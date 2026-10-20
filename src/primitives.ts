@@ -1,5 +1,12 @@
 const MAX_LINE = 200;
 
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The UTC calendar day (`YYYY-MM-DD`) of an ISO instant or an epoch-milliseconds time. */
+export function utcDay(at: string | number): string {
+  return (typeof at === 'number' ? new Date(at).toISOString() : at).slice(0, 10);
+}
+
 export function firstLine(text: string): string | null {
   const line = text.split('\n').find((l) => l.trim() !== '');
   return line === undefined ? null : line.trim().slice(0, MAX_LINE);

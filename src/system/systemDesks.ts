@@ -116,11 +116,10 @@ export function buildEnvironmentDesks(
 ) {
   const { store, sink, errors, gitObserver } = base;
   const environmentObserver = opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot);
-  const prober = opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot);
   const environments = new EnvironmentDesk({
     store,
     environments: config.environments,
-    prober,
+    prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
     healthProber: opts.environmentHealthProber ?? new CommandEnvironmentHealthProber(config.repoRoot),
     git: gitObserver,
     sink,
@@ -135,14 +134,13 @@ export function buildEnvironmentDesks(
       watchIntervalMs: config.watchIntervalMs,
       errors,
     }),
-    appErrors: new AppErrorDesk({
-      store,
-      environments: config.environments,
-      reader: opts.appErrorReader ?? new CommandAppErrorReader(config.repoRoot),
-      prober,
-      intervalMs: config.appErrorIntervalMs,
-      errors,
-    }),
+    errors,
+  });
+  const appErrors = new AppErrorDesk({
+    store,
+    environments: config.environments,
+    reader: opts.appErrorReader ?? new CommandAppErrorReader(config.repoRoot),
+    intervalMs: config.appErrorIntervalMs,
     errors,
   });
 
@@ -153,6 +151,7 @@ export function buildEnvironmentDesks(
   });
   return {
     environments,
+    appErrors,
     watchDryRun,
     ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
   };

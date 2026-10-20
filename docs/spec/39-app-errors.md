@@ -107,12 +107,12 @@ seconds — twice the health check's, because a telemetry query over a fortnight
 
 ## What is stored, and for how long
 
-Three tables, all owned by `AppErrorStore` (`src/store/appErrors.ts`), all written in one
-transaction per read:
+Three tables, all owned by `AppErrorStore` (`src/store/appErrors.ts`). A read's reading row, groups
+and day counts are written in one transaction; the prune is a second, once per desk pass:
 
 | Table              | One row per                       | Holds                                                                                                          |
 | ------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `app_error_reads`  | environment                       | The last read: status, detail, `read_at`, `ok_at` (last _answered_ read) and the deploy window                 |
+| `app_error_reads`  | environment                       | The last read: status, detail, `read_at` and `ok_at` (last _answered_ read)                                    |
 | `app_error_groups` | `(environment, fingerprint)`      | Title, operation, version, frames, url; first and last seen as the harness has accumulated them; `returned_at` |
 | `app_error_days`   | `(environment, fingerprint, day)` | Occurrences on one UTC day                                                                                     |
 
@@ -128,28 +128,35 @@ transaction per read:
   a series.
 - **`returned_at`** is stamped when a read reports a group whose `firstSeen` is at least the quiet
   period (`QUIET_MS`, three days) after the `lastSeen` already held.
-- **Retention.** Day counts older than fourteen days (`RETENTION_DAYS`) are deleted on every read; a
-  group not seen for thirty days (`GROUP_RETENTION_DAYS`) is deleted with its days. Seen again after
-  that, it is a stranger, and reads `new`. A removed environment's groups age out the same way.
+- **Retention.** The retained window is the last fourteen UTC days, today included (`retainedDays`,
+  `RETENTION_DAYS`) — **one window, read by both the prune and the wire**, so the fortnight's `count`
+  a group ships is exactly the sum of the `daily` series it ships beside it. Day counts before it are
+  deleted, and a group not seen for thirty days (`GROUP_RETENTION_DAYS`) is deleted with its days,
+  once per desk pass that read any environment — across every environment, so a removed
+  environment's groups age out the same way. Seen again after that, a group is a stranger, and reads
+  `new`.
 
 All three tables were introduced new and so need no `ColumnMigrations` entry **today** — the rule in
 [14](14-persistence.md#migrations) still applies to the first column anyone adds.
 
 ## The deploy window
 
-`new` and `spiking` are both questions about _the latest deploy_, so each read also asks the
-environment's own `at` probe ([24](24-environments.md#the-probe)) where it is, and `nextDeploy` keeps
-three facts on the reading:
+`new` and `spiking` are both questions about _the latest deploy_, and the deploy is the environment's
+**head**, which the environment desk's probe records ([24](24-environments.md#the-head)) — this
+feature does not ask the probe itself. A route read joins each environment's `environment_heads` row
+on as its `head`:
 
-- `deployedSha` — what the probe named, several commits joined by a space as the probe's own
-  several-services rule names them;
+- `sha` — what the probe named, several commits joined by a space as the probe's own several-services
+  rule names them;
 - `previousSha` — what it named before that changed;
-- `deployedAt` — **when the harness noticed the change**, at read precision.
+- `changedAt` — **when the harness noticed the change**, at the probe's cadence. It is the
+  `deployedAt` every state below is measured from.
 
-The first head ever read is **no deploy at all**: `deployedAt` stays null, because the harness cannot
-say when that build arrived. A probe that could not answer leaves all three as they were. Nothing
-else in the harness records an environment's head over time — reach is per landing, and arrivals are
-per goal — which is why this pass keeps its own.
+The first head ever recorded is **no deploy at all**: `changedAt` stays null, because the harness
+cannot say when that build arrived, and the states fall back to the last day. A probe that could not
+answer leaves the head as it was. An environment that declares `errors` is probed for its head on
+`environmentProbeIntervalMs` even when no landing is pending, which is what keeps the head fresh on an
+environment the fleet has nothing in flight for.
 
 ## States
 
@@ -208,31 +215,34 @@ An environment that declares no `group` is a band of one named for itself, exact
 
 ## The desk
 
-`AppErrorDesk` (`src/appErrors/desk.ts`) runs as a pass on `EnvironmentDesk`, directly below the health
-pass. **Nothing reads what it writes** inside the pulse — no gate, no bench row, no prompt — so its
-position is a preference, for health's reason.
+`AppErrorDesk` (`src/appErrors/desk.ts`) is its own pulse entry, `appErrors`
+([04](04-harness-cycle.md#the-pulse-registry)), **directly below `environments`**: that desk's probe
+records the head a reading is held against, so above it a deploy would be noticed a pulse late.
+**Nothing reads what it writes** inside the pulse — no gate, no bench row, no prompt — so nothing
+below it is ordered on it.
 
-For each environment that declares `errors`, unless its last read is younger than
-`appErrorIntervalMs` — an `unknown` read counts, so a broken query is retried on the interval rather
-than every pulse:
+Every environment that declares `errors` is read **concurrently**, each unless its last read is
+younger than `appErrorIntervalMs` — an `unknown` read counts, so a broken query is retried on the
+interval rather than every pulse:
 
 1. compute `{since}` from `ok_at`, capped at fourteen days back;
-2. ask the probe where the environment is;
-3. run the command, and parse what it printed;
-4. write the reading, the deploy window, every group named and its day counts, and the prune, in one
-   transaction.
+2. run the command, and parse what it printed;
+3. merge each row into what is held for its fingerprint — only the span and the return mark are read
+   back (`groupMarks`), not the groups' day series;
+4. write the reading, every group named and its day counts, in one transaction.
 
-An `unknown` read writes the reading and touches no group. A pass that throws is recorded through
-`errors.record` and never fails the cycle.
+Then, if any environment was read, the prune runs once. An `unknown` read writes the reading and
+touches no group. An environment whose read throws is recorded through `errors.record` and neither
+fails the cycle nor stops the others.
 
 ## Seams
 
 `AppErrorReader` (`src/appErrors/reader.ts`) — one method, `list({environment, command, since})`.
 `CommandAppErrorReader` spawns the command; `FakeAppErrorReader` (`src/appErrors/fakeReader.ts`)
 answers from scripted stdout per environment, records every request, and answers `unknown` for an
-environment nobody scripted. Injected as `appErrorReader` on `buildSystem`; the probe the desk asks is
-the one injected as `environmentProber`. **A test that declares an `errors` block injects both**, or it
-spawns the declared command and the `at` probe on the machine running the tests.
+environment nobody scripted. Injected as `appErrorReader` on `buildSystem`. **A test that declares an
+`errors` block injects it and `environmentProber`**, or it spawns the declared command — and, because
+such an environment is probed for its head, the `at` probe — on the machine running the tests.
 
 ## On the wire
 
@@ -243,11 +253,12 @@ counts per group is too much to send every couple of seconds to every open cockp
 - `project` — the key's project segment;
 - `environments` — one `AppErrorEnvironmentView` per environment that declares `errors`, in config
   order: its `band`, its `reading` (an `AppErrorRead`, or null before the first read — status, detail,
-  `readAt`, `okAt`, and the deploy window `deployedSha` / `previousSha` / `deployedAt`), and its
-  `groups`;
+  `readAt`, `okAt`), its `head` (a `DeployedHead`, or null before the probe first answered — the
+  [deploy window](#the-deploy-window)), and its `groups`;
 - each group an `AppErrorGroupView`: the stored `AppErrorGroup` (title, operation, version, frames,
   `url`, first and last seen, `returnedAt`) with `daily` made dense over the last fourteen UTC days,
-  plus `key`, `state`, `count` (the fortnight's total), `ignored`, and the two placeholders below.
+  plus `key`, `state`, `count` (the total of that dense series, so the two always agree), `ignored`,
+  and the two placeholders below. The state is computed off the same dense series.
   Sorted moved-first — `new`, `returned`, `spiking`, `steady`, `gone` — then most recently seen;
 - `bands` — the [roll-up](#groups).
 
@@ -262,8 +273,8 @@ under the key, and a note. **Always null: the tracker lock is not yet built.**
 
 In the order the proposal stages them, each of which removes its line here:
 
-- **Linking** — the deploy window's candidate goals from landings between `previousSha` and
-  `deployedSha`, frames matched against each candidate's landed diff, a group that went `new` on test
+- **Linking** — the deploy window's candidate goals from landings between the head's `previousSha` and
+  `sha`, frames matched against each candidate's landed diff, a group that went `new` on test
   when a goal arrived there, operation hints, and model triage on a press. Fills `link`, and the goal
   card's "2 new errors on test since this arrived".
 - **The tracker lock** — the key as a field of `IssueCreateInput` resolved by `ticketFiler`
@@ -277,7 +288,7 @@ In the order the proposal stages them, each of which removes its line here:
 - **Late ingestion.** `{since}` is the instant the last read started, and a telemetry store that
   ingests an event minutes after its timestamp reports it to neither read. Overlapping the windows
   would double-count instead, which is the worse of the two for a rate.
-- **When a build actually arrived**, beyond the read that noticed it. `deployedAt` is as precise as
-  `appErrorIntervalMs`, and the first build the harness ever sees has no `deployedAt` at all.
+- **When a build actually arrived**, beyond the probe that noticed it. The head's `changedAt` is as
+  precise as `environmentProbeIntervalMs`, and the first build the harness ever sees has none at all.
 - **A fingerprint that changes under a refactor.** A renamed failing method is a new fingerprint and
   so a new group that reads `new`; relating it to the old one is the linking stage's job.

@@ -1383,7 +1383,7 @@ See [18](18-observability.md#api-errors).
 ### `GET /api/app-errors`
 
 The errors nobody declared, read from each environment's own `errors` command. Returns
-`{ project, environments, bands }` — per environment its latest reading and deploy window and its
+`{ project, environments, bands }` — per environment its latest reading, its recorded head and its
 error groups with their state, key and dense fourteen-day series; per band the roll-up. Not on
 `/api/state`, for `/api/mcp/usage`'s reason. See [39](39-app-errors.md#on-the-wire).
 

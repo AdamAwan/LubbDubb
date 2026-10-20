@@ -9,6 +9,7 @@ import type { RouteContext } from './context.js';
 
 export function register(app: FastifyInstance, { system }: RouteContext): void {
   const { store, config } = system;
+  const project = appErrorProject(config);
 
   app.get(
     '/api/app-errors',
@@ -19,7 +20,8 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           environments: config.environments,
           reads: store.appErrors.listReads(),
           groups: store.appErrors.listGroups(),
-          project: appErrorProject(config),
+          heads: store.environments.listEnvironmentHeads(),
+          project,
           minCount: config.appErrorMinCount,
           ignore: config.appErrorIgnore,
           now: Date.now(),

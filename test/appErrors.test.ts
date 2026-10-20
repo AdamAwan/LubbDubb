@@ -4,17 +4,18 @@ import { errorsCommand, MAX_ROWS_PER_READ, parseAppErrorReport } from '../src/ap
 import { CommandAppErrorReader } from '../src/appErrors/reader.js';
 import { appErrorKey, appErrorProject } from '../src/appErrors/key.js';
 import {
-  DAY_MS,
   MAX_LOOKBACK_MS,
   QUIET_MS,
   mergeGroup,
-  nextDeploy,
   readSince,
+  retainedDays,
   spreadCounts,
 } from '../src/appErrors/groups.js';
+import { DAY_MS } from '../src/primitives.js';
+import { Store } from '../src/store/store.js';
 import { appErrorState, BASELINE_DAYS, type AppErrorStateInput } from '../src/appErrors/states.js';
 import { loadConfig } from '../src/config/config.js';
-import type { AppErrorDay, AppErrorRead } from '../src/types.js';
+import type { AppErrorDay } from '../src/types.js';
 
 const ROW = {
   fingerprint: 'System.NullReferenceException at OrderService.Submit',
@@ -194,45 +195,50 @@ test('a group seen again after a quiet gap is marked returned; one seen steadily
     firstSeen: '2026-10-20T10:00:00.000Z',
     lastSeen: '2026-10-20T11:00:00.000Z',
   };
-  const held = mergeGroup(
-    undefined,
-    'live',
-    { ...row, firstSeen: '2026-10-01T00:00:00.000Z', lastSeen: '2026-10-02T00:00:00.000Z' },
-    'r0',
-  );
+  const held = mergeGroup(undefined, 'live', {
+    ...row,
+    firstSeen: '2026-10-01T00:00:00.000Z',
+    lastSeen: '2026-10-02T00:00:00.000Z',
+  });
   assert.equal(held.returnedAt, null);
-  const back = mergeGroup(held, 'live', row, 'r1');
+  const back = mergeGroup(held, 'live', row);
   assert.equal(back.returnedAt, row.firstSeen);
   assert.equal(back.firstSeen, '2026-10-01T00:00:00.000Z');
   assert.equal(back.lastSeen, row.lastSeen);
-  assert.equal(back.recordedAt, 'r0');
   const steady = mergeGroup(
     { ...held, lastSeen: new Date(Date.parse(row.firstSeen) - QUIET_MS + 1).toISOString() },
     'live',
     row,
-    'r1',
   );
   assert.equal(steady.returnedAt, null);
 });
 
-test('the deploy window moves only when the head does, and the first head is no deploy', () => {
-  const read = (over: Partial<AppErrorRead>): AppErrorRead => ({
-    environment: 'live',
-    status: 'ok',
-    detail: null,
-    readAt: 'x',
-    okAt: 'x',
-    deployedSha: null,
-    previousSha: null,
-    deployedAt: null,
-    ...over,
-  });
-  assert.deepEqual(nextDeploy(undefined, ['aaa'], 'T1'), { deployedSha: 'aaa', previousSha: null, deployedAt: null });
-  const first = read({ deployedSha: 'aaa' });
-  assert.deepEqual(nextDeploy(first, ['aaa'], 'T2'), { deployedSha: 'aaa', previousSha: null, deployedAt: null });
-  assert.deepEqual(nextDeploy(first, ['bbb'], 'T2'), { deployedSha: 'bbb', previousSha: 'aaa', deployedAt: 'T2' });
-  assert.deepEqual(nextDeploy(first, null, 'T2'), { deployedSha: 'aaa', previousSha: null, deployedAt: null });
-  assert.deepEqual(nextDeploy(undefined, ['a', 'b'], 'T1').deployedSha, 'a b');
+test('the head moves only when the probe names another, and the first head is no deploy', () => {
+  const store = new Store(':memory:');
+  const env = store.environments;
+  assert.equal(env.getEnvironmentHead('live'), null);
+  env.recordEnvironmentHead('live', 'aaa');
+  assert.deepEqual(
+    { ...env.getEnvironmentHead('live'), observedAt: null },
+    { environment: 'live', sha: 'aaa', previousSha: null, observedAt: null, changedAt: null },
+  );
+  env.recordEnvironmentHead('live', 'aaa');
+  assert.equal(env.getEnvironmentHead('live')?.changedAt, null, 'the same head again is no deploy');
+  env.recordEnvironmentHead('live', 'bbb');
+  const moved = env.getEnvironmentHead('live');
+  assert.equal(moved?.sha, 'bbb');
+  assert.equal(moved?.previousSha, 'aaa');
+  assert.equal(moved?.changedAt, moved?.observedAt, 'a head that moved is a deploy, noticed now');
+  env.recordEnvironmentHead('live', 'bbb');
+  assert.equal(env.getEnvironmentHead('live')?.previousSha, 'aaa');
+  store.close();
+});
+
+test('the retained window is the last fortnight of UTC days, today included', () => {
+  const window = retainedDays(NOW);
+  assert.equal(window.length, 14);
+  assert.equal(window[13], '2026-10-20');
+  assert.equal(window[0], '2026-10-07');
 });
 
 function days(counts: Record<string, number>): AppErrorDay[] {

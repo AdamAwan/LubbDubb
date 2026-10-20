@@ -5,7 +5,6 @@ import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { EnvironmentReachStatus, GoalLanding, WorldSnapshot } from '../types.js';
 import { announceableArrivals, arrivalComment, newArrivals } from './arrival.js';
-import type { AppErrorDesk } from '../appErrors/desk.js';
 import type { EnvironmentHealthProber } from './healthProber.js';
 import { carriedLandings, unrecordedLandings } from './landings.js';
 import type { EnvironmentConfig } from './policy.js';
@@ -27,7 +26,6 @@ interface EnvironmentDeskDeps {
   probeIntervalMs: number;
   healthIntervalMs: number;
   watch?: WatchDesk;
-  appErrors?: AppErrorDesk;
   errors?: ErrorRecorder;
   now?: () => number;
 }
@@ -37,6 +35,7 @@ const MAX_LANDINGS_PER_PULSE = 200;
 export class EnvironmentDesk {
   private readonly now: () => number;
   private readonly reported = new Set<string>();
+  private readonly headAskedAt = new Map<string, number>();
 
   constructor(private readonly deps: EnvironmentDeskDeps) {
     this.now = deps.now ?? (() => Date.now());
@@ -58,7 +57,6 @@ export class EnvironmentDesk {
 
     if (this.deps.environments.length === 0) return;
     for (const environment of this.deps.environments) await this.checkHealth(environment);
-    await this.deps.appErrors?.run();
     await this.reconcile();
     this.carry(world);
     for (const environment of this.deps.environments) await this.probe(environment);
@@ -158,9 +156,11 @@ export class EnvironmentDesk {
   private async probe(environment: EnvironmentConfig): Promise<void> {
     const { store, errors } = this.deps;
     const pending = this.due(environment.name);
-    if (pending.length === 0) return;
+    if (pending.length === 0 && !this.headDue(environment)) return;
+    this.headAskedAt.set(environment.name, this.now());
     try {
       const head = await this.deps.prober.at(environment.name, environment.at);
+      if (head.commits !== null) store.environments.recordEnvironmentHead(environment.name, head.commits.join(' '));
       const detail = head.detail;
       const held =
         head.commits === null
@@ -184,6 +184,12 @@ export class EnvironmentDesk {
         message: `probing ${environment.name} failed: ${(err as Error).message}`,
       });
     }
+  }
+
+  private headDue(environment: EnvironmentConfig): boolean {
+    if (environment.errors === undefined) return false;
+    const asked = this.headAskedAt.get(environment.name);
+    return asked === undefined || asked <= this.now() - this.deps.probeIntervalMs;
   }
 
   private due(environment: string): GoalLanding[] {

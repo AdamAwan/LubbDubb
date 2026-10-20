@@ -84,8 +84,10 @@ test('every environment that declares errors is read, bounded by {since}, and a 
 
   const reads = new Map(system.store.appErrors.listReads().map((r) => [r.environment, r]));
   assert.equal(reads.get('test')?.status, 'ok');
-  assert.equal(reads.get('test')?.deployedSha, 'aaa');
-  assert.equal(reads.get('test')?.deployedAt, null, 'the first head read is no deploy');
+  const firstHead = system.store.environments.getEnvironmentHead('test');
+  assert.equal(firstHead?.sha, 'aaa', 'the probe records the head even with no landing due');
+  assert.equal(firstHead?.changedAt, null, 'the first head read is no deploy');
+  assert.equal(system.store.environments.getEnvironmentHead('hallway'), null, 'nothing reads hallway’s head');
   assert.equal(reads.get('liveUk')?.status, 'ok', 'an empty list is an answer: no errors');
   assert.equal(reads.get('liveEu')?.status, 'unknown', 'a broken query is never "no errors"');
   assert.equal(reads.get('liveEu')?.okAt, null);
@@ -103,11 +105,11 @@ test('every environment that declares errors is read, bounded by {since}, and a 
 
   const second = reader.asked.filter((r) => r.environment === 'test')[1]!;
   assert.equal(second.since, reads.get('test')?.okAt, 'the next read starts where the last answered one did');
-  const after = system.store.appErrors.listReads().find((r) => r.environment === 'test');
-  assert.equal(after?.deployedSha, 'ccc');
+  const after = system.store.environments.getEnvironmentHead('test');
+  assert.equal(after?.sha, 'ccc');
   assert.equal(after?.previousSha, 'aaa');
-  assert.notEqual(after?.deployedAt, null, 'a head that moved is a deploy');
-  const held = system.store.appErrors.listGroups('test')[0]!;
+  assert.notEqual(after?.changedAt, null, 'a head that moved is a deploy');
+  const held = system.store.appErrors.listGroups().find((g) => g.environment === 'test')!;
   assert.equal(
     held.daily.reduce((n, d) => n + d.count, 0),
     7,
@@ -120,7 +122,7 @@ test('an unknown read leaves what was known standing, and the next read reaches 
   const prober = new FakeEnvironmentProber({ test: ['aaa'] });
   const system = build(reader, prober);
   await system.harness.runCycle();
-  const okAt = system.store.appErrors.listReads().find((r) => r.environment === 'test')?.okAt;
+  const okAt = system.store.appErrors.getRead('test')?.okAt;
 
   reader.script('test', '');
   await system.harness.runCycle();
@@ -129,7 +131,7 @@ test('an unknown read leaves what was known standing, and the next read reaches 
 
   const tests = reader.asked.filter((r) => r.environment === 'test');
   assert.equal(tests[2]?.since, okAt, 'the failed read did not move {since}');
-  assert.equal(system.store.appErrors.listGroups('test').length, 1);
+  assert.equal(system.store.appErrors.listGroups().filter((g) => g.environment === 'test').length, 1);
 });
 
 test('an environment is not read again inside appErrorIntervalMs', async () => {
@@ -181,6 +183,13 @@ test('GET /api/app-errors draws each environment, its moved groups first, and th
   assert.equal(submit.operation, 'POST /orders');
   assert.deepEqual(submit.frames, ['src/Orders/OrderService.cs:118']);
   assert.equal(submit.daily.length, 14, 'the series is dense over the retained fortnight');
+  assert.equal(
+    submit.daily.reduce((n, d) => n + d.count, 0),
+    submit.count,
+    'the count is the series it ships',
+  );
+  assert.equal(body.environments[0]!.head?.sha, 'aaa');
+  assert.equal(body.environments[0]!.head?.changedAt, null);
   assert.equal(submit.link, null, 'linking is not built yet');
   assert.equal(submit.tracker, null, 'the tracker lock is not built yet');
 

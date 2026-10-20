@@ -3,7 +3,8 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { WorldScope } from '../integrations/registry.js';
 import type { Store } from '../store/store.js';
 import type { PoolClockDocument, PoolClockKind } from '../types.js';
-import { buildDigestDocument, POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
+import { buildDigestDocument, POOL_RETENTION_DAYS } from './digestArm.js';
+import { utcDay } from '../primitives.js';
 import { parsePoolDocument, poolContentHash, poolStaleBefore } from './document.js';
 import type { PoolTransport } from './transport.js';
 

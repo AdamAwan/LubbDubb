@@ -1639,21 +1639,30 @@ export interface EnvironmentHealthReading {
   changedAt: string;
 }
 
+/**
+ * Where one environment's `at` probe last said it is. `changedAt` is when the harness noticed the
+ * head move — null for the first head it ever read, which is no deploy. → docs/spec/24-environments.md#the-head
+ */
+export interface DeployedHead {
+  environment: string;
+  sha: string;
+  previousSha: string | null;
+  observedAt: string;
+  changedAt: string | null;
+}
+
 /** → docs/spec/39-app-errors.md */
 export type AppErrorReadStatus = 'ok' | 'unknown';
 
 export type AppErrorState = 'new' | 'returned' | 'spiking' | 'steady' | 'gone';
 
-/** What one environment's `errors` command last said, and the deploy it was read against. */
+/** What one environment's `errors` command last said. */
 export interface AppErrorRead {
   environment: string;
   status: AppErrorReadStatus;
   detail: string | null;
   readAt: string;
   okAt: string | null;
-  deployedSha: string | null;
-  previousSha: string | null;
-  deployedAt: string | null;
 }
 
 export interface AppErrorDay {
@@ -1673,7 +1682,6 @@ export interface AppErrorGroup {
   firstSeen: string;
   lastSeen: string;
   returnedAt: string | null;
-  recordedAt: string;
   daily: AppErrorDay[];
 }
 

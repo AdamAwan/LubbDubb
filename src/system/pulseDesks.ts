@@ -26,6 +26,7 @@ import type { ScheduleDesk } from '../schedules/scheduleDesk.js';
 import type { BotPrRiskDesk } from '../botPrs/riskDesk.js';
 import type { WorkGraphRecorder } from '../graph/workGraphRecorder.js';
 import type { EnvironmentDesk } from '../environments/environmentDesk.js';
+import type { AppErrorDesk } from '../appErrors/desk.js';
 import type { RemoteValidationDesk } from '../validation/remote/desk.js';
 import type { RemoteIntentDesk } from '../validation/remote/intent.js';
 import type { ObstacleDesk } from '../obstacles/desk.js';
@@ -52,6 +53,7 @@ export interface PulseDeps {
   updates?: { run(): Promise<void> };
   graph?: WorkGraphRecorder;
   environments?: EnvironmentDesk;
+  appErrors?: AppErrorDesk;
   remoteValidation?: RemoteValidationDesk;
   remoteIntents?: RemoteIntentDesk;
   validationReady?: ValidationReadyDesk;
@@ -126,6 +128,7 @@ const ENTRIES = [
     { id: 'updates', readWorld: true, run: (d) => d.updates?.run() },
     { id: 'graph', readWorld: false, run: (d, at) => d.graph?.record(at.world) },
     { id: 'environments', readWorld: true, run: (d, at) => d.environments?.run(at.world) },
+    { id: 'appErrors', readWorld: true, run: (d) => d.appErrors?.run() },
     { id: 'remoteValidation', readWorld: true, run: (d) => d.remoteValidation?.run() },
     { id: 'remoteIntents', readWorld: true, run: (d) => d.remoteIntents?.run() },
     { id: 'validationReady', readWorld: false, run: (d, at) => d.validationReady?.run(at.world) },

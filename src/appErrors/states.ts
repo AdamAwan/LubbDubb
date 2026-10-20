@@ -1,5 +1,6 @@
 import type { AppErrorGroup, AppErrorState } from '../types.js';
-import { DAY_MS, QUIET_MS, dayOf, dayStart } from './groups.js';
+import { DAY_MS, utcDay } from '../primitives.js';
+import { QUIET_MS, dayStart } from './groups.js';
 
 // → docs/spec/39-app-errors.md#states
 
@@ -40,9 +41,9 @@ export function appErrorState(input: AppErrorStateInput): AppErrorState {
 }
 
 function spiking({ group, deployedAt, now, minCount }: AppErrorStateInput): boolean {
-  const windowDay = dayOf(deployedAt !== null ? Date.parse(deployedAt) : now - DAY_MS);
+  const windowDay = utcDay(deployedAt !== null ? Date.parse(deployedAt) : now - DAY_MS);
   const windowStart = dayStart(windowDay);
-  const baselineFrom = Math.max(windowStart - BASELINE_DAYS * DAY_MS, dayStart(dayOf(Date.parse(group.firstSeen))));
+  const baselineFrom = Math.max(windowStart - BASELINE_DAYS * DAY_MS, dayStart(utcDay(Date.parse(group.firstSeen))));
   const baselineDays = Math.round((windowStart - baselineFrom) / DAY_MS);
   if (baselineDays <= 0) return false;
   let current = 0;

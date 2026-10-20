@@ -1,51 +1,42 @@
 import type { AppErrorDay, AppErrorGroup, AppErrorRead, AppErrorReadStatus } from '../types.js';
+import type { AppErrorGroupWrite, AppErrorMarks } from '../appErrors/groups.js';
+import { groupBy } from '../primitives.js';
 import type { StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md, docs/spec/39-app-errors.md
 
 interface GroupInput {
-  group: Omit<AppErrorGroup, 'daily'>;
+  group: AppErrorGroupWrite;
   days: AppErrorDay[];
 }
 
-interface ReadInput {
-  environment: string;
-  at: string;
-  status: AppErrorReadStatus;
-  detail: string | null;
-  deployedSha: string | null;
-  previousSha: string | null;
-  deployedAt: string | null;
-}
+type ReadInput = Omit<AppErrorRead, 'okAt'>;
 
 export class AppErrorStore {
   constructor(private readonly ctx: StoreContext) {}
 
   /**
-   * One read, written whole: the reading row, every group it named and their day counts, and the
-   * prune. `okAt` moves only on an `ok` read, because it is what the next read's `{since}` is bounded by.
+   * One read, written whole: the reading row, every group it named and their day counts. `okAt` moves
+   * only on an `ok` read, because it is what the next read's `{since}` is bounded by.
    */
-  recordRead(read: ReadInput, groups: GroupInput[], prune: { dayBefore: string; seenBefore: string }): void {
+  recordRead(read: ReadInput, groups: GroupInput[]): void {
     this.ctx.db.transaction(() => {
       this.ctx
         .prep(
-          `INSERT INTO app_error_reads
-             (environment, status, detail, read_at, ok_at, deployed_sha, previous_sha, deployed_at)
-           VALUES (@environment, @status, @detail, @at, @okAt, @deployedSha, @previousSha, @deployedAt)
+          `INSERT INTO app_error_reads (environment, status, detail, read_at, ok_at)
+           VALUES (@environment, @status, @detail, @readAt, @okAt)
            ON CONFLICT(environment) DO UPDATE SET
              status=excluded.status, detail=excluded.detail, read_at=excluded.read_at,
-             ok_at=ifnull(excluded.ok_at, app_error_reads.ok_at),
-             deployed_sha=excluded.deployed_sha, previous_sha=excluded.previous_sha, deployed_at=excluded.deployed_at`,
+             ok_at=ifnull(excluded.ok_at, app_error_reads.ok_at)`,
         )
-        .run({ ...read, okAt: read.status === 'ok' ? read.at : null });
+        .run({ ...read, okAt: read.status === 'ok' ? read.readAt : null });
       for (const { group, days } of groups) {
         this.ctx
           .prep(
             `INSERT OR REPLACE INTO app_error_groups
-               (environment, fingerprint, title, operation, version, frames, url,
-                first_seen, last_seen, returned_at, recorded_at)
+               (environment, fingerprint, title, operation, version, frames, url, first_seen, last_seen, returned_at)
              VALUES (@environment, @fingerprint, @title, @operation, @version, @frames, @url,
-                @firstSeen, @lastSeen, @returnedAt, @recordedAt)`,
+                @firstSeen, @lastSeen, @returnedAt)`,
           )
           .run({ ...group, frames: JSON.stringify(group.frames) });
         for (const { day, count } of days)
@@ -57,6 +48,12 @@ export class AppErrorStore {
             )
             .run(group.environment, group.fingerprint, day, count);
       }
+    })();
+  }
+
+  /** Day counts before `dayBefore`, and groups last seen before `seenBefore` with their days. */
+  prune(prune: { dayBefore: string; seenBefore: string }): void {
+    this.ctx.db.transaction(() => {
       this.ctx.prep(`DELETE FROM app_error_days WHERE day < ?`).run(prune.dayBefore);
       this.ctx.prep(`DELETE FROM app_error_groups WHERE last_seen < ?`).run(prune.seenBefore);
       this.ctx
@@ -69,38 +66,34 @@ export class AppErrorStore {
     })();
   }
 
-  listReads(): AppErrorRead[] {
-    const rows = this.ctx.prep(`SELECT * FROM app_error_reads ORDER BY environment`).all() as ReadRow[];
-    return rows.map((r) => ({
-      environment: r.environment,
-      status: r.status as AppErrorReadStatus,
-      detail: r.detail,
-      readAt: r.read_at,
-      okAt: r.ok_at,
-      deployedSha: r.deployed_sha,
-      previousSha: r.previous_sha,
-      deployedAt: r.deployed_at,
-    }));
+  getRead(environment: string): AppErrorRead | null {
+    const row = this.ctx.prep(`SELECT * FROM app_error_reads WHERE environment = ?`).get(environment) as
+      ReadRow | undefined;
+    return row === undefined ? null : readOf(row);
   }
 
-  listGroups(environment?: string): AppErrorGroup[] {
-    const groups = (
-      environment === undefined
-        ? this.ctx.prep(`SELECT * FROM app_error_groups ORDER BY environment, last_seen DESC`).all()
-        : this.ctx.prep(`SELECT * FROM app_error_groups WHERE environment = ? ORDER BY last_seen DESC`).all(environment)
-    ) as GroupRow[];
-    const days = (
-      environment === undefined
-        ? this.ctx.prep(`SELECT * FROM app_error_days ORDER BY day`).all()
-        : this.ctx.prep(`SELECT * FROM app_error_days WHERE environment = ? ORDER BY day`).all(environment)
-    ) as DayRow[];
-    const daily = new Map<string, AppErrorDay[]>();
-    for (const d of days) {
-      const key = `${d.environment}\n${d.fingerprint}`;
-      const list = daily.get(key) ?? [];
-      list.push({ day: d.day, count: d.count });
-      daily.set(key, list);
-    }
+  listReads(): AppErrorRead[] {
+    return (this.ctx.prep(`SELECT * FROM app_error_reads ORDER BY environment`).all() as ReadRow[]).map(readOf);
+  }
+
+  /** What a read merges into, by fingerprint — the held span and return mark, and nothing else. */
+  groupMarks(environment: string): Map<string, AppErrorMarks> {
+    const rows = this.ctx
+      .prep(`SELECT fingerprint, first_seen, last_seen, returned_at FROM app_error_groups WHERE environment = ?`)
+      .all(environment) as Pick<GroupRow, 'fingerprint' | 'first_seen' | 'last_seen' | 'returned_at'>[];
+    return new Map(
+      rows.map((r) => [r.fingerprint, { firstSeen: r.first_seen, lastSeen: r.last_seen, returnedAt: r.returned_at }]),
+    );
+  }
+
+  listGroups(): AppErrorGroup[] {
+    const groups = this.ctx
+      .prep(`SELECT * FROM app_error_groups ORDER BY environment, last_seen DESC`)
+      .all() as GroupRow[];
+    const days = groupBy(
+      this.ctx.prep(`SELECT * FROM app_error_days ORDER BY day`).all() as DayRow[],
+      (d) => `${d.environment}\n${d.fingerprint}`,
+    );
     return groups.map((g) => ({
       environment: g.environment,
       fingerprint: g.fingerprint,
@@ -112,8 +105,7 @@ export class AppErrorStore {
       firstSeen: g.first_seen,
       lastSeen: g.last_seen,
       returnedAt: g.returned_at,
-      recordedAt: g.recorded_at,
-      daily: daily.get(`${g.environment}\n${g.fingerprint}`) ?? [],
+      daily: (days.get(`${g.environment}\n${g.fingerprint}`) ?? []).map((d) => ({ day: d.day, count: d.count })),
     }));
   }
 }
@@ -124,9 +116,16 @@ interface ReadRow {
   detail: string | null;
   read_at: string;
   ok_at: string | null;
-  deployed_sha: string | null;
-  previous_sha: string | null;
-  deployed_at: string | null;
+}
+
+function readOf(r: ReadRow): AppErrorRead {
+  return {
+    environment: r.environment,
+    status: r.status as AppErrorReadStatus,
+    detail: r.detail,
+    readAt: r.read_at,
+    okAt: r.ok_at,
+  };
 }
 
 interface GroupRow {
@@ -140,7 +139,6 @@ interface GroupRow {
   first_seen: string;
   last_seen: string;
   returned_at: string | null;
-  recorded_at: string;
 }
 
 interface DayRow {

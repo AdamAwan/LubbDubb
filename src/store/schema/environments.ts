@@ -54,6 +54,20 @@ CREATE TABLE IF NOT EXISTS environment_health (
   changed_at  TEXT NOT NULL       -- when it last became what it is now
 );
 
+-- Where one environment's own at probe last said it is (see EnvironmentStore). One
+-- row per environment, written by every probe that answered. Stored because nothing
+-- else keeps an environment's head over time -- reach is per landing, arrivals per
+-- goal -- and "since the deploy" needs to know when it moved. changed_at is when the
+-- harness noticed the head change, NULL for the first head it ever read, because
+-- the harness cannot say when that build arrived: it is no deploy at all.
+CREATE TABLE IF NOT EXISTS environment_heads (
+  environment  TEXT PRIMARY KEY,
+  sha          TEXT NOT NULL,      -- the probe's commits, joined by a space
+  previous_sha TEXT,               -- what it named before it last changed
+  observed_at  TEXT NOT NULL,
+  changed_at   TEXT
+);
+
 -- Goals the operator has said are not waiting on an environment: a docs change, a
 -- config change, work whose deployment nothing here can see. Lifts every gate on
 -- that goal, and is cleared by deleting the row so "not released" has one shape.

@@ -1,4 +1,5 @@
 import type {
+  DeployedHead,
   EnvironmentGateRelease,
   EnvironmentHealthReading,
   EnvironmentHealthState,
@@ -203,6 +204,33 @@ export class EnvironmentStore {
     }));
   }
 
+  /** A head that differs from the one held is a deploy, noticed now; the first head ever held is not. */
+  recordEnvironmentHead(environment: string, sha: string): void {
+    this.ctx
+      .prep(
+        `INSERT INTO environment_heads (environment, sha, previous_sha, observed_at, changed_at)
+         VALUES (@environment, @sha, NULL, @at, NULL)
+         ON CONFLICT(environment) DO UPDATE SET
+           observed_at = excluded.observed_at,
+           previous_sha = CASE WHEN environment_heads.sha = excluded.sha
+             THEN environment_heads.previous_sha ELSE environment_heads.sha END,
+           changed_at = CASE WHEN environment_heads.sha = excluded.sha
+             THEN environment_heads.changed_at ELSE excluded.observed_at END,
+           sha = excluded.sha`,
+      )
+      .run({ environment, sha, at: this.ctx.now() });
+  }
+
+  getEnvironmentHead(environment: string): DeployedHead | null {
+    const row = this.ctx.prep(`SELECT * FROM environment_heads WHERE environment = ?`).get(environment) as
+      HeadRow | undefined;
+    return row === undefined ? null : headOf(row);
+  }
+
+  listEnvironmentHeads(): DeployedHead[] {
+    return (this.ctx.prep(`SELECT * FROM environment_heads`).all() as HeadRow[]).map(headOf);
+  }
+
   listEnvironmentReach(): EnvironmentReading[] {
     const rows = this.ctx.prep(`SELECT * FROM environment_reach`).all() as ReachRow[];
     return rows.map((r) => ({
@@ -264,6 +292,24 @@ interface ReachRow {
   status: string;
   detail: string | null;
   observed_at: string;
+}
+
+interface HeadRow {
+  environment: string;
+  sha: string;
+  previous_sha: string | null;
+  observed_at: string;
+  changed_at: string | null;
+}
+
+function headOf(r: HeadRow): DeployedHead {
+  return {
+    environment: r.environment,
+    sha: r.sha,
+    previousSha: r.previous_sha,
+    observedAt: r.observed_at,
+    changedAt: r.changed_at,
+  };
 }
 
 function yesNo(value: boolean): 'yes' | 'no' {

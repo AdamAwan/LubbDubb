@@ -50,6 +50,7 @@ import type {
   AppErrorReadStatus,
   AppErrorState,
   AppErrorTracker,
+  DeployedHead,
   AgentFile,
   AgentFlag,
   AppraisalAuthor,
@@ -938,6 +939,7 @@ export interface AppErrorEnvironmentView {
   environment: string;
   band: string;
   reading: AppErrorRead | null;
+  head: DeployedHead | null;
   groups: AppErrorGroupView[];
 }
 
