@@ -102,6 +102,25 @@ export const FLEET_FIELDS: readonly ConfigField[] = [
     why: 'How often an open post-deploy watch asks its environment again. Nothing is asked when none is open.',
   },
   {
+    path: 'appErrorIntervalMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How often each environment’s own errors command is asked what has gone wrong since the last read.',
+  },
+  {
+    path: 'appErrorMinCount',
+    type: 'number',
+    access: 'plain',
+    why: 'How many times an error group must have happened before it reads as new, returned or spiking.',
+  },
+  {
+    path: 'appErrorIgnore',
+    type: 'stringList',
+    access: 'plain',
+    why: 'Error fingerprints (or their err:… keys) held at steady — known noise that should never read as moved.',
+  },
+  {
     path: 'remoteValidation.tenantTimeoutMs',
     type: 'number',
     ms: true,

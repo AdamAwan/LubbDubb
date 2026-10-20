@@ -266,6 +266,18 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'bot-pr.accept': { label: 'Watched a bot pull request', blurb: 'A failing bot pull request was handed to the fleet' },
   'bot-pr.abandon': { label: 'Abandoned a bot pull request', blurb: 'A failing bot pull request was closed' },
   'bot-pr.reject': { label: 'Stepped off a bot pull request', blurb: 'You took yourself off a failing one' },
+  'app-error.view': { label: 'Opened app errors', blurb: 'The Errors tab was reached' },
+  'app-error.filter': {
+    label: 'Re-cut app errors',
+    blurb: 'Another environment, or the steady and gone groups, was drawn',
+  },
+  'app-error.create': { label: 'Filed a bug for an app error', blurb: 'An error group was filed, or found filed' },
+  'app-error.send': {
+    label: 'Sent an app error to investigate',
+    blurb: 'Its bug was filed or found, and labelled for the investigator',
+  },
+  'app-error.undo': { label: 'Reopened an app error’s bug', blurb: 'The fixed bug an error came back after' },
+  'app-error.refresh': { label: 'Searched the tracker again', blurb: 'A failed search for an error key was retried' },
   'ejection.expand': { label: 'Opened a hand-back', blurb: 'The dialog for settling ejected work was opened' },
   'ejection.accept': { label: 'Handed work back', blurb: 'Ejected work was settled' },
   'ejection.close': { label: 'Closed a hand-back', blurb: 'The dialog was shut unsettled' },

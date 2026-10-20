@@ -4,7 +4,8 @@ import { throughputMeasureLabel } from '../insights/throughputInsights.js';
 import { choiceLabel } from '../insights/choiceInsights.js';
 import { poolCauseLabel, poolPhaseLabel, poolUsageLabel } from './aggregate.js';
 import { ruleName } from '../insights/taskTypeSpend.js';
-import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
+import { POOL_RETENTION_DAYS } from './digestArm.js';
+import { utcDay } from '../primitives.js';
 
 // → docs/spec/28-cross-fleet-pool.md
 

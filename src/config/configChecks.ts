@@ -82,3 +82,20 @@ export function validateAgentMode(merged: Config): void {
       `"agentMode": "stream".`,
   );
 }
+
+export function validateAppErrors(merged: Config): void {
+  if (!Number.isInteger(merged.appErrorMinCount) || merged.appErrorMinCount < 1)
+    throw new Error(
+      `appErrorMinCount: must be a whole number of at least 1 — the count an error group needs before it reads ` +
+        `as new, returned or spiking. Got ${JSON.stringify(merged.appErrorMinCount)}.`,
+    );
+  if (
+    !Array.isArray(merged.appErrorIgnore) ||
+    merged.appErrorIgnore.some((f) => typeof f !== 'string' || f.trim() === '')
+  )
+    throw new Error(
+      'appErrorIgnore: must be a list of error fingerprints, or of their err:<project>:<hash> keys, to hold at steady.',
+    );
+  if (typeof merged.appErrorIntervalMs !== 'number' || !(merged.appErrorIntervalMs >= 0))
+    throw new Error('appErrorIntervalMs: must be a number of milliseconds.');
+}

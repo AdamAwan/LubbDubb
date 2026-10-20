@@ -115,6 +115,27 @@ environment only when it is in _every_ commit named. The laggard governs, which 
 A probe is killed after 30 seconds and the kill answers nothing: a probe that hung is a probe that
 said nothing.
 
+### The head
+
+Every probe that answers also records **where the environment is**, in `environment_heads`: the
+commits it named (joined by a space, the several-services rule above), the head before that, when it
+was last observed, and `changed_at` — **when the harness noticed the head move**. Nothing else keeps
+an environment's head over time: reach is per landing and arrivals are per goal, and "since the
+deploy" ([39](39-app-errors.md#the-deploy-window)) needs to know when it moved.
+
+- **The first head ever recorded is no deploy**: `changed_at` stays null, because the harness cannot
+  say when that build arrived. Only a head that differs from the one held moves `previous_sha` and
+  `changed_at`; the same head again only moves `observed_at`.
+- A probe that could not answer leaves the record as it was.
+- `changed_at` is as precise as the probe's cadence — `environmentProbeIntervalMs` for an environment
+  that is probed for its head alone, a pulse when landings are pending.
+
+An environment that declares **`errors`** is the one reader of its head today, so it is probed on
+`environmentProbeIntervalMs` **even with no landing due**; every other environment keeps the rule
+below that nothing pending means nothing asked. The interval runs from the last time the desk _asked_,
+held in memory — not from `observed_at` — so a probe that cannot answer is asked once an interval
+rather than every pulse, and a restart asks once.
+
 ## Asking the clone
 
 `GitObserver.contains(commits, heads)` (`src/git/gitObserver.ts`). Given what the environment named,
@@ -259,6 +280,8 @@ commit. A carrier the clone places off the integration branch carries nothing.
 
 Two landings sharing one `sha` is the correct shape here: each part gets its own row in the
 [reach matrix](#every-part-every-environment), with the same verdicts as the rung that carried it.
+App-error linking reads the same rows and so sees both goals in one deploy with one diff, which it
+reports as a tie rather than choosing ([39](39-app-errors.md#frames-against-diffs)).
 
 ### When a held goal is going nowhere
 
@@ -491,6 +514,8 @@ because each failure is otherwise silent in the same direction:
   likely to be written by somebody who meant one and left it for later;
 - an empty **`arrival.workItemState`**, which names no column. A blank state word would be written to
   the tracker and refused there, one arrival at a time, on the deployment that meant a real one;
+- an **`errors`** block whose `list` is empty or carries no `{since}`
+  — → [39](39-app-errors.md#configuring-an-environment);
 - a **`group`** named after an environment, or one whose members disagree about `arrival`
   — → [Groups](#groups).
 
@@ -820,6 +845,10 @@ arrived, report the delivered goals held behind an environment that is going now
 ([above](#when-a-held-goal-is-going-nowhere)), say so on their tickets, and run the post-deploy
 watch's own window pass ([29](29-post-deploy-watch.md#the-window)).
 
+The probe pass also records each environment's [head](#the-head). The app-error read
+([39](39-app-errors.md#the-desk)) is **not** a pass here: it is its own pulse entry, `appErrors`,
+directly below this desk, so the head it holds a reading against is the one this pulse recorded.
+
 The placing pass runs **above** the probe, because a landing it marks as not on the integration branch
 is one the probe must not ask about: asked, it writes an `absent` that nothing can ever turn into a
 `reached`, which is the reading this whole section exists to stop.
@@ -849,7 +878,8 @@ What is asked, and what is not:
   are this week's.
 - An `absent` or `unknown` older than `environmentProbeIntervalMs` is asked again.
 - **An environment with nothing pending is not asked where it is at all**, so a fleet whose work is
-  confirmed everywhere spawns nothing.
+  confirmed everywhere spawns nothing — unless it declares `errors`, which asks for its
+  [head](#the-head) once an `environmentProbeIntervalMs`.
 - At most **200 landings per environment per pulse**. The bound is on the git half now rather than on
   the probe: the spawn count is one per environment however many goals are in flight, and what is
   left to scale is the argument list the clone is handed. What the cap leaves out is asked on the next
@@ -1081,7 +1111,7 @@ Stated so a later change does not discover them as bugs:
 
 ## Persistence
 
-Five tables, described in [14](14-persistence.md), all owned by `EnvironmentStore`:
+Six tables, described in [14](14-persistence.md), all owned by `EnvironmentStore`:
 
 | Table                       | One row per               | Written                                                                                                                                                                  |
 | --------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -1090,6 +1120,7 @@ Five tables, described in [14](14-persistence.md), all owned by `EnvironmentStor
 | `goal_arrivals`             | `(goal_ref, environment)` | `OR IGNORE` — arriving twice is not two arrivals                                                                                                                         |
 | `environment_gate_releases` | goal                      | `OR REPLACE`, deleted to clear                                                                                                                                           |
 | `environment_health`        | environment               | replaced each reading, `changed_at` held across an unchanged one                                                                                                         |
+| `environment_heads`         | environment               | upserted by every probe that answered, `previous_sha` and `changed_at` moved only by a different head                                                                    |
 
 `goal_landings` is keyed on the pull request for `branch_reaps`' reason — a branch name is reusable,
 and a goal can land more than once.

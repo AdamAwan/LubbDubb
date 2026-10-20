@@ -5,6 +5,7 @@ import { issuePickupStatus, issueWatchGateReason, type IssuePickupContext } from
 import { appraisalHold } from '../intake/appraisal.js';
 import { investigationStanding } from '../intake/investigation.js';
 import { liveParts } from '../plans/parts.js';
+import { sentence } from '../primitives.js';
 
 // → docs/spec/25-supply.md
 
@@ -411,12 +412,7 @@ function latentClause(latent: LatentSupply): string | null {
     latent.parts > 0
       ? ` — answering them puts ${latent.parts} part${latent.parts === 1 ? '' : 's'} back in the fleet`
       : ' — answering them is what releases the next work';
-  return `${capitalise(list(parts))} ${answers === 1 ? 'is' : 'are'} standing${releases}.`;
-}
-
-function list(items: readonly string[]): string {
-  if (items.length <= 1) return items[0] ?? '';
-  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] as string}`;
+  return `${capitalise(sentence(parts))} ${answers === 1 ? 'is' : 'are'} standing${releases}.`;
 }
 
 function capitalise(s: string): string {

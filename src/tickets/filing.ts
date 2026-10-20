@@ -12,6 +12,8 @@ interface TicketFiling {
   bug?: boolean;
   type?: string | null;
   relatedTo?: number;
+  /** A key the item must be findable by — an app error group's; the provider carries it where its search can find it. */
+  searchKey?: string;
 }
 
 export type TicketFiler = (input: TicketFiling) => Promise<string>;
@@ -25,6 +27,7 @@ export function ticketFiler(config: Config, sink: ActionSink): TicketFiler {
       type: input.bug ? bugFilingType(config) : (input.type ?? filingType(config)),
       assignee: ticketAssignee(config),
       relatedTo: input.relatedTo ?? null,
+      ...(input.searchKey === undefined ? {} : { searchKey: input.searchKey }),
     });
     if (!result.ok || !result.ref) throw new Error('the tracker accepted the item but did not say what it created');
     return result.ref;

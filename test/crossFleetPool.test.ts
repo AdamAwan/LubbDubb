@@ -9,7 +9,8 @@ import { loadConfig } from '../src/config/config.js';
 import { FakePoolTransport } from '../src/integrations/fake/fakePool.js';
 import { GitPoolTransport } from '../src/integrations/pool/gitPool.js';
 import { foldPoolDigest } from '../src/pool/aggregate.js';
-import { buildDigestDocument, POOL_RETENTION_DAYS, utcDay } from '../src/pool/digestArm.js';
+import { buildDigestDocument, POOL_RETENTION_DAYS } from '../src/pool/digestArm.js';
+import { utcDay } from '../src/primitives.js';
 import {
   POOL_SCHEMA_VERSION,
   parsePoolDocument,

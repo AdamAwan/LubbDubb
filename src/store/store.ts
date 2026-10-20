@@ -15,6 +15,8 @@ import { ProfileOverrideStore } from './profileOverrides.js';
 import { RemedyStore } from './remedies.js';
 import { McpCallStore } from './mcpCalls.js';
 import { ApiErrorStore } from './apiErrors.js';
+import { AppErrorStore } from './appErrors.js';
+import { AppErrorTicketStore } from './appErrorTickets.js';
 import { SurfaceReachStore } from './surfaceReach.js';
 import { declineRetiredOutcomeRows, HumanTaskStore, HUMAN_TASK_COLUMNS, indexHumanTasksByKind } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
@@ -152,6 +154,8 @@ export class Store {
   readonly remedies: RemedyStore;
   readonly mcpCalls: McpCallStore;
   readonly apiErrors: ApiErrorStore;
+  readonly appErrors: AppErrorStore;
+  readonly appErrorTickets: AppErrorTicketStore;
   readonly surfaceReach: SurfaceReachStore;
   readonly humanTasks: HumanTaskStore;
   readonly plans: PlanStore;
@@ -220,6 +224,8 @@ export class Store {
     this.remedies = new RemedyStore(ctx);
     this.mcpCalls = new McpCallStore(ctx);
     this.apiErrors = new ApiErrorStore(ctx);
+    this.appErrors = new AppErrorStore(ctx);
+    this.appErrorTickets = new AppErrorTicketStore(ctx);
     this.surfaceReach = new SurfaceReachStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
     this.plans = new PlanStore(ctx);

@@ -107,6 +107,7 @@ function fakeApi(evals: AzPolicyEvaluation[], requeue: RequeueScript = { asked: 
     linkWorkItemAttachment: unused('linkWorkItemAttachment'),
     listOpenWorkItems: unused('listOpenWorkItems'),
     listWorkItemsChangedSince: unused('listWorkItemsChangedSince'),
+    queryWorkItemsByTags: unused('queryWorkItemsByTags'),
     getWorkItems: unused('getWorkItems'),
     listWorkItemUpdates: unused('listWorkItemUpdates'),
     createThreadReply: unused('createThreadReply'),
@@ -151,6 +152,10 @@ function azureSink(evals: AzPolicyEvaluation[], requeue: RequeueScript): ActionS
   };
   return {
     canCloseIssue: () => false,
+    canReopenIssue: () => false,
+    reopenIssue: (): never => {
+      throw new Error('reopenIssue is not scripted in this test');
+    },
     canClosePr: () => false,
     closePr: (): never => {
       throw new Error('closePr is not scripted in this test');

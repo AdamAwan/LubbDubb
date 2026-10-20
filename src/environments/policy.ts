@@ -1,5 +1,6 @@
 import type { EnvironmentGate, RemoteRowKind } from '../types.js';
 import { QUERY_URL_TOKENS } from './watchQueryUrl.js';
+import { SINCE_TOKEN } from '../appErrors/report.js';
 
 // → docs/spec/24-environments.md
 
@@ -11,6 +12,7 @@ export interface EnvironmentConfig {
   arrival?: EnvironmentArrival;
   watch?: EnvironmentWatch;
   validate?: EnvironmentValidate;
+  errors?: { list: string };
 }
 
 const REMOTE_ROW_KINDS: readonly RemoteRowKind[] = ['check', 'state'];
@@ -129,6 +131,7 @@ export function validateEnvironments(environments: EnvironmentConfig[]): void {
         `${where} ("${env.name}"): "group" must be a non-empty name — the one place these environments are ` +
           'read as, or be left out, and this environment stands on its own.',
       );
+    validateErrors(env.errors, `${where} ("${env.name}")`);
     validateArrival(env.arrival, `${where} ("${env.name}")`);
     validateWatch(env, `${where} ("${env.name}")`);
     validateValidate(env.validate, `${where} ("${env.name}")`);
@@ -168,6 +171,22 @@ function validateGroups(environments: EnvironmentConfig[]): void {
           'group declares the same "arrival".',
       );
   }
+}
+
+function validateErrors(errors: EnvironmentConfig['errors'], where: string): void {
+  if (errors === undefined) return;
+  if (typeof errors !== 'object' || errors === null || Array.isArray(errors))
+    throw new Error(`${where}: "errors" must be an object — {"list": "./scripts/errors.sh {since}"}.`);
+  if (typeof errors.list !== 'string' || errors.list.trim() === '')
+    throw new Error(
+      `${where}: "errors.list" must be a non-empty command printing a JSON list of error groups, or "errors" ` +
+        'must be left out — with none, nobody is asked what has gone wrong here.',
+    );
+  if (!errors.list.includes(SINCE_TOKEN))
+    throw new Error(
+      `${where}: "errors.list" carries no ${SINCE_TOKEN}. Every read is bounded by the instant the last one ` +
+        'reached, and a command that ignores it counts old errors as new on every read.',
+    );
 }
 
 function validateArrival(arrival: EnvironmentArrival | undefined, where: string): void {

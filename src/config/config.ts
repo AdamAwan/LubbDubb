@@ -23,7 +23,13 @@ import { DEFAULT_READ_LANES } from '../world/readPlan.js';
 import type { IssueSequencing } from '../sequence/readiness.js';
 import { DEFAULT_SEQUENCE_MAX_CHILDREN } from '../sequence/sequence.js';
 import { dropRetiredKeys, refuseRemovedKeys } from './retiredKeys.js';
-import { validateAgentMode, validatePool, validateReview, validateWorkItemStates } from './configChecks.js';
+import {
+  validateAgentMode,
+  validateAppErrors,
+  validatePool,
+  validateReview,
+  validateWorkItemStates,
+} from './configChecks.js';
 
 // → docs/spec/02-configuration.md
 
@@ -96,6 +102,9 @@ export interface Config {
   environmentProbeIntervalMs: number;
   environmentHealthIntervalMs: number;
   watchIntervalMs: number;
+  appErrorIntervalMs: number;
+  appErrorMinCount: number;
+  appErrorIgnore: string[];
   remoteValidation: RemoteValidationPolicy;
   ci: CiPolicy;
   upNextOverrideTtlMs: number;
@@ -289,6 +298,9 @@ const DEFAULTS: Config = {
   environmentProbeIntervalMs: 5 * 60 * 1000,
   environmentHealthIntervalMs: 5 * 60 * 1000,
   watchIntervalMs: 30 * 60 * 1000,
+  appErrorIntervalMs: 15 * 60 * 1000,
+  appErrorMinCount: 2,
+  appErrorIgnore: [],
   remoteValidation: DEFAULT_REMOTE_VALIDATION,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
@@ -522,6 +534,8 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   validateRunwayPolicy(merged.runway);
 
   validateEnvironments(merged.environments);
+
+  validateAppErrors(merged);
 
   validateOperatorTenants(merged.remoteValidation.tenants, merged.environments);
 

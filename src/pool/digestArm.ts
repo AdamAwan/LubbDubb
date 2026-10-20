@@ -23,14 +23,11 @@ import { VERBS_BY_SUBJECT } from '../usage/events.js';
 import { choiceKey, choiceSightings, type DecisionChoice } from '../insights/choiceInsights.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
 import { isDispatchRule } from '../insights/taskTypeSpend.js';
+import { utcDay } from '../primitives.js';
 
 // → docs/spec/28-cross-fleet-pool.md
 
 export const POOL_RETENTION_DAYS = 90;
-
-export function utcDay(iso: string): string {
-  return iso.slice(0, 10);
-}
 
 export function buildDigestDocument(
   store: Store,

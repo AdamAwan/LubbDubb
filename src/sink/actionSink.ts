@@ -104,6 +104,12 @@ export interface IssueCreateInput {
   type: string | null;
   assignee: string | null;
   relatedTo: number | null;
+  /**
+   * A key the item must be findable by exactly, carried where the provider's search can find it:
+   * an Azure DevOps tag, lines in a GitHub body (`src/tickets/searchKey.ts`). Absent for most filings.
+   * → docs/spec/15-integrations.md, docs/spec/39-app-errors.md#the-key-on-the-ticket
+   */
+  searchKey?: string;
 }
 
 export interface IssueCloseInput {
@@ -148,6 +154,24 @@ export interface IssueImageSink {
   attachIssueImage(input: IssueImageInput): Promise<IssueImageResult>;
 }
 
+/** One tracker item found carrying an app error key. */
+export interface IssueKeyHit {
+  ref: string;
+  state: 'open' | 'closed';
+  closedAt: string | null;
+}
+
+/**
+ * Finding the tickets an app error key was filed under — the tracker as the lock between fleets. A
+ * capability beside `ActionSink` because only the app errors desk and its routes read it. A search
+ * that fails **throws**: a failed search is never an empty answer.
+ * → docs/spec/39-app-errors.md#the-tracker-lock
+ */
+export interface IssueKeySink {
+  canSearchIssueKeys(): boolean;
+  findIssuesByKeys(keys: readonly string[]): Promise<Map<string, IssueKeyHit[]>>;
+}
+
 export interface PrAssignInput {
   prNumber: number;
   personId: string;
@@ -187,6 +211,9 @@ export interface ActionSink {
   setIssueLabel(input: IssueLabelInput): Promise<SendResult>;
   canCloseIssue(): boolean;
   closeIssue(input: IssueCloseInput): Promise<SendResult>;
+  /** False where the provider could reopen but this deployment has not said into which state. */
+  canReopenIssue(): boolean;
+  reopenIssue(number: number): Promise<SendResult>;
   canSetWorkItemState(): boolean;
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult>;
   canPlaceWorkItem(): boolean;

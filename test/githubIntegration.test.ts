@@ -9,7 +9,12 @@ import {
   aggregateCiStatus,
   buildReviewThreads,
 } from '../src/integrations/github/sourceControl.js';
-import { GitHubIssuesIntegration, linkedPrFromTimeline, viewerAddedLabels } from '../src/integrations/github/issues.js';
+import {
+  GitHubIssuesIntegration,
+  keySearchBatches,
+  linkedPrFromTimeline,
+  viewerAddedLabels,
+} from '../src/integrations/github/issues.js';
 import { diffWorlds } from '../src/world/worldDiff.js';
 import type { Issue, WorldSnapshot } from '../src/types.js';
 import { resolvePullDetail } from '../src/integrations/github/octokitGitHubApi.js';
@@ -26,6 +31,7 @@ import type {
   GhReview,
   GhReviewComment,
   GhReviewThread,
+  GhSearchIssue,
   GhTimelineEvent,
   GitHubApi,
 } from '../src/integrations/github/githubApi.js';
@@ -51,7 +57,9 @@ interface Script {
     | 'resolveReviewThread'
     | 'updatePullBranch'
     | 'getJobLog'
+    | 'searchIssues'
     | 'viewerLogin';
+  searchable?: GhSearchIssue[];
   annotations?: Record<number, GhAnnotation[]>;
   jobLogs?: Record<number, string>;
   createdPullNumber?: number;
@@ -87,6 +95,8 @@ interface Recorded {
   branchUpdates: number[];
   deletedBranches: string[];
   resolvedThreads: Array<{ number: number; rootCommentId: number }>;
+  searches: string[];
+  reopened: number[];
 }
 
 function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
@@ -112,8 +122,19 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     branchUpdates: [],
     deletedBranches: [],
     resolvedThreads: [],
+    searches: [],
+    reopened: [],
   };
   const api: GitHubApi = {
+    async searchIssues(query) {
+      recorded.searches.push(query);
+      if (script.throwOn === 'searchIssues') throw new Error('secondary rate limit');
+      const phrases = [...query.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+      return (script.searchable ?? []).filter((i) => phrases.some((p) => i.body.includes(p)));
+    },
+    async reopenIssue(number) {
+      recorded.reopened.push(number);
+    },
     async listCheckRunAnnotations(checkRunId) {
       recorded.annotationReads.push(checkRunId);
       return script.annotations?.[checkRunId] ?? [];
@@ -1093,4 +1114,70 @@ test('a closed issue produces no world event, because it leaves the world instea
     ['issue_opened'],
   );
   store.close();
+});
+
+test('an app error key on a filed issue is a visible line and a marker in the body', async () => {
+  const { api, recorded } = fakeApi({ createdIssueNumber: 314 });
+  const issues = new GitHubIssuesIntegration({ api });
+  await issues.createIssue({
+    title: 'live: Orders.Submit threw',
+    body: 'frames only',
+    labels: [],
+    type: null,
+    assignee: null,
+    relatedTo: 12,
+    searchKey: 'err:shop:3f9a1c2b',
+  });
+  const body = recorded.createdIssues[0]!.body;
+  assert.match(body, /Related to #12\.\n\nError key: `err:shop:3f9a1c2b`/);
+  assert.match(body, /<!-- lubbdubb:err:shop:3f9a1c2b -->$/);
+  assert.deepEqual(recorded.createdIssues[0]!.labels, [], 'the key is never a label');
+});
+
+test('a key search is OR-batched within GitHub’s limits, and a hit is matched to the key it carries whole', async () => {
+  const keys = Array.from({ length: 8 }, (_, i) => `err:shop:${String(i).padStart(8, '0')}`);
+  const { api, recorded } = fakeApi({
+    searchable: [
+      { number: 5, state: 'open', body: 'x\n\nError key: `err:shop:00000000`', closedAt: null },
+      { number: 6, state: 'closed', body: 'Error key: `err:shop:00000007`', closedAt: '2026-10-01T00:00:00Z' },
+      { number: 8, state: 'open', body: 'err:shop:000000001 is a different key', closedAt: null },
+    ],
+  });
+  const issues = new GitHubIssuesIntegration({ api, owner: 'acme', repo: 'shop' });
+  const found = await issues.findIssuesByKeys(keys);
+  assert.equal(recorded.searches.length, 2);
+  for (const q of recorded.searches) {
+    assert.ok(q.length <= 256, q);
+    assert.ok(q.split(' OR ').length <= 6, q);
+    assert.match(q, /^repo:acme\/shop is:issue in:body "/);
+  }
+  assert.deepEqual(found.get(keys[0]!), [{ ref: 'issue:5', state: 'open', closedAt: null }]);
+  assert.deepEqual(found.get(keys[7]!), [{ ref: 'issue:6', state: 'closed', closedAt: '2026-10-01T00:00:00Z' }]);
+  assert.deepEqual(found.get(keys[1]!), [], 'a longer key that starts with this one is not this one');
+});
+
+test('a GitHub key search that fails rejects rather than answering nothing found', async () => {
+  const { api } = fakeApi({ throwOn: 'searchIssues' });
+  const issues = new GitHubIssuesIntegration({ api, owner: 'acme', repo: 'shop' });
+  await assert.rejects(() => issues.findIssuesByKeys(['err:shop:3f9a1c2b']), /rate limit/);
+});
+
+test('keySearchBatches keeps every query inside the length cap', () => {
+  const long = Array.from(
+    { length: 12 },
+    (_, i) => `err:a-very-long-project-name-for-a-shop:${String(i).padStart(8, '0')}`,
+  );
+  const batches = keySearchBatches('acme', 'shop', long);
+  assert.deepEqual(
+    batches.flatMap((b) => b.keys),
+    long,
+  );
+  for (const b of batches) assert.ok(b.query.length <= 256, b.query);
+});
+
+test('reopening a GitHub issue opens it', async () => {
+  const { api, recorded } = fakeApi();
+  const issues = new GitHubIssuesIntegration({ api });
+  assert.deepEqual(await issues.reopenIssue(9), { ok: true, ref: 'issue:9' });
+  assert.deepEqual(recorded.reopened, [9]);
 });

@@ -36,14 +36,17 @@ const STOPWORDS = new Set([
   'or',
 ]);
 
-function terms(text: string): Set<string> {
+/** The words a title names: lower-cased, split on anything not a letter or digit, short words and stop words dropped. */
+export function terms(text: string, alsoStop: ReadonlySet<string> = NO_WORDS): Set<string> {
   return new Set(
     text
       .toLowerCase()
       .split(/[^a-z0-9]+/)
-      .filter((w) => w.length > 2 && !STOPWORDS.has(w)),
+      .filter((w) => w.length > 2 && !STOPWORDS.has(w) && !alsoStop.has(w)),
   );
 }
+
+const NO_WORDS: ReadonlySet<string> = new Set();
 
 export function dedupeCandidates(
   items: readonly MirroredTicket[],

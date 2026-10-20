@@ -39,6 +39,7 @@ is about.
 | `routes/reliability.ts`     | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                  |
 | `routes/throughput.ts`      | `/api/throughput` — how much came out: pull requests, review, issues                                                                                                       |
 | `routes/apiErrors.ts`       | `/api/api-errors` — how often the model API refused an agent's turn                                                                                                        |
+| `routes/appErrors.ts`       | `/api/app-errors` — the application's own errors per environment, grouped, with what moved, and the tracker presses on them ([39](39-app-errors.md))                       |
 | `routes/mcpUsage.ts`        | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                           |
 | `routes/plugin.ts`          | `/api/plugin` and `POST /api/plugin/install` — the operator's Claude Code plugin ([11](11-mcp-tools.md#the-plugin))                                                        |
 | `routes/usage.ts`           | `/api/usage` — the operator ledger and surface reach, and `POST /api/usage/events`, the cockpit's own batch of what a person did ([34](34-usage-metrics.md))               |
@@ -1378,6 +1379,31 @@ How often the model API refused an agent's turn, over `?window=` (the insights w
 `{ insights }` — `total`, `agentsStarted`, `agentsAffected`, `affectedRate`, counts `byKind`, `byCode`
 and `byModel`, a `byDay` series (`errors` beside `agentsStarted`), and the twenty most `recent` rows.
 See [18](18-observability.md#api-errors).
+
+### `GET /api/app-errors`
+
+The errors nobody declared, read from each environment's own `errors` command. Returns
+`{ project, environments, bands }` — per environment its latest reading, its recorded head and its
+error groups with their state, key, dense fourteen-day series and, for a moved group, the goal it is
+probably the work of; per band the roll-up. Not on `/api/state`, for `/api/mcp/usage`'s reason. The
+link asks the clone, and the route waits on it for at most five seconds; a linked payload is reused for
+thirty seconds while nothing it was built from has moved ([39](39-app-errors.md#where-it-is-computed)). Each group's `tracker` is what the last search for its
+key found. See [39](39-app-errors.md#on-the-wire).
+
+### `POST /api/app-errors/file-bug`, `/reopen`, `/search`
+
+The Errors tab's tracker presses ([39](39-app-errors.md#the-presses)). `file-bug` takes
+`{environment, fingerprint, investigate?, unsearched?}` — `investigate: true` is the row's Investigate,
+which files exactly as File bug and also asks for an investigation; there is no separate route for it.
+`reopen` and `search` take `{key}` (an `err:` key, or a 400). Each searches the tracker for the key
+again before it writes; an open ticket found is answered with `reused: true` rather than filed twice.
+`file-bug` and `reopen` answer `AppErrorPressPayload` (`{ok, ticketRef, reused, investigation}`) through
+one `pressRoute` mapping — a refusal is its status, a tracker that throws is a 502 recorded through
+`errors.record`, and success broadcasts `world:changed` — while `search` answers `{ok, search}`.
+Refusals: **409** with no tracker configured, a tracker that cannot search or reopen, nothing closed to
+reopen, or a press already running for the key; **404** for a group the store does not hold; **502**
+for a search that failed (unless `unsearched: true`) or a tracker that refused the write. Never a
+`WorldEvent`.
 
 ### `GET /api/mcp/usage`
 

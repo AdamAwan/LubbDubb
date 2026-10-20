@@ -109,6 +109,8 @@ test('every pass is awaited — a pass that must not block the pulse starts its 
 test('the validation chain runs in the order the bench is read in', () => {
   below('environments', 'graph', 'merge attribution walks the graph, so a stale graph resolves nothing');
   below('remoteValidation', 'environments', 'a sheet is assembled off the arrivals the environment desk records');
+  below('appErrors', 'environments', 'an error read is held against the head the environment desk just recorded');
+  below('appErrorTracker', 'appErrors', 'the tracker is searched for the groups the read just moved');
   below('validationReady', 'remoteValidation', "the validate row's detail carries this pulse's sheet");
   below('closeOuts', 'validationReady', 'the bench asks for one thing at a time');
   below('validationReady', 'validationAsks', 'the resources are asked for before the obligation they are for');

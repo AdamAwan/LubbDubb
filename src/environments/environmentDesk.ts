@@ -35,6 +35,7 @@ const MAX_LANDINGS_PER_PULSE = 200;
 export class EnvironmentDesk {
   private readonly now: () => number;
   private readonly reported = new Set<string>();
+  private readonly headAskedAt = new Map<string, number>();
 
   constructor(private readonly deps: EnvironmentDeskDeps) {
     this.now = deps.now ?? (() => Date.now());
@@ -155,9 +156,11 @@ export class EnvironmentDesk {
   private async probe(environment: EnvironmentConfig): Promise<void> {
     const { store, errors } = this.deps;
     const pending = this.due(environment.name);
-    if (pending.length === 0) return;
+    if (pending.length === 0 && !this.headDue(environment)) return;
+    this.headAskedAt.set(environment.name, this.now());
     try {
       const head = await this.deps.prober.at(environment.name, environment.at);
+      if (head.commits !== null) store.environments.recordEnvironmentHead(environment.name, head.commits.join(' '));
       const detail = head.detail;
       const held =
         head.commits === null
@@ -181,6 +184,12 @@ export class EnvironmentDesk {
         message: `probing ${environment.name} failed: ${(err as Error).message}`,
       });
     }
+  }
+
+  private headDue(environment: EnvironmentConfig): boolean {
+    if (environment.errors === undefined) return false;
+    const asked = this.headAskedAt.get(environment.name);
+    return asked === undefined || asked <= this.now() - this.deps.probeIntervalMs;
   }
 
   private due(environment: string): GoalLanding[] {

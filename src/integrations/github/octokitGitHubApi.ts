@@ -18,6 +18,7 @@ import type {
   GhReview,
   GhReviewComment,
   GhReviewThread,
+  GhSearchIssue,
   GhTimelineEvent,
   GitHubApi,
 } from './githubApi.js';
@@ -412,6 +413,15 @@ export class OctokitGitHubApi implements GitHubApi {
 
   async closeIssue(number: number, reason: 'completed' | 'not_planned'): Promise<void> {
     await this.octokit.issues.update({ ...this.base, issue_number: number, state: 'closed', state_reason: reason });
+  }
+
+  async reopenIssue(number: number): Promise<void> {
+    await this.octokit.issues.update({ ...this.base, issue_number: number, state: 'open' });
+  }
+
+  async searchIssues(query: string): Promise<GhSearchIssue[]> {
+    const { data } = await this.octokit.search.issuesAndPullRequests({ q: query, per_page: 100 });
+    return data.items.filter((i) => !i.pull_request).map((i) => ({ ...i, body: i.body ?? '', closedAt: i.closed_at }));
   }
 
   async createIssue(input: {

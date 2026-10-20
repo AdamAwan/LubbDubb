@@ -62,6 +62,10 @@ export interface Place {
   petsBlended: boolean;
   /** Which shape the overview draws in. */
   overview: OverviewShape;
+  /** Which band the Errors tab draws, or null for the first. → 39-app-errors.md#in-the-cockpit */
+  errorsBand: string | null;
+  /** Whether the Errors tab draws the steady and gone groups it folds away by default. */
+  errorsSteady: boolean;
   /** Whether the feature board is read as a board or worked one Feature at a time. */
   featureMode: FeatureMode;
 }
@@ -115,6 +119,7 @@ const TABS: readonly ConsoleTab[] = [
   'obstacles',
   'features',
   'bots',
+  'errors',
   'insights',
   'pets',
   'config',
@@ -204,6 +209,8 @@ export const NOWHERE: Place = {
   petsBlended: false,
   overview: 'cards',
   featureMode: 'board',
+  errorsBand: null,
+  errorsSteady: false,
 };
 
 const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mcp', 'notifications', 'theme'];
@@ -354,6 +361,10 @@ function readFeatureBoard(
   };
 }
 
+function readErrors(query: URLSearchParams): Pick<Place, 'errorsBand' | 'errorsSteady'> {
+  return { errorsBand: param(query, 'band'), errorsSteady: query.has('steady') };
+}
+
 export function readPlace(search: string): Place {
   const query = new URLSearchParams(search);
   return {
@@ -362,6 +373,7 @@ export function readPlace(search: string): Place {
     ...readInsightsPage(query),
     ...readTicketFilters(query),
     ...readFeatureBoard(query),
+    ...readErrors(query),
   };
 }
 
@@ -513,6 +525,11 @@ function writeFeatureBoard(query: URLSearchParams, place: Place): void {
   if (place.featureMode !== 'board') query.set('fmode', place.featureMode);
 }
 
+function writeErrors(query: URLSearchParams, place: Place): void {
+  if (place.errorsBand !== null) query.set('band', place.errorsBand);
+  if (place.errorsSteady) query.set('steady', '1');
+}
+
 export function placeQuery(place: Place): string {
   const query = new URLSearchParams();
   writeWhere(query, place);
@@ -520,6 +537,7 @@ export function placeQuery(place: Place): string {
   writeInsightsPage(query, place);
   writeTicketFilters(query, place);
   writeFeatureBoard(query, place);
+  writeErrors(query, place);
   const encoded = query.toString();
   return encoded === '' ? '' : `?${encoded}`;
 }

@@ -10,6 +10,7 @@ import type {
   IssueCreateInput,
   IssueImageInput,
   IssueImageResult,
+  IssueKeyHit,
   IssueLabelInput,
   PrBaseInput,
   PrAssignInput,
@@ -285,6 +286,25 @@ export interface IssueCreateCapable {
 
 export function isIssueCreateCapable(x: Integration): x is Integration & IssueCreateCapable {
   return typeof (x as Partial<IssueCreateCapable>).createIssue === 'function';
+}
+
+export interface IssueKeySearchCapable {
+  findIssuesByKeys(keys: readonly string[]): Promise<Map<string, IssueKeyHit[]>>;
+}
+
+export function isIssueKeySearchCapable(x: Integration): x is Integration & IssueKeySearchCapable {
+  return typeof (x as Partial<IssueKeySearchCapable>).findIssuesByKeys === 'function';
+}
+
+export interface IssueReopenCapable {
+  reopenIssue(number: number): Promise<SendResult>;
+  /** Answers false where the provider could reopen but this deployment has not said into which state. */
+  canReopenIssue?(): boolean;
+}
+
+export function isIssueReopenCapable(x: Integration): x is Integration & IssueReopenCapable {
+  const candidate = x as Partial<IssueReopenCapable>;
+  return typeof candidate.reopenIssue === 'function' && (candidate.canReopenIssue?.() ?? true);
 }
 
 export interface IssueImageCapable {

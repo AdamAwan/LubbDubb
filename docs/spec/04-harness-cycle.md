@@ -115,7 +115,7 @@ and skips **every pass whose subject is the world snapshot**:
 
 `connector.getState` and `recordWorldChanges` — plus every pass the
 [pulse registry](#the-pulse-registry) declares `readWorld: true`, which today is `plans`, `prWatch`,
-`prWorkItems`, `naming`, `branchReaps`, `updates`, `environments`, `remoteValidation`, `notices`,
+`prWorkItems`, `naming`, `branchReaps`, `updates`, `environments`, `appErrors`, `appErrorTracker`, `remoteValidation`, `notices`,
 and `pool` at the `reconcile` phase, and `appraisals`, `areaPaths`,
 `reviewedElsewhere` and `tickets` at the phases below it.
 
@@ -643,6 +643,8 @@ breaking silently:
 | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `graph` → `environments`, immediately              | merge attribution walks `parentRef`, so a graph one pulse stale resolves nothing ([24](24-environments.md#recording-a-landing))                                                  |
 | `environments` → `remoteValidation`                | a sheet is assembled off the arrivals the environment desk records ([36](36-remote-validation.md))                                                                               |
+| `environments` → `appErrors`                       | an error read is held against the head the environment desk's probe just recorded ([39](39-app-errors.md#the-deploy-window))                                                     |
+| `appErrors` → `appErrorTracker`                    | the tracker is searched for the groups the read just moved ([39](39-app-errors.md#the-tracker-lock))                                                                             |
 | `remoteValidation` → `validationReady`             | the validate row's detail carries **this** pulse's sheet                                                                                                                         |
 | `validationAsks` → `validationReady` → `closeOuts` | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                                                         |
 | `plans` → `graph`                                  | the part→PR observations the reconciler just made are the ones recorded                                                                                                          |

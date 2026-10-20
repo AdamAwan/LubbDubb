@@ -11,8 +11,8 @@ export function pullReviewerUrl(repoUrl: string, pullRequestId: number, reviewer
   return withApiVersion(`${repoUrl}/pullrequests/${pullRequestId}/reviewers/${encodeURIComponent(reviewerId)}`);
 }
 
-export function chunkIds(ids: number[], size: number): number[][] {
-  const chunks: number[][] = [];
+export function chunkIds<T>(ids: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
   for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
   return chunks;
 }
@@ -94,4 +94,8 @@ export async function readFileAtCommit(
     if (isAzNotFound(err)) return '';
     throw err;
   }
+}
+
+export function isRelationAlreadyExists(message: string): boolean {
+  return /WorkItemRelationAlreadyExists|relation already exists/i.test(message);
 }

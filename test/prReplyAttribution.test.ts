@@ -53,6 +53,10 @@ function replySink(script: { commentRef?: string } = {}): ActionSink & {
   return {
     replies,
     canCloseIssue: () => false,
+    canReopenIssue: () => false,
+    reopenIssue: (): never => {
+      throw new Error('reopenIssue is not scripted in this test');
+    },
     canClosePr: () => false,
     closePr: (): never => {
       throw new Error('closePr is not scripted in this test');
@@ -164,6 +168,8 @@ function githubApi(script: GhScript): GitHubApi {
     getReleaseBody: unused,
     updatePullBranch: unused,
     closePull: unused,
+    reopenIssue: unused,
+    searchIssues: unused,
     deleteBranch: unused,
   };
 }

@@ -28,6 +28,7 @@ import { CommandReviewProber } from '../review/reviewedElsewhere.js';
 import type { WatchDryRunner } from '../environments/watchDryRun.js';
 import { StateQueryDesk } from '../validation/remote/stateQueries.js';
 import { RemoteValidationDesk } from '../validation/remote/desk.js';
+import type { AppErrorTrackerDesk } from '../appErrors/tracker.js';
 import { RemoteRunDesk } from '../validation/remote/run.js';
 import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
@@ -91,6 +92,8 @@ export interface System {
   setupReading: { latest: SetupReading | null };
   store: Store;
   connector: CompositeConnector;
+  /** What the harness writes through: the connector, or the sink a test injected in its place. */
+  sink: Foundation['sink'];
   agents: AgentManager;
   escalations: EscalationInbox;
   proposals: ProposalDesk;
@@ -112,11 +115,13 @@ export interface System {
   watch: WatchDryRunner;
   stateQueries: StateQueryDesk;
   remoteValidation: RemoteValidationDesk;
+  appErrorTracker: AppErrorTrackerDesk;
   validationReady: ValidationReadyDesk;
   remoteRuns: RemoteRunDesk;
   remoteIntents: EnvironmentDesks['remoteIntents'];
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
+  appErrorPayloads: EnvironmentDesks['appErrorPayloads'];
   prAssign: IntakeDesks['prAssign'];
   botPrs: BenchDesks['botPrs'];
   botPrRisks: BenchDesks['botPrRisks'];
@@ -169,6 +174,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     setupReading: { latest: null },
     store: base.store,
     connector: base.connector,
+    sink: base.sink,
     agents: fleet.agents,
     escalations: fleet.escalations,
     proposals: fleet.proposals,
@@ -192,11 +198,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     watch: envs.watchDryRun,
     stateQueries: envs.stateQueries,
     remoteValidation: envs.remoteValidation,
+    appErrorTracker: envs.appErrorTracker,
     validationReady: bench.validationReady,
     remoteRuns: envs.remoteRuns,
     remoteIntents: envs.remoteIntents,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,
+    appErrorPayloads: envs.appErrorPayloads,
     prAssign: intake.prAssign,
     botPrs: bench.botPrs,
     botPrRisks: bench.botPrRisks,
@@ -328,6 +336,8 @@ function buildHarness(
     issuePickup: fleet.issuePickup,
     branchReaps: intake.branchReaps,
     environments: envs.environments,
+    appErrors: envs.appErrors,
+    appErrorTracker: envs.appErrorTracker,
     remoteValidation: envs.remoteValidation,
     remoteIntents: envs.remoteIntents,
     prWatch: intake.prWatch,
