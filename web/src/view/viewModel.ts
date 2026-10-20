@@ -73,6 +73,8 @@ export interface CockpitView {
   featureDensity: FeatureDensity;
   featureClosed: boolean;
   petsBlended: boolean;
+  errorsBand: string | null;
+  errorsSteady: boolean;
   overviewShape: OverviewShape;
   featureMode: FeatureMode;
   featurePrs: FeaturePrFilter;
@@ -185,6 +187,8 @@ interface ViewInputs {
   featureDensity?: FeatureDensity;
   featureClosed?: boolean;
   petsBlended?: boolean;
+  errorsBand?: string | null;
+  errorsSteady?: boolean;
   overviewShape?: OverviewShape;
   featureMode?: FeatureMode;
   featurePrs?: FeaturePrFilter;
@@ -319,6 +323,8 @@ function featuresView(input: ViewInputs) {
     featureDensity: input.featureDensity ?? 'auto',
     featureClosed: input.featureClosed ?? false,
     petsBlended: input.petsBlended ?? false,
+    errorsBand: input.errorsBand ?? null,
+    errorsSteady: input.errorsSteady ?? false,
     overviewShape: input.overviewShape ?? 'cards',
     featureMode: input.featureMode ?? 'board',
     featurePrs: input.featurePrs ?? 'open',

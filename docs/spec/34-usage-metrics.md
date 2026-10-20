@@ -114,6 +114,7 @@ offers no such control, and the day it does, the cell is where it is added.
 | `review-thread`  | `reject` `undo`                                                                                         |
 | `pr-assignee`    | `accept` `reject`                                                                                       |
 | `bot-pr`         | `view` `create` `accept` `abandon` `reject`                                                             |
+| `app-error`      | `view` `filter`                                                                                         |
 | `ejection`       | `expand` `accept` `close` `open`                                                                        |
 | `theme`          | `edit` `accept` `undo`                                                                                  |
 | `notification`   | `edit` `send`                                                                                           |

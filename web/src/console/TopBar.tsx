@@ -29,6 +29,7 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
   obstacles: 'Obstacles',
   features: 'Features',
   bots: 'Bot PRs',
+  errors: 'Errors',
   insights: 'Insights',
   pets: 'Pets',
   config: 'Config',
@@ -41,9 +42,11 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
     actions.openTab(tab);
   };
 
-  const { featureBoard, botPrs } = view.state.config;
+  const { featureBoard, botPrs, appErrors } = view.state.config;
   const tabs = (featureBoard ? FEATURE_TABS : TABS).flatMap((tab): ConsoleTab[] =>
-    tab === 'insights' && botPrs ? ['bots', tab] : [tab],
+    tab === 'insights'
+      ? [...(appErrors ? (['errors'] as const) : []), ...(botPrs ? (['bots'] as const) : []), tab]
+      : [tab],
   );
 
   return (

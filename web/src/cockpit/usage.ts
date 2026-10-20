@@ -130,6 +130,7 @@ const TAB_REACH: Record<ConsoleTab, { key: PlaceKey; view: TabView }> = {
   obstacles: { key: 'obstacles', view: 'obstacle.view' },
   features: { key: 'features', view: 'feature.view' },
   bots: { key: 'bots', view: 'bot-pr.view' },
+  errors: { key: 'errors', view: 'app-error.view' },
   insights: { key: 'insights', view: 'insights.view' },
   pets: { key: 'pets', view: 'pet.view' },
   config: { key: 'config', view: 'config.view' },

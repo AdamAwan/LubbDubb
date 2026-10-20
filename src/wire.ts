@@ -422,6 +422,8 @@ interface CockpitConfig {
   featureBoard: boolean;
   featureSummaries: boolean;
   botPrs: boolean;
+  /** Some environment declares an `errors` block, so the Errors tab has something to read. */
+  appErrors: boolean;
   areaPaths: string[];
   stateRules: { pickup: string[]; inProgress: string | null; inReview: string | null; returnsTo: string | null } | null;
 }

@@ -233,6 +233,7 @@ export function buildDemoState(): DemoSeed {
       featureBoard: true,
       featureSummaries: DEMO_FEATURE_SUMMARIES,
       botPrs: true,
+      appErrors: true,
       canPlaceWorkItem: true,
       desktopFolder: '/Users/you/code/inkwell-books',
       ejectionEnabled: true,
