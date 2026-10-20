@@ -140,6 +140,8 @@ export class AppErrorTrackerDesk {
     if (reads.every((r) => this.seenReads.get(r.environment) === r.readAt)) return;
     const view = this.deps.view();
     const owed = keysOwed(view, this.deps.tickets.listSearches(), (g) => this.moved(g));
+    const held = new Set(view.environments.flatMap((e) => e.groups.map(groupId)));
+    for (const id of this.seenGroups.keys()) if (!held.has(id)) this.seenGroups.delete(id);
     for (const r of reads) this.seenReads.set(r.environment, r.readAt);
     if (owed.length === 0) return;
     this.flight = this.search(owed)
@@ -167,8 +169,11 @@ export class AppErrorTrackerDesk {
     const checkedAt = new Date(this.now()).toISOString();
     let answered: AppErrorTicketSearch[];
     try {
+      const find = this.deps.sink.findIssuesByKeys;
+      if (find === undefined || !this.searchable())
+        throw new Error('no tracker this deployment files into can search by key');
       const hits = await withDeadline(
-        this.deps.sink.findIssuesByKeys!(keys),
+        find.call(this.deps.sink, keys),
         SEARCH_DEADLINE_MS,
         `the tracker did not answer the search within ${String(SEARCH_DEADLINE_MS / 1000)} seconds`,
       );

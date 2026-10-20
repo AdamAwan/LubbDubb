@@ -348,14 +348,14 @@ than it is not, and occasionally it is not.
 Per request, not by the desk: a link depends on landings, reach and the work graph, which move on
 every pulse, so a stored link would be stale the moment the next landing was recorded, and a link
 stored by nothing that reads it would be a second copy to keep true. **There is one builder of the
-linked payload**, `currentAppErrors` (`src/appErrors/current.ts`): the view, the tracker cache folded
-on, then `AppErrorLinker.link`. The route answers with it and [every press](#the-presses) finds its
+linked payload**, `CurrentAppErrors.read` (`src/appErrors/current.ts`): the view, `AppErrorLinker.link`,
+then the tracker cache folded on. The route answers with it and [every press](#the-presses) finds its
 group in it, so a press files from exactly the row the tab drew — its link, and so the story a bug is
 related to, included. A press that rebuilt the row without the link would file every bug unrelated.
 
 **One linked pass is shared.** `CurrentAppErrors.read` keeps the last linked payload and hands it out
 again for thirty seconds while nothing it was built from has moved — no environment read, no head, no
-landing, no reach reading, no work node, and no change to `appErrorMinCount` or `appErrorIgnore` — so
+landing recorded, re-pointed at another commit or reconciled on or off the integration branch, no reach reading, no work node, and no change to `appErrorMinCount` or `appErrorIgnore` — so
 the Errors tab, every goal header's line and a press do not each pay a link pass. The tracker cache is
 folded on afresh on every read (`withTrackers`), never kept in the shared payload, so a press's own
 record shows on the next draw. A pass the deadline cut short is not kept: the next request asks again,

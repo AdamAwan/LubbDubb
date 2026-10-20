@@ -53,7 +53,7 @@ export class CurrentAppErrors {
     const key = [
       ...store.appErrors.listReads().map((r) => `${r.environment}@${r.readAt}`),
       ...store.environments.listEnvironmentHeads().map((h) => `${h.environment}=${h.sha}@${h.changedAt ?? ''}`),
-      `landings ${String(landings.length)} ${landings.reduce((max, l) => (l.recordedAt > max ? l.recordedAt : max), '')}`,
+      `landings ${landings.map((l) => `${String(l.prNumber)}=${l.sha}:${String(l.onIntegration)}`).join(',')}`,
       `reach ${String(readings.length)} ${readings.reduce((max, r) => (r.observedAt > max ? r.observedAt : max), '')}`,
       `nodes ${String(nodes.length)}`,
       `min ${String(config.appErrorMinCount)} ignore ${config.appErrorIgnore.join(',')}`,
