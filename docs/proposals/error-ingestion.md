@@ -97,37 +97,66 @@ A link is shown with how it was made ("frame match", "test arrival", "hint"), ne
 
 ## Several fleets, one app
 
-Every fleet working this app reads the same two resources, but each knows only its **own** goals. So
-the error that fleet A's goal caused may first be seen by fleet B, which has no candidate to link it to.
-The cross-fleet pool ([28](../spec/28-cross-fleet-pool.md)) is the way fleets already see each other,
-and it fits with care:
+Every fleet working this app reads the same two resources. Reading is cheap and stays per fleet. What
+costs is a model investigation and a filed bug, and two fleets doing either for one error is the waste
+to stop. **The tracker is the lock**: it is live, every fleet already reads it, and a filed bug is the
+record of "someone has this".
 
-- **What would cross:** per environment and fingerprint, which of this fleet's goals it links the group
-  to (and how), and the ticket filed for it, if any. Each fleet publishes only its own document — one
-  writer per namespace, whole-document put, as today.
-- **What it gives:** fleet B's cockpit shows "linked by fleet A to goal 412, bug #9031 filed" beside
-  the group, so nobody files the same bug twice and the week-wide window is narrowed by whoever owns
-  the change.
-- **What it must not do:** the pool is read by a page and by nothing else. Nothing from it files,
-  dispatches, or links on its own; it is drawn, and a person acts.
+### The key
 
-Two tensions with the pool's rules, to settle before building:
+`err:<project>:<hash>` — a short hash of the error's **fingerprint**, scoped by the project name the
+pool already uses ([28](../spec/28-cross-fleet-pool.md#the-project-name)).
 
-- **The pool carries numbers over closed vocabularies and no free text.** A fingerprint is close to a
-  key; an exception title or a stack frame is not. The proposal is that the fingerprint (hashed if
-  `problemId` reads as sensitive), a goal ref and a ticket ref cross — and the title, message and frames
-  never do. Each fleet reads those itself from App Insights.
-- **The digest is a daily rollup**; a "someone already filed this" note wants to be fresher than a day.
-  Either error links get their own document kind with a shorter publish clock, or the pool is the
-  wrong home and this is a tracker search instead (the filed bug carries the fingerprint, and a fleet
-  looks for it before offering to file).
+- **The fingerprint is the script's job**, and the contract says what it must be: stable across
+  deploys, versions and environments, and free of line numbers, ids and user data. For App Insights
+  that is `problemId` — exception type plus failing method — which is computed from the code, so the
+  same fault reads the same on test and on live even though they are two resources.
+- **Hashed** so the key is short, exact-match searchable, and carries no code or message text into the
+  tracker's tag list.
+- **Carried by the ticket, never by a prompt.** It is a field of `IssueCreateInput`, resolved by
+  `ticketFiler` ([13](../spec/13-jobs-and-tickets.md#filing-a-ticket)): an Azure DevOps **tag**
+  (`Tags CONTAINS` is exact) or, on GitHub, a marker line in the body (`"err:…" in:body`). Told to an
+  agent instead, a bug filed without it is invisible to every other fleet, with nothing red.
+
+### The search
+
+Before a group's row offers **File bug** or **Investigate**, the fleet searches the tracker for its key:
+
+| Found                    | The row shows                                                     |
+| ------------------------ | ----------------------------------------------------------------- |
+| an open bug              | "Filed: Bug #9031" — no File bug, no Investigate                  |
+| a bug closed, error back | "Returned after Bug #9031 was fixed" — **Reopen** instead of File |
+| nothing                  | File bug and Investigate                                          |
+| the search failed        | `unknown`, and the buttons stay — never read as "nothing found"   |
+
+- **Searched again at the press**, right before the create, so the window two fleets can both file in
+  is seconds, not a poll interval. A duplicate that slips through is two bugs with one tag, which the
+  next search shows side by side.
+- **An investigation is claimed by its bug.** Investigate files the bug first (or uses the one found)
+  and runs against it, so a second fleet sees "Filed" and does not start a second investigation.
+- **Searches are batched**: one query per read for every group's key, not one per row.
+
+### Where the key can miss
+
+- **A refactor renames the failing method** → new `problemId`, new key, the group reads `new`. The
+  frame match usually links it back to the change that moved it, and the row says so.
+- **A bug filed by hand** carries no key. It is found only if someone adds the tag; the row cannot know.
+- **Two faults one `problemId`** (one method, two causes) share a bug. Acceptable: the bug is about the
+  method.
+
+### The pool, later
+
+The pool ([28](../spec/28-cross-fleet-pool.md)) is the wrong lock — its clock is a day — but it can
+later show which fleet **linked** a group to which of its goals, which narrows the week-long window for
+fleets that do not own the change. Only the key, a goal ref and a ticket ref would cross; titles,
+messages and frames never do, since the pool carries no free text.
 
 ## In the cockpit
 
 - **Errors per environment**: the moved groups, with first and last seen and a link to App Insights.
 - **On the goal card**: "2 new errors on test since this arrived", with how each link was made.
 - **File bug**: through `ticketFiler` as a Bug related to the goal's story, with frames and title only
-  (messages often carry user data). The fingerprint goes in the ticket so other fleets can find it.
+  (messages often carry user data), tagged with [the key](#the-key).
 - **Promote to watch**: turn the group into a declared `signal` check (`tolerate: 0`) on the fixing
   goal, so the existing watch confirms it is gone after the fix arrives.
 
@@ -138,12 +167,13 @@ the tracker.
 
 1. `errors` command, contract, grouping and states, per-environment panel. Read-only.
 2. Linking by window, frames and test-before-live, on the goal card.
-3. File bug (with fingerprint) and promote to watch.
-4. Cross-fleet links through the pool, once the two tensions above are settled.
+3. The key on `IssueCreateInput`, the tracker search, File bug / Reopen / Investigate, promote to
+   watch.
+4. Cross-fleet links through the pool.
 
 ## Open questions
 
 - Does the build version map to a commit (a tag, a build record)? If not, the window comes from the
   probe's deployed SHA and the deploy time, which is fine but needs `at` declared on both environments.
-- Is `problemId` safe to cross between fleets as is, or hashed?
-- Pool document or tracker search for "already filed"?
+- Does the GitHub provider's search reach a body marker reliably enough, or does it need a label per
+  key (labels are capped and clutter the repo)?
