@@ -22,6 +22,8 @@ import { SpendBurnDesk } from '../insights/spendBurnDesk.js';
 import { RunwayDesk } from '../supply/runwayDesk.js';
 import { BranchReapDesk } from '../pr/branchReapDesk.js';
 import { EnvironmentDesk } from '../environments/environmentDesk.js';
+import { AppErrorDesk } from '../appErrors/desk.js';
+import { CommandAppErrorReader } from '../appErrors/reader.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber } from '../environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from '../environments/observer.js';
@@ -114,10 +116,11 @@ export function buildEnvironmentDesks(
 ) {
   const { store, sink, errors, gitObserver } = base;
   const environmentObserver = opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot);
+  const prober = opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot);
   const environments = new EnvironmentDesk({
     store,
     environments: config.environments,
-    prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    prober,
     healthProber: opts.environmentHealthProber ?? new CommandEnvironmentHealthProber(config.repoRoot),
     git: gitObserver,
     sink,
@@ -130,6 +133,14 @@ export function buildEnvironmentDesks(
       observer: environmentObserver,
       probeIntervalMs: config.environmentProbeIntervalMs,
       watchIntervalMs: config.watchIntervalMs,
+      errors,
+    }),
+    appErrors: new AppErrorDesk({
+      store,
+      environments: config.environments,
+      reader: opts.appErrorReader ?? new CommandAppErrorReader(config.repoRoot),
+      prober,
+      intervalMs: config.appErrorIntervalMs,
       errors,
     }),
     errors,

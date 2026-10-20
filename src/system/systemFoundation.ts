@@ -26,6 +26,7 @@ import { EscalationInbox } from '../escalation/escalationInbox.js';
 import { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { ObstacleReader } from '../obstacles/desk.js';
 import type { EnvironmentHealthProber } from '../environments/healthProber.js';
+import type { AppErrorReader } from '../appErrors/reader.js';
 import type { ReviewProber } from '../review/reviewedElsewhere.js';
 import type { EnvironmentProber } from '../environments/prober.js';
 import type { EnvironmentObserver } from '../environments/observer.js';
@@ -71,6 +72,7 @@ export interface BuildOptions {
   worktrees?: Worktrees;
   environmentProber?: EnvironmentProber;
   environmentHealthProber?: EnvironmentHealthProber;
+  appErrorReader?: AppErrorReader;
   reviewProber?: ReviewProber;
   environmentObserver?: EnvironmentObserver;
   stateReader?: StateReader;

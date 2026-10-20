@@ -39,6 +39,7 @@ is about.
 | `routes/reliability.ts`     | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                  |
 | `routes/throughput.ts`      | `/api/throughput` — how much came out: pull requests, review, issues                                                                                                       |
 | `routes/apiErrors.ts`       | `/api/api-errors` — how often the model API refused an agent's turn                                                                                                        |
+| `routes/appErrors.ts`       | `/api/app-errors` — the application's own errors per environment, grouped, with what moved ([39](39-app-errors.md))                                                        |
 | `routes/mcpUsage.ts`        | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                           |
 | `routes/plugin.ts`          | `/api/plugin` and `POST /api/plugin/install` — the operator's Claude Code plugin ([11](11-mcp-tools.md#the-plugin))                                                        |
 | `routes/usage.ts`           | `/api/usage` — the operator ledger and surface reach, and `POST /api/usage/events`, the cockpit's own batch of what a person did ([34](34-usage-metrics.md))               |
@@ -1378,6 +1379,13 @@ How often the model API refused an agent's turn, over `?window=` (the insights w
 `{ insights }` — `total`, `agentsStarted`, `agentsAffected`, `affectedRate`, counts `byKind`, `byCode`
 and `byModel`, a `byDay` series (`errors` beside `agentsStarted`), and the twenty most `recent` rows.
 See [18](18-observability.md#api-errors).
+
+### `GET /api/app-errors`
+
+The errors nobody declared, read from each environment's own `errors` command. Returns
+`{ project, environments, bands }` — per environment its latest reading and deploy window and its
+error groups with their state, key and dense fourteen-day series; per band the roll-up. Not on
+`/api/state`, for `/api/mcp/usage`'s reason. See [39](39-app-errors.md#on-the-wire).
 
 ### `GET /api/mcp/usage`
 

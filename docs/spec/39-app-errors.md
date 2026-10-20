@@ -1,0 +1,283 @@
+# 39 — App errors
+
+`src/appErrors/`. **Off by default**: an environment is read for errors only when it declares an
+`errors` block, and with none declared nothing is spawned, nothing is stored and the route answers
+with empty lists.
+
+The post-deploy watch ([29](29-post-deploy-watch.md)) reads checks a plan **declared**. This reads
+the errors **nobody declared**: an environment's own telemetry, grouped by fingerprint, watched for
+what _moved_ — a group that is new since the deploy, one that came back, one running well above its
+baseline — rather than drawn as an error list an operator has to read in full.
+
+**Partly built.** What is described here as running is the first phase: the command, its contract,
+grouping, states, the key and a read-only route. Three things are **not yet built**, and each section
+that names them says so:
+
+- **Linking a group to the work that probably caused it** — the deploy window, frames against landed
+  diffs, test-before-live and operation hints. The wire carries a `link` field for it that is always
+  `null` today. → [Not yet built](#not-yet-built)
+- **The tracker as the cross-fleet lock** — searching for a group's key before offering File bug or
+  Investigate, and filing with the key on `IssueCreateInput`. The wire carries a `tracker` field for
+  it that is always `null` today.
+- **The cockpit** — the per-environment panel and the goal card line. Nothing in `web/` reads the
+  route yet.
+
+The design all three are argued in is [`proposals/error-ingestion.md`](../proposals/error-ingestion.md),
+which the change that finishes them deletes.
+
+## What it is not
+
+| Not                   | Because                                                                                                                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A telemetry client    | The harness knows a command and an output contract, never Kusto, App Insights or Sentry. The same shape as `health` and `observe`.                                                                             |
+| A `WorldEvent` source | `deliveryHold` expires a delivery verdict on **any** world event matching a goal's issue ref, so an error reading filed as one would un-park delivered goals. Own tables, own route — the arrivals rule again. |
+| A dispatch input      | Nothing under `src/dispatcher/` reads what this writes. It files nothing, opens no gate and reaches no prompt.                                                                                                 |
+| An error log          | The harness's own faults are `error_events` (`src/store/errors.ts`, [18](18-observability.md)). These are the **application's** errors, which is why the feature is called app errors.                         |
+
+## Configuring an environment
+
+```jsonc
+{
+  "name": "live",
+  "at": "./scripts/deployed-sha.sh live",
+  "group": "prod",
+  "errors": { "list": "./scripts/ai-errors.sh live {since}" },
+}
+```
+
+`errors.list` is a shell command run in `repoRoot` with `LUBBDUBB_ENVIRONMENT` and
+`LUBBDUBB_ERRORS_SINCE` set. `validateEnvironments` (`src/environments/policy.ts`) refuses:
+
+- an `errors` that is not an object;
+- an empty `list`, which answers nothing and would read `unknown` forever;
+- a `list` that carries **no `{since}`**. Every read is bounded by the instant the last answered one
+  reached, and an unbounded query counts old errors as new on every read — the
+  [29](29-post-deploy-watch.md#every-query-carries-since) refusal, held at boot rather than at
+  ingestion because here the command _is_ the query.
+
+`{since}` is substituted into the command text (every occurrence) and passed beside it in
+`LUBBDUBB_ERRORS_SINCE`. It is an ISO-8601 instant, which carries nothing a shell would read.
+
+Three top-level keys tune it ([02](02-configuration.md)): `appErrorIntervalMs` (default 15 minutes),
+`appErrorMinCount` (default 2) and `appErrorIgnore` (default empty).
+
+## The output contract
+
+The command prints one JSON **list**, one object per error group:
+
+```jsonc
+[
+  {
+    "fingerprint": "…", // required: stable across deploys, versions and environments
+    "title": "NullReferenceException in OrderService.Submit", // required
+    "count": 42, // required: whole number ≥ 1, occurrences since {since}
+    "firstSeen": "2026-10-19T10:00:00Z", // required: ISO timestamps, first ≤ last
+    "lastSeen": "2026-10-19T11:00:00Z",
+    "version": "2026.10.14.3", // optional
+    "operation": "POST /orders", // optional
+    "frames": ["src/Orders/OrderService.cs:118"], // optional: top in-app frames
+    "link": "https://portal.azure.com/…", // optional: absolute http(s)
+  },
+]
+```
+
+`parseAppErrorReport` (`src/appErrors/report.ts`) is pure and is the whole of the schema.
+
+- **The fingerprint is the script's job**, and the contract says what it must be: stable across
+  deploys, versions and environments, free of line numbers, ids and user data. For App Insights that is
+  `problemId`. It is capped at 200 characters — it is an identity, not a message.
+- **A row that breaks the contract is refused, named and left out**, and the rest of the report still
+  reads. The refusals go to the error log through `errors.record` once per read, with the first ten
+  reasons. A report in which **every** row was refused is not "no errors": it is `unknown`, because a
+  script that prints only rows the harness cannot read is a broken script.
+- **One fingerprint printed twice is one group**: counts summed, the span widened, the later row's
+  title and detail kept. A script grouping by `problemId` _and_ version prints exactly this.
+- **A read is bounded to the 500 most frequent groups.** What was left out is said on the reading's
+  `detail`; the reading is still `ok`.
+- Titles are capped at 300 characters, `version` and `operation` at 200, `frames` at twenty of 300.
+  Anything else in an object is ignored.
+
+**The reading is two-valued — `ok` or `unknown` — and `unknown` is never "no errors".** `[]` is the
+only way to say nothing went wrong. A non-zero exit, a signal, a timeout, empty output, output that is
+not JSON, and JSON that is not a list are all `unknown` with an account of why. Unlike `health`, the
+exit code is **not** forgiven when stdout parses: a failed `az` call that printed `[]` before dying is
+precisely the confident wrong answer this rule exists to refuse. The command is killed after 60
+seconds — twice the health check's, because a telemetry query over a fortnight is slower than an
+`HTTP 200`.
+
+## What is stored, and for how long
+
+Three tables, all owned by `AppErrorStore` (`src/store/appErrors.ts`), all written in one
+transaction per read:
+
+| Table              | One row per                       | Holds                                                                                                          |
+| ------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `app_error_reads`  | environment                       | The last read: status, detail, `read_at`, `ok_at` (last _answered_ read) and the deploy window                 |
+| `app_error_groups` | `(environment, fingerprint)`      | Title, operation, version, frames, url; first and last seen as the harness has accumulated them; `returned_at` |
+| `app_error_days`   | `(environment, fingerprint, day)` | Occurrences on one UTC day                                                                                     |
+
+- **`ok_at` moves only on an `ok` read**, and it is what the next read's `{since}` is: a read that
+  failed for a day leaves the next one reaching back over that day rather than skipping it. `{since}`
+  is never further back than **fourteen days** (`MAX_LOOKBACK_MS`), which is also a first read's reach.
+- **First and last seen are the harness's**, not the read's: `firstSeen` is the earliest any read has
+  reported, so a bounded query's "first seen in this window" never overwrites an older sighting.
+- **A count is spread evenly across the UTC days its row spans inside the read**, remainder on the
+  last day (`spreadCounts`, `src/appErrors/groups.ts`). A fifteen-minute read lands on one day; a first
+  read's fortnight does not all land on today, which would read as a spike against its own history.
+  It is an approximation, and the only one available from a contract that reports a count rather than
+  a series.
+- **`returned_at`** is stamped when a read reports a group whose `firstSeen` is at least the quiet
+  period (`QUIET_MS`, three days) after the `lastSeen` already held.
+- **Retention.** Day counts older than fourteen days (`RETENTION_DAYS`) are deleted on every read; a
+  group not seen for thirty days (`GROUP_RETENTION_DAYS`) is deleted with its days. Seen again after
+  that, it is a stranger, and reads `new`. A removed environment's groups age out the same way.
+
+All three tables were introduced new and so need no `ColumnMigrations` entry **today** — the rule in
+[14](14-persistence.md#migrations) still applies to the first column anyone adds.
+
+## The deploy window
+
+`new` and `spiking` are both questions about _the latest deploy_, so each read also asks the
+environment's own `at` probe ([24](24-environments.md#the-probe)) where it is, and `nextDeploy` keeps
+three facts on the reading:
+
+- `deployedSha` — what the probe named, several commits joined by a space as the probe's own
+  several-services rule names them;
+- `previousSha` — what it named before that changed;
+- `deployedAt` — **when the harness noticed the change**, at read precision.
+
+The first head ever read is **no deploy at all**: `deployedAt` stays null, because the harness cannot
+say when that build arrived. A probe that could not answer leaves all three as they were. Nothing
+else in the harness records an environment's head over time — reach is per landing, and arrivals are
+per goal — which is why this pass keeps its own.
+
+## States
+
+`appErrorState` (`src/appErrors/states.ts`) is pure and recomputed on every route read, so `gone`
+arrives with the clock rather than waiting for another telemetry query. In order, first match wins:
+
+| State      | When                                                                                                                                           |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gone`     | not seen for `QUIET_MS` (three days)                                                                                                           |
+| `steady`   | **muted**: ignored, or fewer than `appErrorMinCount` occurrences over the retained fortnight                                                   |
+| `new`      | first seen at or after `deployedAt`; with no deploy on record, first seen within the last day (`NEW_FALLBACK_MS`)                              |
+| `returned` | `returned_at` within the last `QUIET_MS`                                                                                                       |
+| `spiking`  | the daily rate since the deploy's day is at least `SPIKE_RATIO` (3) times the baseline — the daily rate over the `BASELINE_DAYS` (7) before it |
+| `steady`   | otherwise — known noise                                                                                                                        |
+
+- **The minimum count and the ignore list mute every moved state**, not only `new`: a single
+  exception that returns is still a single exception. A muted group still reads `gone` when it stops.
+- **The baseline is floored at one a day** (`SPIKE_FLOOR_PER_DAY`), so a group that happened once last
+  week does not "spike" at three. It is measured only over days on or after the group's own first
+  sighting, and a group with no such day has no baseline and cannot spike — it is `new` instead.
+- **With no deploy on record**, the window is the last day against the week before it.
+- The deploy's own day counts as after the deploy. Day counts cannot be split at an instant, and
+  reading it the other way would hide the morning of every bad deploy in the baseline.
+- `appErrorIgnore` matches a fingerprint or its key, so an operator can paste either.
+
+## The key
+
+`appErrorKey(project, fingerprint)` (`src/appErrors/key.ts`) is `err:<project>:<hash>`: the first eight
+hex characters of the fingerprint's SHA-256. Short, exact-match searchable, and carrying no code or
+message text into a tracker's tag list.
+
+The project is the pool's name ([28](28-cross-fleet-pool.md#the-project-name)), slugged to lower case
+`a-z 0-9 . _ -`, so every fleet on one project mints the same key for the same fault. **Unlike the
+pool, the key has a fallback** — `github.repo`, then `azureDevOps.repository`, then the basename of
+`repoRoot` — because the key is also how a single fleet names a group, and a fleet with no pool still
+reads errors. The fallback is honest about what it costs: two fleets that derive different names do
+not share a key, which is the fork-and-rename case the pool's own refusal exists for. A deployment
+that wants the key shared declares `pool.project`.
+
+Nothing carries the key anywhere yet: it is on the wire, and it reaches a tracker only when the
+tracker lock is built.
+
+## Groups
+
+Every environment is still **read** on its own — three regions of production are three queries, three
+readings and three sets of groups, for the reason every other reading in [24](24-environments.md#groups)
+is per environment. The route adds a **band roll-up** on top, computed per request:
+
+- a band's `status` is `ok` only when every member's latest reading is `ok`, `null` when no member has
+  been read, and `unknown` otherwise — one member that could not answer is a band that could not;
+- a band's groups are its members' groups **by key**, so one fault on two regions is one row naming
+  both, with the counts summed and the most moved member's state.
+
+An environment that declares no `group` is a band of one named for itself, exactly as in
+`environmentGroups`.
+
+## The desk
+
+`AppErrorDesk` (`src/appErrors/desk.ts`) runs as a pass on `EnvironmentDesk`, directly below the health
+pass. **Nothing reads what it writes** inside the pulse — no gate, no bench row, no prompt — so its
+position is a preference, for health's reason.
+
+For each environment that declares `errors`, unless its last read is younger than
+`appErrorIntervalMs` — an `unknown` read counts, so a broken query is retried on the interval rather
+than every pulse:
+
+1. compute `{since}` from `ok_at`, capped at fourteen days back;
+2. ask the probe where the environment is;
+3. run the command, and parse what it printed;
+4. write the reading, the deploy window, every group named and its day counts, and the prune, in one
+   transaction.
+
+An `unknown` read writes the reading and touches no group. A pass that throws is recorded through
+`errors.record` and never fails the cycle.
+
+## Seams
+
+`AppErrorReader` (`src/appErrors/reader.ts`) — one method, `list({environment, command, since})`.
+`CommandAppErrorReader` spawns the command; `FakeAppErrorReader` (`src/appErrors/fakeReader.ts`)
+answers from scripted stdout per environment, records every request, and answers `unknown` for an
+environment nobody scripted. Injected as `appErrorReader` on `buildSystem`; the probe the desk asks is
+the one injected as `environmentProber`. **A test that declares an `errors` block injects both**, or it
+spawns the declared command and the `at` probe on the machine running the tests.
+
+## On the wire
+
+`GET /api/app-errors` (`src/server/routes/appErrors.ts`), not on `/api/state`: a fortnight of day
+counts per group is too much to send every couple of seconds to every open cockpit. Returns
+`AppErrorsPayload` (`src/wire.ts`):
+
+- `project` — the key's project segment;
+- `environments` — one `AppErrorEnvironmentView` per environment that declares `errors`, in config
+  order: its `band`, its `reading` (an `AppErrorRead`, or null before the first read — status, detail,
+  `readAt`, `okAt`, and the deploy window `deployedSha` / `previousSha` / `deployedAt`), and its
+  `groups`;
+- each group an `AppErrorGroupView`: the stored `AppErrorGroup` (title, operation, version, frames,
+  `url`, first and last seen, `returnedAt`) with `daily` made dense over the last fourteen UTC days,
+  plus `key`, `state`, `count` (the fortnight's total), `ignored`, and the two placeholders below.
+  Sorted moved-first — `new`, `returned`, `spiking`, `steady`, `gone` — then most recently seen;
+- `bands` — the [roll-up](#groups).
+
+`link: AppErrorLink | null` — the goal a group is probably the work of (`goalRef`), how the link was
+made (`how`, e.g. `frame match`, `test arrival`, `hint`), a sentence saying why, and how many
+candidates the deploy window held. **Always null: linking is not yet built.**
+
+`tracker: AppErrorTracker | null` — `status` (`none`, `open`, `closed`, `unknown`), the ticket found
+under the key, and a note. **Always null: the tracker lock is not yet built.**
+
+## Not yet built
+
+In the order the proposal stages them, each of which removes its line here:
+
+- **Linking** — the deploy window's candidate goals from landings between `previousSha` and
+  `deployedSha`, frames matched against each candidate's landed diff, a group that went `new` on test
+  when a goal arrived there, operation hints, and model triage on a press. Fills `link`, and the goal
+  card's "2 new errors on test since this arrived".
+- **The tracker lock** — the key as a field of `IssueCreateInput` resolved by `ticketFiler`
+  ([13](13-jobs-and-tickets.md#filing-a-ticket)), a batched search for every group's key per read, and
+  File bug / Reopen / Investigate / promote to watch. Fills `tracker`.
+- **The cockpit** — the Errors-per-environment panel, drawing the moved groups and folding `steady`
+  away, with first and last seen and the `url`.
+
+## What it does not see
+
+- **Late ingestion.** `{since}` is the instant the last read started, and a telemetry store that
+  ingests an event minutes after its timestamp reports it to neither read. Overlapping the windows
+  would double-count instead, which is the worse of the two for a rate.
+- **When a build actually arrived**, beyond the read that noticed it. `deployedAt` is as precise as
+  `appErrorIntervalMs`, and the first build the harness ever sees has no `deployedAt` at all.
+- **A fingerprint that changes under a refactor.** A renamed failing method is a new fingerprint and
+  so a new group that reads `new`; relating it to the old one is the linking stage's job.

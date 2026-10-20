@@ -491,6 +491,8 @@ because each failure is otherwise silent in the same direction:
   likely to be written by somebody who meant one and left it for later;
 - an empty **`arrival.workItemState`**, which names no column. A blank state word would be written to
   the tracker and refused there, one arrival at a time, on the deployment that meant a real one;
+- an **`errors`** block whose `list` is empty or carries no `{since}`
+  — → [39](39-app-errors.md#configuring-an-environment);
 - a **`group`** named after an environment, or one whose members disagree about `arrival`
   — → [Groups](#groups).
 
@@ -819,6 +821,10 @@ Eight passes: attribute the merges nothing has attributed yet, ask each environm
 arrived, report the delivered goals held behind an environment that is going nowhere
 ([above](#when-a-held-goal-is-going-nowhere)), say so on their tickets, and run the post-deploy
 watch's own window pass ([29](29-post-deploy-watch.md#the-window)).
+
+Beside them, directly below the health pass, it runs the app-error read
+([39](39-app-errors.md#the-desk)). It is outside the count above because it is its own desk
+(`AppErrorDesk`) and, like health, nothing in this one reads what it writes.
 
 The placing pass runs **above** the probe, because a landing it marks as not on the integration branch
 is one the probe must not ask about: asked, it writes an `absent` that nothing can ever turn into a

@@ -1639,6 +1639,61 @@ export interface EnvironmentHealthReading {
   changedAt: string;
 }
 
+/** → docs/spec/39-app-errors.md */
+export type AppErrorReadStatus = 'ok' | 'unknown';
+
+export type AppErrorState = 'new' | 'returned' | 'spiking' | 'steady' | 'gone';
+
+/** What one environment's `errors` command last said, and the deploy it was read against. */
+export interface AppErrorRead {
+  environment: string;
+  status: AppErrorReadStatus;
+  detail: string | null;
+  readAt: string;
+  okAt: string | null;
+  deployedSha: string | null;
+  previousSha: string | null;
+  deployedAt: string | null;
+}
+
+export interface AppErrorDay {
+  day: string;
+  count: number;
+}
+
+/** One fingerprint on one environment, as the harness has accumulated it across reads. */
+export interface AppErrorGroup {
+  environment: string;
+  fingerprint: string;
+  title: string;
+  operation: string | null;
+  version: string | null;
+  frames: string[];
+  url: string | null;
+  firstSeen: string;
+  lastSeen: string;
+  returnedAt: string | null;
+  recordedAt: string;
+  daily: AppErrorDay[];
+}
+
+/** Which goal an error group is probably the work of, and how that was decided. Not yet built. */
+export interface AppErrorLink {
+  goalRef: string;
+  how: string[];
+  why: string;
+  candidates: number;
+}
+
+type AppErrorTrackerStatus = 'none' | 'open' | 'closed' | 'unknown';
+
+/** What the tracker holds under an error group's key. Not yet built. */
+export interface AppErrorTracker {
+  status: AppErrorTrackerStatus;
+  ticketRef: string | null;
+  note: string | null;
+}
+
 export type GoalReachStatus = 'reached' | 'partial' | 'absent' | 'unknown';
 
 export interface GoalEnvironmentReach {

@@ -58,6 +58,7 @@ import { GOAL_CRITERIA_SCHEMA } from './schema/goalCriteria.js';
 import { PR_DESCRIPTIONS_SCHEMA } from './schema/prDescriptions.js';
 import { BOT_PR_RISKS_SCHEMA } from './schema/botPrRisks.js';
 import { INVESTIGATIONS_SCHEMA } from './schema/investigations.js';
+import { APP_ERRORS_SCHEMA } from './schema/appErrors.js';
 
 export const SCHEMA =
   TASKS_SCHEMA +
@@ -117,4 +118,5 @@ export const SCHEMA =
   GOAL_CRITERIA_SCHEMA +
   PR_DESCRIPTIONS_SCHEMA +
   BOT_PR_RISKS_SCHEMA +
-  INVESTIGATIONS_SCHEMA;
+  INVESTIGATIONS_SCHEMA +
+  APP_ERRORS_SCHEMA;

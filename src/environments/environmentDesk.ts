@@ -5,6 +5,7 @@ import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { EnvironmentReachStatus, GoalLanding, WorldSnapshot } from '../types.js';
 import { announceableArrivals, arrivalComment, newArrivals } from './arrival.js';
+import type { AppErrorDesk } from '../appErrors/desk.js';
 import type { EnvironmentHealthProber } from './healthProber.js';
 import { carriedLandings, unrecordedLandings } from './landings.js';
 import type { EnvironmentConfig } from './policy.js';
@@ -26,6 +27,7 @@ interface EnvironmentDeskDeps {
   probeIntervalMs: number;
   healthIntervalMs: number;
   watch?: WatchDesk;
+  appErrors?: AppErrorDesk;
   errors?: ErrorRecorder;
   now?: () => number;
 }
@@ -56,6 +58,7 @@ export class EnvironmentDesk {
 
     if (this.deps.environments.length === 0) return;
     for (const environment of this.deps.environments) await this.checkHealth(environment);
+    await this.deps.appErrors?.run();
     await this.reconcile();
     this.carry(world);
     for (const environment of this.deps.environments) await this.probe(environment);

@@ -44,6 +44,12 @@ import type { LocalRunOption } from './localRun/ref.js';
 import type {
   AccountRateLimits,
   Agent,
+  AppErrorGroup,
+  AppErrorLink,
+  AppErrorRead,
+  AppErrorReadStatus,
+  AppErrorState,
+  AppErrorTracker,
   AgentFile,
   AgentFlag,
   AppraisalAuthor,
@@ -916,6 +922,47 @@ export interface SpendTrendPayload {
 
 export interface PredictionAggregatePayload {
   aggregate: PredictionAggregate;
+}
+
+/** → docs/spec/39-app-errors.md#on-the-wire */
+export interface AppErrorGroupView extends AppErrorGroup {
+  key: string;
+  state: AppErrorState;
+  count: number;
+  ignored: boolean;
+  link: AppErrorLink | null;
+  tracker: AppErrorTracker | null;
+}
+
+export interface AppErrorEnvironmentView {
+  environment: string;
+  band: string;
+  reading: AppErrorRead | null;
+  groups: AppErrorGroupView[];
+}
+
+export interface AppErrorBandGroup {
+  key: string;
+  fingerprint: string;
+  title: string;
+  state: AppErrorState;
+  environments: string[];
+  count: number;
+  lastSeen: string;
+}
+
+export interface AppErrorBandView {
+  band: string;
+  declared: boolean;
+  environments: string[];
+  status: AppErrorReadStatus | null;
+  groups: AppErrorBandGroup[];
+}
+
+export interface AppErrorsPayload {
+  project: string;
+  environments: AppErrorEnvironmentView[];
+  bands: AppErrorBandView[];
 }
 
 export interface ApiErrorsPayload {
