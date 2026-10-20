@@ -26,7 +26,7 @@ import { AppErrorDesk } from '../appErrors/desk.js';
 import { CommandAppErrorReader } from '../appErrors/reader.js';
 import { AppErrorLinker } from '../appErrors/linker.js';
 import { AppErrorTrackerDesk } from '../appErrors/tracker.js';
-import { unlinkedAppErrors } from '../appErrors/current.js';
+import { appErrorView, CurrentAppErrors } from '../appErrors/current.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber } from '../environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from '../environments/observer.js';
@@ -150,7 +150,7 @@ export function buildEnvironmentDesks(
     tickets: store.appErrorTickets,
     sink,
     canFile: () => trackerCoordinates(config) !== null,
-    current: () => unlinkedAppErrors(store, config, Date.now()),
+    view: () => appErrorView(store, config, Date.now()),
     reads: () => store.appErrors.listReads(),
     errors,
   });
@@ -165,7 +165,7 @@ export function buildEnvironmentDesks(
     appErrors,
     appErrorTracker,
     watchDryRun,
-    appErrorLinks: new AppErrorLinker({ git: gitObserver, errors }),
+    appErrorPayloads: new CurrentAppErrors({ store, config, linker: new AppErrorLinker({ git: gitObserver, errors }) }),
     ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
   };
 }

@@ -5032,12 +5032,10 @@ export const demoApi = {
     Promise.resolve({ policy: { rules: [], unmatched: 'dispatch', policyKinds: null } as CiPolicyDescription }),
   getBotPrs: () => Promise.resolve(demoBotPrs(Date.now())),
   getAppErrors: () => Promise.resolve(demoAppErrors(Date.now())),
-  fileAppErrorBug: (_environment: string, _fingerprint: string, _unsearched: boolean): Promise<AppErrorPressPayload> =>
-    Promise.reject(new Error('the demo has no tracker to file into')),
-  investigateAppError: (
+  fileAppErrorBug: (
     _environment: string,
     _fingerprint: string,
-    _unsearched: boolean,
+    _opts: { investigate: boolean; unsearched: boolean },
   ): Promise<AppErrorPressPayload> => Promise.reject(new Error('the demo has no tracker to file into')),
   reopenAppErrorTicket: (_key: string): Promise<AppErrorPressPayload> =>
     Promise.reject(new Error('the demo has no tracker to reopen in')),

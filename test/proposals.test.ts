@@ -89,6 +89,10 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     merges,
     replies,
     canCloseIssue: () => false,
+    canReopenIssue: () => false,
+    reopenIssue: (): never => {
+      throw new Error('reopenIssue is not scripted in this test');
+    },
     canClosePr: () => false,
     closePr: (): never => {
       throw new Error('closePr is not scripted in this test');

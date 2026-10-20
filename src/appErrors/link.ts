@@ -1,8 +1,10 @@
 import { issueOriginNumber } from '../issueOrigins.js';
-import { DAY_MS } from '../primitives.js';
+import { DAY_MS, sentence } from '../primitives.js';
+import { terms } from '../tickets/candidates.js';
 import type { AppErrorLink, AppErrorLinkHow, DeployedHead, EnvironmentReading, GoalLanding } from '../types.js';
 import type { AppErrorEnvironmentView, AppErrorGroupView, AppErrorsPayload } from '../wire.js';
 import { filesTouched, frameFiles } from './frames.js';
+import { GROUP_RETENTION_DAYS } from './groups.js';
 
 // → docs/spec/39-app-errors.md#linking-a-group-to-work
 
@@ -23,9 +25,22 @@ export interface DeployVerdicts {
   unanswered: string | null;
 }
 
+/** A landing on the integration branch, its recorded time parsed once. */
+export interface TimedLanding {
+  goalRef: string;
+  sha: string;
+  at: number;
+}
+
+interface PlacedReach {
+  status: EnvironmentReading['status'];
+  at: number;
+}
+
 export interface LinkFacts {
-  landings: readonly GoalLanding[];
-  readings: readonly EnvironmentReading[];
+  landings: readonly TimedLanding[];
+  /** By environment, then by commit: what the reach probe last said. */
+  reach: ReadonlyMap<string, ReadonlyMap<string, PlacedReach>>;
   /** Goal ref to title, for the route hint. */
   titles: ReadonlyMap<string, string>;
   /** By environment, for every environment whose deploy window some group is held against. */
@@ -35,9 +50,34 @@ export interface LinkFacts {
   now: number;
 }
 
+/** The landings and readings indexed once for a pass: a landing off the integration branch is in no window. */
+export function placeFacts(input: {
+  landings: readonly GoalLanding[];
+  readings: readonly EnvironmentReading[];
+}): Pick<LinkFacts, 'landings' | 'reach'> {
+  const reach = new Map<string, Map<string, PlacedReach>>();
+  for (const r of input.readings) {
+    const held = reach.get(r.environment) ?? new Map<string, PlacedReach>();
+    held.set(r.sha, { status: r.status, at: Date.parse(r.observedAt) });
+    reach.set(r.environment, held);
+  }
+  return {
+    landings: input.landings
+      .filter((l) => l.onIntegration !== false)
+      .map((l) => ({ goalRef: l.goalRef, sha: l.sha, at: Date.parse(l.recordedAt) })),
+    reach,
+  };
+}
+
 /** A window's candidate goals and the commits of theirs it holds — or why it cannot be decided. */
 export type LinkWindow =
   { known: true; goals: ReadonlyMap<string, string[]>; said: string } | { known: false; why: string };
+
+/** A linked group's anchor and the window it is held against, computed once a pass. */
+export interface GroupWindow {
+  anchor: number;
+  window: LinkWindow;
+}
 
 /**
  * The instant a moved group is held against, or null for a group nothing is linked for: `new` from its
@@ -62,14 +102,19 @@ export function heldAgainstDeploy(head: DeployedHead | null, anchor: number): he
 type ChangedHead = DeployedHead & { changedAt: string; previousSha: string };
 
 /** The landings a deploy window asks the clone about. */
-export function deployLandings(landings: readonly GoalLanding[], changedAt: string): GoalLanding[] {
+export function deployLandings(landings: readonly TimedLanding[], changedAt: string): TimedLanding[] {
   const floor = Date.parse(changedAt) - LANDING_HORIZON_MS;
-  return landings.filter((l) => l.onIntegration !== false && Date.parse(l.recordedAt) >= floor);
+  return landings.filter((l) => l.at >= floor);
+}
+
+/** The oldest a landing can be and still fall in some window: no group is held longer than it is kept. */
+export function landingHorizon(now: number): number {
+  return now - GROUP_RETENTION_DAYS * DAY_MS - LANDING_HORIZON_MS;
 }
 
 function deployWindow(
   head: ChangedHead,
-  landings: readonly GoalLanding[],
+  landings: readonly TimedLanding[],
   verdicts: DeployVerdicts | undefined,
 ): LinkWindow {
   const range = `${short(head.previousSha)}..${short(head.sha)}`;
@@ -98,24 +143,20 @@ export function arrivalWindow(input: {
   environment: string;
   anchor: number;
   lookbackMs: number;
-  landings: readonly GoalLanding[];
-  readings: readonly EnvironmentReading[];
+  facts: Pick<LinkFacts, 'landings' | 'reach'>;
 }): LinkWindow {
-  const reach = new Map(input.readings.filter((r) => r.environment === input.environment).map((r) => [r.sha, r]));
+  const reach = input.facts.reach.get(input.environment);
   const from = input.anchor - input.lookbackMs;
   const goals = new Map<string, string[]>();
-  for (const landing of input.landings) {
-    if (landing.onIntegration === false) continue;
-    const recorded = Date.parse(landing.recordedAt);
-    if (recorded > input.anchor) continue;
-    const reading = reach.get(landing.sha);
+  for (const landing of input.facts.landings) {
+    if (landing.at > input.anchor) continue;
+    const reading = reach?.get(landing.sha);
     if (reading?.status === 'reached') {
-      const at = Date.parse(reading.observedAt);
-      if (at >= from && at <= input.anchor)
+      if (reading.at >= from && reading.at <= input.anchor)
         goals.set(landing.goalRef, [...(goals.get(landing.goalRef) ?? []), landing.sha]);
       continue;
     }
-    if (reading?.status === 'absent' || recorded < input.anchor - LANDING_HORIZON_MS) continue;
+    if (reading?.status === 'absent' || landing.at < input.anchor - LANDING_HORIZON_MS) continue;
     return {
       known: false,
       why: `whether ${short(landing.sha)} is on ${input.environment} is ${reading === undefined ? 'not yet asked' : 'unknown'}`,
@@ -131,22 +172,16 @@ export function arrivalWindow(input: {
 function windowFor(view: AppErrorEnvironmentView, anchor: number, facts: LinkFacts): LinkWindow {
   if (heldAgainstDeploy(view.head, anchor))
     return deployWindow(view.head, facts.landings, facts.deploys.get(view.environment));
-  return arrivalWindow({
-    environment: view.environment,
-    anchor,
-    lookbackMs: ARRIVAL_LOOKBACK_MS,
-    landings: facts.landings,
-    readings: facts.readings,
-  });
+  return arrivalWindow({ environment: view.environment, anchor, lookbackMs: ARRIVAL_LOOKBACK_MS, facts });
 }
 
-/** Every linked group's window, keyed by {@link groupId}: what the linker asks the clone to diff. */
-export function linkWindows(payload: AppErrorsPayload, facts: LinkFacts): Map<string, LinkWindow> {
-  const out = new Map<string, LinkWindow>();
+/** Every linked group's anchor and window, keyed by {@link groupId}: what the linker diffs and links from. */
+export function groupWindows(payload: AppErrorsPayload, facts: LinkFacts): Map<string, GroupWindow> {
+  const out = new Map<string, GroupWindow>();
   for (const view of payload.environments)
     for (const group of view.groups) {
       const anchor = linkAnchor(group, view.head, facts.now);
-      if (anchor !== null) out.set(groupId(group), windowFor(view, anchor, facts));
+      if (anchor !== null) out.set(groupId(group), { anchor, window: windowFor(view, anchor, facts) });
     }
   return out;
 }
@@ -155,14 +190,17 @@ export function groupId(group: { environment: string; fingerprint: string }): st
   return `${group.environment}\u0000${group.fingerprint}`;
 }
 
-/** Fills `link` on every moved group of the payload. Nothing else in it changes. */
-export function linkGroups(payload: AppErrorsPayload, facts: LinkFacts): void {
-  const windows = linkWindows(payload, facts);
+/** Fills `link` on every moved group of the payload from the windows computed for it. Nothing else in it changes. */
+export function linkGroups(
+  payload: AppErrorsPayload,
+  facts: LinkFacts,
+  windows: ReadonlyMap<string, GroupWindow>,
+): void {
   for (const view of payload.environments)
     for (const group of view.groups) {
-      const window = windows.get(groupId(group));
-      if (window === undefined) continue;
-      const anchor = linkAnchor(group, view.head, facts.now)!;
+      const held = windows.get(groupId(group));
+      if (held === undefined) continue;
+      const { anchor, window } = held;
       group.link = decideLink({
         window,
         frames: group.frames,
@@ -190,13 +228,14 @@ function testArrival(
   for (const view of payload.environments) {
     if (view.environment === group.environment) continue;
     const there = view.groups.find((g) => g.fingerprint === group.fingerprint);
-    if (there === undefined || Date.parse(there.firstSeen) > anchor) continue;
+    if (there === undefined) continue;
+    const firstSeen = Date.parse(there.firstSeen);
+    if (firstSeen > anchor) continue;
     const window = arrivalWindow({
       environment: view.environment,
-      anchor: Date.parse(there.firstSeen),
+      anchor: firstSeen,
       lookbackMs: TEST_ARRIVAL_MS,
-      landings: facts.landings,
-      readings: facts.readings,
+      facts,
     });
     if (!window.known) continue;
     const narrowed = [...window.goals.keys()].filter((g) => here.goals.has(g));
@@ -296,7 +335,7 @@ function byFrames(
 }
 
 function arrivalSaid(arrival: TestArrival): string {
-  return `it first appeared on ${arrival.environments.join(' and ')} within a ${period(TEST_ARRIVAL_MS)} of ${label(arrival.goalRef)} reaching it`;
+  return `it first appeared on ${sentence(arrival.environments)} within a ${period(TEST_ARRIVAL_MS)} of ${label(arrival.goalRef)} reaching it`;
 }
 
 function byHint(input: LinkDecisionInput, goals: ReadonlyMap<string, string[]>, of: string, n: number): AppErrorLink {
@@ -311,7 +350,8 @@ function byHint(input: LinkDecisionInput, goals: ReadonlyMap<string, string[]>, 
   return unlinked(`Nothing in the error points at one ${of}.`, n);
 }
 
-const STOP_WORDS = new Set([
+/** Beyond the title stop words: HTTP verbs, `api`, and the verbs every goal title opens with. */
+const HINT_STOP_WORDS: ReadonlySet<string> = new Set([
   'get',
   'post',
   'put',
@@ -320,12 +360,6 @@ const STOP_WORDS = new Set([
   'head',
   'options',
   'api',
-  'the',
-  'and',
-  'for',
-  'with',
-  'from',
-  'into',
   'add',
   'fix',
   'new',
@@ -334,11 +368,7 @@ const STOP_WORDS = new Set([
 /** The words an operation or a title names, stemmed: ids, verbs and short tokens dropped. */
 export function hintWords(text: string): Set<string> {
   return new Set(
-    text
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((w) => w.length >= 3 && /[a-z]/.test(w) && !/^[0-9a-f]{8,}$/.test(w) && !STOP_WORDS.has(w))
-      .map(stem),
+    [...terms(text, HINT_STOP_WORDS)].filter((w) => /[a-z]/.test(w) && !/^[0-9a-f]{8,}$/.test(w)).map(stem),
   );
 }
 
@@ -379,8 +409,7 @@ function label(goalRef: string): string {
 }
 
 function files(paths: readonly string[]): string {
-  const names = paths.map((p) => p.split('/').pop() ?? p);
-  return names.length === 1 ? names[0]! : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]!}`;
+  return sentence(paths.map((p) => p.split('/').pop() ?? p));
 }
 
 function short(sha: string): string {

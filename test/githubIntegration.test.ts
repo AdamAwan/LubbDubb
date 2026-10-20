@@ -976,7 +976,6 @@ test('createIssue files an issue with its labels and assignee on the create itse
     type: 'User Story',
     assignee: 'adamawan',
     relatedTo: null,
-    errorKey: null,
   });
 
   assert.deepEqual(res, { ok: true, ref: 'issue:314' });
@@ -1000,7 +999,6 @@ test('a related item becomes the cross-reference GitHub draws on both issues', a
     type: null,
     assignee: null,
     relatedTo: 12,
-    errorKey: null,
   });
   assert.match(recorded.createdIssues[0]!.body, /The symptom\.\n\nRelated to #12\./);
 });
@@ -1128,7 +1126,7 @@ test('an app error key on a filed issue is a visible line and a marker in the bo
     type: null,
     assignee: null,
     relatedTo: 12,
-    errorKey: 'err:shop:3f9a1c2b',
+    searchKey: 'err:shop:3f9a1c2b',
   });
   const body = recorded.createdIssues[0]!.body;
   assert.match(body, /Related to #12\.\n\nError key: `err:shop:3f9a1c2b`/);

@@ -347,9 +347,10 @@ Errors tab ([39](39-app-errors.md#the-presses)). All five go through `ActionSink
   label is never dispatched for, an Azure bug without its relation cannot be traced back to its story,
   and a create with no `--type` is refused outright, taking the ticket with it. `ticketFiler`
   (`src/tickets/filing.ts`) resolves all four per call, so every arm files identically.
-- **An app error's key is a field too.** `errorKey` on the filing reaches `IssueCreateInput` and the
-  provider carries it where its search finds it — an Azure DevOps tag, a line in a GitHub body
-  ([39](39-app-errors.md#the-key-on-the-ticket)). It is the cross-fleet lock: a bug filed without it is
+- **An app error's key is a field too.** `searchKey` on the filing reaches `IssueCreateInput` and the
+  provider carries it where its search finds it — an Azure DevOps tag, lines in a GitHub body
+  ([39](39-app-errors.md#the-key-on-the-ticket)). The field is optional and provider-neutral: every
+  other arm leaves it out, and nothing in a provider knows it is an app error's. It is the cross-fleet lock: a bug filed without it is
   invisible to every other fleet's search, so it is never left to a template or a prompt.
 - **The wording stays operator-overridable**, because how a ticket reads _is_ house style. Three arms
   render a ticket **body** from the template book — `work-item-ticket-body`, `brief-ticket-body` and

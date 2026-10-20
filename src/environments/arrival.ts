@@ -3,6 +3,7 @@ import { optionalText, requiredBoolean } from '../server/validation.js';
 import type { EnvironmentGate, EnvironmentGateRelease, GoalArrival, GoalEnvironmentReach } from '../types.js';
 import { bandOfEnvironment, bandSaid, environmentGroups, type EnvironmentGroup } from './groups.js';
 import type { EnvironmentConfig } from './policy.js';
+import { sentence } from '../primitives.js';
 
 // → docs/spec/24-environments.md
 
@@ -220,8 +221,3 @@ const GATE_SAID: Record<EnvironmentGate, string> = {
   validate: 'the validation checks',
   close_out: 'the close-out',
 };
-
-function sentence(parts: string[]): string {
-  if (parts.length <= 1) return parts[0] ?? '';
-  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]!}`;
-}

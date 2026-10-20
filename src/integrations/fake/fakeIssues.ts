@@ -31,7 +31,7 @@ import type {
 } from '../integration.js';
 import type { TrackerItem } from '../../types.js';
 import type { FakeWorldStore } from './fakeWorld.js';
-import { bodyCarriesKey, errorKeyBodyLines } from '../../appErrors/key.js';
+import { bodyCarriesKey, issueBodyWithRefs } from '../../tickets/searchKey.js';
 
 // → docs/spec/15-integrations.md
 
@@ -218,13 +218,7 @@ export class FakeIssuesIntegration
         id: `issue_${nanoid(6)}`,
         number,
         title: input.title,
-        body: [
-          input.body,
-          input.relatedTo === null ? null : `Related to #${input.relatedTo}.`,
-          input.errorKey === null ? null : errorKeyBodyLines(input.errorKey),
-        ]
-          .filter((part) => part !== null)
-          .join('\n\n'),
+        body: issueBodyWithRefs(input),
         labels: [...input.labels],
         state: 'open',
         linkedPrNumber: null,

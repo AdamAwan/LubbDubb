@@ -16,6 +16,10 @@ function sinkRecording(created: IssueCreateInput[], ref: string | null = 'issue:
       return ref === null ? { ok: true } : { ok: true, ref };
     },
     canCloseIssue: () => false,
+    canReopenIssue: () => false,
+    reopenIssue: (): never => {
+      throw new Error('reopenIssue is not scripted in this test');
+    },
     canClosePr: () => false,
     closePr: (): never => {
       throw new Error('closePr is not scripted in this test');
@@ -71,7 +75,6 @@ test('the filer resolves the type, the assignee and the relation from config and
     type: 'Product Backlog Item',
     assignee: 'adam@contoso.com',
     relatedTo: null,
-    errorKey: null,
   });
 
   await file({ title: 'CSV export 404s', body: 'The symptom.', bug: true, relatedTo: 12 });
@@ -82,8 +85,8 @@ test('the filer resolves the type, the assignee and the relation from config and
 test('an app error key rides on the create as a field, never in the body the caller wrote', async () => {
   const created: IssueCreateInput[] = [];
   const file = ticketFiler(azure(), sinkRecording(created));
-  await file({ title: 'live: Orders.Submit threw', body: 'frames', bug: true, errorKey: 'err:shop:3f9a1c2b' });
-  assert.equal(created[0]!.errorKey, 'err:shop:3f9a1c2b');
+  await file({ title: 'live: Orders.Submit threw', body: 'frames', bug: true, searchKey: 'err:shop:3f9a1c2b' });
+  assert.equal(created[0]!.searchKey, 'err:shop:3f9a1c2b');
   assert.equal(created[0]!.body, 'frames');
 });
 

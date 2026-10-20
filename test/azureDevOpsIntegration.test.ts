@@ -1199,7 +1199,6 @@ test('createIssue creates the work item as its type, tagged and assigned, in one
     type: 'User Story',
     assignee: 'adam@contoso.com',
     relatedTo: null,
-    errorKey: null,
   });
 
   assert.deepEqual(res, { ok: true, ref: 'issue:314' });
@@ -1225,7 +1224,6 @@ test('a related item is linked as a second write the caller never has to remembe
     type: 'Bug',
     assignee: null,
     relatedTo: 12,
-    errorKey: null,
   });
   assert.deepEqual(recorded.relations, [{ id: 314, relatedId: 12 }]);
   assert.equal(recorded.createdWorkItems[0]!.description, 'The symptom.');
@@ -1243,7 +1241,6 @@ test('a relation that fails does not cost the item, and says which one exists', 
         type: 'Bug',
         assignee: null,
         relatedTo: 12,
-        errorKey: null,
       }),
     /work item 314 was created but linking it to #12 failed/,
   );
@@ -1545,7 +1542,7 @@ test('an app error key on a filed item is a tag, the one place Azure DevOps sear
     type: 'Bug',
     assignee: null,
     relatedTo: null,
-    errorKey: 'err:shop:3f9a1c2b',
+    searchKey: 'err:shop:3f9a1c2b',
   });
   assert.deepEqual(recorded.createdWorkItems[0]!.tags, ['lubbdubb-watch', 'err:shop:3f9a1c2b']);
   assert.equal(recorded.createdWorkItems[0]!.description, 'frames only', 'the body carries no key line');
@@ -1578,6 +1575,11 @@ test('reopening a work item moves it to the first pickup state, and without one 
   const unset = new AzureDevOpsWorkItemsIntegration({ api });
   assert.equal(unset.canReopenIssue(), false);
   await assert.rejects(() => unset.reopenIssue(9), /issuePickupStates/);
+  assert.equal(
+    new AzureDevOpsWorkItemsIntegration({ api, reopenState: '  ' }).canReopenIssue(),
+    false,
+    'blank is none',
+  );
   const named = new AzureDevOpsWorkItemsIntegration({ api, reopenState: 'Active' });
   assert.equal(named.canReopenIssue(), true);
   await named.reopenIssue(9);

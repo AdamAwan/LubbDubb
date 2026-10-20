@@ -89,13 +89,7 @@ function firstOf<T>(
   held: readonly AppErrorGroupView[],
   pick: (g: AppErrorGroupView) => T | null,
 ): T | null {
-  const own = lead === undefined ? null : pick(lead);
-  if (own !== null) return own;
-  for (const g of held) {
-    const value = pick(g);
-    if (value !== null) return value;
-  }
-  return null;
+  return [lead, ...held].map((g) => (g === undefined ? null : pick(g))).find((v) => v !== null) ?? null;
 }
 
 function sumDaily(groups: readonly AppErrorGroupView[]): number[] {
@@ -142,11 +136,10 @@ export const HOW_SAID: Record<ErrorLinkHow, string> = {
 
 /**
  * A link made only from an operation hint is not a claim the work caused the error, so it is not
- * counted on the goal; nor is a link that names no goal.
+ * counted on the goal; nor is a link that names no goal, whose `how` is empty.
  */
 export function countsOnGoal(link: ErrorLink): boolean {
-  if (link.goalRef === null) return false;
-  return link.how.length === 0 || !link.how.every((how) => how === 'route-hint');
+  return link.how.some((how) => how !== 'route-hint');
 }
 
 /** What the goal card says about one environment: the moved groups linked to this goal there. */

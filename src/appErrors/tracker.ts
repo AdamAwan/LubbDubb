@@ -1,16 +1,17 @@
 import type { ErrorRecorder } from '../errorLog.js';
-import { withDeadline } from '../primitives.js';
+import { utcDay, withDeadline } from '../primitives.js';
 import { parseIssueOrigin } from '../issueOrigins.js';
 import type { ActionSink, IssueKeyHit, IssueKeySink } from '../sink/actionSink.js';
 import type { AppErrorTicketStore } from '../store/appErrorTickets.js';
 import type { AppErrorRead, AppErrorState, AppErrorTicketSearch, AppErrorTracker } from '../types.js';
-import type { AppErrorsPayload } from '../wire.js';
+import type { AppErrorGroupView, AppErrorsPayload } from '../wire.js';
+import { groupId } from './link.js';
 
 // → docs/spec/39-app-errors.md#the-tracker-lock
 
 const MOVED: ReadonlySet<AppErrorState> = new Set<AppErrorState>(['new', 'returned', 'spiking']);
 
-/** Neither tracker client sets a request timeout, and the pulse awaits this desk. */
+/** Neither tracker client sets a request timeout, and a search still running holds every later pass. */
 const SEARCH_DEADLINE_MS = 30_000;
 
 export function settleSearch(key: string, hits: readonly IssueKeyHit[], checkedAt: string): AppErrorTicketSearch {
@@ -45,7 +46,7 @@ function trackerOf(search: AppErrorTicketSearch | undefined, state: AppErrorStat
     case 'open':
       return { status: 'open', ticketRef: search.ticketRef, note: several };
     case 'closed': {
-      const when = search.closedAt === null ? '' : ` ${search.closedAt.slice(0, 10)}`;
+      const when = search.closedAt === null ? '' : ` ${utcDay(search.closedAt)}`;
       return {
         status: 'closed',
         ticketRef: search.ticketRef,
@@ -71,23 +72,27 @@ export function withTrackers(payload: AppErrorsPayload, searches: readonly AppEr
 }
 
 /**
- * The keys a pass owes a search: every moved group's, unless it was searched after the newest read.
- * A group that has not moved is never searched for on the pulse — the tab is about what moved.
+ * The keys a pass owes a search, per environment: a moved group's, unless it was searched after its own
+ * environment's newest read and has not changed since. A group that has not moved is never searched
+ * for on the pulse — the tab is about what moved.
  */
 export function keysOwed(
   payload: AppErrorsPayload,
   searches: readonly AppErrorTicketSearch[],
-  reads: readonly AppErrorRead[],
+  changed: (group: AppErrorGroupView) => boolean = () => false,
 ): string[] {
-  const newest = reads.reduce((max, r) => (r.readAt > max ? r.readAt : max), '');
   const checked = new Map(searches.map((s) => [s.key, s.checkedAt]));
-  const moved = new Set(
-    payload.environments.flatMap((e) => e.groups.filter((g) => MOVED.has(g.state)).map((g) => g.key)),
-  );
-  return [...moved].filter((key) => {
-    const at = checked.get(key);
-    return at === undefined || at < newest;
-  });
+  const owed = new Set<string>();
+  for (const env of payload.environments) {
+    const readAt = env.reading?.readAt ?? '';
+    for (const group of env.groups) {
+      if (!MOVED.has(group.state)) continue;
+      const differs = changed(group);
+      const at = checked.get(group.key);
+      if (at === undefined || at < readAt || differs) owed.add(group.key);
+    }
+  }
+  return [...owed];
 }
 
 interface AppErrorTrackerDeps {
@@ -95,7 +100,8 @@ interface AppErrorTrackerDeps {
   sink: ActionSink & Partial<IssueKeySink>;
   /** Whether a tracker is configured at all — `trackerCoordinates(config) !== null`, read live. */
   canFile: () => boolean;
-  current: () => AppErrorsPayload;
+  /** The view without links or trackers: a search needs only each group's key and state. */
+  view: () => AppErrorsPayload;
   reads: () => AppErrorRead[];
   errors?: ErrorRecorder;
   now?: () => number;
@@ -103,14 +109,20 @@ interface AppErrorTrackerDeps {
 
 export class AppErrorTrackerDesk {
   private readonly now: () => number;
+  /** Each environment's `readAt` when the desk last worked out what was owed. */
+  private readonly seenReads = new Map<string, string>();
+  /** Each moved group's state and last sighting when the desk last looked. */
+  private readonly seenGroups = new Map<string, string>();
+  private flight: Promise<void> | null = null;
+  /** Keys a press is filing right now: two clicks in one cockpit are one bug. */
+  private readonly filing = new Set<string>();
 
   constructor(private readonly deps: AppErrorTrackerDeps) {
     this.now = deps.now ?? (() => Date.now());
   }
 
-  /** The sink a press files, labels and reopens through — the one this desk searches. */
-  get sink(): ActionSink & Partial<IssueKeySink> {
-    return this.deps.sink;
+  canFile(): boolean {
+    return this.deps.canFile();
   }
 
   /** Whether a search can be made at all: a tracker to search, and a provider that can search it. */
@@ -118,10 +130,36 @@ export class AppErrorTrackerDesk {
     return this.deps.canFile() && this.deps.sink.canSearchIssueKeys?.() === true;
   }
 
-  async run(): Promise<void> {
-    if (!this.searchable()) return;
-    const owed = keysOwed(this.deps.current(), this.deps.tickets.listSearches(), this.deps.reads());
-    if (owed.length > 0) await this.search(owed);
+  /**
+   * Starts the pass's search and does not wait for it: the answer lands in the store, and a pulse that
+   * finds one still running skips. Nothing is built unless some environment was read since the last pass.
+   */
+  run(): void {
+    if (this.flight !== null || !this.searchable()) return;
+    const reads = this.deps.reads();
+    if (reads.every((r) => this.seenReads.get(r.environment) === r.readAt)) return;
+    const view = this.deps.view();
+    const owed = keysOwed(view, this.deps.tickets.listSearches(), (g) => this.moved(g));
+    for (const r of reads) this.seenReads.set(r.environment, r.readAt);
+    if (owed.length === 0) return;
+    this.flight = this.search(owed)
+      .then(
+        () => undefined,
+        (err: unknown) => {
+          this.deps.errors?.record({
+            source: 'provider',
+            message: `recording a tracker search for app error keys: ${(err as Error).message}`,
+          });
+        },
+      )
+      .finally(() => {
+        this.flight = null;
+      });
+  }
+
+  /** @public resolves once the search a pass started has landed; tests read the store after it */
+  async settled(): Promise<void> {
+    await this.flight;
   }
 
   /** One batched search, recorded whole. A search that fails is `unknown` for every key it carried — never `none`. */
@@ -129,11 +167,8 @@ export class AppErrorTrackerDesk {
     const checkedAt = new Date(this.now()).toISOString();
     let answered: AppErrorTicketSearch[];
     try {
-      const find = this.deps.sink.findIssuesByKeys;
-      if (find === undefined || !this.searchable())
-        throw new Error('no tracker this deployment files into can search by key');
       const hits = await withDeadline(
-        find.call(this.deps.sink, keys),
+        this.deps.sink.findIssuesByKeys!(keys),
         SEARCH_DEADLINE_MS,
         `the tracker did not answer the search within ${String(SEARCH_DEADLINE_MS / 1000)} seconds`,
       );
@@ -150,5 +185,24 @@ export class AppErrorTrackerDesk {
   /** What a press filed or reopened, written before the next search would find it. */
   record(search: Omit<AppErrorTicketSearch, 'checkedAt'>): void {
     this.deps.tickets.recordSearches([{ ...search, checkedAt: new Date(this.now()).toISOString() }]);
+  }
+
+  /** Claims a key for one press; false while another press holds it. */
+  claim(key: string): boolean {
+    if (this.filing.has(key)) return false;
+    this.filing.add(key);
+    return true;
+  }
+
+  release(key: string): void {
+    this.filing.delete(key);
+  }
+
+  private moved(group: AppErrorGroupView): boolean {
+    const id = groupId(group);
+    const mark = `${group.state}\u0000${group.lastSeen}`;
+    const before = this.seenGroups.get(id);
+    this.seenGroups.set(id, mark);
+    return before !== undefined && before !== mark;
   }
 }

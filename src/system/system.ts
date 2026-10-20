@@ -92,6 +92,8 @@ export interface System {
   setupReading: { latest: SetupReading | null };
   store: Store;
   connector: CompositeConnector;
+  /** What the harness writes through: the connector, or the sink a test injected in its place. */
+  sink: Foundation['sink'];
   agents: AgentManager;
   escalations: EscalationInbox;
   proposals: ProposalDesk;
@@ -119,7 +121,7 @@ export interface System {
   remoteIntents: EnvironmentDesks['remoteIntents'];
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
-  appErrorLinks: EnvironmentDesks['appErrorLinks'];
+  appErrorPayloads: EnvironmentDesks['appErrorPayloads'];
   prAssign: IntakeDesks['prAssign'];
   botPrs: BenchDesks['botPrs'];
   botPrRisks: BenchDesks['botPrRisks'];
@@ -172,6 +174,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     setupReading: { latest: null },
     store: base.store,
     connector: base.connector,
+    sink: base.sink,
     agents: fleet.agents,
     escalations: fleet.escalations,
     proposals: fleet.proposals,
@@ -201,7 +204,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteIntents: envs.remoteIntents,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,
-    appErrorLinks: envs.appErrorLinks,
+    appErrorPayloads: envs.appErrorPayloads,
     prAssign: intake.prAssign,
     botPrs: bench.botPrs,
     botPrRisks: bench.botPrRisks,

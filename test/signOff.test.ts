@@ -105,7 +105,6 @@ test('every prose method signs on its way to the provider, whichever surface it 
     type: null,
     assignee: null,
     relatedTo: null,
-    errorKey: null,
   });
   await connector.upsertIssueComment({ number: 1, body: 'A status.', commentRef: null });
 

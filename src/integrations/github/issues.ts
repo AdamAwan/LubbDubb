@@ -8,7 +8,7 @@ import type {
   IssueLabelInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import { bodyCarriesKey, errorKeyBodyLines } from '../../appErrors/key.js';
+import { bodyCarriesKey, issueBodyWithRefs } from '../../tickets/searchKey.js';
 import type { Issue, IssueState, TrackerItem } from '../../types.js';
 import type {
   WorldCapability,
@@ -90,8 +90,7 @@ export class GitHubIssuesIntegration
   }
 
   async createIssue(input: IssueCreateInput): Promise<SendResult> {
-    const related = input.relatedTo === null ? input.body : `${input.body}\n\nRelated to #${input.relatedTo}.`;
-    const body = input.errorKey === null ? related : `${related}\n\n${errorKeyBodyLines(input.errorKey)}`;
+    const body = issueBodyWithRefs(input);
     const created = await this.opts.api.createIssue({
       title: input.title,
       body,

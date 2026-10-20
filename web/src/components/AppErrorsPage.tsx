@@ -216,18 +216,17 @@ function DeployLine({
   multi: boolean;
   now: number;
 }): JSX.Element {
-  const sha = head?.sha ?? null;
   return (
     <p className="ae-line">
       {multi && <b>{env} </b>}
-      {sha === null ? (
+      {head === null ? (
         <span className="ae-note">no deployed commit read yet</span>
       ) : (
         <>
-          {head?.previousSha != null && <code>{short(head.previousSha)} → </code>}
-          <code>{short(sha)}</code>
+          {head.previousSha !== null && <code>{short(head.previousSha)} → </code>}
+          <code>{short(head.sha)}</code>
           <span className="ae-note">
-            {head?.changedAt != null
+            {head.changedAt !== null
               ? ` · noticed ${relTime(head.changedAt, now)}`
               : ' · the first build read, so no deploy time — new means the last day'}
           </span>
@@ -409,37 +408,28 @@ function Spark({ daily, state }: { daily: number[]; state: ErrorState }): JSX.El
 
 function LinkCell({ link }: { link: ErrorLink | null }): JSX.Element {
   if (link === null) return <span className="ae-none">—</span>;
-  const candidates = `candidates: ${link.candidates === null ? 'unknown' : String(link.candidates)}`;
-  if (link.goalRef === null)
-    return (
-      <div className="ae-link">
+  const refs = link.goalRef === null ? link.tied : [link.goalRef];
+  return (
+    <div className="ae-link">
+      {link.goalRef === null && (
         <Tag tone="grey" lower>
           no link
         </Tag>
-        {link.tied.length > 0 && (
-          <span className="cn-refs">
-            {link.tied.map((goalRef) => (
-              <Ref key={goalRef} to={goalRef} />
-            ))}
-          </span>
-        )}
-        <span className="ae-note">
-          {link.why} ({candidates})
+      )}
+      {refs.length > 0 && (
+        <span className="cn-refs">
+          {refs.map((goalRef) => (
+            <Ref key={goalRef} to={goalRef} />
+          ))}
         </span>
-      </div>
-    );
-  return (
-    <div className="ae-link">
-      <span className="cn-refs">
-        <Ref to={link.goalRef} />
-      </span>
+      )}
       {link.how.map((how) => (
         <Tag key={how} tone="grey" lower>
           {HOW_SAID[how]}
         </Tag>
       ))}
       <span className="ae-note">
-        {link.why} ({candidates})
+        {link.why} (candidates: {link.candidates === null ? 'unknown' : String(link.candidates)})
       </span>
     </div>
   );
@@ -494,10 +484,13 @@ function TrackerButton({
   onPressed: () => void;
 }): JSX.Element {
   const act = async (): Promise<void> => {
-    if (press === 'investigate') await api.investigateAppError(row.environment, row.fingerprint, false);
-    else if (press === 'reopen') await api.reopenAppErrorTicket(row.key);
+    if (press === 'reopen') await api.reopenAppErrorTicket(row.key);
     else if (press === 'search') await api.searchAppErrorKey(row.key);
-    else await api.fileAppErrorBug(row.environment, row.fingerprint, press === 'file-anyway');
+    else
+      await api.fileAppErrorBug(row.environment, row.fingerprint, {
+        investigate: press === 'investigate',
+        unsearched: press === 'file-anyway',
+      });
     onPressed();
   };
   return (

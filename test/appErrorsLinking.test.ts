@@ -108,6 +108,19 @@ async function read(system: System): Promise<AppErrorsPayload> {
   return res.json<AppErrorsPayload>();
 }
 
+function viewOf(system: System): AppErrorsPayload {
+  return appErrorsView({
+    environments: ENVIRONMENTS,
+    reads: system.store.appErrors.listReads(),
+    groups: system.store.appErrors.listGroups(),
+    heads: system.store.environments.listEnvironmentHeads(),
+    project: 'acme-api',
+    minCount: 2,
+    ignore: [],
+    now: Date.now(),
+  });
+}
+
 function linkOf(payload: AppErrorsPayload, environment: string, fingerprint: string) {
   const env = payload.environments.find((e) => e.environment === environment);
   const g = env?.groups.find((x) => x.fingerprint === fingerprint);
@@ -148,8 +161,50 @@ test('GET /api/app-errors links a moved group to the goal whose landed diff its 
     'only the deploy window is diffed, and once',
   );
 
+  const asked = git.calls.length;
+  await read(system);
+  assert.equal(git.calls.length, asked, 'nothing moved, so the linked payload is shared and the clone is not asked');
+
+  system.store.appErrors.recordRead({ environment: 'test', readAt: ago(-1000), status: 'ok', detail: null }, [
+    group('test', 'Pay.Charge', soon(60_000)),
+  ]);
   await read(system);
   assert.equal(git.calls.filter((c) => c === `changedFiles:${A}`).length, 1, 'a commit is diffed once, then kept');
+});
+
+test('a commit the clone could not diff is not asked about again until the failure is ten minutes old', async () => {
+  const git = new FakeGitObserver()
+    .setContains(AFTER, A, true)
+    .setContains(AFTER, B, true)
+    .setContains(AFTER, C, true)
+    .setContains(BEFORE, A, false)
+    .setContains(BEFORE, B, false)
+    .setContains(BEFORE, C, true)
+    .setChangedFiles(B, ['src/Cart/Cart.cs']);
+  const system = build(git);
+  seed(system);
+  let clock = Date.now();
+  const linker = new AppErrorLinker({ git, now: () => clock });
+  const pass = async (): Promise<AppErrorsPayload> => {
+    const payload = viewOf(system);
+    await linker.link(payload, {
+      landings: system.store.environments.listGoalLandings(),
+      readings: system.store.environments.listEnvironmentReach(),
+      nodes: [],
+      now: Date.now(),
+    });
+    return payload;
+  };
+  const diffsOfA = (): number => git.calls.filter((c) => c === `changedFiles:${A}`).length;
+
+  const first = await pass();
+  assert.match(linkOf(first, 'live', 'Orders.Submit')?.why ?? '', /could not list what aaaaaaa changed/);
+  assert.equal(diffsOfA(), 1);
+  await pass();
+  assert.equal(diffsOfA(), 1, 'the failure is remembered');
+  clock += 11 * 60_000;
+  await pass();
+  assert.equal(diffsOfA(), 2, 'and asked again once it is old');
 });
 
 test('a landing the clone cannot place leaves the window undecided: no link, and never zero candidates', async () => {
@@ -176,22 +231,14 @@ test('a clone that does not answer in time is no link, never a wait', async () =
   }
   const system = build(new SlowGit());
   seed(system);
-  const payload = appErrorsView({
-    environments: ENVIRONMENTS,
-    reads: system.store.appErrors.listReads(),
-    groups: system.store.appErrors.listGroups(),
-    heads: system.store.environments.listEnvironmentHeads(),
-    project: 'acme-api',
-    minCount: 2,
-    ignore: [],
-    now: Date.now(),
-  });
-  await new AppErrorLinker({ git: new SlowGit(), deadlineMs: 20 }).link(payload, {
+  const payload = viewOf(system);
+  const answered = await new AppErrorLinker({ git: new SlowGit(), deadlineMs: 20 }).link(payload, {
     landings: system.store.environments.listGoalLandings(),
     readings: system.store.environments.listEnvironmentReach(),
     nodes: [],
     now: Date.now(),
   });
+  assert.equal(answered, false, 'a pass the deadline cut short says so, and is not shared');
   const orders = linkOf(payload, 'live', 'Orders.Submit');
   assert.equal(orders?.candidates, null);
   assert.match(orders?.why ?? '', /did not answer within 0s/);

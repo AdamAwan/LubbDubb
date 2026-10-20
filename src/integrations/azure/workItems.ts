@@ -36,7 +36,7 @@ import type {
 } from '../integration.js';
 import type { AzureDevOpsApi, AzWorkItem, AzWorkItemUpdate } from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
-import { sameTag } from './restHelpers.js';
+import { chunkIds, sameTag } from './restHelpers.js';
 import { sameIdentity } from '../../pr/prOwnership.js';
 import { HydrationCache } from '../hydrationCache.js';
 import { hydrationMaxAgeMs, issueReadRef, type ReadPlan } from '../../world/readPlan.js';
@@ -83,7 +83,11 @@ export class AzureDevOpsWorkItemsIntegration
   private lastGood: Issue[] | null = null;
   private readonly tagAuthorship = new HydrationCache<{ token: string; tags: string[] }>();
 
-  constructor(private readonly opts: AzureWorkItemsOpts) {}
+  private readonly reopenState: string | undefined;
+
+  constructor(private readonly opts: AzureWorkItemsOpts) {
+    this.reopenState = opts.reopenState?.trim() === '' ? undefined : opts.reopenState;
+  }
 
   resolveRefUrl(ref: string): string | null {
     const { organization, project, repository } = this.opts;
@@ -279,7 +283,7 @@ export class AzureDevOpsWorkItemsIntegration
       type: input.type ?? 'Task',
       title: input.title,
       description: input.body,
-      tags: input.errorKey === null ? input.labels : [...input.labels, input.errorKey],
+      tags: input.searchKey === undefined ? input.labels : [...input.labels, input.searchKey],
       assignedTo: input.assignee,
     });
     const ref = issueOriginRef('root', created.id);
@@ -298,9 +302,7 @@ export class AzureDevOpsWorkItemsIntegration
 
   async findIssuesByKeys(keys: readonly string[]): Promise<Map<string, IssueKeyHit[]>> {
     const found = new Map<string, IssueKeyHit[]>(keys.map((k) => [k, []]));
-    const unique = [...new Set(keys)];
-    for (let i = 0; i < unique.length; i += TAG_QUERY_BATCH) {
-      const batch = unique.slice(i, i + TAG_QUERY_BATCH);
+    for (const batch of chunkIds([...new Set(keys)], TAG_QUERY_BATCH))
       for (const w of await this.opts.api.queryWorkItemsByTags(batch))
         for (const key of batch.filter((k) => w.tags.some((t) => sameTag(t, k)))) {
           const state = normalizeState(w.state);
@@ -310,17 +312,16 @@ export class AzureDevOpsWorkItemsIntegration
             closedAt: state === 'closed' ? (w.closedAt ?? (w.changedAt === '' ? null : w.changedAt)) : null,
           });
         }
-    }
     return found;
   }
 
   canReopenIssue(): boolean {
-    return this.opts.reopenState !== undefined && this.opts.reopenState.trim() !== '';
+    return this.reopenState !== undefined;
   }
 
   async reopenIssue(number: number): Promise<SendResult> {
-    const state = this.opts.reopenState;
-    if (state === undefined || state.trim() === '')
+    const state = this.reopenState;
+    if (state === undefined)
       throw new Error(
         'issuePickupStates names no state on this deployment, so there is no column a reopened work item ' +
           'moves to. Name it in the config, or reopen the item in Azure DevOps.',

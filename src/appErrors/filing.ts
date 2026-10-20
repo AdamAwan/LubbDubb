@@ -1,7 +1,7 @@
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import { issueOriginNumber } from '../issueOrigins.js';
 import { requestInvestigation, type IssueWatchContext } from '../issueWatch.js';
-import type { IssueKeySink } from '../sink/actionSink.js';
+import type { ActionSink } from '../sink/actionSink.js';
 import type { TicketFiler } from '../tickets/filing.js';
 import type { AppErrorTicketSearch } from '../types.js';
 import { investigateLabelFor, watchLabelFor } from '../watchLabels.js';
@@ -14,14 +14,11 @@ const MAX_TITLE_CHARS = 200;
 
 export interface AppErrorFilingDeps {
   tracker: AppErrorTrackerDesk;
-  sink: Partial<IssueKeySink>;
   filing: TicketFiler;
   prompts: PromptTemplates;
   watch: IssueWatchContext;
-  /** `currentAppErrors`: the payload the tab draws, links included, so a press files from exactly that row. */
+  /** The payload the tab draws, links included, so a press files from exactly that row. */
   current: () => Promise<AppErrorsPayload>;
-  /** `trackerCoordinates(config)`, read live: null when there is no tracker to file into. */
-  trackerTarget: () => string | null;
 }
 
 export type PressOutcome = AppErrorPressPayload | { ok: false; status: 404 | 409 | 502; error: string };
@@ -34,15 +31,12 @@ interface FileRequest {
   unsearched: boolean;
 }
 
-const inFlight = new Set<string>();
-
 export async function fileAppErrorBug(deps: AppErrorFilingDeps, request: FileRequest): Promise<PressOutcome> {
-  if (deps.trackerTarget() === null) return noTracker();
+  if (!deps.tracker.canFile()) return noTracker();
   const group = findGroup(await deps.current(), request.environment, request.fingerprint);
   if (group === null)
     return { ok: false, status: 404, error: `no error group ${request.fingerprint} is held on ${request.environment}` };
-  if (inFlight.has(group.key)) return { ok: false, status: 409, error: `${group.key} is already being filed` };
-  inFlight.add(group.key);
+  if (!deps.tracker.claim(group.key)) return { ok: false, status: 409, error: `${group.key} is already being filed` };
   try {
     const found = await searchAgain(deps, group.key, request.unsearched);
     if (!found.ok) return found;
@@ -59,7 +53,7 @@ export async function fileAppErrorBug(deps: AppErrorFilingDeps, request: FileReq
       bug: true,
       labels: request.investigate ? investigateLabels(deps.watch.labelPrefix) : [],
       ...relatedTo(group),
-      errorKey: group.key,
+      searchKey: group.key,
     });
     deps.tracker.record({
       key: group.key,
@@ -71,13 +65,17 @@ export async function fileAppErrorBug(deps: AppErrorFilingDeps, request: FileReq
     });
     return { ok: true, ticketRef, reused: false, investigation: request.investigate ? { failed: [] } : null };
   } finally {
-    inFlight.delete(group.key);
+    deps.tracker.release(group.key);
   }
 }
 
-export async function reopenAppErrorTicket(deps: AppErrorFilingDeps, key: string): Promise<PressOutcome> {
-  if (deps.trackerTarget() === null) return noTracker();
-  if (deps.sink.canReopenIssue?.() !== true || deps.sink.reopenIssue === undefined)
+export async function reopenAppErrorTicket(
+  deps: AppErrorFilingDeps,
+  sink: Pick<ActionSink, 'canReopenIssue' | 'reopenIssue'>,
+  key: string,
+): Promise<PressOutcome> {
+  if (!deps.tracker.canFile()) return noTracker();
+  if (!sink.canReopenIssue())
     return {
       ok: false,
       status: 409,
@@ -90,7 +88,7 @@ export async function reopenAppErrorTicket(deps: AppErrorFilingDeps, key: string
     return { ok: true, ticketRef: search.ticketRef, reused: true, investigation: null };
   const number = search.status === 'closed' ? issueOriginNumber('root', search.ticketRef) : null;
   if (number === null) return { ok: false, status: 409, error: `nothing closed is filed under ${key} to reopen` };
-  await deps.sink.reopenIssue.call(deps.sink, number);
+  await sink.reopenIssue(number);
   deps.tracker.record({ ...search, status: 'open', closedAt: null, detail: null });
   return { ok: true, ticketRef: search.ticketRef!, reused: false, investigation: null };
 }
@@ -138,8 +136,11 @@ function investigateLabels(prefix: string): string[] {
   return [watchLabelFor(prefix), investigateLabelFor(prefix)].filter((label) => label !== '');
 }
 
+/** A link made by a route hint alone is a reason to look, not a claim the work caused the error. */
 function relatedTo(group: AppErrorGroupView): { relatedTo?: number } {
-  const story = issueOriginNumber('root', group.link?.goalRef ?? null);
+  const link = group.link;
+  if (link === null || !link.how.some((how) => how !== 'route-hint')) return {};
+  const story = issueOriginNumber('root', link.goalRef);
   return story === null ? {} : { relatedTo: story };
 }
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { filesTouched, frameFiles, framePath, samePath } from '../src/appErrors/frames.js';
-import { arrivalWindow, decideLink, hintWords, type LinkWindow } from '../src/appErrors/link.js';
+import { arrivalWindow, decideLink, hintWords, placeFacts, type LinkWindow } from '../src/appErrors/link.js';
 import type { EnvironmentReading, GoalLanding } from '../src/types.js';
 
 const HOUR = 60 * 60 * 1000;
@@ -149,17 +149,20 @@ test('the arrival window: what reached the environment in the period, undecided 
     landing('issue:3', 'ccc', 30 * HOUR),
     landing('issue:4', 'dddd', 40 * 24 * HOUR),
   ];
-  const input = { environment: 'test', anchor: NOW, lookbackMs: 24 * HOUR, landings };
+  const input = { environment: 'test', anchor: NOW, lookbackMs: 24 * HOUR };
   const window = arrivalWindow({
     ...input,
-    readings: [reach('a', 'reached', 2 * HOUR), reach('bb', 'reached', 28 * HOUR), reach('ccc', 'absent', HOUR)],
+    facts: placeFacts({
+      landings,
+      readings: [reach('a', 'reached', 2 * HOUR), reach('bb', 'reached', 28 * HOUR), reach('ccc', 'absent', HOUR)],
+    }),
   });
   assert.ok(window.known);
   assert.deepEqual([...window.goals.keys()], ['issue:1'], 'reached before the period, absent and too old are out');
 
   const undecided = arrivalWindow({
     ...input,
-    readings: [reach('a', 'reached', 2 * HOUR), reach('bb', 'unknown', HOUR)],
+    facts: placeFacts({ landings, readings: [reach('a', 'reached', 2 * HOUR), reach('bb', 'unknown', HOUR)] }),
   });
   assert.equal(undecided.known, false);
   assert.ok(!undecided.known && /bb is on test is unknown/.test(undecided.why));

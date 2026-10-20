@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 import type {
   AssessedBotPr,
   BotPrOutcome,
@@ -9,6 +9,7 @@ import type {
   UpdateKind,
 } from '../types.js';
 import { api } from '../api.js';
+import { usePolled } from '../hooks.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ExtLink, relTime, timeLeft } from './util.js';
 import { Tag, type TagTone } from './tag.js';
@@ -300,32 +301,5 @@ function Outcome({
 }
 
 function useBotPrs(): { reading: BotPrsPayload | null; failed: boolean; reload: () => void } {
-  const [reading, setReading] = useState<BotPrsPayload | null>(null);
-  const [failed, setFailed] = useState(false);
-  const live = useRef(true);
-
-  const reload = useCallback((): void => {
-    api.getBotPrs().then(
-      (payload) => {
-        if (!live.current) return;
-        setReading(payload);
-        setFailed(false);
-      },
-      () => {
-        if (live.current) setFailed(true);
-      },
-    );
-  }, []);
-
-  useEffect(() => {
-    live.current = true;
-    reload();
-    const timer = setInterval(reload, REFRESH_MS);
-    return () => {
-      live.current = false;
-      clearInterval(timer);
-    };
-  }, [reload]);
-
-  return { reading, failed, reload };
+  return usePolled(api.getBotPrs, REFRESH_MS);
 }

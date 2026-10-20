@@ -26,10 +26,7 @@ export function GoalErrorBadge({
   const total = lines.reduce((n, l) => n + l.count, 0);
   const where = lines.map((l) => l.environment).join(', ');
   const title = lines
-    .map(
-      (l) =>
-        `${l.count} on ${l.environment}, linked by ${l.how.length === 0 ? 'an unnamed method' : l.how.map((h) => HOW_SAID[h]).join(' and ')}`,
-    )
+    .map((l) => `${l.count} on ${l.environment}, linked by ${l.how.map((h) => HOW_SAID[h]).join(' and ')}`)
     .join('; ');
   return (
     <Button

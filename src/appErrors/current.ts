@@ -6,16 +6,19 @@ import type { AppErrorLinker } from './linker.js';
 import { withTrackers } from './tracker.js';
 import { appErrorsView } from './view.js';
 
-// → docs/spec/39-app-errors.md#on-the-wire
+// → docs/spec/39-app-errors.md#where-it-is-computed
 
 type CurrentConfig = Pick<
   Config,
   'environments' | 'appErrorMinCount' | 'appErrorIgnore' | 'pool' | 'github' | 'azureDevOps' | 'repoRoot'
 >;
 
-/** The payload with every `link` still null: the tracker desk's reading, which needs only keys and states. */
-export function unlinkedAppErrors(store: Store, config: CurrentConfig, now: number): AppErrorsPayload {
-  const view = appErrorsView({
+/** A linked payload is reused this long while nothing it was built from has moved. */
+const REUSE_MS = 30_000;
+
+/** The payload with every `link` and `tracker` still null: the tracker desk's reading, which needs only keys and states. */
+export function appErrorView(store: Store, config: CurrentConfig, now: number): AppErrorsPayload {
+  return appErrorsView({
     environments: config.environments,
     reads: store.appErrors.listReads(),
     groups: store.appErrors.listGroups(),
@@ -25,22 +28,42 @@ export function unlinkedAppErrors(store: Store, config: CurrentConfig, now: numb
     ignore: config.appErrorIgnore,
     now,
   });
-  return withTrackers(view, store.appErrorTickets.listSearches());
 }
 
-/** The Errors tab's payload as the tab draws it, links included: the route's answer and what every press acts on. */
-export async function currentAppErrors(
-  store: Store,
-  config: CurrentConfig,
-  linker: AppErrorLinker,
-  now: number,
-): Promise<AppErrorsPayload> {
-  const payload = unlinkedAppErrors(store, config, now);
-  await linker.link(payload, {
-    landings: store.environments.listGoalLandings(),
-    readings: store.environments.listEnvironmentReach(),
-    nodes: store.graph.listWorkNodes(),
-    now,
-  });
-  return payload;
+interface CurrentAppErrorsDeps {
+  store: Store;
+  config: CurrentConfig;
+  linker: AppErrorLinker;
+}
+
+/**
+ * The one builder of the linked payload — the Errors tab's, every goal badge's and every press's. A
+ * linked pass is shared for a short while, and only while no read, head or landing has moved since.
+ */
+export class CurrentAppErrors {
+  private held: { key: string; builtAt: number; payload: AppErrorsPayload } | null = null;
+
+  constructor(private readonly deps: CurrentAppErrorsDeps) {}
+
+  async read(now: number): Promise<AppErrorsPayload> {
+    const { store, config, linker } = this.deps;
+    const landings = store.environments.listGoalLandings();
+    const readings = store.environments.listEnvironmentReach();
+    const nodes = store.graph.listWorkNodes();
+    const key = [
+      ...store.appErrors.listReads().map((r) => `${r.environment}@${r.readAt}`),
+      ...store.environments.listEnvironmentHeads().map((h) => `${h.environment}=${h.sha}@${h.changedAt ?? ''}`),
+      `landings ${String(landings.length)} ${landings.reduce((max, l) => (l.recordedAt > max ? l.recordedAt : max), '')}`,
+      `reach ${String(readings.length)} ${readings.reduce((max, r) => (r.observedAt > max ? r.observedAt : max), '')}`,
+      `nodes ${String(nodes.length)}`,
+      `min ${String(config.appErrorMinCount)} ignore ${config.appErrorIgnore.join(',')}`,
+    ].join('\n');
+    let linked = this.held?.key === key && now - this.held.builtAt < REUSE_MS ? this.held.payload : null;
+    if (linked === null) {
+      linked = appErrorView(store, config, now);
+      const answered = await linker.link(linked, { landings, readings, nodes, now });
+      this.held = answered ? { key, builtAt: now, payload: linked } : null;
+    }
+    return withTrackers(linked, store.appErrorTickets.listSearches());
+  }
 }

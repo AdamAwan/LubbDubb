@@ -10,15 +10,19 @@ export function buildWorkItemHistoryQuery(since: string, tag?: string, assignedT
 
 /** Open and closed alike: a closed bug under an error key is what the tracker lock reads as "fixed, and back". */
 export function buildTagsQuery(tags: readonly string[]): string {
-  const any = tags.map((t) => `[System.Tags] CONTAINS '${t.replace(/'/g, "''")}'`).join(' OR ');
+  const any = tags.map((t) => `[System.Tags] CONTAINS ${wiqlString(t)}`).join(' OR ');
   return `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project AND (${any}) ORDER BY [System.Id] ASC`;
 }
 
 function workItemQuery(extra: string[], tag?: string, assignedTo?: string): string {
   const clauses = ['[System.TeamProject] = @project', ...extra];
-  if (tag) clauses.push(`[System.Tags] CONTAINS '${tag.replace(/'/g, "''")}'`);
-  if (assignedTo) clauses.push(`[System.AssignedTo] = '${assignedTo.replace(/'/g, "''")}'`);
+  if (tag) clauses.push(`[System.Tags] CONTAINS ${wiqlString(tag)}`);
+  if (assignedTo) clauses.push(`[System.AssignedTo] = ${wiqlString(assignedTo)}`);
   return `SELECT [System.Id] FROM WorkItems WHERE ${clauses.join(' AND ')} ORDER BY [System.Id] ASC`;
+}
+
+function wiqlString(s: string): string {
+  return `'${s.replace(/'/g, "''")}'`;
 }
 
 function wiqlDate(iso: string): string {

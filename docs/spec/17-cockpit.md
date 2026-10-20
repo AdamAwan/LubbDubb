@@ -5993,7 +5993,9 @@ a table of the error groups that moved, with `steady` and `gone` folded away beh
 `Place` field. Each row draws the goal it is probably the work of and what the tracker holds for its
 key, with the tracker presses (File bug, Investigate, Reopen, Retry search) beside the ticket. Its goal
 and ticket references go through `<Ref>`, never inside a button, and the goal header carries the line
-that sends an operator here. Owned by [39](39-app-errors.md#in-the-cockpit).
+that sends an operator here. The tab and every goal header's line read one shared poll (`usePolled`,
+`web/src/hooks.ts`), so a goal page does not add a request per mount. Owned by
+[39](39-app-errors.md#in-the-cockpit).
 
 ## The feature board
 

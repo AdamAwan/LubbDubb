@@ -7,7 +7,8 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeAppErrorReader } from '../src/appErrors/fakeReader.js';
-import { appErrorKey, bodyCarriesKey } from '../src/appErrors/key.js';
+import { appErrorKey } from '../src/appErrors/key.js';
+import { bodyCarriesKey } from '../src/tickets/searchKey.js';
 import { AppErrorTrackerDesk, keysOwed, settleSearch } from '../src/appErrors/tracker.js';
 import { FakeUpstreamIssues } from '../src/tickets/fakeUpstream.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -105,6 +106,7 @@ function issues(system: System) {
 test('a moved group is searched for on the pulse, and the tab says no bug carries its key', async () => {
   const { system } = build();
   await system.harness.runCycle();
+  await system.appErrorTracker.settled();
 
   const group = await errorsTab(system);
   assert.equal(group.key, KEY);
@@ -160,6 +162,33 @@ test('a press files from the row the tab drew, link included: the bug is related
   assert.match(bug.body, /Related to #412\./, 'the press read the same link the tab drew');
 });
 
+test('a link made by a route hint alone is not a relation: the bug is filed related to nothing', async () => {
+  const landed = 'b'.repeat(40);
+  const git = new FakeGitObserver().setChangedFiles(landed, ['docs/readme.md']);
+  const soon = new Date(Date.now() + 60_000).toISOString();
+  const { system } = build({ gitObserver: git, errors: errorsOn('Orders.Submit', 5, soon, soon) });
+  system.store.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:412', sha: landed });
+  system.store.environments.recordEnvironmentReach({
+    sha: landed,
+    environment: 'test',
+    status: 'reached',
+    detail: null,
+  });
+  await system.harness.runCycle();
+  system.store.graph.recordWorkGraph([
+    { ref: 'issue:412', kind: 'issue', parentRef: null, title: 'Orders page', status: 'open', terminal: false },
+  ]);
+
+  const group = await errorsTab(system);
+  assert.equal(group.link?.goalRef, 'issue:412');
+  assert.deepEqual(group.link?.how, ['route-hint']);
+
+  const filed = await press(system, '/api/app-errors/file-bug', { environment: 'test', fingerprint: 'Orders.Submit' });
+  assert.equal(filed.status, 200);
+  const bug = (await issues(system)).find((i) => `issue:${i.number}` === filed.body.ticketRef)!;
+  assert.doesNotMatch(bug.body, /Related to/, 'a hint is a reason to look, not a claim the goal caused it');
+});
+
 test('a closed bug under a moved key reads closed and back, and Reopen reopens it', async () => {
   const { system } = build();
   await system.harness.runCycle();
@@ -184,6 +213,7 @@ test('a search that fails is unknown, never none, and File bug will not file ove
   const { system, failSearch } = build();
   failSearch('secondary rate limit');
   await system.harness.runCycle();
+  await system.appErrorTracker.settled();
 
   const group = await errorsTab(system);
   assert.equal(group.tracker?.status, 'unknown');
@@ -210,15 +240,20 @@ test('Investigate files the bug with the watch tag and the investigate label the
   const { system } = build();
   await system.harness.runCycle();
 
-  const res = await press(system, '/api/app-errors/investigate', { environment: 'test', fingerprint: 'Orders.Submit' });
+  const res = await press(system, '/api/app-errors/file-bug', {
+    environment: 'test',
+    fingerprint: 'Orders.Submit',
+    investigate: true,
+  });
   assert.equal(res.status, 200);
   assert.deepEqual(res.body.investigation, { failed: [] });
   const filed = (await issues(system)).find((i) => `issue:${i.number}` === res.body.ticketRef)!;
   assert.deepEqual([...filed.labels].sort(), ['lubbdubb-investigate', 'lubbdubb-watch']);
 
-  const again = await press(system, '/api/app-errors/investigate', {
+  const again = await press(system, '/api/app-errors/file-bug', {
     environment: 'test',
     fingerprint: 'Orders.Submit',
+    investigate: true,
   });
   assert.equal(again.body.reused, true, 'a second fleet sees it filed and starts no second investigation');
   assert.equal((await issues(system)).length, 1);
@@ -250,12 +285,19 @@ test('settleSearch prefers an open ticket, else the latest closed, and counts ev
   assert.equal(settleSearch(KEY, [], 'now').status, 'none');
 });
 
-test('keysOwed searches moved groups only, and only once per read', () => {
+test('keysOwed searches moved groups only, each against its own environment’s read', () => {
   const group = (key: string, state: AppErrorGroupView['state']) => ({ key, state }) as AppErrorGroupView;
+  const env = (readAt: string, groups: AppErrorGroupView[]) => ({ reading: { readAt }, groups });
   const payload = {
-    environments: [{ groups: [group('err:a:1', 'new'), group('err:a:2', 'steady'), group('err:a:3', 'spiking')] }],
+    environments: [
+      env('2026-10-20T10:00:00.000Z', [
+        group('err:a:1', 'new'),
+        group('err:a:2', 'steady'),
+        group('err:a:3', 'spiking'),
+      ]),
+      env('2026-10-20T08:00:00.000Z', [group('err:a:4', 'returned')]),
+    ],
   } as unknown as AppErrorsPayload;
-  const reads = [{ readAt: '2026-10-20T10:00:00.000Z' }] as AppErrorRead[];
   const searched = (key: string, checkedAt: string) => ({
     key,
     status: 'none' as const,
@@ -265,16 +307,76 @@ test('keysOwed searches moved groups only, and only once per read', () => {
     detail: null,
     checkedAt,
   });
-  assert.deepEqual(keysOwed(payload, [], reads), ['err:a:1', 'err:a:3']);
+  assert.deepEqual(keysOwed(payload, []), ['err:a:1', 'err:a:3', 'err:a:4']);
+  const searches = [
+    searched('err:a:1', '2026-10-20T10:01:00.000Z'),
+    searched('err:a:3', '2026-10-20T09:00:00.000Z'),
+    searched('err:a:4', '2026-10-20T09:00:00.000Z'),
+  ];
   assert.deepEqual(
-    keysOwed(
-      payload,
-      [searched('err:a:1', '2026-10-20T10:01:00.000Z'), searched('err:a:3', '2026-10-20T09:00:00.000Z')],
-      reads,
-    ),
+    keysOwed(payload, searches),
     ['err:a:3'],
-    'a key searched since the newest read is not searched again',
+    'a key searched since its own environment’s read is not searched again, however new another’s is',
   );
+  assert.deepEqual(
+    keysOwed(payload, searches, (g) => g.key === 'err:a:4'),
+    ['err:a:3', 'err:a:4'],
+    'a group whose state or sighting changed is searched again',
+  );
+});
+
+test('a pass builds nothing until some environment is read again, and never waits on its search', async () => {
+  const store = new Store(':memory:');
+  let views = 0;
+  let answer: (hits: Map<string, IssueKeyHit[]>) => void = () => {};
+  let searches = 0;
+  const sink = {
+    canSearchIssueKeys: () => true,
+    findIssuesByKeys: () => {
+      searches += 1;
+      return new Promise<Map<string, IssueKeyHit[]>>((resolve) => (answer = resolve));
+    },
+  } as unknown as ActionSink & Partial<IssueKeySink>;
+  let reads: AppErrorRead[] = [{ environment: 'test', readAt: '2026-10-20T10:00:00.000Z' } as AppErrorRead];
+  const desk = new AppErrorTrackerDesk({
+    tickets: store.appErrorTickets,
+    sink,
+    canFile: () => true,
+    view: () => {
+      views += 1;
+      return {
+        project: 'shop',
+        environments: [
+          {
+            environment: 'test',
+            reading: reads[0],
+            groups: [{ key: KEY, state: 'new', environment: 'test', fingerprint: 'f', lastSeen: 'x' }],
+          },
+        ],
+        bands: [],
+      } as unknown as AppErrorsPayload;
+    },
+    reads: () => reads,
+    now: () => Date.parse('2026-10-20T10:30:00.000Z'),
+  });
+
+  desk.run();
+  assert.equal(searches, 1);
+  desk.run();
+  assert.equal(searches, 1, 'a pass that finds the search still running skips');
+  answer(new Map());
+  await desk.settled();
+  assert.equal(store.appErrorTickets.listSearches()[0]?.status, 'none');
+
+  desk.run();
+  assert.equal(views, 1, 'no environment was read since, so no view is built');
+  reads = [{ environment: 'test', readAt: '2026-10-20T11:00:00.000Z' } as AppErrorRead];
+  desk.run();
+  assert.equal(views, 2);
+  assert.equal(searches, 2, 'the new read owes the key a search');
+  answer(new Map());
+  await desk.settled();
+  store.close();
 });
 
 test('a search that throws is recorded unknown for every key it carried', async () => {
@@ -287,7 +389,7 @@ test('a search that throws is recorded unknown for every key it carried', async 
     tickets: store.appErrorTickets,
     sink,
     canFile: () => true,
-    current: () => ({ project: 'shop', environments: [], bands: [] }),
+    view: () => ({ project: 'shop', environments: [], bands: [] }),
     reads: () => [],
   });
   const answered = await desk.search([KEY]);

@@ -1,16 +1,19 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { GitObserver } from '../git/gitObserver.js';
 import type { EnvironmentReading, GoalLanding, WorkNode } from '../types.js';
-import type { AppErrorsPayload } from '../wire.js';
+import type { AppErrorEnvironmentView, AppErrorsPayload } from '../wire.js';
 import { frameFiles } from './frames.js';
 import {
   deployLandings,
   groupId,
+  groupWindows,
   heldAgainstDeploy,
+  landingHorizon,
   linkAnchor,
   linkGroups,
-  linkWindows,
+  placeFacts,
   type DeployVerdicts,
+  type GroupWindow,
   type LinkFacts,
 } from './link.js';
 
@@ -19,6 +22,8 @@ import {
 const LINK_DEADLINE_MS = 5_000;
 const DIFF_CONCURRENCY = 4;
 const CACHE_LIMIT = 20_000;
+/** A commit the clone could not diff is not asked about again for this long. */
+const FAILED_DIFF_TTL_MS = 10 * 60_000;
 const TIMED_OUT = Symbol('timed out');
 const IMMUTABLE_HEAD = /^[0-9a-f]{7,64}$/i;
 
@@ -26,6 +31,7 @@ interface AppErrorLinkerDeps {
   git: GitObserver;
   errors?: ErrorRecorder;
   deadlineMs?: number;
+  now?: () => number;
 }
 
 interface LinkInput {
@@ -35,6 +41,8 @@ interface LinkInput {
   now: number;
 }
 
+type Deadline = Promise<typeof TIMED_OUT>;
+
 /**
  * Fills the `link` of a route's payload from the clone, never waiting on it past a deadline. What the
  * clone answers about a fixed commit never changes, so it is kept; what it could not answer is asked again.
@@ -43,21 +51,25 @@ export class AppErrorLinker {
   private readonly reached = new Map<string, boolean>();
   private readonly asking = new Map<string, Promise<Map<string, boolean | null>>>();
   private readonly diffs = new Map<string, string[]>();
+  private readonly undiffable = new Map<string, number>();
   private readonly diffing = new Map<string, Promise<void>>();
+  private readonly now: () => number;
 
-  constructor(private readonly deps: AppErrorLinkerDeps) {}
+  constructor(private readonly deps: AppErrorLinkerDeps) {
+    this.now = deps.now ?? (() => Date.now());
+  }
 
-  async link(payload: AppErrorsPayload, input: LinkInput): Promise<void> {
+  /** Links the payload in place; false when the deadline cut some question off, so the answer is partial. */
+  async link(payload: AppErrorsPayload, input: LinkInput): Promise<boolean> {
     const deadlineMs = this.deps.deadlineMs ?? LINK_DEADLINE_MS;
     let timer: NodeJS.Timeout | undefined;
-    const deadline = new Promise<typeof TIMED_OUT>((resolve) => {
+    const deadline: Deadline = new Promise((resolve) => {
       timer = setTimeout(() => resolve(TIMED_OUT), deadlineMs);
     });
     const late = `the clone did not answer within ${String(Math.round(deadlineMs / 1000))}s; it is asked again on the next read`;
     try {
       const facts: LinkFacts = {
-        landings: input.landings,
-        readings: input.readings,
+        ...placeFacts(input),
         titles: new Map(input.nodes.map((n) => [n.ref, n.title])),
         deploys: new Map(),
         diffs: new Map(),
@@ -65,8 +77,11 @@ export class AppErrorLinker {
       };
       const deploys = await this.deployVerdicts(payload, facts, deadline, late);
       const placed = { ...facts, deploys };
-      const diffs = await this.changedFiles(commitsToDiff(payload, placed), deadline);
-      linkGroups(payload, { ...placed, diffs });
+      const windows = groupWindows(payload, placed);
+      const diffed = await this.changedFiles(commitsToDiff(payload, windows), deadline);
+      linkGroups(payload, { ...placed, diffs: diffed.diffs }, windows);
+      this.evictDiffs(facts);
+      return diffed.answered && [...deploys.values()].every((d) => d.unanswered === null);
     } finally {
       clearTimeout(timer);
     }
@@ -75,31 +90,39 @@ export class AppErrorLinker {
   private async deployVerdicts(
     payload: AppErrorsPayload,
     facts: LinkFacts,
-    deadline: Promise<typeof TIMED_OUT>,
+    deadline: Deadline,
     late: string,
   ): Promise<Map<string, DeployVerdicts>> {
-    const out = new Map<string, DeployVerdicts>();
-    for (const view of payload.environments) {
-      const head = view.head;
-      if (head === null || head.changedAt === null || head.previousSha === null) continue;
-      const held = view.groups.some((g) => {
-        const anchor = linkAnchor(g, head, facts.now);
-        return anchor !== null && heldAgainstDeploy(head, anchor);
-      });
-      if (!held) continue;
-      const shas = [...new Set(deployLandings(facts.landings, head.changedAt).map((l) => l.sha))];
-      const asked = await Promise.race([
-        Promise.all([this.contains(shas, heads(head.sha)), this.contains(shas, heads(head.previousSha))]),
-        deadline,
-      ]);
-      out.set(
-        view.environment,
-        asked === TIMED_OUT
-          ? { deployed: new Map(), previous: new Map(), unanswered: late }
-          : { deployed: asked[0], previous: asked[1], unanswered: null },
-      );
-    }
-    return out;
+    const asked = await Promise.all(
+      payload.environments.map(async (view) => {
+        const verdicts = await this.deployVerdict(view, facts, deadline, late);
+        return verdicts === null ? null : ([view.environment, verdicts] as const);
+      }),
+    );
+    return new Map(asked.filter((entry) => entry !== null));
+  }
+
+  private async deployVerdict(
+    view: AppErrorEnvironmentView,
+    facts: LinkFacts,
+    deadline: Deadline,
+    late: string,
+  ): Promise<DeployVerdicts | null> {
+    const head = view.head;
+    if (head === null || head.changedAt === null || head.previousSha === null) return null;
+    const held = view.groups.some((g) => {
+      const anchor = linkAnchor(g, head, facts.now);
+      return anchor !== null && heldAgainstDeploy(head, anchor);
+    });
+    if (!held) return null;
+    const shas = [...new Set(deployLandings(facts.landings, head.changedAt).map((l) => l.sha))];
+    const asked = await Promise.race([
+      Promise.all([this.contains(shas, heads(head.sha)), this.contains(shas, heads(head.previousSha))]),
+      deadline,
+    ]);
+    return asked === TIMED_OUT
+      ? { deployed: new Map(), previous: new Map(), unanswered: late }
+      : { deployed: asked[0], previous: asked[1], unanswered: null };
   }
 
   private async contains(shas: string[], heads: string[]): Promise<Map<string, boolean | null>> {
@@ -141,27 +164,31 @@ export class AppErrorLinker {
 
   private async changedFiles(
     shas: readonly string[],
-    deadline: Promise<typeof TIMED_OUT>,
-  ): Promise<Map<string, string[] | null>> {
-    const wanted = shas.filter((sha) => !this.diffs.has(sha));
+    deadline: Deadline,
+  ): Promise<{ diffs: Map<string, string[] | null>; answered: boolean }> {
+    const now = this.now();
+    const wanted = shas.filter((sha) => !this.diffs.has(sha) && (this.undiffable.get(sha) ?? 0) <= now);
     const queue = wanted.filter((sha) => !this.diffing.has(sha));
     const workers = Array.from({ length: Math.min(DIFF_CONCURRENCY, queue.length) }, async () => {
       for (let sha = queue.shift(); sha !== undefined; sha = queue.shift()) await this.diff(sha);
     });
     const flights = wanted.map((sha) => this.diffing.get(sha)).filter((f) => f !== undefined);
-    await Promise.race([Promise.all([...workers, ...flights]), deadline]);
-    return new Map(shas.map((sha) => [sha, this.diffs.get(sha) ?? null]));
+    const raced = await Promise.race([Promise.all([...workers, ...flights]), deadline]);
+    return {
+      diffs: new Map(shas.map((sha) => [sha, this.diffs.get(sha) ?? null])),
+      answered: raced !== TIMED_OUT,
+    };
   }
 
   private diff(sha: string): Promise<void> {
     const flight = this.deps.git
       .changedFiles(sha)
       .then((files) => {
-        if (files === null) return;
-        if (this.diffs.size > CACHE_LIMIT) this.diffs.clear();
-        this.diffs.set(sha, files);
+        if (files === null) this.undiffable.set(sha, this.now() + FAILED_DIFF_TTL_MS);
+        else this.diffs.set(sha, files);
       })
       .catch((err: unknown) => {
+        this.undiffable.set(sha, this.now() + FAILED_DIFF_TTL_MS);
         this.deps.errors?.record({
           source: 'cycle',
           message: `linking app errors: the clone could not list what ${sha} changed`,
@@ -172,14 +199,22 @@ export class AppErrorLinker {
     this.diffing.set(sha, flight);
     return flight;
   }
+
+  /** Keeps what was diffed only for commits some window can still hold. */
+  private evictDiffs(facts: LinkFacts): void {
+    const horizon = landingHorizon(facts.now);
+    const live = new Set(facts.landings.filter((l) => l.at >= horizon).map((l) => l.sha));
+    for (const sha of this.diffs.keys()) if (!live.has(sha)) this.diffs.delete(sha);
+    const now = this.now();
+    for (const [sha, until] of this.undiffable) if (until <= now) this.undiffable.delete(sha);
+  }
 }
 
-function commitsToDiff(payload: AppErrorsPayload, facts: LinkFacts): string[] {
-  const windows = linkWindows(payload, facts);
+function commitsToDiff(payload: AppErrorsPayload, windows: ReadonlyMap<string, GroupWindow>): string[] {
   const out = new Set<string>();
   for (const view of payload.environments)
     for (const group of view.groups) {
-      const window = windows.get(groupId(group));
+      const window = windows.get(groupId(group))?.window;
       if (window?.known !== true || frameFiles(group.frames).length === 0) continue;
       for (const shas of window.goals.values()) for (const sha of shas) out.add(sha);
     }

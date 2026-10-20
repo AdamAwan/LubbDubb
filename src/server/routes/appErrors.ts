@@ -1,7 +1,6 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { AppErrorSearchPayload, AppErrorsPayload } from '../../wire.js';
-import { currentAppErrors } from '../../appErrors/current.js';
 import {
   fileAppErrorBug,
   reopenAppErrorTicket,
@@ -9,7 +8,6 @@ import {
   type PressOutcome,
 } from '../../appErrors/filing.js';
 import { issueWatchContext } from '../../issueWatch.js';
-import { trackerCoordinates } from '../../mcp/findings.js';
 import { checked, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -18,6 +16,7 @@ import type { RouteContext } from './context.js';
 const GroupBody = z.object({
   environment: requiredText('environment is required'),
   fingerprint: requiredText('fingerprint is required'),
+  investigate: z.boolean({ error: 'investigate must be a boolean' }).optional(),
   unsearched: z.boolean({ error: 'unsearched must be a boolean' }).optional(),
 });
 
@@ -26,29 +25,32 @@ const KeyBody = z.object({
 });
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, config, errors } = system;
-  const current = (): Promise<AppErrorsPayload> => currentAppErrors(store, config, system.appErrorLinks, Date.now());
+  const { store, config, errors, sink } = system;
+  const current = (): Promise<AppErrorsPayload> => system.appErrorPayloads.read(Date.now());
   const deps = (): AppErrorFilingDeps => ({
     tracker: system.appErrorTracker,
-    sink: system.appErrorTracker.sink,
     filing: system.filing,
     prompts: system.prompts,
-    watch: issueWatchContext({ store, connector: system.appErrorTracker.sink, errors, config }),
+    watch: issueWatchContext({ store, connector: sink, errors, config }),
     current,
-    trackerTarget: () => trackerCoordinates(config),
   });
 
-  const press = async (what: string, work: () => Promise<PressOutcome>): Promise<PressOutcome> => {
-    try {
-      const outcome = await work();
-      if (outcome.ok) hub.broadcast({ type: 'world:changed' });
+  /** A press: what it did is broadcast, a refusal is its status, and a tracker that throws is a 502 on the log. */
+  const pressRoute =
+    <B>(what: string, work: (body: B) => Promise<PressOutcome>) =>
+    async ({ body, reply }: { body: B; reply: FastifyReply }) => {
+      let outcome: PressOutcome;
+      try {
+        outcome = await work(body);
+      } catch (err) {
+        const message = `the tracker refused the ${what}: ${(err as Error).message}`;
+        errors.record({ source: 'server', message });
+        outcome = { ok: false, status: 502, error: message };
+      }
+      if (!outcome.ok) return reply.code(outcome.status).send({ error: outcome.error });
+      hub.broadcast({ type: 'world:changed' });
       return outcome;
-    } catch (err) {
-      const message = `the tracker refused the ${what}: ${(err as Error).message}`;
-      errors.record({ source: 'server', message });
-      return { ok: false, status: 502, error: message };
-    }
-  };
+    };
 
   app.get(
     '/api/app-errors',
@@ -57,30 +59,24 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
   app.post(
     '/api/app-errors/file-bug',
-    checked({ body: GroupBody }, async ({ body, reply }) => {
-      const outcome = await press('bug', () =>
-        fileAppErrorBug(deps(), { ...body, investigate: false, unsearched: body.unsearched ?? false }),
-      );
-      return outcome.ok ? outcome : reply.code(outcome.status).send({ error: outcome.error });
-    }),
-  );
-
-  app.post(
-    '/api/app-errors/investigate',
-    checked({ body: GroupBody }, async ({ body, reply }) => {
-      const outcome = await press('bug', () =>
-        fileAppErrorBug(deps(), { ...body, investigate: true, unsearched: body.unsearched ?? false }),
-      );
-      return outcome.ok ? outcome : reply.code(outcome.status).send({ error: outcome.error });
-    }),
+    checked(
+      { body: GroupBody },
+      pressRoute('bug', (body: z.infer<typeof GroupBody>) =>
+        fileAppErrorBug(deps(), {
+          ...body,
+          investigate: body.investigate ?? false,
+          unsearched: body.unsearched ?? false,
+        }),
+      ),
+    ),
   );
 
   app.post(
     '/api/app-errors/reopen',
-    checked({ body: KeyBody }, async ({ body, reply }) => {
-      const outcome = await press('reopen', () => reopenAppErrorTicket(deps(), body.key));
-      return outcome.ok ? outcome : reply.code(outcome.status).send({ error: outcome.error });
-    }),
+    checked(
+      { body: KeyBody },
+      pressRoute('reopen', (body: z.infer<typeof KeyBody>) => reopenAppErrorTicket(deps(), sink, body.key)),
+    ),
   );
 
   app.post(

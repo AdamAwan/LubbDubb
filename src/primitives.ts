@@ -7,6 +7,11 @@ export function utcDay(at: string | number): string {
   return (typeof at === 'number' ? new Date(at).toISOString() : at).slice(0, 10);
 }
 
+export function sentence(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]!}`;
+}
+
 export function firstLine(text: string): string | null {
   const line = text.split('\n').find((l) => l.trim() !== '');
   return line === undefined ? null : line.trim().slice(0, MAX_LINE);
