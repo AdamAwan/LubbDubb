@@ -26,6 +26,7 @@ import { watchBucket } from '../worldBuckets.js';
 import { StaleChip, StateChip } from './goalChips.js';
 import { LIVE_AGENT } from './goalRunners.js';
 import { investigationChip } from '../view/issueAsks.js';
+import { GoalErrors } from './goalErrors.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -50,7 +51,7 @@ export function Header({
 
   return (
     <div className="cn-gh">
-      <GoalIdent page={page} view={view} />
+      <GoalIdent page={page} view={view} actions={actions} />
       {/* Three captioned groups, drawn through the control kit
           (`web/src/components/controls.tsx`) rather than as class strings: what
           state the run is in, what steers the work, and what happens somewhere
@@ -95,7 +96,15 @@ export function Header({
   );
 }
 
-function GoalIdent({ page, view }: { page: GoalPageView; view: CockpitView }): JSX.Element {
+function GoalIdent({
+  page,
+  view,
+  actions,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
   const { issue } = page;
   const { config } = view.state;
   const investigation = investigationChip(issue);
@@ -156,6 +165,9 @@ function GoalIdent({ page, view }: { page: GoalPageView; view: CockpitView }): J
           `parts merged` is deliberately not among them: it is the track's first
           stage now, and stating it twice is how the header and the plan card
           came to disagree. */}
+        {/* What the deployment's own telemetry blames on this goal. Fetched only where some
+            environment reads errors at all. → docs/spec/39-app-errors.md#in-the-cockpit */}
+        {config.appErrors && <GoalErrors goalRef={`issue:${issue.number}`} actions={actions} />}
         <span className="cn-ghfacts">
           {issue.run !== undefined && <>started {relTime(issue.run.startedAt, view.now)} · </>}
           {/* Who those agents are, on the reading that counts them. It was a card

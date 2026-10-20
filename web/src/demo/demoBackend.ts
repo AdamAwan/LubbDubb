@@ -107,6 +107,7 @@ import type { PredictionDraft, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, DEMO_FEATURE_SUMMARIES, demoPlanHistory } from './fixtures.js';
 import { buildAskQueue } from './askQueue.js';
+import { demoAppErrors } from './demoAppErrors.js';
 import { DemoPredictions } from './predictions.js';
 import { isContainerType } from '../issueGroups.js';
 import { inFlight } from '../view/localValidation.js';
@@ -3846,6 +3847,7 @@ const DEMO_SUBJECT_LABEL: Record<UsageSubject, string> = {
   'review-thread': 'Review threads',
   'pr-assignee': 'Pull request assignees',
   'bot-pr': 'Bot pull requests',
+  'app-error': 'App errors',
   ejection: 'Ejected work',
   theme: 'The theme',
   notification: 'Notifications',
@@ -5027,6 +5029,7 @@ export const demoApi = {
   getCiPolicy: () =>
     Promise.resolve({ policy: { rules: [], unmatched: 'dispatch', policyKinds: null } as CiPolicyDescription }),
   getBotPrs: () => Promise.resolve(demoBotPrs(Date.now())),
+  getAppErrors: () => Promise.resolve(demoAppErrors(Date.now())),
   summariseBotPrs: () => Promise.resolve({ ok: true as const, prs: 2 }),
   claimBotPr: (number: number) => {
     demoClaimed.add(number);

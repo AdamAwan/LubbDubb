@@ -23,6 +23,7 @@ import { Vivarium, openPets } from './Vivarium.js';
 import { InsightsPage } from '../components/InsightsPage.js';
 import { ObstaclesPage } from '../components/ObstaclesPage.js';
 import { BotPrsPage } from '../components/BotPrsPage.js';
+import { AppErrorsPage } from '../components/AppErrorsPage.js';
 import { Ref } from '../components/refs.js';
 import { PluginBand } from './PluginBand.js';
 
@@ -202,6 +203,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       return <ObstaclesPage open={view.viewingObstacle} ended={view.obstacleEnded} now={view.now} actions={actions} />;
     case 'bots':
       return <BotPrsPage now={view.now} />;
+    case 'errors':
+      return <AppErrorsPage band={view.errorsBand} steady={view.errorsSteady} now={view.now} actions={actions} />;
     case 'features':
       return view.state.config.featureBoard ? (
         <FeatureBoard view={view} actions={actions} />

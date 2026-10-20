@@ -9,9 +9,9 @@ the errors **nobody declared**: an environment's own telemetry, grouped by finge
 what _moved_ — a group that is new since the deploy, one that came back, one running well above its
 baseline — rather than drawn as an error list an operator has to read in full.
 
-**Partly built.** What is described here as running is the first phase: the command, its contract,
-grouping, states, the key and a read-only route. Three things are **not yet built**, and each section
-that names them says so:
+**Partly built.** What is described here as running is the command, its contract, grouping, states,
+the key, a read-only route and the cockpit that draws it. Two things are **not yet built**, and each
+section that names them says so:
 
 - **Linking a group to the work that probably caused it** — the deploy window, frames against landed
   diffs, test-before-live and operation hints. The wire carries a `link` field for it that is always
@@ -19,10 +19,11 @@ that names them says so:
 - **The tracker as the cross-fleet lock** — searching for a group's key before offering File bug or
   Investigate, and filing with the key on `IssueCreateInput`. The wire carries a `tracker` field for
   it that is always `null` today.
-- **The cockpit** — the per-environment panel and the goal card line. Nothing in `web/` reads the
-  route yet.
 
-The design all three are argued in is [`proposals/error-ingestion.md`](../proposals/error-ingestion.md),
+The cockpit draws both fields wherever they are non-null, so neither stage needs a change in `web/` to
+be seen. → [In the cockpit](#in-the-cockpit)
+
+The design both are argued in is [`proposals/error-ingestion.md`](../proposals/error-ingestion.md),
 which the change that finishes them deletes.
 
 ## What it is not
@@ -258,19 +259,61 @@ candidates the deploy window held. **Always null: linking is not yet built.**
 `tracker: AppErrorTracker | null` — `status` (`none`, `open`, `closed`, `unknown`), the ticket found
 under the key, and a note. **Always null: the tracker lock is not yet built.**
 
+## In the cockpit
+
+The **Errors** tab (`tab=errors`, `web/src/components/AppErrorsPage.tsx`), in the nav beside Insights
+only while `CockpitConfig.appErrors` is true — some environment declares an `errors` block. It reads
+`GET /api/app-errors` on open and every minute after (`useAppErrors`, the Bot PRs tab's interval): the
+route is too heavy for the snapshot, and a reading moves on `appErrorIntervalMs`, not per pulse. Read
+only; the controls that act on a group — File bug, Reopen, Investigate, promote to watch — arrive with
+the tracker lock and their routes.
+
+- **One tab per band**, from `bands`: a declared group is named with its members (`prod: liveEu,
+liveUs`), and an environment in no group is a band of one under its own name. Each tab carries its
+  moved count, and an `unknown` chip when any member could not answer. Which band is open is
+  `Place.errorsBand` (`band=`), so a link from a goal card lands on the right one; a band the payload
+  does not hold reads as the first.
+- **Three cards over the table**: the deploy window per member (`previousSha → deployedSha` and when
+  the harness noticed it; the first build read says it has no deploy time, which is why `new` means
+  the last day there), the last read per member, and the project — the key's middle segment.
+- **`unknown` is a warning, never an empty table.** A member whose last read is `unknown` draws an amber
+  chip, the sentence _this is not "no errors"_, when it last answered, and the reading's `detail`. A
+  table of no rows under an unanswered read would be exactly the confident wrong answer the
+  [two-valued reading](#the-output-contract) exists to refuse.
+- **Counts per state**: new, spiking, returned, then _N steady, N gone (hidden)_. `steady` and `gone`
+  are folded away by default — the panel is "watch for what moved", not an error list — and **Show
+  steady and gone** is `Place.errorsSteady` (`steady=1`), never a `useState`.
+- **One row per band group**, horizontally scrollable at width: the state chip in its tone (`new` red,
+  `spiking` amber, `returned` violet, `steady` grey, `gone` green), the title, the key in mono, the
+  operation, the members it was seen on when the band has several, first and last seen, the top frame,
+  **Open in App Insights** off `url`, a fourteen-bar sparkline of `daily` with the last three days in
+  the state's hue, the count, the link and the tracker. The roll-up carries state, count and members;
+  everything else is taken from the member whose state the band reports (`bandRows`,
+  `web/src/view/appErrors.ts`), with the members' days summed.
+- **The link column** draws `link.goalRef` through `<Ref>`, each `how` as a pill and the `why`; **the
+  tracker column** draws the status, the ticket through `<Ref>` and the note. Each is a dash while its
+  field is null — a blank there would read as a stage that ran and found nothing.
+
+**On the goal**, the header's identity row carries _N new errors on test since this arrived_
+(`web/src/console/goalErrors.tsx`) when any environment's group in `new`, `returned` or `spiking` links
+to that goal, with how each link was made on hover; pressing it opens the Errors tab on that
+environment's band. It counts per environment rather than per band, so a fault seen in two regions is
+two there and one row on the tab. **A link made only by hint is not counted** (`countsOnGoal`): an
+operation that looks like the goal's area is a reason to look, not a claim the work caused the error,
+and every `how` entry naming a hint is read as one. It fetches only where `CockpitConfig.appErrors` is
+true, so a deployment that reads no errors pays nothing on every goal page.
+
 ## Not yet built
 
 In the order the proposal stages them, each of which removes its line here:
 
 - **Linking** — the deploy window's candidate goals from landings between `previousSha` and
   `deployedSha`, frames matched against each candidate's landed diff, a group that went `new` on test
-  when a goal arrived there, operation hints, and model triage on a press. Fills `link`, and the goal
-  card's "2 new errors on test since this arrived".
+  when a goal arrived there, operation hints, and model triage on a press. Fills `link`, which the Errors
+  tab's link column and the goal header's line [already draw](#in-the-cockpit).
 - **The tracker lock** — the key as a field of `IssueCreateInput` resolved by `ticketFiler`
   ([13](13-jobs-and-tickets.md#filing-a-ticket)), a batched search for every group's key per read, and
   File bug / Reopen / Investigate / promote to watch. Fills `tracker`.
-- **The cockpit** — the Errors-per-environment panel, drawing the moved groups and folding `steady`
-  away, with first and last seen and the `url`.
 
 ## What it does not see
 

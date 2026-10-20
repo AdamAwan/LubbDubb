@@ -41,7 +41,8 @@ export type ConsolePanel =
   | { ask: string }
   | null;
 
-export type ConsoleTab = 'overview' | 'tickets' | 'obstacles' | 'features' | 'bots' | 'insights' | 'pets' | 'config';
+export type ConsoleTab =
+  'overview' | 'tickets' | 'obstacles' | 'features' | 'bots' | 'errors' | 'insights' | 'pets' | 'config';
 
 export type InsightsView =
   'economics' | 'allowance' | 'reliability' | 'throughput' | 'causes' | 'trend' | 'mcp' | 'prediction' | 'usage';
@@ -190,6 +191,8 @@ export interface CockpitActions {
   placePet(id: string, placed: boolean): Promise<void>;
   blendPet(id: string): Promise<void>;
   showBlendedPets(show: boolean): void;
+  /** The Errors tab, on a band and with steady and gone drawn or folded — a place, never a useState. */
+  openErrors(where: Partial<Pick<Place, 'errorsBand' | 'errorsSteady'>>): void;
 
   setObstacleQuery(next: Partial<Pick<Place, 'obstacle' | 'obstacleEnded'>>): void;
 
