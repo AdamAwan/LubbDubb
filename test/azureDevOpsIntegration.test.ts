@@ -26,7 +26,7 @@ import { RestAzureDevOpsApi } from '../src/integrations/azure/restAzureDevOpsApi
 import type { AzureAuth } from '../src/integrations/azure/azureAuth.js';
 import { isSignInHtml } from '../src/integrations/azure/azureTransport.js';
 import { policyDisplayName } from '../src/integrations/azure/restShapes.js';
-import { buildOpenWorkItemQuery, buildWorkItemHistoryQuery } from '../src/integrations/azure/wiql.js';
+import { buildOpenWorkItemQuery, buildTagsQuery, buildWorkItemHistoryQuery } from '../src/integrations/azure/wiql.js';
 import type {
   AzClosedPull,
   AzCommentRef,
@@ -54,7 +54,9 @@ interface Script {
   workItems?: AzWorkItem[];
   relatedWorkItems?: AzWorkItem[];
   updates?: Record<number, AzWorkItemUpdate[]>;
-  throwOn?: 'listActivePullRequests' | 'listOpenWorkItems' | 'getBuildTimeline' | 'getPullBody';
+  throwOn?:
+    'listActivePullRequests' | 'listOpenWorkItems' | 'getBuildTimeline' | 'getPullBody' | 'queryWorkItemsByTags';
+  taggedWorkItems?: AzWorkItem[];
   historyItems?: AzWorkItem[];
   timeline?: Record<number, AzTimelineRecord[]>;
   buildLogs?: Record<string, string[]>;
@@ -105,6 +107,7 @@ interface Recorded {
   abandoned: number[];
   attachments: Array<{ fileName: string; bytes: number }>;
   attachmentLinks: Array<{ id: number; url: string; comment: string }>;
+  tagSearches: string[][];
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
@@ -141,8 +144,15 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     abandoned: [],
     attachments: [],
     attachmentLinks: [],
+    tagSearches: [],
   };
   const api: AzureDevOpsApi = {
+    async queryWorkItemsByTags(tags) {
+      recorded.tagSearches.push([...tags]);
+      if (script.throwOn === 'queryWorkItemsByTags') throw new Error('TF400898: the query timed out');
+      const wanted = tags.map((t) => t.toLowerCase());
+      return (script.taggedWorkItems ?? []).filter((w) => w.tags.some((t) => wanted.includes(t.toLowerCase())));
+    },
     async createWorkItemAttachment(fileName, bytes) {
       recorded.attachments.push({ fileName, bytes: bytes.length });
       return { id: 'att-1', url: `https://dev.azure.test/_apis/wit/attachments/att-1?fileName=${fileName}` };
@@ -1189,6 +1199,7 @@ test('createIssue creates the work item as its type, tagged and assigned, in one
     type: 'User Story',
     assignee: 'adam@contoso.com',
     relatedTo: null,
+    errorKey: null,
   });
 
   assert.deepEqual(res, { ok: true, ref: 'issue:314' });
@@ -1214,6 +1225,7 @@ test('a related item is linked as a second write the caller never has to remembe
     type: 'Bug',
     assignee: null,
     relatedTo: 12,
+    errorKey: null,
   });
   assert.deepEqual(recorded.relations, [{ id: 314, relatedId: 12 }]);
   assert.equal(recorded.createdWorkItems[0]!.description, 'The symptom.');
@@ -1223,7 +1235,16 @@ test('a relation that fails does not cost the item, and says which one exists', 
   const { api } = fakeApi({ createdWorkItemId: 314, relateThrows: 'TF401232: work item 12 does not exist' });
   const issues = new AzureDevOpsWorkItemsIntegration({ api });
   await assert.rejects(
-    () => issues.createIssue({ title: 'Bug', body: 'x', labels: [], type: 'Bug', assignee: null, relatedTo: 12 }),
+    () =>
+      issues.createIssue({
+        title: 'Bug',
+        body: 'x',
+        labels: [],
+        type: 'Bug',
+        assignee: null,
+        relatedTo: 12,
+        errorKey: null,
+      }),
     /work item 314 was created but linking it to #12 failed/,
   );
 });
@@ -1512,4 +1533,59 @@ test('viewerAddedTags: a revision that only re-cases a tag keeps its authorship'
     { revisedByUniqueName: 'other@acme.com', tagsOld: 'lubbdubb-watch', tagsNew: 'LubbDubb-Watch' },
   ];
   assert.deepEqual([...viewerAddedTags(updates, 'me@acme.com')], ['LubbDubb-Watch']);
+});
+
+test('an app error key on a filed item is a tag, the one place Azure DevOps searches exactly', async () => {
+  const { api, recorded } = fakeApi({ createdWorkItemId: 314 });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+  await issues.createIssue({
+    title: 'live: Orders.Submit threw',
+    body: 'frames only',
+    labels: ['lubbdubb-watch'],
+    type: 'Bug',
+    assignee: null,
+    relatedTo: null,
+    errorKey: 'err:shop:3f9a1c2b',
+  });
+  assert.deepEqual(recorded.createdWorkItems[0]!.tags, ['lubbdubb-watch', 'err:shop:3f9a1c2b']);
+  assert.equal(recorded.createdWorkItems[0]!.description, 'frames only', 'the body carries no key line');
+});
+
+test('a key search is one WIQL query per batch, open and closed alike, matched to its tag whatever the case', async () => {
+  const keys = Array.from({ length: 51 }, (_, i) => `err:shop:${String(i).padStart(8, '0')}`);
+  const { api, recorded } = fakeApi({
+    taggedWorkItems: [
+      workItem({ id: 7, state: 'Active', tags: ['Err:Shop:00000000'] }),
+      workItem({ id: 9, state: 'Closed', tags: ['err:shop:00000050'], closedAt: '2026-10-01T00:00:00Z' }),
+    ],
+  });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+  const found = await issues.findIssuesByKeys(keys);
+  assert.equal(recorded.tagSearches.length, 2, 'fifty keys to a query');
+  assert.deepEqual(found.get(keys[0]!), [{ ref: 'issue:7', state: 'open', closedAt: null }]);
+  assert.deepEqual(found.get(keys[50]!), [{ ref: 'issue:9', state: 'closed', closedAt: '2026-10-01T00:00:00Z' }]);
+  assert.deepEqual(found.get(keys[1]!), []);
+});
+
+test('a key search that fails rejects rather than answering nothing found', async () => {
+  const { api } = fakeApi({ throwOn: 'queryWorkItemsByTags' });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+  await assert.rejects(() => issues.findIssuesByKeys(['err:shop:3f9a1c2b']), /TF400898/);
+});
+
+test('reopening a work item moves it to the first pickup state, and without one it cannot', async () => {
+  const { api, recorded } = fakeApi();
+  const unset = new AzureDevOpsWorkItemsIntegration({ api });
+  assert.equal(unset.canReopenIssue(), false);
+  await assert.rejects(() => unset.reopenIssue(9), /issuePickupStates/);
+  const named = new AzureDevOpsWorkItemsIntegration({ api, reopenState: 'Active' });
+  assert.equal(named.canReopenIssue(), true);
+  await named.reopenIssue(9);
+  assert.deepEqual(recorded.stateSets.at(-1), { id: 9, state: 'Active' });
+});
+
+test('the tag query names every key and spans open and closed items', () => {
+  const wiql = buildTagsQuery(['err:shop:1', "err:o'brien:2"]);
+  assert.match(wiql, /\[System\.Tags\] CONTAINS 'err:shop:1' OR \[System\.Tags\] CONTAINS 'err:o''brien:2'/);
+  assert.doesNotMatch(wiql, /System\.State/);
 });

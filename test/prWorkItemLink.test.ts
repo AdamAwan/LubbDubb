@@ -7,7 +7,7 @@ import { loadConfig, type Config } from '../src/config/config.js';
 import { buildSystem } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { prsToLinkWorkItem } from '../src/pr/prWorkItemLink.js';
-import { isRelationAlreadyExists } from '../src/integrations/azure/restAzureDevOpsApi.js';
+import { isRelationAlreadyExists } from '../src/integrations/azure/restHelpers.js';
 import type { Issue, PullRequest } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
 

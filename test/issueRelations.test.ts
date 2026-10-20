@@ -336,6 +336,7 @@ function relationApi(
     listPullChanges: unused,
     getFileAtCommit: unused,
     abandonPullRequest: unused,
+    queryWorkItemsByTags: unused,
     deleteBranch: unused,
     getBuildTimeline: unused,
     requeuePolicyEvaluation: unused,

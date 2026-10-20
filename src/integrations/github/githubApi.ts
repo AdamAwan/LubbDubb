@@ -29,6 +29,9 @@ export interface GitHubApi {
   setPullLabel(number: number, label: string, present: boolean): Promise<void>;
   setIssueLabel(number: number, label: string, present: boolean): Promise<void>;
   closeIssue(number: number, reason: 'completed' | 'not_planned'): Promise<void>;
+  reopenIssue(number: number): Promise<void>;
+  /** The issues — never pull requests — a search query matches, the first hundred of them. */
+  searchIssues(query: string): Promise<GhSearchIssue[]>;
   createIssue(input: { title: string; body: string; labels: string[]; assignee: string | null }): Promise<{
     number: number;
   }>;
@@ -141,6 +144,13 @@ export interface GhIssue {
   isPullRequest: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GhSearchIssue {
+  number: number;
+  state: string;
+  body: string;
+  closedAt: string | null;
 }
 
 export interface GhTimelineEvent {

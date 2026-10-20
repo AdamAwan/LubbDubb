@@ -260,6 +260,8 @@ export type {
   AppErrorBandView,
   AppErrorEnvironmentView,
   AppErrorGroupView,
+  AppErrorPressPayload,
+  AppErrorSearchPayload,
   UpdateKind,
   CockpitState as AppState,
   CockpitWorld as WorldSnapshot,

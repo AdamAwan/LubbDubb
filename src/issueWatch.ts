@@ -75,6 +75,29 @@ export async function applyInvestigateLabel(
   if (landed.includes(issueNumber)) applied.markLabelApplied(originRef);
 }
 
+/**
+ * An operator's own request to investigate an issue: the watch tag, so pickup reads it, and the
+ * investigate label, which is the only switch rule `issue-investigate` reads. Not recorded as the
+ * appraiser's once — it is the operator's hand, as a label put on in the tracker is.
+ * → docs/spec/38-bug-investigation.md#the-label
+ */
+export async function requestInvestigation(
+  ctx: IssueWatchContext,
+  issueNumber: number,
+  because: string,
+): Promise<{ failed: { number: number; message: string }[] }> {
+  const watched = await applyIssueWatch(ctx, issueNumber, true, because);
+  const labelled = await applyIssueLabel(
+    ctx,
+    investigateLabelFor(ctx.labelPrefix),
+    [issueNumber],
+    true,
+    'the investigate label',
+    because,
+  );
+  return { failed: [...watched.failed, ...labelled.failed] };
+}
+
 async function applyIssueLabel(
   ctx: IssueWatchContext,
   label: string,

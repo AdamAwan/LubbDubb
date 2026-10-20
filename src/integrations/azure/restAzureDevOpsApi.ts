@@ -37,11 +37,11 @@ import {
   type RawWorkItemUpdate,
 } from './restShapes.js';
 import { chunkIds, headsRef, readFileAtCommit, readPullChanges, sameTag, tagWriteOp } from './restHelpers.js';
-import { pullReviewerUrl } from './restHelpers.js';
+import { isRelationAlreadyExists, pullReviewerUrl } from './restHelpers.js';
 import { mergeStrategyFor } from './sourceControl.js';
 import { parseTags } from './workItems.js';
 import { workItemBodyField } from './workItemBody.js';
-import { buildOpenWorkItemQuery, buildWorkItemHistoryQuery } from './wiql.js';
+import { buildOpenWorkItemQuery, buildTagsQuery, buildWorkItemHistoryQuery } from './wiql.js';
 
 // → docs/spec/15-integrations.md
 
@@ -54,10 +54,6 @@ const ZERO_OBJECT_ID = '0000000000000000000000000000000000000000';
 const WORK_ITEM_COMMENTS_API_VERSION = '7.1-preview.4';
 
 const AREA_DEPTH = 6;
-
-export function isRelationAlreadyExists(message: string): boolean {
-  return /WorkItemRelationAlreadyExists|relation already exists/i.test(message);
-}
 
 export class RestAzureDevOpsApi implements AzureDevOpsApi {
   private viewer: string | null = null;
@@ -225,6 +221,10 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
 
   async listWorkItemsChangedSince(since: string, tag?: string, assignedTo?: string): Promise<AzWorkItem[]> {
     return this.runWorkItemQuery(buildWorkItemHistoryQuery(since, tag, assignedTo), true);
+  }
+
+  async queryWorkItemsByTags(tags: string[]): Promise<AzWorkItem[]> {
+    return this.runWorkItemQuery(buildTagsQuery(tags));
   }
 
   private async runWorkItemQuery(wiql: string, timePrecision = false): Promise<AzWorkItem[]> {

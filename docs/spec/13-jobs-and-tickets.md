@@ -326,11 +326,12 @@ Tests: `test/jobSchedules.test.ts`.
 
 ## Filing a ticket
 
-Four things file a tracker item: a standing **obstacle** the ownership desk gives an owner
-([27](27-obstacles.md#ownership)) — the one of the four the pulse takes rather than a click —
-unrecorded **work**, a **brief**, and a **bug** an operator raised. All four go through
-`ActionSink.createIssue` ([15](15-integrations.md)), and none of them asks a model to run a `gh` / `az`
-command any more (issue #394).
+Five things file a tracker item: a standing **obstacle** the ownership desk gives an owner
+([27](27-obstacles.md#ownership)) — the one of the five the pulse takes rather than a click —
+unrecorded **work**, a **brief**, a **bug** an operator raised, and an **app error** pressed on the
+Errors tab ([39](39-app-errors.md#the-presses)). All five go through `ActionSink.createIssue`
+([15](15-integrations.md)), and none of them asks a model to run a `gh` / `az` command any more
+(issue #394).
 
 - **What the harness must supply is the one thing nothing else can infer: which tracker.**
   `trackerCoordinates(config)` (pure, `src/mcp/findings.ts`) names it from the same config block the
@@ -345,12 +346,17 @@ command any more (issue #394).
   a sentence is only as reliable as a model's memory of it: a brief's ticket without its watch
   label is never dispatched for, an Azure bug without its relation cannot be traced back to its story,
   and a create with no `--type` is refused outright, taking the ticket with it. `ticketFiler`
-  (`src/tickets/filing.ts`) resolves all four per call, so all four arms file identically.
-- **The wording stays operator-overridable**, because how a ticket reads _is_ house style. Two arms
-  render a ticket **body** from the template book — `work-item-ticket-body`, `brief-ticket-body` —
-  and two keep an agent to write one. Nothing about the change moves that judgement into the harness.
-- **One arm keeps a desk agent, and three do not.** Where the whole body is already harness- or
-  operator-composed text (unrecorded work, a brief, an obstacle's sightings), a desk agent was
+  (`src/tickets/filing.ts`) resolves all four per call, so every arm files identically.
+- **An app error's key is a field too.** `errorKey` on the filing reaches `IssueCreateInput` and the
+  provider carries it where its search finds it — an Azure DevOps tag, a line in a GitHub body
+  ([39](39-app-errors.md#the-key-on-the-ticket)). It is the cross-fleet lock: a bug filed without it is
+  invisible to every other fleet's search, so it is never left to a template or a prompt.
+- **The wording stays operator-overridable**, because how a ticket reads _is_ house style. Three arms
+  render a ticket **body** from the template book — `work-item-ticket-body`, `brief-ticket-body` and
+  `app-error-ticket-body` — and two keep an agent to write one. Nothing about the change moves that judgement into the harness.
+- **One arm keeps a desk agent, and four do not.** Where the whole body is already harness- or
+  operator-composed text (unrecorded work, a brief, an obstacle's sightings, an error group's
+  telemetry), a desk agent was
   spending a slot on one API call. Where the body is a judgement — writing up a symptom an operator
   observed, which no agent on the goal can derive because none of them ran it — the agent stays,
   narrowed to composing the title and body and handing both to `link_ticket`

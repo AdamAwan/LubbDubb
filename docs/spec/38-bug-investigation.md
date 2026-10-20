@@ -38,9 +38,14 @@ same failure if a provider cannot report authorship ([02](02-configuration.md#us
 only read on an issue that already passes the watch gate: the rule walks `eligibleIssues`, so an
 unwatched issue carrying it is left alone like any other.
 
-Two hands put it on:
+Three hands put it on:
 
 - **An operator, by hand**, on the tracker. That is the whole interface for "investigate this first".
+- **An operator, from the Errors tab.** Investigate on an app error group files its bug — or finds the
+  one already open under its key — with the watch tag and this label, as `labels` on the create or
+  through `requestInvestigation` (`src/issueWatch.ts`) on a ticket that already exists
+  ([39](39-app-errors.md#the-presses)). It is the operator's hand, not the appraiser's, so it is not
+  recorded as the once below.
 - **The goal appraisal, once ever per issue.** `appraise_issue` takes an optional `investigate` flag,
   honoured only with `workable` — an `unclear` ticket gets its questions first, and a goal nobody can
   start from has no cause to look for ([06](06-issue-pickup.md#a-bug-whose-cause-is-not-known)). The

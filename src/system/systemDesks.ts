@@ -24,6 +24,8 @@ import { BranchReapDesk } from '../pr/branchReapDesk.js';
 import { EnvironmentDesk } from '../environments/environmentDesk.js';
 import { AppErrorDesk } from '../appErrors/desk.js';
 import { CommandAppErrorReader } from '../appErrors/reader.js';
+import { AppErrorTrackerDesk } from '../appErrors/tracker.js';
+import { currentAppErrors } from '../appErrors/current.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber } from '../environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from '../environments/observer.js';
@@ -143,6 +145,14 @@ export function buildEnvironmentDesks(
     intervalMs: config.appErrorIntervalMs,
     errors,
   });
+  const appErrorTracker = new AppErrorTrackerDesk({
+    tickets: store.appErrorTickets,
+    sink,
+    canFile: () => trackerCoordinates(config) !== null,
+    current: () => currentAppErrors(store, config, Date.now()),
+    reads: () => store.appErrors.listReads(),
+    errors,
+  });
 
   const watchDryRun = new WatchDryRun({
     store,
@@ -152,6 +162,7 @@ export function buildEnvironmentDesks(
   return {
     environments,
     appErrors,
+    appErrorTracker,
     watchDryRun,
     ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
   };

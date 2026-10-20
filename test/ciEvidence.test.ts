@@ -106,6 +106,8 @@ function ghApi(script: GhScript): GitHubApi {
     getReleaseBody: unused('getReleaseBody'),
     updatePullBranch: unused('updatePullBranch'),
     closePull: unused('closePull'),
+    reopenIssue: unused('reopenIssue'),
+    searchIssues: unused('searchIssues'),
     deleteBranch: unused('deleteBranch'),
   };
 }
@@ -184,6 +186,7 @@ function azApi(script: AzScript): AzureDevOpsApi {
     listRecentlyClosedPullRequests: unused('listRecentlyClosedPullRequests'),
     listOpenWorkItems: unused('listOpenWorkItems'),
     listWorkItemsChangedSince: unused('listWorkItemsChangedSince'),
+    queryWorkItemsByTags: unused('queryWorkItemsByTags'),
     getWorkItems: unused('getWorkItems'),
     listWorkItemUpdates: unused('listWorkItemUpdates'),
     createThreadReply: unused('createThreadReply'),

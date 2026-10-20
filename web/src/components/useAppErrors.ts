@@ -6,7 +6,7 @@ import { api } from '../api.js';
 
 const REFRESH_MS = 60_000;
 
-export function useAppErrors(): { reading: AppErrorsPayload | null; failed: boolean } {
+export function useAppErrors(): { reading: AppErrorsPayload | null; failed: boolean; reload: () => void } {
   const [reading, setReading] = useState<AppErrorsPayload | null>(null);
   const [failed, setFailed] = useState(false);
   const live = useRef(true);
@@ -34,5 +34,5 @@ export function useAppErrors(): { reading: AppErrorsPayload | null; failed: bool
     };
   }, [reload]);
 
-  return { reading, failed };
+  return { reading, failed, reload };
 }

@@ -234,6 +234,10 @@ export function toWorkItem(w: RawWorkItem, url: string): AzWorkItem {
     areaPath: String(fields['System.AreaPath'] ?? ''),
     createdAt: String(fields['System.CreatedDate'] ?? ''),
     changedAt: String(fields['System.ChangedDate'] ?? ''),
+    closedAt:
+      typeof fields['Microsoft.VSTS.Common.ClosedDate'] === 'string'
+        ? fields['Microsoft.VSTS.Common.ClosedDate']
+        : null,
     relationUrls: (w.relations ?? [])
       .filter((r) => r.rel === 'ArtifactLink' && typeof r.url === 'string')
       .map((r) => r.url as string),

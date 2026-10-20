@@ -21,6 +21,8 @@ export interface AzureDevOpsApi {
   listOpenWorkItems(tag?: string, assignedTo?: string): Promise<AzWorkItem[]>;
   listWorkItemsChangedSince(since: string, tag?: string, assignedTo?: string): Promise<AzWorkItem[]>;
   getWorkItems(ids: number[]): Promise<AzWorkItem[]>;
+  /** Every work item in the project, open or closed, carrying any one of these tags. */
+  queryWorkItemsByTags(tags: string[]): Promise<AzWorkItem[]>;
   listWorkItemUpdates(id: number): Promise<AzWorkItemUpdate[]>;
 
   createThreadReply(
@@ -202,6 +204,8 @@ export interface AzWorkItem {
   url: string;
   createdAt: string;
   changedAt: string;
+  /** `Microsoft.VSTS.Common.ClosedDate`, where the process template keeps one. */
+  closedAt?: string | null;
 }
 
 export interface AzWorkItemUpdate {

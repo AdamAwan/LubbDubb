@@ -1,4 +1,6 @@
 import type {
+  AppErrorPressPayload,
+  AppErrorSearchPayload,
   PrDescriptionDraft,
   PrDescriptionVersion,
   RemoteSheetView,
@@ -5030,6 +5032,17 @@ export const demoApi = {
     Promise.resolve({ policy: { rules: [], unmatched: 'dispatch', policyKinds: null } as CiPolicyDescription }),
   getBotPrs: () => Promise.resolve(demoBotPrs(Date.now())),
   getAppErrors: () => Promise.resolve(demoAppErrors(Date.now())),
+  fileAppErrorBug: (_environment: string, _fingerprint: string, _unsearched: boolean): Promise<AppErrorPressPayload> =>
+    Promise.reject(new Error('the demo has no tracker to file into')),
+  investigateAppError: (
+    _environment: string,
+    _fingerprint: string,
+    _unsearched: boolean,
+  ): Promise<AppErrorPressPayload> => Promise.reject(new Error('the demo has no tracker to file into')),
+  reopenAppErrorTicket: (_key: string): Promise<AppErrorPressPayload> =>
+    Promise.reject(new Error('the demo has no tracker to reopen in')),
+  searchAppErrorKey: (_key: string): Promise<AppErrorSearchPayload> =>
+    Promise.reject(new Error('the demo has no tracker to search')),
   summariseBotPrs: () => Promise.resolve({ ok: true as const, prs: 2 }),
   claimBotPr: (number: number) => {
     demoClaimed.add(number);
