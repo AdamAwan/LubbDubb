@@ -1384,8 +1384,10 @@ See [18](18-observability.md#api-errors).
 
 The errors nobody declared, read from each environment's own `errors` command. Returns
 `{ project, environments, bands }` — per environment its latest reading, its recorded head and its
-error groups with their state, key and dense fourteen-day series; per band the roll-up. Not on
-`/api/state`, for `/api/mcp/usage`'s reason. See [39](39-app-errors.md#on-the-wire).
+error groups with their state, key, dense fourteen-day series and, for a moved group, the goal it is
+probably the work of; per band the roll-up. Not on `/api/state`, for `/api/mcp/usage`'s reason. The
+link asks the clone, and the route waits on it for at most five seconds
+([39](39-app-errors.md#where-it-is-computed)). See [39](39-app-errors.md#on-the-wire).
 
 ### `GET /api/mcp/usage`
 

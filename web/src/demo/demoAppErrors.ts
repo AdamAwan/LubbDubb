@@ -93,9 +93,10 @@ function stagingGroups(now: number, ago: (hours: number) => string): AppErrorGro
       series: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 25],
       link: {
         goalRef: 'issue:395',
-        how: ['frame match'],
-        why: 'The top frame is in a file this goal changed in the deploy window.',
+        how: ['frame-match'],
+        why: 'issue.ts changed only by #395, of 3 goals in the deploy window 41be07d..9f3c2a1.',
         candidates: 3,
+        tied: [],
       },
     }),
     group('staging', now, {
@@ -112,6 +113,13 @@ function stagingGroups(now: number, ago: (hours: number) => string): AppErrorGro
       count: 96,
       ignored: false,
       series: [2, 3, 2, 1, 2, 3, 2, 2, 3, 2, 2, 18, 26, 28],
+      link: {
+        goalRef: null,
+        how: [],
+        why: 'No link: pay.ts changed as much by #398 as by #364, of 3 goals in the deploy window 41be07d..9f3c2a1, and nothing else separates them.',
+        candidates: 3,
+        tied: ['issue:398', 'issue:364'],
+      },
     }),
     group('staging', now, {
       fingerprint: 'isbn-lookup-404',

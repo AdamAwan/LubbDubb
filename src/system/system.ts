@@ -117,6 +117,7 @@ export interface System {
   remoteIntents: EnvironmentDesks['remoteIntents'];
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
+  appErrorLinks: EnvironmentDesks['appErrorLinks'];
   prAssign: IntakeDesks['prAssign'];
   botPrs: BenchDesks['botPrs'];
   botPrRisks: BenchDesks['botPrRisks'];
@@ -197,6 +198,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remoteIntents: envs.remoteIntents,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,
+    appErrorLinks: envs.appErrorLinks,
     prAssign: intake.prAssign,
     botPrs: bench.botPrs,
     botPrRisks: bench.botPrRisks,

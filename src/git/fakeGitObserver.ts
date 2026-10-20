@@ -7,6 +7,17 @@ export class FakeGitObserver implements GitObserver {
   private readonly presences = new Map<string, BranchPresence>();
   private readonly divergences = new Map<string, BranchDivergence>();
   private readonly containment = new Map<string, boolean>();
+  private readonly changes = new Map<string, string[]>();
+
+  setChangedFiles(commit: string, files: string[]): this {
+    this.changes.set(commit, files);
+    return this;
+  }
+
+  async changedFiles(commit: string): Promise<string[] | null> {
+    this.calls.push(`changedFiles:${commit}`);
+    return this.changes.get(commit) ?? null;
+  }
 
   setPresence(branch: string, presence: Partial<BranchPresence>): this {
     this.presences.set(branch, { local: presence.local ?? false, remote: presence.remote ?? false });

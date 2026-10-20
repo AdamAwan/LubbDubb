@@ -5,6 +5,7 @@ import {
   bandLabel,
   bandMembers,
   bandRows,
+  HOW_SAID,
   isMoved,
   pickBand,
   shownRows,
@@ -376,6 +377,25 @@ function Spark({ daily, state }: { daily: number[]; state: ErrorState }): JSX.El
 
 function LinkCell({ link }: { link: ErrorLink | null }): JSX.Element {
   if (link === null) return <span className="ae-none">—</span>;
+  const candidates = `candidates: ${link.candidates === null ? 'unknown' : String(link.candidates)}`;
+  if (link.goalRef === null)
+    return (
+      <div className="ae-link">
+        <Tag tone="grey" lower>
+          no link
+        </Tag>
+        {link.tied.length > 0 && (
+          <span className="cn-refs">
+            {link.tied.map((goalRef) => (
+              <Ref key={goalRef} to={goalRef} />
+            ))}
+          </span>
+        )}
+        <span className="ae-note">
+          {link.why} ({candidates})
+        </span>
+      </div>
+    );
   return (
     <div className="ae-link">
       <span className="cn-refs">
@@ -383,10 +403,12 @@ function LinkCell({ link }: { link: ErrorLink | null }): JSX.Element {
       </span>
       {link.how.map((how) => (
         <Tag key={how} tone="grey" lower>
-          {how}
+          {HOW_SAID[how]}
         </Tag>
       ))}
-      <span className="ae-note">{link.why}</span>
+      <span className="ae-note">
+        {link.why} ({candidates})
+      </span>
     </div>
   );
 }

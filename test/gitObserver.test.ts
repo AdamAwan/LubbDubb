@@ -185,3 +185,16 @@ test('a clone that could not answer records the failure rather than swallowing i
   assert.equal(errors.entries.length, 1, 'unknown everywhere is visible rather than mute');
   assert.match(errors.entries[0]!.message, /could not answer/);
 });
+
+test('a commit lists the paths it changed against its first parent, and an unanswerable one is null', async () => {
+  const repo = initRepo();
+  commitOn(repo, 'trunk', 'OrderService.cs');
+  const head = git(repo, ['rev-parse', 'HEAD']);
+  const errors = recorder();
+  const observer = new GitCliObserver(repo, errors);
+
+  assert.deepEqual(await observer.changedFiles(head), ['OrderService.cs']);
+  assert.equal(await observer.changedFiles('--output=x'), null, 'only a commit id reaches git');
+  assert.equal(await observer.changedFiles('deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'), null);
+  assert.equal(errors.entries.length, 1, 'the clone that could not say is recorded');
+});

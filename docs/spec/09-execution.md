@@ -1620,8 +1620,11 @@ but expected Y` — on a ref the first has already moved to the right place. The
   `git worktree add -b` a remote-tracking ref would set the new branch's _upstream_ to it, so a later
   bare `git push` would aim at the base.
 - **`GitObserver`** (`gitObserver.ts`) — the read-only seam: `presence(branch)`,
-  `divergence(branch, base)`, `hasCommitsBeyond(branch, base)`. Deliberately **fetch-free**; how often
-  to refresh is the caller's decision. Its one consumer is plan reconciliation.
+  `divergence(branch, base)`, `hasCommitsBeyond(branch, base)`, `contains(commits, heads)`
+  ([24](24-environments.md#asking-the-clone)) and `changedFiles(commit)` — the paths a commit changed
+  against its first parent, `null` when the clone cannot say, and refused without running `git` for
+  anything that is not a commit id ([39](39-app-errors.md#frames-against-diffs)). Deliberately
+  **fetch-free**; how often to refresh is the caller's decision.
   `FakeGitObserver` is the test implementation.
 
 New observer methods must stay read-only and fetch-free — which means passing `noLazyFetch` on

@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { Button } from '../components/button.js';
 import { useAppErrors } from '../components/useAppErrors.js';
-import { goalErrorLines, type GoalErrorLine } from '../view/appErrors.js';
+import { goalErrorLines, HOW_SAID, type GoalErrorLine } from '../view/appErrors.js';
 
 // → docs/spec/39-app-errors.md#in-the-cockpit
 
@@ -28,7 +28,7 @@ export function GoalErrorBadge({
   const title = lines
     .map(
       (l) =>
-        `${l.count} on ${l.environment}, linked by ${l.how.length === 0 ? 'an unnamed method' : l.how.join(' and ')}`,
+        `${l.count} on ${l.environment}, linked by ${l.how.length === 0 ? 'an unnamed method' : l.how.map((h) => HOW_SAID[h]).join(' and ')}`,
     )
     .join('; ');
   return (

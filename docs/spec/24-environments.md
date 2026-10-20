@@ -280,6 +280,8 @@ commit. A carrier the clone places off the integration branch carries nothing.
 
 Two landings sharing one `sha` is the correct shape here: each part gets its own row in the
 [reach matrix](#every-part-every-environment), with the same verdicts as the rung that carried it.
+App-error linking reads the same rows and so sees both goals in one deploy with one diff, which it
+reports as a tie rather than choosing ([39](39-app-errors.md#frames-against-diffs)).
 
 ### When a held goal is going nowhere
 

@@ -4,6 +4,7 @@ import type { AppErrorBandView, AppErrorEnvironmentView, AppErrorGroupView, AppE
 
 export type ErrorState = AppErrorGroupView['state'];
 export type ErrorLink = NonNullable<AppErrorGroupView['link']>;
+type ErrorLinkHow = ErrorLink['how'][number];
 export type ErrorTracker = NonNullable<AppErrorGroupView['tracker']>;
 export type ErrorReading = NonNullable<AppErrorEnvironmentView['reading']>;
 
@@ -110,13 +111,20 @@ export function shownRows(rows: readonly ErrorRow[], steady: boolean): ErrorRow[
   return steady ? [...rows] : rows.filter((r) => isMoved(r.state));
 }
 
+/** How each linking method is said in the cockpit. */
+export const HOW_SAID: Record<ErrorLinkHow, string> = {
+  'frame-match': 'frame match',
+  'test-arrival': 'test arrival',
+  'route-hint': 'route hint',
+};
+
 /**
- * A link made only from an operation hint is not a claim the work caused the error, so it is
- * not counted on the goal. Read off `how` by word, because the linking stage names its methods
- * in prose: a `how` every entry of which is a hint is a hint.
+ * A link made only from an operation hint is not a claim the work caused the error, so it is not
+ * counted on the goal; nor is a link that names no goal.
  */
 export function countsOnGoal(link: ErrorLink): boolean {
-  return link.how.length === 0 || !link.how.every((how) => /\bhint\b/i.test(how));
+  if (link.goalRef === null) return false;
+  return link.how.length === 0 || !link.how.every((how) => how === 'route-hint');
 }
 
 /** What the goal card says about one environment: the moved groups linked to this goal there. */
@@ -124,14 +132,12 @@ export interface GoalErrorLine {
   environment: string;
   band: string;
   count: number;
-  how: string[];
+  how: ErrorLinkHow[];
 }
 
 export function goalErrorLines(payload: AppErrorsPayload, goalRef: string): GoalErrorLine[] {
   return payload.environments.flatMap((env) => {
-    const linked = env.groups.filter(
-      (g) => isMoved(g.state) && g.link !== null && g.link.goalRef === goalRef && countsOnGoal(g.link),
-    );
+    const linked = env.groups.filter((g) => isMoved(g.state) && g.link?.goalRef === goalRef && countsOnGoal(g.link));
     if (linked.length === 0) return [];
     const how = [...new Set(linked.flatMap((g) => g.link?.how ?? []))];
     return [{ environment: env.environment, band: env.band, count: linked.length, how }];

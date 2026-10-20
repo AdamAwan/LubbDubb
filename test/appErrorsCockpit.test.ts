@@ -7,7 +7,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { AppErrorEnvironmentView, AppErrorGroupView, AppErrorsPayload } from '../web/src/types.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 import { NOWHERE, placeQuery, readPlace } from '../web/src/cockpit/place.js';
-import { bandRows, countsOnGoal, goalErrorLines, shownRows, stateCounts } from '../web/src/view/appErrors.js';
+import {
+  bandRows,
+  countsOnGoal,
+  goalErrorLines,
+  shownRows,
+  stateCounts,
+  type ErrorLink as AppErrorLink,
+} from '../web/src/view/appErrors.js';
 import { decode } from './support/html.js';
 
 (globalThis as { React?: typeof React }).React = React;
@@ -66,11 +73,12 @@ function env(environment: string, band: string, groups: AppErrorGroupView[]): Ap
 
 /** Two regions of production in one declared band, and a test environment on its own. */
 function payload(): AppErrorsPayload {
-  const linked = {
+  const linked: AppErrorLink = {
     goalRef: 'issue:42',
-    how: ['frame match'],
-    why: 'Its top frame is a file #42 changed.',
+    how: ['frame-match'],
+    why: 'OrderService.cs changed only by #42, of 2 goals in the deploy window 7654321..abcdef1.',
     candidates: 2,
+    tied: [],
   };
   const eu = env('liveEu', 'prod', [
     group('liveEu', { link: linked }),
@@ -89,7 +97,7 @@ function payload(): AppErrorsPayload {
       key: 'err:shop:dddd4444',
       fingerprint: 'fp-4',
       state: 'new',
-      link: { goalRef: 'issue:42', how: ['hint'], why: 'POST /orders is orders work.', candidates: 4 },
+      link: { goalRef: 'issue:42', how: ['route-hint'], why: 'A hint only.', candidates: 4, tied: [] },
     }),
   ]);
   return {
@@ -226,6 +234,38 @@ test('no link and no tracker are drawn as a dash, never as a claim', () => {
   assert.equal((out.match(/class="ae-none">—</g) ?? []).length, 2);
 });
 
+test('a group the evidence could not pin draws why, the goals it tied, and never a goal of its own', () => {
+  const data = payload();
+  data.environments[0]!.groups[0]!.link = {
+    goalRef: null,
+    how: [],
+    why: 'No link: OrderService.cs changed as much by #42 as by #7, of 3 goals in the deploy window, and nothing else separates them.',
+    candidates: 3,
+    tied: ['issue:42', 'issue:7'],
+  };
+  const out = page({ data });
+  assert.match(out, /no link/);
+  assert.match(out, /nothing else separates them/);
+  assert.match(out, /#42/);
+  assert.match(out, /#7/);
+  assert.match(out, /candidates: 3/);
+  assert.deepEqual(goalErrorLines(data, 'issue:42'), [], 'a tie is not counted on either goal');
+});
+
+test('a window that could not be decided says so, and its candidates are unknown', () => {
+  const data = payload();
+  data.environments[0]!.groups[0]!.link = {
+    goalRef: null,
+    how: [],
+    why: 'No link: the window cannot be decided — the clone did not answer within 5s.',
+    candidates: null,
+    tied: [],
+  };
+  const out = page({ data });
+  assert.match(out, /the clone did not answer within 5s/);
+  assert.match(out, /candidates: unknown/);
+});
+
 test('a tracker reading is drawn when a later stage fills it', () => {
   const data = payload();
   data.environments[0]!.groups[0]!.tracker = { status: 'open', ticketRef: 'issue:77', note: 'Filed by fleet B' };
@@ -260,11 +300,21 @@ test('with nothing declared the page says how to declare it', () => {
 test('the goal card counts the moved groups linked to it, and not a hint', () => {
   const data = payload();
   assert.deepEqual(goalErrorLines(data, 'issue:42'), [
-    { environment: 'liveEu', band: 'prod', count: 1, how: ['frame match'] },
+    { environment: 'liveEu', band: 'prod', count: 1, how: ['frame-match'] },
   ]);
   assert.deepEqual(goalErrorLines(data, 'issue:7'), []);
-  assert.equal(countsOnGoal({ goalRef: 'issue:42', how: ['hint'], why: '', candidates: 1 }), false);
-  assert.equal(countsOnGoal({ goalRef: 'issue:42', how: ['hint', 'test arrival'], why: '', candidates: 1 }), true);
+  const link = (over: Partial<AppErrorLink>): AppErrorLink => ({
+    goalRef: 'issue:42',
+    how: [],
+    why: '',
+    candidates: 1,
+    tied: [],
+    ...over,
+  });
+  assert.equal(countsOnGoal(link({ how: ['route-hint'] })), false);
+  assert.equal(countsOnGoal(link({ how: ['route-hint', 'test-arrival'] })), true);
+  assert.equal(countsOnGoal(link({ how: ['frame-match'] })), true);
+  assert.equal(countsOnGoal(link({ goalRef: null, tied: ['issue:42', 'issue:7'] })), false, 'no goal, nothing counted');
   data.environments[0]!.groups[0]!.state = 'steady';
   assert.deepEqual(goalErrorLines(data, 'issue:42'), []);
 });

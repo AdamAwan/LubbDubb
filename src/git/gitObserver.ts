@@ -23,7 +23,12 @@ export interface GitObserver {
   divergence(branch: string, base: string): Promise<BranchDivergence | null>;
   hasCommitsBeyond(branch: string, base: string): Promise<boolean>;
   contains(commits: string[], heads: string[]): Promise<Map<string, boolean | null>>;
+  /** The paths a commit changed against its first parent; null when the clone cannot say. */
+  changedFiles(commit: string): Promise<string[] | null>;
 }
+
+const CHANGED_FILES_TIMEOUT_MS = 30_000;
+const COMMIT_ID = /^[0-9a-f]{7,64}$/i;
 
 export class GitCliObserver implements GitObserver {
   constructor(
@@ -75,6 +80,24 @@ export class GitCliObserver implements GitObserver {
       for (const [key, sha] of present) if (missing.has(sha)) out.set(key, false);
     }
     return out;
+  }
+
+  async changedFiles(commit: string): Promise<string[] | null> {
+    if (!COMMIT_ID.test(commit)) return null;
+    try {
+      const { stdout } = await runGit(
+        this.repoRoot,
+        ['diff-tree', '-r', '--name-only', '--no-commit-id', '--no-renames', `${commit}^`, commit],
+        { ...READ_ONLY, timeoutMs: CHANGED_FILES_TIMEOUT_MS },
+      );
+      return stdout
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l !== '');
+    } catch (err) {
+      this.note(`listing what ${commit} changed`, err);
+      return null;
+    }
   }
 
   private async presentCommits(commits: string[]): Promise<Map<string, string>> {

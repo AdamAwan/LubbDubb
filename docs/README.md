@@ -51,8 +51,9 @@ follow-ups to the validation page an operator answers once ([36](spec/36-remote-
 [`proposals/watch-length.md`](proposals/watch-length.md) and
 [`proposals/owed-telemetry.md`](proposals/owed-telemetry.md). The third,
 [`proposals/error-ingestion.md`](proposals/error-ingestion.md), reads errors nobody declared from an
-environment's telemetry and links them to the work that caused them; its first phase and its cockpit are
-built and specified in [39](spec/39-app-errors.md), and the proposal goes with the change that finishes the rest.
+environment's telemetry and links them to the work that caused them; its reading, its deterministic
+linking and its cockpit are built and specified in [39](spec/39-app-errors.md), and the proposal goes
+with the change that finishes the rest.
 
 A **build plan** — the staged order a spec still marked unbuilt gets built in — lives under `plans/`
 while it is being worked and is **deleted by the change that finishes the last stage**, for the same
@@ -130,7 +131,7 @@ deliberately left unchecked, and why, is in
 | [36](spec/36-remote-validation.md)   | Remote validation          | The sheet a goal's arrival assembles: its three row kinds, the gate, the runner contract, and what a `spec` reading is      |
 | [37](spec/37-bot-prs.md)             | Bot pull requests          | The separate read of a dependency bot's pull requests, how an update's size is read, and the tab that draws them            |
 | [38](spec/38-bug-investigation.md)   | Bug investigation          | The investigate label, the read-only investigator, the hold on plan and pickup, and the four ways its findings are resolved |
-| [39](spec/39-app-errors.md)          | App errors                 | The errors nobody declared: the `errors` command, its contract, grouping, states, the key, the Errors tab — partly built    |
+| [39](spec/39-app-errors.md)          | App errors                 | The errors nobody declared: the `errors` command, grouping, states, the key, linking, the Errors tab — partly built         |
 
 ## Conventions used throughout
 
