@@ -12,18 +12,24 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
 
   app.get(
     '/api/app-errors',
-    checked(
-      {},
-      () =>
-        appErrorsView({
-          environments: config.environments,
-          reads: store.appErrors.listReads(),
-          groups: store.appErrors.listGroups(),
-          project: appErrorProject(config),
-          minCount: config.appErrorMinCount,
-          ignore: config.appErrorIgnore,
-          now: Date.now(),
-        }) satisfies AppErrorsPayload,
-    ),
+    checked({}, async (): Promise<AppErrorsPayload> => {
+      const now = Date.now();
+      const payload = appErrorsView({
+        environments: config.environments,
+        reads: store.appErrors.listReads(),
+        groups: store.appErrors.listGroups(),
+        project: appErrorProject(config),
+        minCount: config.appErrorMinCount,
+        ignore: config.appErrorIgnore,
+        now,
+      });
+      await system.appErrorLinks.link(payload, {
+        landings: store.environments.listGoalLandings(),
+        readings: store.environments.listEnvironmentReach(),
+        nodes: store.graph.listWorkNodes(),
+        now,
+      });
+      return payload;
+    }),
   );
 }

@@ -9,18 +9,19 @@ the errors **nobody declared**: an environment's own telemetry, grouped by finge
 what _moved_ — a group that is new since the deploy, one that came back, one running well above its
 baseline — rather than drawn as an error list an operator has to read in full.
 
-**Partly built.** What is described here as running is the first phase: the command, its contract,
-grouping, states, the key and a read-only route. Three things are **not yet built**, and each section
-that names them says so:
+**Partly built.** What is described here as running is the command, its contract, grouping, states,
+the key, a read-only route, and [linking a moved group to the goal that probably caused
+it](#linking-a-group-to-work) — deterministically, from the deploy window, frames against landed
+diffs, test-before-live and operation hints. Three things are **not yet built**, and each section that
+names them says so:
 
-- **Linking a group to the work that probably caused it** — the deploy window, frames against landed
-  diffs, test-before-live and operation hints. The wire carries a `link` field for it that is always
-  `null` today. → [Not yet built](#not-yet-built)
+- **Model triage on a press** — the bug-investigation flow with the trace attached, for what the
+  deterministic link leaves open. → [Not yet built](#not-yet-built)
 - **The tracker as the cross-fleet lock** — searching for a group's key before offering File bug or
   Investigate, and filing with the key on `IssueCreateInput`. The wire carries a `tracker` field for
   it that is always `null` today.
 - **The cockpit** — the per-environment panel and the goal card line. Nothing in `web/` reads the
-  route yet.
+  route yet, `link` included.
 
 The design all three are argued in is [`proposals/error-ingestion.md`](../proposals/error-ingestion.md),
 which the change that finishes them deletes.
@@ -31,7 +32,7 @@ which the change that finishes them deletes.
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A telemetry client    | The harness knows a command and an output contract, never Kusto, App Insights or Sentry. The same shape as `health` and `observe`.                                                                             |
 | A `WorldEvent` source | `deliveryHold` expires a delivery verdict on **any** world event matching a goal's issue ref, so an error reading filed as one would un-park delivered goals. Own tables, own route — the arrivals rule again. |
-| A dispatch input      | Nothing under `src/dispatcher/` reads what this writes. It files nothing, opens no gate and reaches no prompt.                                                                                                 |
+| A dispatch input      | Nothing under `src/dispatcher/` reads what this writes. It files nothing, opens no gate and reaches no prompt. A link is computed for the route and stored nowhere.                                            |
 | An error log          | The harness's own faults are `error_events` (`src/store/errors.ts`, [18](18-observability.md)). These are the **application's** errors, which is why the feature is called app errors.                         |
 
 ## Configuring an environment
@@ -225,6 +226,125 @@ than every pulse:
 An `unknown` read writes the reading and touches no group. A pass that throws is recorded through
 `errors.record` and never fails the cycle.
 
+## Linking a group to work
+
+`src/appErrors/link.ts` (pure) and `src/appErrors/linker.ts` (the clone). A moved group is linked to
+the goal it is **probably** the work of, and the link carries how it was made and why — never a bare
+claim. Deterministic only: no model is asked anything. One build is often a week of work, so the build
+gives a **window** of candidate goals, not an answer; the evidence below narrows it.
+
+Only a group that moved is linked, and each from its own instant — its **anchor**:
+
+| State      | Anchor                                                                    |
+| ---------- | ------------------------------------------------------------------------- |
+| `new`      | its first sighting                                                        |
+| `returned` | `returnedAt`                                                              |
+| `spiking`  | the deploy it spiked after; with no deploy on record, a day before now    |
+| otherwise  | none — `steady` (including every muted group) and `gone` get `link: null` |
+
+### The window
+
+**The deploy window**, when the reading holds a deploy (`deployedAt`, `deployedSha`, `previousSha`)
+and the anchor is at or after `deployedAt`: the goals with a landing ([24](24-environments.md#recording-a-landing))
+that `deployedSha` reaches and `previousSha` does not. Asked of the clone with
+`GitObserver.contains`, both heads split on spaces as the probe's several-services rule names them —
+so a landing is in the deploy only when every service holds it, and was in the build before only
+when every service held it.
+
+**The arrival window** otherwise — the first build the harness saw, a group anchored before the
+deploy, a spike with no deploy on record: the goals with a landing the reach probe **first found on
+the environment** in the seven days (`ARRIVAL_LOOKBACK_MS`) before the anchor. That is the reach
+row's `observedAt`, the same instant an arrival is stamped from, read per landing so a goal that has
+only partly reached the environment is still a candidate.
+
+Both are **three-valued, and an undecided window is no link** — never a smaller window. The rule from
+[24](24-environments.md#the-three-verdicts) holds here unchanged:
+
+- in the deploy window, a landing the clone cannot place against either head (`contains` answered
+  `null`, or did not answer in time) makes the whole window undecided;
+- in the arrival window, a landing that could have been there — recorded before the anchor, on the
+  integration branch or not yet placed — whose reach on the environment is `unknown` or not yet
+  asked makes it undecided. `absent` is a decision and is simply not a candidate.
+
+An undecided window is drawn as `goalRef: null`, `candidates: null` and a `why` naming the landing it
+could not place. Reading it as "no candidates" would say the deploy shipped nothing, and point the
+operator at the wrong deploy.
+
+**A landing recorded more than thirty days before the window** (`LANDING_HORIZON_MS`; before
+`deployedAt` for the deploy window, before the anchor for the arrival window) is in neither, and
+cannot make either undecided. Without the bound one landing whose commit the clone never held —
+a rebuilt clone, a deleted fork — leaves every window on that environment undecided for good. With
+it, a fault whose cause shipped more than a month before the deploy that surfaced it is linked to
+nothing, which the link's `why` already allows for.
+
+Landings off the integration branch (`onIntegration` `no`) are in no window; a stacked pull request
+is present on its carrier's commit ([24](24-environments.md#a-stacked-pull-request-rides-its-carrier)).
+
+### Frames against diffs
+
+The strongest evidence. Each candidate's diff is the union of the paths its commits **in the window**
+changed against their first parent (`GitObserver.changedFiles`, `git diff-tree` on the commit and its
+`^`); the group's `frames` are matched against it (`src/appErrors/frames.ts`):
+
+- a frame is reduced to a path — backslashes to slashes, a trailing `:118`, `:118:5`, `:line 118` or
+  `(118,5)` dropped, a drive letter dropped — and one file named by several frames counts once;
+- a frame and a changed path match when the shorter is a **whole-segment suffix** of the longer,
+  ignoring case. The deployed `/app/api/Orders/OrderService.cs` and the bare `Orders/OrderService.cs`
+  both meet the repository's `api/Orders/OrderService.cs`; `MyOrderService.cs` does not, and nor does
+  `api/Billing/OrderService.cs`.
+
+A candidate's score is how many of the group's files its diff touched. **The one highest score
+links, with `frame-match`** ("changed only by" when no other candidate touched any; "changed most by"
+otherwise). Several candidates at the highest score is no frame link: they go on `tied`, for the
+evidence below to separate.
+
+A diff the clone could not list makes the frame evidence **unknown**, never a miss: it is neither a
+frame link nor a reason to fall through to the route hint, since the frame it could not see might
+have decided it.
+
+### Test before live
+
+A group with the same fingerprint on **another** environment, first seen there no later than this
+group's anchor, is held against that environment's arrival window over **one day** (`TEST_ARRIVAL_MS`)
+before that first sighting — the same three-valued window, so an undecided one is no evidence. If
+exactly one goal of _this_ group's window is in it, that environment votes for the goal; when every
+voting environment names the same goal, it is the test arrival. Test deploys more often than live, so
+it narrows what live's week cannot.
+
+- With no frame link, it links on its own: `test-arrival`.
+- With a frame tie it breaks the tie if it names one of the tied goals: `frame-match` and
+  `test-arrival`.
+- With a frame link to the same goal, both are named. To a different goal, the frame wins — it is the
+  stronger evidence — and `why` says where the test arrival pointed.
+
+### Operation to feature
+
+The weakest, and only when nothing above had anything to say and the frame evidence was not unknown:
+the words of the group's `operation` — lower-cased, split on anything not a letter or digit, HTTP
+verbs, `api`, ids and tokens under three letters dropped, a plural stemmed — against the same words
+of each candidate's title in the work graph. The one candidate sharing the most words links with
+`route-hint` alone, and its `why` opens "A hint only". `POST /orders` is orders work far more often
+than it is not, and occasionally it is not.
+
+### Where it is computed
+
+On the route, per request, not by the desk: a link depends on landings, reach and the work graph,
+which move on every pulse, so a stored link would be stale the moment the next landing was recorded,
+and a link stored by nothing that reads it would be a second copy to keep true.
+
+What makes that affordable is that everything the clone says here is **about a fixed commit**, and so
+never changes. `AppErrorLinker` keeps every `contains` answer whose heads are commit ids, and every
+diff, for the life of the process; an answer of `null`, and any failure, is not kept and is asked again
+on the next request. The steady state is no `git` at all. Questions already in flight are joined, not
+repeated, and at most four diffs run at once.
+
+**The route never waits on the clone past five seconds** (`LINK_DEADLINE_MS`). Whatever has not
+answered by then is unknown for this request — the window undecided, or the frame evidence unknown,
+and `why` says the clone did not answer in time — and the question runs on in the background, so the
+next request usually finds it answered. A `git` that never exits is bounded below that as well:
+`changedFiles` carries its own thirty-second deadline, and only a commit id ever reaches its argument
+list.
+
 ## Seams
 
 `AppErrorReader` (`src/appErrors/reader.ts`) — one method, `list({environment, command, since})`.
@@ -233,6 +353,10 @@ answers from scripted stdout per environment, records every request, and answers
 environment nobody scripted. Injected as `appErrorReader` on `buildSystem`; the probe the desk asks is
 the one injected as `environmentProber`. **A test that declares an `errors` block injects both**, or it
 spawns the declared command and the `at` probe on the machine running the tests.
+
+Linking asks the clone through `GitObserver` — `contains` and `changedFiles` — injected as
+`gitObserver`. `FakeGitObserver` answers `changedFiles` from `setChangedFiles` and `null` for a commit
+nobody scripted, and records every question on `calls`. A test with no landings asks the clone nothing.
 
 ## On the wire
 
@@ -247,13 +371,21 @@ counts per group is too much to send every couple of seconds to every open cockp
   `groups`;
 - each group an `AppErrorGroupView`: the stored `AppErrorGroup` (title, operation, version, frames,
   `url`, first and last seen, `returnedAt`) with `daily` made dense over the last fourteen UTC days,
-  plus `key`, `state`, `count` (the fortnight's total), `ignored`, and the two placeholders below.
+  plus `key`, `state`, `count` (the fortnight's total), `ignored`, `link`, and the `tracker`
+  placeholder below.
   Sorted moved-first — `new`, `returned`, `spiking`, `steady`, `gone` — then most recently seen;
 - `bands` — the [roll-up](#groups).
 
-`link: AppErrorLink | null` — the goal a group is probably the work of (`goalRef`), how the link was
-made (`how`, e.g. `frame match`, `test arrival`, `hint`), a sentence saying why, and how many
-candidates the deploy window held. **Always null: linking is not yet built.**
+`link: AppErrorLink | null` — [the link](#linking-a-group-to-work). Null for a group nothing is
+linked for (`steady`, `gone`, ignored); otherwise always an object, even when no goal was found:
+
+| Field        | Is                                                                                                                     |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `goalRef`    | the goal the group is probably the work of (`issue:<n>`), or **null** when the evidence did not single one out         |
+| `how`        | what made it, strongest first: `frame-match`, `test-arrival`, `route-hint` (`AppErrorLinkHow`); empty with no goal     |
+| `why`        | one sentence for a person — "OrderService.cs changed only by #412, of 11 goals in the deploy window 1a2b3c4..5d6e7f8." |
+| `candidates` | how many goals the window held; **null when the window could not be decided**, which is never the same as `0`          |
+| `tied`       | the goals the frames narrowed to and nothing separated, when that is why there is no goal; empty otherwise             |
 
 `tracker: AppErrorTracker | null` — `status` (`none`, `open`, `closed`, `unknown`), the ticket found
 under the key, and a note. **Always null: the tracker lock is not yet built.**
@@ -262,15 +394,14 @@ under the key, and a note. **Always null: the tracker lock is not yet built.**
 
 In the order the proposal stages them, each of which removes its line here:
 
-- **Linking** — the deploy window's candidate goals from landings between `previousSha` and
-  `deployedSha`, frames matched against each candidate's landed diff, a group that went `new` on test
-  when a goal arrived there, operation hints, and model triage on a press. Fills `link`, and the goal
-  card's "2 new errors on test since this arrived".
+- **Model triage on a press** — the bug-investigation flow ([38](38-bug-investigation.md)) with the
+  trace attached, for a group the [deterministic link](#linking-a-group-to-work) leaves without a goal.
 - **The tracker lock** — the key as a field of `IssueCreateInput` resolved by `ticketFiler`
   ([13](13-jobs-and-tickets.md#filing-a-ticket)), a batched search for every group's key per read, and
   File bug / Reopen / Investigate / promote to watch. Fills `tracker`.
 - **The cockpit** — the Errors-per-environment panel, drawing the moved groups and folding `steady`
-  away, with first and last seen and the `url`.
+  away, with first and last seen, the `url` and the link with its `why`; and the goal card's "2 new
+  errors on test since this arrived".
 
 ## What it does not see
 
@@ -280,4 +411,13 @@ In the order the proposal stages them, each of which removes its line here:
 - **When a build actually arrived**, beyond the read that noticed it. `deployedAt` is as precise as
   `appErrorIntervalMs`, and the first build the harness ever sees has no `deployedAt` at all.
 - **A fingerprint that changes under a refactor.** A renamed failing method is a new fingerprint and
-  so a new group that reads `new`; relating it to the old one is the linking stage's job.
+  so a new group that reads `new`; nothing relates it to the old one. Its frames are linked like any
+  other new group's, which is usually to the refactor.
+- **A culprit outside the window.** The window is the last deploy's, or a week of arrivals: a fault
+  that sat dormant for three deploys until traffic found it is linked to whichever goal happens to
+  touch its file in the latest one, or to nothing. The link says _probably_ for this reason, and shows
+  its evidence rather than asserting it.
+- **Two goals carried by one commit.** A stacked pull request's landing is its carrier's commit
+  ([24](24-environments.md#a-stacked-pull-request-rides-its-carrier)), so its frames match exactly as
+  the carrier's do and the two read `tied`. That is the truth about what shipped, not a defect of the
+  match.

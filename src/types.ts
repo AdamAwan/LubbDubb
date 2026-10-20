@@ -1677,12 +1677,19 @@ export interface AppErrorGroup {
   daily: AppErrorDay[];
 }
 
-/** Which goal an error group is probably the work of, and how that was decided. Not yet built. */
+/** What made a link: the group's frames in a goal's landed diff, its first sighting on another environment, its operation. */
+export type AppErrorLinkHow = 'frame-match' | 'test-arrival' | 'route-hint';
+
+/** Which goal an error group is probably the work of, and how that was decided. → docs/spec/39-app-errors.md#linking-a-group-to-work */
 export interface AppErrorLink {
-  goalRef: string;
-  how: string[];
+  /** Null when the evidence did not single out one goal — `why` says what it did find. */
+  goalRef: string | null;
+  how: AppErrorLinkHow[];
   why: string;
-  candidates: number;
+  /** How many goals the window held; null when the window could not be decided. */
+  candidates: number | null;
+  /** The goals the evidence narrowed to and could not choose between; empty otherwise. */
+  tied: string[];
 }
 
 type AppErrorTrackerStatus = 'none' | 'open' | 'closed' | 'unknown';

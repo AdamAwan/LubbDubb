@@ -181,7 +181,9 @@ test('GET /api/app-errors draws each environment, its moved groups first, and th
   assert.equal(submit.operation, 'POST /orders');
   assert.deepEqual(submit.frames, ['src/Orders/OrderService.cs:118']);
   assert.equal(submit.daily.length, 14, 'the series is dense over the retained fortnight');
-  assert.equal(submit.link, null, 'linking is not built yet');
+  assert.equal(submit.link?.goalRef, null, 'no goal has landed, so there is nothing to link to');
+  assert.equal(submit.link?.candidates, 0);
+  assert.equal(onTest[1]!.link, null, 'a muted group is not linked');
   assert.equal(submit.tracker, null, 'the tracker lock is not built yet');
 
   const prod = body.bands.find((b) => b.band === 'prod')!;
