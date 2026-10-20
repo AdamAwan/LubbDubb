@@ -7,6 +7,7 @@ import type {
   IssueImageInput,
   IssueImageResult,
   IssueCreateInput,
+  IssueKeyHit,
   IssueLabelInput,
   SendResult,
   WorkItemLinkInput,
@@ -20,7 +21,9 @@ import type {
   IssueImageCapable,
   IssueCreateCapable,
   IssueCloseCapable,
+  IssueKeySearchCapable,
   IssueLabelCapable,
+  IssueReopenCapable,
   TicketHistoryCapable,
   WorkItemLinkCapable,
   WorkItemStateCapable,
@@ -28,6 +31,7 @@ import type {
 } from '../integration.js';
 import type { TrackerItem } from '../../types.js';
 import type { FakeWorldStore } from './fakeWorld.js';
+import { bodyCarriesKey, errorKeyBodyLines } from '../../appErrors/key.js';
 
 // → docs/spec/15-integrations.md
 
@@ -44,6 +48,8 @@ export class FakeIssuesIntegration
     IssueCreateCapable,
     IssueCommentCapable,
     IssueImageCapable,
+    IssueKeySearchCapable,
+    IssueReopenCapable,
     TicketHistoryCapable
 {
   readonly id = 'issues:fake';
@@ -57,6 +63,13 @@ export class FakeIssuesIntegration
   private nextAttachmentId = 1;
 
   private readonly seenAt = new Map<number, string>();
+  private readonly closedAt = new Map<number, string>();
+
+  /** @public set by a test to make the next key searches fail, as a tracker that cannot answer does */
+  keySearchFailure: string | null = null;
+
+  /** @public read by tests asserting how many searches a press or a pass made */
+  keySearches = 0;
 
   constructor(
     private readonly world: FakeWorldStore,
@@ -108,6 +121,7 @@ export class FakeIssuesIntegration
         case 'issue_state': {
           const issue = world.issues.find((i) => i.number === event.number);
           if (issue) issue.state = event.state;
+          if (event.state === 'closed') this.closedAt.set(event.number, this.now());
           break;
         }
         case 'issue_linked_pr': {
@@ -136,7 +150,35 @@ export class FakeIssuesIntegration
       const issue = world.issues.find((i) => i.number === input.number);
       if (issue) issue.state = 'closed';
     });
+    this.closedAt.set(input.number, this.now());
     return { ok: true, ref: issueOriginRef('root', input.number) };
+  }
+
+  async findIssuesByKeys(keys: readonly string[]): Promise<Map<string, IssueKeyHit[]>> {
+    this.keySearches += 1;
+    if (this.keySearchFailure !== null) throw new Error(this.keySearchFailure);
+    const issues = this.world.read().issues;
+    return new Map(
+      keys.map((key) => [
+        key,
+        issues
+          .filter((i) => bodyCarriesKey(i.body, key))
+          .map((i) => ({
+            ref: issueOriginRef('root', i.number),
+            state: i.state,
+            closedAt: i.state === 'closed' ? (this.closedAt.get(i.number) ?? null) : null,
+          })),
+      ]),
+    );
+  }
+
+  async reopenIssue(number: number): Promise<SendResult> {
+    this.world.mutate((world) => {
+      const issue = world.issues.find((i) => i.number === number);
+      if (issue) issue.state = 'open';
+    });
+    this.closedAt.delete(number);
+    return { ok: true, ref: issueOriginRef('root', number) };
   }
 
   async linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {
@@ -176,7 +218,13 @@ export class FakeIssuesIntegration
         id: `issue_${nanoid(6)}`,
         number,
         title: input.title,
-        body: input.relatedTo === null ? input.body : `${input.body}\n\nRelated to #${input.relatedTo}.`,
+        body: [
+          input.body,
+          input.relatedTo === null ? null : `Related to #${input.relatedTo}.`,
+          input.errorKey === null ? null : errorKeyBodyLines(input.errorKey),
+        ]
+          .filter((part) => part !== null)
+          .join('\n\n'),
         labels: [...input.labels],
         state: 'open',
         linkedPrNumber: null,

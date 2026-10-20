@@ -104,6 +104,7 @@ function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script:
     async listWorkItemsChangedSince() {
       return script.workItems ?? [];
     },
+    queryWorkItemsByTags: async () => [],
     async getWorkItems() {
       return [];
     },

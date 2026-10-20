@@ -6,6 +6,7 @@ import type {
   IssueCreateInput,
   IssueImageInput,
   IssueImageResult,
+  IssueKeyHit,
   IssueLabelInput,
   SendResult,
   WorkItemAreaPathInput,
@@ -22,7 +23,9 @@ import type {
   IssueCommentCapable,
   IssueImageCapable,
   IssueCreateCapable,
+  IssueKeySearchCapable,
   IssueLabelCapable,
+  IssueReopenCapable,
   RefResolvable,
   TicketHistoryCapable,
   WorkItemLinkCapable,
@@ -52,6 +55,8 @@ interface AzureWorkItemsOpts {
   harnessTags?: string[];
   completedState?: string;
   notPlannedState?: string;
+  /** The state a reopened work item moves to — the first of `issuePickupStates`. */
+  reopenState?: string;
 }
 
 export class AzureDevOpsWorkItemsIntegration
@@ -67,6 +72,8 @@ export class AzureDevOpsWorkItemsIntegration
     IssueCreateCapable,
     IssueCommentCapable,
     IssueImageCapable,
+    IssueKeySearchCapable,
+    IssueReopenCapable,
     TicketHistoryCapable
 {
   readonly id = 'issues:azure';
@@ -272,7 +279,7 @@ export class AzureDevOpsWorkItemsIntegration
       type: input.type ?? 'Task',
       title: input.title,
       description: input.body,
-      tags: input.labels,
+      tags: input.errorKey === null ? input.labels : [...input.labels, input.errorKey],
       assignedTo: input.assignee,
     });
     const ref = issueOriginRef('root', created.id);
@@ -287,6 +294,39 @@ export class AzureDevOpsWorkItemsIntegration
       }
     }
     return { ok: true, ref };
+  }
+
+  async findIssuesByKeys(keys: readonly string[]): Promise<Map<string, IssueKeyHit[]>> {
+    const found = new Map<string, IssueKeyHit[]>(keys.map((k) => [k, []]));
+    const unique = [...new Set(keys)];
+    for (let i = 0; i < unique.length; i += TAG_QUERY_BATCH) {
+      const batch = unique.slice(i, i + TAG_QUERY_BATCH);
+      for (const w of await this.opts.api.queryWorkItemsByTags(batch))
+        for (const key of batch.filter((k) => w.tags.some((t) => sameTag(t, k)))) {
+          const state = normalizeState(w.state);
+          found.get(key)!.push({
+            ref: issueOriginRef('root', w.id),
+            state,
+            closedAt: state === 'closed' ? (w.closedAt ?? (w.changedAt === '' ? null : w.changedAt)) : null,
+          });
+        }
+    }
+    return found;
+  }
+
+  canReopenIssue(): boolean {
+    return this.opts.reopenState !== undefined && this.opts.reopenState.trim() !== '';
+  }
+
+  async reopenIssue(number: number): Promise<SendResult> {
+    const state = this.opts.reopenState;
+    if (state === undefined || state.trim() === '')
+      throw new Error(
+        'issuePickupStates names no state on this deployment, so there is no column a reopened work item ' +
+          'moves to. Name it in the config, or reopen the item in Azure DevOps.',
+      );
+    await this.opts.api.setWorkItemState(number, state);
+    return { ok: true, ref: issueOriginRef('root', number) };
   }
 
   async listAreaPaths(): Promise<AreaPathTree> {
@@ -308,6 +348,9 @@ export class AzureDevOpsWorkItemsIntegration
     return { ok: true };
   }
 }
+
+/** Keys OR'd into one WIQL query; the query text is capped at 32K, which this stays far inside. */
+const TAG_QUERY_BATCH = 50;
 
 function relative(w: AzWorkItem, opts: { withBody: boolean } = { withBody: false }): IssueRelative {
   return {

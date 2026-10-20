@@ -13,6 +13,7 @@ import {
   goalErrorLines,
   shownRows,
   stateCounts,
+  trackerPresses,
   type ErrorLink as AppErrorLink,
 } from '../web/src/view/appErrors.js';
 import { decode } from './support/html.js';
@@ -272,6 +273,51 @@ test('a tracker reading is drawn when a later stage fills it', () => {
   const out = page({ data });
   assert.match(out, /Filed by fleet B/);
   assert.match(out, /#77/);
+});
+
+test('the tracker column offers the press its search answers, and never File bug over an open bug', () => {
+  const link: AppErrorLink = { goalRef: 'issue:42', how: ['frame-match'], why: 'w', candidates: 1, tied: [] };
+  const unlinked: AppErrorLink = { goalRef: null, how: [], why: 'w', candidates: 3, tied: ['issue:42', 'issue:7'] };
+  assert.deepEqual(trackerPresses({ status: 'none', ticketRef: null, note: null }, null), ['file', 'investigate']);
+  assert.deepEqual(trackerPresses({ status: 'none', ticketRef: null, note: null }, link), ['file']);
+  assert.deepEqual(
+    trackerPresses({ status: 'none', ticketRef: null, note: null }, unlinked),
+    ['file', 'investigate'],
+    'a link that names no goal leaves the error unexplained, so Investigate is offered',
+  );
+  assert.deepEqual(trackerPresses({ status: 'open', ticketRef: 'issue:7', note: null }, null), []);
+  assert.deepEqual(trackerPresses({ status: 'closed', ticketRef: 'issue:7', note: null }, null), [
+    'reopen',
+    'file-new',
+  ]);
+  assert.deepEqual(trackerPresses({ status: 'unknown', ticketRef: null, note: 'x' }, null), ['file-anyway', 'search']);
+  assert.deepEqual(trackerPresses(null, null), [], 'not searched yet offers nothing to press');
+});
+
+test('each tracker status draws its buttons, with the ticket beside them and never inside one', () => {
+  const draw = (tracker: AppErrorGroupView['tracker'], linked = true): string => {
+    const data = payload();
+    data.environments[0]!.groups[0]!.tracker = tracker;
+    if (!linked) data.environments[0]!.groups[0]!.link = null;
+    return page({ data });
+  };
+  const linked = draw({ status: 'none', ticketRef: null, note: null });
+  assert.match(linked, />File bug</);
+  assert.doesNotMatch(linked, />Investigate</, 'a linked group has a goal to look at already');
+  const none = draw({ status: 'none', ticketRef: null, note: null }, false);
+  assert.match(none, />Investigate</);
+  const open = draw({ status: 'open', ticketRef: 'issue:77', note: null });
+  assert.match(open, /Filed:/);
+  assert.doesNotMatch(open, />File bug</);
+  assert.doesNotMatch(open, /class="btn[^"]*"[^>]*>[^<]*#77/, 'the ticket is drawn beside the controls');
+  const closed = draw({ status: 'closed', ticketRef: 'issue:77', note: 'fixed 2026-10-01, error is back' });
+  assert.match(closed, />Reopen</);
+  assert.match(closed, />File new</);
+  assert.match(closed, /fixed 2026-10-01, error is back/);
+  const unknown = draw({ status: 'unknown', ticketRef: null, note: 'the tracker search failed: 503' });
+  assert.match(unknown, /search failed — not 'no bug'/);
+  assert.match(unknown, />File bug anyway</);
+  assert.match(unknown, />Retry search</);
 });
 
 test('an unknown reading is a warning with its account, never "no errors"', () => {

@@ -5990,8 +5990,10 @@ who has taken each on and **Add me** to take one. Its links go out to the provid
 Tab `errors`, `web/src/components/AppErrorsPage.tsx`, in the nav beside Insights only while
 `CockpitConfig.appErrors` is true. One tab per environment band, the deploy window and last read over
 a table of the error groups that moved, with `steady` and `gone` folded away behind a toggle that is a
-`Place` field. Its goal references go through `<Ref>`, and the goal header carries the line that sends
-an operator here. Owned by [39](39-app-errors.md#in-the-cockpit).
+`Place` field. Each row draws the goal it is probably the work of and what the tracker holds for its
+key, with the tracker presses (File bug, Investigate, Reopen, Retry search) beside the ticket. Its goal
+and ticket references go through `<Ref>`, never inside a button, and the goal header carries the line
+that sends an operator here. Owned by [39](39-app-errors.md#in-the-cockpit).
 
 ## The feature board
 

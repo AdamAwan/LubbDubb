@@ -4,9 +4,11 @@ import type {
   IssueCloseInput,
   IssueCommentInput,
   IssueCreateInput,
+  IssueKeyHit,
   IssueLabelInput,
   SendResult,
 } from '../../sink/actionSink.js';
+import { bodyCarriesKey, errorKeyBodyLines } from '../../appErrors/key.js';
 import type { Issue, IssueState, TrackerItem } from '../../types.js';
 import type {
   WorldCapability,
@@ -14,7 +16,9 @@ import type {
   IssueCloseCapable,
   IssueCommentCapable,
   IssueCreateCapable,
+  IssueKeySearchCapable,
   IssueLabelCapable,
+  IssueReopenCapable,
   RefResolvable,
   TicketHistoryCapable,
   WorldSlice,
@@ -49,6 +53,8 @@ export class GitHubIssuesIntegration
     IssueCloseCapable,
     IssueCreateCapable,
     IssueCommentCapable,
+    IssueKeySearchCapable,
+    IssueReopenCapable,
     TicketHistoryCapable
 {
   readonly id = 'issues:github';
@@ -84,7 +90,8 @@ export class GitHubIssuesIntegration
   }
 
   async createIssue(input: IssueCreateInput): Promise<SendResult> {
-    const body = input.relatedTo === null ? input.body : `${input.body}\n\nRelated to #${input.relatedTo}.`;
+    const related = input.relatedTo === null ? input.body : `${input.body}\n\nRelated to #${input.relatedTo}.`;
+    const body = input.errorKey === null ? related : `${related}\n\n${errorKeyBodyLines(input.errorKey)}`;
     const created = await this.opts.api.createIssue({
       title: input.title,
       body,
@@ -92,6 +99,28 @@ export class GitHubIssuesIntegration
       assignee: input.assignee,
     });
     return { ok: true, ref: issueOriginRef('root', created.number) };
+  }
+
+  async findIssuesByKeys(keys: readonly string[]): Promise<Map<string, IssueKeyHit[]>> {
+    const { owner, repo, api } = this.opts;
+    if (!owner || !repo) throw new Error('the GitHub issues provider names no repository to search');
+    const found = new Map<string, IssueKeyHit[]>(keys.map((k) => [k, []]));
+    for (const batch of keySearchBatches(owner, repo, keys)) {
+      const hits = await api.searchIssues(batch.query);
+      for (const key of batch.keys)
+        for (const hit of hits.filter((h) => bodyCarriesKey(h.body, key)))
+          found.get(key)!.push({
+            ref: issueOriginRef('root', hit.number),
+            state: normalizeState(hit.state),
+            closedAt: hit.closedAt,
+          });
+    }
+    return found;
+  }
+
+  async reopenIssue(number: number): Promise<SendResult> {
+    await this.opts.api.reopenIssue(number);
+    return { ok: true, ref: issueOriginRef('root', number) };
   }
 
   async setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
@@ -176,6 +205,31 @@ export class GitHubIssuesIntegration
     this.timelineCache.set(number, fresh);
     return fresh;
   }
+}
+
+/** GitHub's search refuses more than five `OR`s and a query over 256 characters. */
+const MAX_OR_TERMS = 6;
+const MAX_QUERY_CHARS = 256;
+
+/** The searches a batch of keys takes: each key a quoted phrase, OR'd, as few queries as the limits allow. */
+export function keySearchBatches(
+  owner: string,
+  repo: string,
+  keys: readonly string[],
+): { query: string; keys: string[] }[] {
+  const head = `repo:${owner}/${repo} is:issue in:body`;
+  const batches: { query: string; keys: string[] }[] = [];
+  let current: string[] = [];
+  const query = (terms: string[]): string => `${head} ${terms.map((k) => `"${k}"`).join(' OR ')}`;
+  for (const key of new Set(keys)) {
+    const next = [...current, key];
+    if (current.length > 0 && (next.length > MAX_OR_TERMS || query(next).length > MAX_QUERY_CHARS)) {
+      batches.push({ query: query(current), keys: current });
+      current = [key];
+    } else current = next;
+  }
+  if (current.length > 0) batches.push({ query: query(current), keys: current });
+  return batches;
 }
 
 function normalizeState(state: string): IssueState {

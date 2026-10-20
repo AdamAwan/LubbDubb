@@ -104,6 +104,12 @@ export interface IssueCreateInput {
   type: string | null;
   assignee: string | null;
   relatedTo: number | null;
+  /**
+   * An app error group's key (`err:<project>:<hash>`), carried where the provider can search for it
+   * exactly: an Azure DevOps tag, a line in a GitHub body. Null for every other filing.
+   * → docs/spec/39-app-errors.md#the-tracker-lock
+   */
+  errorKey: string | null;
 }
 
 export interface IssueCloseInput {
@@ -146,6 +152,26 @@ export interface IssueImageResult {
 export interface IssueImageSink {
   canAttachIssueImage(): boolean;
   attachIssueImage(input: IssueImageInput): Promise<IssueImageResult>;
+}
+
+/** One tracker item found carrying an app error key. */
+export interface IssueKeyHit {
+  ref: string;
+  state: 'open' | 'closed';
+  closedAt: string | null;
+}
+
+/**
+ * Finding and reopening the tickets an app error key was filed under — the tracker as the lock
+ * between fleets. A capability beside `ActionSink` because only the app errors desk and its routes
+ * read it. A search that fails **throws**: a failed search is never an empty answer.
+ * → docs/spec/39-app-errors.md#the-tracker-lock
+ */
+export interface IssueKeySink {
+  canSearchIssueKeys(): boolean;
+  findIssuesByKeys(keys: readonly string[]): Promise<Map<string, IssueKeyHit[]>>;
+  canReopenIssue(): boolean;
+  reopenIssue(number: number): Promise<SendResult>;
 }
 
 export interface PrAssignInput {

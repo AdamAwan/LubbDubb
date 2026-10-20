@@ -128,7 +128,7 @@ providers share one `FakeWorldStore` so their world stays coherent.
 `PrReplyCapable`, `PrThreadResolveCapable`, `PrMergeCapable`, `PrCloseCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
 `PrBaseCapable`, `PrAssignCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
 `WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `IssueCreateCapable`,
-`IssueCloseCapable`, `IssueImageCapable`,
+`IssueCloseCapable`, `IssueImageCapable`, `IssueKeySearchCapable`, `IssueReopenCapable`,
 `CiEvidenceCapable`, `RefResolvable`, `TicketHistoryCapable`, and the fake-only `Injectable`.
 
 `PrAssignCapable` puts a person on a pull request: `addPullAssignee` on GitHub, `addPullReviewer`
@@ -152,6 +152,24 @@ head branches" setting removes the branch at merge time, so absence is the commo
 failure. GitHub deletes the ref; Azure has no delete verb for one and updates it to the zero object
 id, which needs the id it currently points at, so the Azure arm is two calls and the first is also
 the already-gone check.
+
+### Finding a ticket by an app error key
+
+`IssueKeySearchCapable.findIssuesByKeys(keys)` answers, per key, every ticket carrying an app error key
+— open and closed, with when it closed — and `IssueReopenCapable.reopenIssue(number)` reopens one. They
+reach callers as `IssueKeySink` (`canSearchIssueKeys`, `findIssuesByKeys`, `canReopenIssue`,
+`reopenIssue`), beside `ActionSink` as `IssueImageSink` is, because only the app errors tracker lock
+reads them ([39](39-app-errors.md#the-tracker-lock)). **A search that fails throws** — a provider never
+answers "nothing found" for a search it could not make.
+
+The key reaches a ticket as `errorKey` on `IssueCreateInput`, and each provider puts it where its own
+search finds it exactly: Azure DevOps as a **tag** (searched by one WIQL `[System.Tags] CONTAINS`
+query per fifty keys, OR'd, over open and closed items alike — `AzureDevOpsApi.queryWorkItemsByTags`),
+GitHub as a visible `Error key:` line and a marker comment in the body (searched as
+`"key" in:body`, at most six keys and 256 characters a query — `GitHubApi.searchIssues`), and the fake
+as the GitHub lines. Reopening is `GitHubApi.reopenIssue` on GitHub; on Azure it is a
+`System.State` patch to the first of `issuePickupStates`, and `canReopenIssue` is false where none is
+named ([02](02-configuration.md)).
 
 ### Uploading an image to a ticket
 
@@ -395,6 +413,9 @@ Implements both seams:
   deployment's fleet. `describeTarget()` is that seam's probe (the repo and the `gh` identity, under
   an 8s deadline the route imposes), and `fleetWorksUpstream(config)` says whether this deployment's
   own fleet would pick such a ticket up. → [16](16-http-api.md#get-apiissuesfiling-target)
+- **`findIssuesByKeys(keys)` / `reopenIssue(number)`** — the first `IssueKeySearchCapable` /
+  `IssueReopenCapable` issues provider, throwing when there is none; `canSearchIssueKeys()` /
+  `canReopenIssue()` ask first. → [above](#finding-a-ticket-by-an-app-error-key)
 - **`inject(event)`** — routes to the fake that owns the event kind and logs it. An event with no fake
   owner is recorded as `inject_unhandled` rather than throwing: you cannot fake-inject onto a real
   provider. **There is no HTTP route behind this**: it is the test suite's world driver (316 call

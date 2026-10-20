@@ -1700,13 +1700,24 @@ export interface AppErrorLink {
   tied: string[];
 }
 
-type AppErrorTrackerStatus = 'none' | 'open' | 'closed' | 'unknown';
+export type AppErrorTrackerStatus = 'none' | 'open' | 'closed' | 'unknown';
 
-/** What the tracker holds under an error group's key. Not yet built. */
+/** What the tracker holds under an error group's key, as the Errors tab draws it. */
 export interface AppErrorTracker {
   status: AppErrorTrackerStatus;
   ticketRef: string | null;
   note: string | null;
+}
+
+/** What the last search for one key found: the ticket that answers for it, and how many carried it. */
+export interface AppErrorTicketSearch {
+  key: string;
+  status: AppErrorTrackerStatus;
+  ticketRef: string | null;
+  closedAt: string | null;
+  tickets: number;
+  detail: string | null;
+  checkedAt: string;
 }
 
 export type GoalReachStatus = 'reached' | 'partial' | 'absent' | 'unknown';

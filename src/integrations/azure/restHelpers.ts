@@ -95,3 +95,7 @@ export async function readFileAtCommit(
     throw err;
   }
 }
+
+export function isRelationAlreadyExists(message: string): boolean {
+  return /WorkItemRelationAlreadyExists|relation already exists/i.test(message);
+}

@@ -8,6 +8,8 @@ import type {
   IssueImageInput,
   IssueImageResult,
   IssueImageSink,
+  IssueKeyHit,
+  IssueKeySink,
   PrAssignInput,
   PrAssignSink,
   IssueCreateInput,
@@ -43,6 +45,8 @@ import {
   isIssueCommentCapable,
   isIssueCreateCapable,
   isIssueImageCapable,
+  isIssueKeySearchCapable,
+  isIssueReopenCapable,
   isIssueLabelCapable,
   isPrBaseCapable,
   isPrAssignCapable,
@@ -80,6 +84,7 @@ export class CompositeConnector
     ActionSink,
     CiEvidenceReader,
     IssueImageSink,
+    IssueKeySink,
     PrAssignSink,
     BotPrReadable,
     BotPrClaimable,
@@ -325,6 +330,27 @@ export class CompositeConnector
     if (!handler)
       throw new Error('no integration can attach images to issues (no issues provider is IssueImageCapable)');
     return handler.attachIssueImage(input);
+  }
+
+  canSearchIssueKeys(): boolean {
+    return this.integrations.some(isIssueKeySearchCapable);
+  }
+
+  async findIssuesByKeys(keys: readonly string[]): Promise<Map<string, IssueKeyHit[]>> {
+    const handler = this.integrations.find(isIssueKeySearchCapable);
+    if (!handler)
+      throw new Error('no integration can search issues by key (no issues provider is IssueKeySearchCapable)');
+    return handler.findIssuesByKeys(keys);
+  }
+
+  canReopenIssue(): boolean {
+    return this.integrations.some(isIssueReopenCapable);
+  }
+
+  async reopenIssue(number: number): Promise<SendResult> {
+    const handler = this.integrations.find(isIssueReopenCapable);
+    if (!handler) throw new Error('no integration can reopen issues (no issues provider is IssueReopenCapable)');
+    return handler.reopenIssue(number);
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {

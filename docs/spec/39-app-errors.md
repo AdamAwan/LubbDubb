@@ -10,31 +10,25 @@ what _moved_ — a group that is new since the deploy, one that came back, one r
 baseline — rather than drawn as an error list an operator has to read in full.
 
 **Partly built.** What is described here as running is the command, its contract, grouping, states,
-the key, a read-only route, [linking a moved group to the goal that probably caused
-it](#linking-a-group-to-work) — deterministically, from the deploy window, frames against landed
-diffs, test-before-live and operation hints — and the cockpit that draws it. Two things are **not yet
-built**, and each section that names them says so:
+the key, [linking a moved group to the goal that probably caused it](#linking-a-group-to-work) —
+deterministically, from the deploy window, frames against landed diffs, test-before-live and operation
+hints — the [tracker lock](#the-tracker-lock) and its presses, the route and the cockpit that draws
+them. Three things are **not yet built**, and each section that names them says so:
 
 - **Model triage on a press** — the bug-investigation flow with the trace attached, for what the
   deterministic link leaves open. → [Not yet built](#not-yet-built)
-- **The tracker as the cross-fleet lock** — searching for a group's key before offering File bug or
-  Investigate, and filing with the key on `IssueCreateInput`. The wire carries a `tracker` field for
-  it that is always `null` today.
-
-The cockpit draws `tracker` wherever it is non-null, so the lock needs no change in `web/` to be
-seen. → [In the cockpit](#in-the-cockpit)
-
-The design both are argued in is [`proposals/error-ingestion.md`](../proposals/error-ingestion.md),
-which the change that finishes them deletes.
+- **Promote to watch** — turning a group into a declared `signal` check on the fixing goal.
+  → [Why there is no Watch press](#why-there-is-no-watch-press)
+- **Cross-fleet links through the pool.** → [Not yet built](#not-yet-built)
 
 ## What it is not
 
-| Not                   | Because                                                                                                                                                                                                        |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A telemetry client    | The harness knows a command and an output contract, never Kusto, App Insights or Sentry. The same shape as `health` and `observe`.                                                                             |
-| A `WorldEvent` source | `deliveryHold` expires a delivery verdict on **any** world event matching a goal's issue ref, so an error reading filed as one would un-park delivered goals. Own tables, own route — the arrivals rule again. |
-| A dispatch input      | Nothing under `src/dispatcher/` reads what this writes. It files nothing, opens no gate and reaches no prompt. A link is computed for the route and stored nowhere.                                            |
-| An error log          | The harness's own faults are `error_events` (`src/store/errors.ts`, [18](18-observability.md)). These are the **application's** errors, which is why the feature is called app errors.                         |
+| Not                   | Because                                                                                                                                                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A telemetry client    | The harness knows a command and an output contract, never Kusto, App Insights or Sentry. The same shape as `health` and `observe`.                                                                                                                                  |
+| A `WorldEvent` source | `deliveryHold` expires a delivery verdict on **any** world event matching a goal's issue ref, so an error reading filed as one would un-park delivered goals. Own tables, own route — the arrivals rule again.                                                      |
+| A dispatch input      | Nothing under `src/dispatcher/` reads what this writes. It files only on an operator's press, opens no gate and reaches no prompt; Investigate starts the existing investigation by its label, and nothing else. A link is computed per request and stored nowhere. |
+| An error log          | The harness's own faults are `error_events` (`src/store/errors.ts`, [18](18-observability.md)). These are the **application's** errors, which is why the feature is called app errors.                                                                              |
 
 ## Configuring an environment
 
@@ -118,6 +112,10 @@ and day counts are written in one transaction; the prune is a second, once per d
 | `app_error_groups` | `(environment, fingerprint)`      | Title, operation, version, frames, url; first and last seen as the harness has accumulated them; `returned_at` |
 | `app_error_days`   | `(environment, fingerprint, day)` | Occurrences on one UTC day                                                                                     |
 
+A fourth, `app_error_tickets`, is the [tracker lock](#the-tracker-lock)'s cache, one row per key and
+owned by `AppErrorTicketStore` (`src/store/appErrorTickets.ts`) — its own module, because it is keyed
+on the key rather than on an environment and nothing about a read writes it.
+
 - **`ok_at` moves only on an `ok` read**, and it is what the next read's `{since}` is: a read that
   failed for a day leaves the next one reaching back over that day rather than skipping it. `{since}`
   is never further back than **fourteen days** (`MAX_LOOKBACK_MS`), which is also a first read's reach.
@@ -138,7 +136,7 @@ and day counts are written in one transaction; the prune is a second, once per d
   environment's groups age out the same way. Seen again after that, a group is a stranger, and reads
   `new`.
 
-All three tables were introduced new and so need no `ColumnMigrations` entry **today** — the rule in
+All four tables were introduced new and so need no `ColumnMigrations` entry **today** — the rule in
 [14](14-persistence.md#migrations) still applies to the first column anyone adds.
 
 ## The deploy window
@@ -198,8 +196,9 @@ reads errors. The fallback is honest about what it costs: two fleets that derive
 not share a key, which is the fork-and-rename case the pool's own refusal exists for. A deployment
 that wants the key shared declares `pool.project`.
 
-Nothing carries the key anywhere yet: it is on the wire, and it reaches a tracker only when the
-tracker lock is built.
+The key is what [the tracker lock](#the-tracker-lock) files under and searches for. It is computed
+from the fingerprint and never stored, so changing how it is derived re-keys every group at once —
+and, with them, orphans every ticket already filed under the old keys.
 
 ## Groups
 
@@ -220,8 +219,9 @@ An environment that declares no `group` is a band of one named for itself, exact
 `AppErrorDesk` (`src/appErrors/desk.ts`) is its own pulse entry, `appErrors`
 ([04](04-harness-cycle.md#the-pulse-registry)), **directly below `environments`**: that desk's probe
 records the head a reading is held against, so above it a deploy would be noticed a pulse late.
-**Nothing reads what it writes** inside the pulse — no gate, no bench row, no prompt — so nothing
-below it is ordered on it.
+**One pass reads what it writes** inside the pulse — the [tracker desk](#the-search), directly below
+it, which searches for the groups the read just moved. Nothing else does: no gate, no bench row, no
+prompt.
 
 Every environment that declares `errors` is read **concurrently**, each unless its last read is
 younger than `appErrorIntervalMs` — an `unknown` read counts, so a broken query is retried on the
@@ -340,9 +340,18 @@ than it is not, and occasionally it is not.
 
 ### Where it is computed
 
-On the route, per request, not by the desk: a link depends on landings, reach and the work graph,
-which move on every pulse, so a stored link would be stale the moment the next landing was recorded,
-and a link stored by nothing that reads it would be a second copy to keep true.
+Per request, not by the desk: a link depends on landings, reach and the work graph, which move on
+every pulse, so a stored link would be stale the moment the next landing was recorded, and a link
+stored by nothing that reads it would be a second copy to keep true. **There is one builder of the
+linked payload**, `currentAppErrors` (`src/appErrors/current.ts`): the view, the tracker cache folded
+on, then `AppErrorLinker.link`. The route answers with it and [every press](#the-presses) finds its
+group in it, so a press files from exactly the row the tab drew — its link, and so the story a bug is
+related to, included. A press that rebuilt the row without the link would file every bug unrelated.
+
+The [tracker desk](#the-search) is the one reader that does not link: it reads `unlinkedAppErrors`,
+the same builder stopped before the linker. It needs only each group's key and state, which linking
+never changes, and linking there would put the clone's questions — up to five seconds of them — inside
+the pulse for an answer nothing on the pulse reads.
 
 What makes that affordable is that everything the clone says here is **about a fixed commit**, and so
 never changes. `AppErrorLinker` keeps every `contains` answer whose heads are commit ids, and every
@@ -350,19 +359,163 @@ diff, for the life of the process; an answer of `null`, and any failure, is not 
 on the next request. The steady state is no `git` at all. Questions already in flight are joined, not
 repeated, and at most four diffs run at once.
 
-**The route never waits on the clone past five seconds** (`LINK_DEADLINE_MS`). Whatever has not
+**A request never waits on the clone past five seconds** — the route's, or a press's (`LINK_DEADLINE_MS`). Whatever has not
 answered by then is unknown for this request — the window undecided, or the frame evidence unknown,
 and `why` says the clone did not answer in time — and the question runs on in the background, so the
 next request usually finds it answered. A `git` that never exits is bounded below that as well:
 `changedFiles` carries its own thirty-second deadline, and only a commit id ever reaches its argument
 list.
 
+## The tracker lock
+
+Every fleet working an app reads the same telemetry. Reading is cheap and stays per fleet; what costs
+is a filed bug and a model investigation, and two fleets doing either for one error is the waste to
+stop. **The tracker is the lock**: it is live, every fleet already reads it, and a filed bug is the
+record of _someone has this_. The pool ([28](28-cross-fleet-pool.md)) is the wrong lock — its clock is
+a day — and a lock of the harness's own would be a second record of what the tracker already says.
+
+### The key on the ticket
+
+**The key is carried by the ticket, never by a prompt.** It is `errorKey` on `IssueCreateInput`
+([15](15-integrations.md)), passed through `ticketFiler` ([13](13-jobs-and-tickets.md#filing-a-ticket))
+and resolved by the provider where its own search can find it exactly:
+
+| Provider     | Carries it as                                                                                                    |
+| ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Azure DevOps | a **tag** — `[System.Tags] CONTAINS` matches a whole tag                                                         |
+| GitHub       | a visible line, `` Error key: `err:shop:3f9a1c2b` ``, and a marker comment `<!-- lubbdubb:err:shop:3f9a1c2b -->` |
+| fake         | the GitHub lines, so a test's search reads what it filed                                                         |
+
+Told to an agent instead, a bug filed without it is invisible to every other fleet, with nothing red.
+It is not a template placeholder either, for the same reason: `app-error-ticket-body` is
+operator-overridable, and an override that never learned the token would drop it
+([05](05-dispatcher.md#prompt-templates)). A label per key was the GitHub alternative and is refused:
+labels are capped per repository and would clutter it with one per fault.
+
+### The search
+
+`IssueKeySink.findIssuesByKeys(keys)` (`src/sink/actionSink.ts`) answers, per key, every ticket
+carrying it — open or closed, with its `closedAt`. **A search that fails throws; it is never an empty
+answer.**
+
+- **Azure DevOps** runs one WIQL query per fifty keys, the `CONTAINS` clauses OR'd, over open and closed
+  items alike, and matches each item back to its key by tag, case-insensitively. `closedAt` is
+  `Microsoft.VSTS.Common.ClosedDate`, else the item's last change.
+- **GitHub** runs `repo:<o>/<r> is:issue in:body "k1" OR "k2" …`, at most six keys a query (the search
+  refuses more than five `OR`s) and at most 256 characters (`keySearchBatches`,
+  `src/integrations/github/issues.ts`). The search tokenises, so a hit is kept for a key only where its
+  body carries the key **whole** (`bodyCarriesKey`) — `err:shop:3f9a1c2b0` is not `err:shop:3f9a1c2b`.
+
+**`AppErrorTrackerDesk`** (`src/appErrors/tracker.ts`) is its own pulse entry, `appErrorTracker`,
+directly below `appErrors` ([04](04-harness-cycle.md#the-pulse-registry)): it searches for the keys the
+read just moved. It runs only where a tracker is configured (`trackerCoordinates`, the same predicate
+the filing routes 409 on) and the provider can search. Each pass makes **one batched search** for the
+keys owed (`keysOwed`): every group in `new`, `returned` or `spiking` whose key has not been searched
+since the newest read. A group that has not moved is not searched for on the pulse; the tab is about
+what moved. The search carries a 30-second deadline, because neither tracker client sets a request
+timeout and the pulse awaits the desk — a search that never answered would hold the cycle for good.
+
+The answer is cached in `app_error_tickets` — status, the ticket that answers for the key, its
+`closed_at`, how many tickets carry the key, a detail and `checked_at`. `settleSearch` picks the
+ticket: the **oldest open** one, else the **most recently closed**, else none. Two tickets under one key
+is a duplicate two fleets filed in the same seconds; the row says how many carry it, and the next
+search shows them side by side.
+
+| The search found  | `tracker`                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| an open ticket    | `open`, its ref; a note when several carry the key                                              |
+| only closed ones  | `closed`, the latest; _fixed <date>, error is back_ on a moved group, _closed <date>_ otherwise |
+| nothing           | `none`                                                                                          |
+| the search failed | `unknown`, with the failure as the note                                                         |
+| never searched    | `null`                                                                                          |
+
+**`unknown` is never `none`.** A failed search is recorded `unknown` for every key it carried, with the
+failure on the error log through `errors.record`, and retried after the next read. Like the
+[two-valued reading](#the-output-contract), the confident wrong answer — _no bug_, when nobody could
+say — is what this refuses. **The cache is not a `WorldEvent` and nothing dispatches on it**: it is a
+table the route reads, and nothing under `src/dispatcher/` does.
+
+### The presses
+
+All four are operator-pressed routes ([16](16-http-api.md)), each **searching again right before it
+writes**, so the window in which two fleets can both file is seconds rather than a read interval. All
+refuse with a 409 when no tracker is configured, and record what they did in the cache before
+answering, so the row redraws without waiting for a search. Each is `src/appErrors/filing.ts`.
+
+- **File bug** (`POST /api/app-errors/file-bug`, `{environment, fingerprint}`). Found open: the found
+  ticket is answered, `reused: true`, and nothing is filed. Otherwise it files through `ticketFiler` as
+  a **bug** (`issueBugType`) carrying the key, titled `<environment>: <group title>`, its body the
+  `app-error-ticket-body` template — title, state, counts, first and last seen, operation, version, the
+  top ten frames and the telemetry link. **Never the exception message**: messages carry user data,
+  and the contract does not even ask the script for one. When the group's link names a goal, the bug is
+  `relatedTo` that goal's story — read off the [linked payload](#where-it-is-computed) the tab drew — the Azure `related` relation or the GitHub cross-reference, as every
+  other bug the operator raises ([13](13-jobs-and-tickets.md#the-other-filing-kind--a-bug-the-operator-raised)).
+  A link with `goalRef: null` — undecided, tied, or no evidence — relates it to nothing, not to any of
+  its `tied` goals.
+  It carries **no watch tag**: filing is a record, and the operator watches it from the Tickets tab like
+  any ticket they want the fleet on.
+- **Investigate** (`POST /api/app-errors/investigate`). Files exactly as File bug — or reuses the open
+  one found — and puts on the **watch tag and the investigate label**
+  ([38](38-bug-investigation.md#the-label)): at filing, as `labels` on the create; on a found ticket,
+  through `requestInvestigation` (`src/issueWatch.ts`). That label is the only switch rule
+  `issue-investigate` reads, so the existing read-only investigator takes it on a later pulse, held
+  behind the appraisal like any other. **An investigation is claimed by its bug**: a second fleet
+  pressing it finds the bug open and starts nothing — the labels it re-applies are already there.
+- **Reopen** (`POST /api/app-errors/reopen`, `{key}`). Found open (somebody reopened or refiled it):
+  answered, `reused`. Found closed: the latest closed ticket is reopened through
+  `IssueKeySink.reopenIssue` — on GitHub its state, on Azure DevOps the **first of
+  `issuePickupStates`**, the column the harness already reads as _to be worked_. With none named,
+  Azure cannot be reopened from here and the route says to name it.
+- **Search** (`POST /api/app-errors/search`, `{key}`) — the row's Retry search: one key, recorded as the
+  pulse would.
+
+**A press whose search fails does not file.** It answers a 502 naming the failure — not filing what may
+be a duplicate — unless the request says `unsearched: true`, which is the row's **File bug anyway**:
+the operator, told the lock could not be read, files regardless. A press already running for a key
+refuses a second one (409), so two clicks in one cockpit are one bug. A tracker that refuses the
+create is a 502 with its reason, and recorded through `errors.record`.
+
+**Filing is always a click.** An automatic filer on a weekly live deploy of a week's changes would
+flood the tracker.
+
+### Why there is no Watch press
+
+The fourth press once argued for — turn a group into a declared `signal` check with `tolerate: 0` on
+the fixing goal, so the post-deploy watch ([29](29-post-deploy-watch.md)) confirms it is gone after
+the fix arrives — is **not built**, and not for want of time. A `signal` check is a **query** the
+environment's `observe` command runs, and it must carry a `presence` query and a `{since}` bound
+([29](29-post-deploy-watch.md#every-query-carries-since)). The harness knows a fingerprint and an
+`errors` command, never Kusto, so it cannot write that query generically; and reading the check
+through the `errors` command instead is a second kind of check with its own presence story, which is
+a change to the watch, not to this. Until then, the operator writes the signal on the goal's Signals
+card — the group's operation and fingerprint are on the row.
+
+### Where the key can miss
+
+- **A refactor renames the failing method** → a new fingerprint, a new key, a group that reads `new`,
+  and no ticket found for it. Linking (when built) is what ties it back to the change that moved it.
+- **A bug filed by hand** carries no key. It is found only if someone adds the tag or the line; the
+  row cannot know.
+- **Two faults, one fingerprint** (one method, two causes) share a bug. Acceptable: the bug is about
+  the method.
+- **GitHub's search index lags** a create by seconds to minutes, so a second fleet pressing in that
+  window can file a duplicate. It is the one gap the search at the press does not close, and the next
+  search shows both.
+
 ## Seams
 
 `AppErrorReader` (`src/appErrors/reader.ts`) — one method, `list({environment, command, since})`.
 `CommandAppErrorReader` spawns the command; `FakeAppErrorReader` (`src/appErrors/fakeReader.ts`)
 answers from scripted stdout per environment, records every request, and answers `unknown` for an
-environment nobody scripted. Injected as `appErrorReader` on `buildSystem`. **A test that declares an
+environment nobody scripted. Injected as `appErrorReader` on `buildSystem`.
+
+The tracker lock reads through `IssueKeySink` beside `ActionSink` — `canSearchIssueKeys`,
+`findIssuesByKeys`, `canReopenIssue`, `reopenIssue` — which `CompositeConnector` routes to the issues
+provider's `IssueKeySearchCapable` / `IssueReopenCapable` ([15](15-integrations.md)). The provider HTTP
+is `GitHubApi.searchIssues` / `reopenIssue` and `AzureDevOpsApi.queryWorkItemsByTags`, each with its
+scripted fake; `FakeIssuesIntegration` searches the bodies it filed. A test of the presses flips
+`config.integrations.issues` to a real provider after `buildSystem`, as the bug routes' tests do, and
+keeps the fake connector underneath (`test/appErrorTracker.test.ts`). **A test that declares an
 `errors` block injects it and `environmentProber`**, or it spawns the declared command — and, because
 such an environment is probed for its head, the `at` probe — on the machine running the tests.
 
@@ -384,7 +537,7 @@ counts per group is too much to send every couple of seconds to every open cockp
 - each group an `AppErrorGroupView`: the stored `AppErrorGroup` (title, operation, version, frames,
   `url`, first and last seen, `returnedAt`) with `daily` made dense over the last fourteen UTC days,
   plus `key`, `state`, `count` (the total of that dense series, so the two always agree), `ignored`,
-  `link`, and the `tracker` placeholder below. The state is computed off the same dense series.
+  `link` and `tracker`, both below. The state is computed off the same dense series.
   Sorted moved-first — `new`, `returned`, `spiking`, `steady`, `gone` — then most recently seen;
 - `bands` — the [roll-up](#groups).
 
@@ -399,17 +552,24 @@ linked for (`steady`, `gone`, ignored); otherwise always an object, even when no
 | `candidates` | how many goals the window held; **null when the window could not be decided**, which is never the same as `0`          |
 | `tied`       | the goals the frames narrowed to and nothing separated, when that is why there is no goal; empty otherwise             |
 
-`tracker: AppErrorTracker | null` — `status` (`none`, `open`, `closed`, `unknown`), the ticket found
-under the key, and a note. **Always null: the tracker lock is not yet built.**
+`tracker: AppErrorTracker | null` — `status` (`none`, `open`, `closed`, `unknown`), the ticket that
+answers for the key, and a note, filled from `app_error_tickets` by `withTrackers`
+([the search](#the-search)). Null where the key has never been searched — no tracker, or a group that
+has not moved.
+
+The route's payload is built by `currentAppErrors` (`src/appErrors/current.ts`), the one builder of
+the linked payload, which the presses read too, so a press files from exactly the row the tab drew
+([where it is computed](#where-it-is-computed)). The
+presses are [above](#the-presses); each answers an `AppErrorPressPayload` — the ticket ref, whether it
+was `reused`, and for Investigate the label writes that failed.
 
 ## In the cockpit
 
 The **Errors** tab (`tab=errors`, `web/src/components/AppErrorsPage.tsx`), in the nav beside Insights
 only while `CockpitConfig.appErrors` is true — some environment declares an `errors` block. It reads
-`GET /api/app-errors` on open and every minute after (`useAppErrors`, the Bot PRs tab's interval): the
-route is too heavy for the snapshot, and a reading moves on `appErrorIntervalMs`, not per pulse. Read
-only; the controls that act on a group — File bug, Reopen, Investigate, promote to watch — arrive with
-the tracker lock and their routes.
+`GET /api/app-errors` on open, every minute after (`useAppErrors`, the Bot PRs tab's interval) and
+straight after a tracker press lands: the route is too heavy for the snapshot, and a reading moves on
+`appErrorIntervalMs`, not per pulse.
 
 - **One tab per band**, from `bands`: a declared group is named with its members (`prod: liveEu,
 liveUs`), and an environment in no group is a band of one under its own name. Each tab carries its
@@ -440,6 +600,20 @@ arrival`, `route hint`), the `why` and _candidates: N_. A link with **no goal** 
   shipped nothing. **The tracker column** draws the status, the ticket through `<Ref>` and the note.
   Each is a dash while its field is null — a blank there would read as a stage that ran and found
   nothing.
+- **The tracker column carries the presses**, by what the search found (`trackerPresses`,
+  `web/src/view/appErrors.ts`), each pressing for the member whose state the band reports:
+
+  | Found     | Drawn                                                                                 |
+  | --------- | ------------------------------------------------------------------------------------- |
+  | `none`    | **File bug** (primary), and **Investigate** when the group's link names no goal       |
+  | `open`    | _Filed:_ and the ticket — no File bug, no Investigate                                 |
+  | `closed`  | the ticket, _fixed <date>, error is back_, **Reopen** and **File new**                |
+  | `unknown` | _search failed — not 'no bug'_, the failure, **File bug anyway** and **Retry search** |
+
+  The ticket is a `<Ref>` **beside** the buttons, in its own `cn-refs` group, never inside one
+  ([17](17-cockpit.md#links)). A refused press says why on the button. Investigate is offered only where the
+  link names no goal — no link at all, or a link whose `goalRef` is null (undecided, tied, or no
+  evidence) — because a group whose link names a goal already says where to look.
 
 **On the goal**, the header's identity row carries _N new errors on test since this arrived_
 (`web/src/console/goalErrors.tsx`) when any environment's group in `new`, `returned` or `spiking` links
@@ -453,14 +627,17 @@ true, so a deployment that reads no errors pays nothing on every goal page.
 
 ## Not yet built
 
-In the order the proposal stages them, each of which removes its line here:
+Each removes its line here when it lands:
 
 - **Model triage on a press** — the bug-investigation flow ([38](38-bug-investigation.md)) with the
   trace attached, for a group the [deterministic link](#linking-a-group-to-work) leaves without a goal.
-- **The tracker lock** — the key as a field of `IssueCreateInput` resolved by `ticketFiler`
-  ([13](13-jobs-and-tickets.md#filing-a-ticket)), a batched search for every group's key per read, and
-  File bug / Reopen / Investigate / promote to watch. Fills `tracker`, which the Errors tab's tracker
-  column [already draws](#in-the-cockpit).
+  Today Investigate files the bug and sets the investigate label, and the investigator starts from
+  the ticket alone.
+- **Promote to watch.** → [Why there is no Watch press](#why-there-is-no-watch-press)
+- **Cross-fleet links through the pool** ([28](28-cross-fleet-pool.md)). The pool is the wrong lock,
+  but it can later show which fleet **linked** a group to which of its goals, which narrows the
+  week-long window for fleets that do not own the change. Only the key, a goal ref and a ticket ref
+  would cross; titles, messages and frames never do, since the pool carries no free text.
 
 ## What it does not see
 

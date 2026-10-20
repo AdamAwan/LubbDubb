@@ -195,4 +195,36 @@ export const TICKET_PROMPTS = {
       '`blueprint-ticket` (#394), and the `blueprint-ticket-body` this was called before the rename. ' +
       'Placeholders: {request}.',
   },
+  'app-error-ticket-body': {
+    placeholders: [
+      'title',
+      'environment',
+      'state',
+      'count',
+      'firstSeen',
+      'lastSeen',
+      'operation',
+      'version',
+      'frames',
+      'link',
+    ],
+    template:
+      'An error the application is throwing on {environment}, read from its own telemetry and filed from ' +
+      "the harness's Errors tab.\n\n" +
+      '- **Error:** {title}\n' +
+      '- **State:** {state} — {count} in the last fortnight, first seen {firstSeen}, last seen {lastSeen}\n' +
+      '- **Operation:** {operation}\n' +
+      '- **Version:** {version}\n' +
+      '- **Telemetry:** {link}\n\n' +
+      'Top frames:\n\n{frames}',
+    doc:
+      'The **body** of the bug the harness files when an operator presses File bug or Investigate on a ' +
+      'row of the Errors tab (docs/spec/39-app-errors.md). Not a prompt: it is written straight into ' +
+      'the tracker, so an override is house style for how such a bug reads. It carries the group\u2019s ' +
+      'title, operation, version, top frames and telemetry link, and **never the exception message**, ' +
+      'which often carries user data. The error key is not a placeholder: the provider adds it where its ' +
+      'search finds it (an Azure DevOps tag, a line in a GitHub body), so an override cannot drop it. ' +
+      'Placeholders: {title} {environment} {state} {count} {firstSeen} {lastSeen} {operation} {version} ' +
+      '{frames} {link}.',
+  },
 } satisfies Record<string, TemplateDef>;

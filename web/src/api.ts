@@ -37,6 +37,8 @@ import type {
   CiPolicyPayload,
   BotPrsPayload,
   AppErrorsPayload,
+  AppErrorPressPayload,
+  AppErrorSearchPayload,
   FilingTargetProbe,
   IssueFiled,
   PetCatalogue,
@@ -274,6 +276,12 @@ const realApi = {
   getCiPolicy: () => authFetch('/api/ci-policy').then((r) => json<CiPolicyPayload>(r)),
   getBotPrs: () => authFetch('/api/bot-prs').then((r) => json<BotPrsPayload>(r)),
   getAppErrors: () => authFetch('/api/app-errors').then((r) => json<AppErrorsPayload>(r)),
+  fileAppErrorBug: (environment: string, fingerprint: string, unsearched: boolean) =>
+    post<AppErrorPressPayload>('/api/app-errors/file-bug', { environment, fingerprint, unsearched }),
+  investigateAppError: (environment: string, fingerprint: string, unsearched: boolean) =>
+    post<AppErrorPressPayload>('/api/app-errors/investigate', { environment, fingerprint, unsearched }),
+  reopenAppErrorTicket: (key: string) => post<AppErrorPressPayload>('/api/app-errors/reopen', { key }),
+  searchAppErrorKey: (key: string) => post<AppErrorSearchPayload>('/api/app-errors/search', { key }),
   claimBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/claim`, {}),
   unclaimBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/unclaim`, {}),
   closeBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/close`, {}),

@@ -18,6 +18,9 @@ export function isMoved(state: ErrorState): boolean {
 /** One row of the Errors table: a band group, with what its members' groups carry folded onto it. */
 export interface ErrorRow {
   key: string;
+  fingerprint: string;
+  /** The member a press files from: the one whose state the band reports. */
+  environment: string;
   title: string;
   state: ErrorState;
   count: number;
@@ -64,6 +67,8 @@ function bandRow(bandGroup: AppErrorBandView['groups'][number], held: readonly A
   const lead = held.find((g) => g.state === bandGroup.state) ?? held[0];
   return {
     key: bandGroup.key,
+    fingerprint: bandGroup.fingerprint,
+    environment: lead?.environment ?? bandGroup.environments[0] ?? '',
     title: bandGroup.title,
     state: bandGroup.state,
     count: bandGroup.count,
@@ -97,6 +102,23 @@ function sumDaily(groups: readonly AppErrorGroupView[]): number[] {
   const out: number[] = [];
   for (const g of groups) g.daily.forEach((d, i) => (out[i] = (out[i] ?? 0) + d.count));
   return out;
+}
+
+/** What the tracker column offers, by what the search found — never File bug over a ticket already open. */
+export type TrackerPress = 'file' | 'investigate' | 'reopen' | 'file-new' | 'file-anyway' | 'search';
+
+export function trackerPresses(tracker: ErrorTracker | null, link: ErrorLink | null): TrackerPress[] {
+  if (tracker === null) return [];
+  switch (tracker.status) {
+    case 'none':
+      return (link?.goalRef ?? null) === null ? ['file', 'investigate'] : ['file'];
+    case 'open':
+      return [];
+    case 'closed':
+      return ['reopen', 'file-new'];
+    case 'unknown':
+      return ['file-anyway', 'search'];
+  }
 }
 
 export type StateCounts = Record<ErrorState, number>;

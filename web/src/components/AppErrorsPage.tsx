@@ -16,7 +16,11 @@ import {
   type ErrorState,
   type ErrorTracker,
   type StateCounts,
+  type TrackerPress,
+  trackerPresses,
 } from '../view/appErrors.js';
+import { api } from '../api.js';
+import { AsyncButton } from './AsyncButton.js';
 import { BareButton, Button } from './button.js';
 import { Ref } from './refs.js';
 import { Tag, type TagTone } from './tag.js';
@@ -44,7 +48,7 @@ const TRACKER_SAID: Record<ErrorTracker['status'], string> = {
   none: 'no ticket',
   open: 'open',
   closed: 'closed',
-  unknown: 'could not search',
+  unknown: "search failed — not 'no bug'",
 };
 
 /** How many of the fortnight's days at the end are drawn in the state's own hue. */
@@ -61,12 +65,12 @@ export function AppErrorsPage({
   now: number;
   actions: CockpitActions;
 }): JSX.Element {
-  const { reading, failed } = useAppErrors();
+  const { reading, failed, reload } = useAppErrors();
   if (failed && reading === null) {
     return <p className="empty">The app errors could not be read. The rest of the cockpit is unaffected.</p>;
   }
   if (reading === null) return <p className="empty">Reading app errors…</p>;
-  return <AppErrorsView payload={reading} band={band} steady={steady} now={now} actions={actions} />;
+  return <AppErrorsView payload={reading} band={band} steady={steady} now={now} actions={actions} onPressed={reload} />;
 }
 
 /** @public the seam the page is rendered through in `test/appErrorsCockpit.test.ts` */
@@ -76,12 +80,15 @@ export function AppErrorsView({
   steady,
   now,
   actions,
+  onPressed = () => {},
 }: {
   payload: AppErrorsPayload;
   band: string | null;
   steady: boolean;
   now: number;
   actions: CockpitActions;
+  /** Called once a tracker press lands, so the row redraws from what the route recorded. */
+  onPressed?: () => void;
 }): JSX.Element {
   const picked = pickBand(payload, band);
   if (picked === null) {
@@ -102,7 +109,12 @@ export function AppErrorsView({
       <BandTabs payload={payload} picked={picked} actions={actions} />
       <Readings members={bandMembers(payload, picked)} project={payload.project} now={now} />
       <Counts counts={stateCounts(rows)} steady={steady} actions={actions} />
-      <ErrorTable rows={shownRows(rows, steady)} multi={picked.environments.length > 1} now={now} />
+      <ErrorTable
+        rows={shownRows(rows, steady)}
+        multi={picked.environments.length > 1}
+        now={now}
+        onPressed={onPressed}
+      />
     </div>
   );
 }
@@ -298,7 +310,17 @@ function Counts({
   );
 }
 
-function ErrorTable({ rows, multi, now }: { rows: ErrorRow[]; multi: boolean; now: number }): JSX.Element {
+function ErrorTable({
+  rows,
+  multi,
+  now,
+  onPressed,
+}: {
+  rows: ErrorRow[];
+  multi: boolean;
+  now: number;
+  onPressed: () => void;
+}): JSX.Element {
   if (rows.length === 0) return <p className="empty">Nothing has moved here.</p>;
   return (
     <div className="ae-scroll">
@@ -318,7 +340,7 @@ function ErrorTable({ rows, multi, now }: { rows: ErrorRow[]; multi: boolean; no
         </thead>
         <tbody>
           {rows.map((row) => (
-            <ErrorTableRow key={row.key} row={row} multi={multi} now={now} />
+            <ErrorTableRow key={row.key} row={row} multi={multi} now={now} onPressed={onPressed} />
           ))}
         </tbody>
       </table>
@@ -326,7 +348,17 @@ function ErrorTable({ rows, multi, now }: { rows: ErrorRow[]; multi: boolean; no
   );
 }
 
-function ErrorTableRow({ row, multi, now }: { row: ErrorRow; multi: boolean; now: number }): JSX.Element {
+function ErrorTableRow({
+  row,
+  multi,
+  now,
+  onPressed,
+}: {
+  row: ErrorRow;
+  multi: boolean;
+  now: number;
+  onPressed: () => void;
+}): JSX.Element {
   return (
     <tr className={isMoved(row.state) ? '' : 'ae-quiet'}>
       <td>
@@ -354,7 +386,7 @@ function ErrorTableRow({ row, multi, now }: { row: ErrorRow; multi: boolean; now
         <LinkCell link={row.link} />
       </td>
       <td>
-        <TrackerCell tracker={row.tracker} />
+        <TrackerCell row={row} onPressed={onPressed} />
       </td>
     </tr>
   );
@@ -413,22 +445,76 @@ function LinkCell({ link }: { link: ErrorLink | null }): JSX.Element {
   );
 }
 
-function TrackerCell({ tracker }: { tracker: ErrorTracker | null }): JSX.Element {
+function TrackerCell({ row, onPressed }: { row: ErrorRow; onPressed: () => void }): JSX.Element {
+  const { tracker } = row;
   if (tracker === null) return <span className="ae-none">—</span>;
+  const presses = trackerPresses(tracker, row.link);
   return (
     <div className="ae-link">
-      <Tag tone={TRACKER_TONE[tracker.status]} lower>
-        {TRACKER_SAID[tracker.status]}
-      </Tag>
+      {tracker.status === 'open' ? (
+        <span className="ae-filed">Filed:</span>
+      ) : (
+        <Tag tone={TRACKER_TONE[tracker.status]} lower>
+          {TRACKER_SAID[tracker.status]}
+        </Tag>
+      )}
       {tracker.ticketRef !== null && (
         <span className="cn-refs">
           <Ref to={tracker.ticketRef} />
         </span>
       )}
       {tracker.note !== null && <span className="ae-note">{tracker.note}</span>}
+      {presses.length > 0 && (
+        <span className="ae-acts">
+          {presses.map((press) => (
+            <TrackerButton key={press} press={press} row={row} onPressed={onPressed} />
+          ))}
+        </span>
+      )}
     </div>
   );
 }
+
+const PRESS_LABEL: Record<TrackerPress, string> = {
+  file: 'File bug',
+  investigate: 'Investigate',
+  reopen: 'Reopen',
+  'file-new': 'File new',
+  'file-anyway': 'File bug anyway',
+  search: 'Retry search',
+};
+
+function TrackerButton({
+  press,
+  row,
+  onPressed,
+}: {
+  press: TrackerPress;
+  row: ErrorRow;
+  onPressed: () => void;
+}): JSX.Element {
+  const act = async (): Promise<void> => {
+    if (press === 'investigate') await api.investigateAppError(row.environment, row.fingerprint, false);
+    else if (press === 'reopen') await api.reopenAppErrorTicket(row.key);
+    else if (press === 'search') await api.searchAppErrorKey(row.key);
+    else await api.fileAppErrorBug(row.environment, row.fingerprint, press === 'file-anyway');
+    onPressed();
+  };
+  return (
+    <AsyncButton usage={PRESS_USAGE[press]} tone={press === 'file' ? 'primary' : undefined} size="small" onClick={act}>
+      {PRESS_LABEL[press]}
+    </AsyncButton>
+  );
+}
+
+const PRESS_USAGE = {
+  file: 'app-error.create',
+  investigate: 'app-error.send',
+  reopen: 'app-error.undo',
+  'file-new': 'app-error.create',
+  'file-anyway': 'app-error.create',
+  search: 'app-error.refresh',
+} as const satisfies Record<TrackerPress, string>;
 
 function short(sha: string): string {
   return sha

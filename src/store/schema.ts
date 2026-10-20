@@ -59,6 +59,7 @@ import { PR_DESCRIPTIONS_SCHEMA } from './schema/prDescriptions.js';
 import { BOT_PR_RISKS_SCHEMA } from './schema/botPrRisks.js';
 import { INVESTIGATIONS_SCHEMA } from './schema/investigations.js';
 import { APP_ERRORS_SCHEMA } from './schema/appErrors.js';
+import { APP_ERROR_TICKETS_SCHEMA } from './schema/appErrorTickets.js';
 
 export const SCHEMA =
   TASKS_SCHEMA +
@@ -119,4 +120,5 @@ export const SCHEMA =
   PR_DESCRIPTIONS_SCHEMA +
   BOT_PR_RISKS_SCHEMA +
   INVESTIGATIONS_SCHEMA +
-  APP_ERRORS_SCHEMA;
+  APP_ERRORS_SCHEMA +
+  APP_ERROR_TICKETS_SCHEMA;

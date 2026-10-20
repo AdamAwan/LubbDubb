@@ -49,6 +49,7 @@ import type {
   AppErrorRead,
   AppErrorReadStatus,
   AppErrorState,
+  AppErrorTicketSearch,
   AppErrorTracker,
   DeployedHead,
   AgentFile,
@@ -967,6 +968,20 @@ export interface AppErrorsPayload {
   project: string;
   environments: AppErrorEnvironmentView[];
   bands: AppErrorBandView[];
+}
+
+/** What a press on an Errors row answered: the ticket that now answers for the key, and whether it was already there. */
+export interface AppErrorPressPayload {
+  ok: true;
+  ticketRef: string;
+  reused: boolean;
+  /** For Investigate: the label writes that failed, each a sentence. Null for any other press. */
+  investigation: { failed: string[] } | null;
+}
+
+export interface AppErrorSearchPayload {
+  ok: true;
+  search: AppErrorTicketSearch;
 }
 
 export interface ApiErrorsPayload {

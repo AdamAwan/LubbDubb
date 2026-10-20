@@ -164,6 +164,8 @@ function githubApi(script: GhScript): GitHubApi {
     getReleaseBody: unused,
     updatePullBranch: unused,
     closePull: unused,
+    reopenIssue: unused,
+    searchIssues: unused,
     deleteBranch: unused,
   };
 }

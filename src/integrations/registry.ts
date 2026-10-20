@@ -88,6 +88,7 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         harnessTags: [watchLabelFor(ctx.config.labelPrefix)],
         completedState: ctx.config.issueCompletedState,
         notPlannedState: ctx.config.issueNotPlannedState,
+        reopenState: ctx.config.issuePickupStates?.[0],
       });
     },
   },
