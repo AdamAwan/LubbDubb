@@ -6,12 +6,14 @@ import { createElement, type ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { AppErrorEnvironmentView, AppErrorGroupView, AppErrorsPayload } from '../web/src/types.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
-import { NOWHERE, placeQuery, readPlace } from '../web/src/cockpit/place.js';
+import { NOWHERE, placeQuery, readPlace, type ErrorsShow } from '../web/src/cockpit/place.js';
 import {
   bandRows,
   countsOnGoal,
+  filteredRows,
   goalErrorLines,
   shownRows,
+  sortedRows,
   stateCounts,
   trackerPresses,
   type ErrorLink as AppErrorLink,
@@ -46,6 +48,7 @@ function group(environment: string, over: Partial<AppErrorGroupView> = {}): AppE
     state: 'new',
     count: 5,
     ignored: false,
+    spike: null,
     link: null,
     tracker: null,
     ...over,
@@ -161,12 +164,23 @@ function html(element: ReactElement): string {
   );
 }
 
-function page(over: { band?: string | null; steady?: boolean; data?: AppErrorsPayload } = {}): string {
+function page(
+  over: {
+    band?: string | null;
+    steady?: boolean;
+    data?: AppErrorsPayload;
+    show?: ErrorsShow;
+    text?: string | null;
+  } = {},
+): string {
   return html(
     createElement(AppErrorsView, {
       payload: over.data ?? payload(),
       band: over.band ?? null,
       steady: over.steady ?? false,
+      show: over.show ?? 'all',
+      text: over.text ?? null,
+      sort: 'state',
       now: NOW,
       actions: noActions,
     }),
@@ -178,6 +192,8 @@ test('the selected band and the steady toggle are places, and round-trip through
     { ...NOWHERE, tab: 'errors' as const },
     { ...NOWHERE, tab: 'errors' as const, errorsBand: 'prod' },
     { ...NOWHERE, tab: 'errors' as const, errorsBand: 'prod', errorsSteady: true },
+    { ...NOWHERE, tab: 'errors' as const, errorsSort: 'count' as const, errorsShow: 'goalless' as const },
+    { ...NOWHERE, tab: 'errors' as const, errorsText: 'OrderService' },
   ])
     assert.deepEqual(readPlace(placeQuery(place)), place, placeQuery(place));
   assert.equal(
@@ -212,7 +228,7 @@ test('the page draws the moved groups and folds steady and gone away until asked
   assert.match(folded, /NullReferenceException in OrderService\.Submit/);
   assert.match(folded, /err:shop:aaaa1111/);
   assert.match(folded, /POST \/orders/);
-  assert.match(folded, /Open in App Insights/);
+  assert.match(folded, /Open in telemetry/);
   assert.match(folded, /https:\/\/portal\.example\/problem\/1/);
   assert.match(folded, /frame match/);
   assert.match(folded, /#42/);
@@ -390,4 +406,54 @@ test('a row opens onto its message and stack, or its frames when no stack was re
   assert.match(body('failed'), /could not be read/);
 
   assert.match(page(), /Error and stack/, 'a row with frames offers the fold');
+});
+
+test('rows sort by count, last or first seen, and keep the route’s moved-first order by default', () => {
+  const rows = shownRows(bandRows(payload(), payload().bands[0]!), true);
+  assert.deepEqual(
+    sortedRows(rows, 'state').map((r) => r.state),
+    ['new', 'steady'],
+  );
+  assert.deepEqual(
+    sortedRows(rows, 'count').map((r) => r.count),
+    [30, 12],
+  );
+});
+
+test('rows narrow by what is missing on them and by text, without case', () => {
+  const rows = shownRows(bandRows(payload(), payload().bands[0]!), true);
+  assert.deepEqual(
+    filteredRows(rows, 'goalless', null).map((r) => r.key),
+    ['err:shop:bbbb2222'],
+  );
+  assert.equal(filteredRows(rows, 'ticketless', null).length, 2, 'no row has an open ticket');
+  assert.deepEqual(
+    filteredRows(rows, 'all', 'PAYMENTS').map((r) => r.key),
+    ['err:shop:bbbb2222'],
+  );
+  assert.deepEqual(
+    filteredRows(rows, 'all', 'aaaa1111').map((r) => r.key),
+    ['err:shop:aaaa1111'],
+  );
+  assert.match(page({ text: 'nothing like this' }), /Nothing here matches the filter/);
+});
+
+test('a spiking row says its rate against the baseline it was read off', () => {
+  const data = payload();
+  const spiking = data.environments[1]!.groups[0]!;
+  spiking.spike = { perDay: 24, baselinePerDay: 2.25 };
+  data.bands[0]!.groups[0]!.state = 'spiking';
+  assert.match(page({ data }), /24\/day vs 2\.3 usual on liveUs/, 'a band of several says whose rate it is');
+  spiking.state = 'new';
+  data.bands[0]!.groups[0]!.state = 'new';
+  assert.doesNotMatch(page({ data }), /usual/, 'a rate is drawn only under a spiking chip');
+});
+
+test('a whitespace search in the address is no search', () => {
+  assert.equal(readPlace('?tab=errors&etext=%20%20').errorsText, null);
+});
+
+test('a link’s reasoning rides on hover, not in the cell', () => {
+  const out = page();
+  assert.match(out, /title="OrderService\.cs changed only by #42[^"]*\(candidates: 2\)"/);
 });

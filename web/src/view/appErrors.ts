@@ -1,4 +1,5 @@
 import type { AppErrorBandView, AppErrorEnvironmentView, AppErrorGroupView, AppErrorsPayload } from '../types.js';
+import type { ErrorsShow, ErrorsSort } from '../cockpit/place.js';
 
 // → docs/spec/39-app-errors.md#in-the-cockpit
 
@@ -32,6 +33,7 @@ export interface ErrorRow {
   hasDetail: boolean;
   url: string | null;
   daily: number[];
+  spike: AppErrorGroupView['spike'];
   link: ErrorLink | null;
   tracker: ErrorTracker | null;
 }
@@ -83,10 +85,12 @@ function bandRow(bandGroup: AppErrorBandView['groups'][number], held: readonly A
   };
 }
 
-function leadDetail(lead: AppErrorGroupView | undefined): Pick<ErrorRow, 'operation' | 'frames' | 'hasDetail' | 'url'> {
-  if (lead === undefined) return { operation: null, frames: [], hasDetail: false, url: null };
-  const { operation, frames, hasDetail, url } = lead;
-  return { operation, frames, hasDetail, url };
+function leadDetail(
+  lead: AppErrorGroupView | undefined,
+): Pick<ErrorRow, 'operation' | 'frames' | 'hasDetail' | 'url' | 'spike'> {
+  if (lead === undefined) return { operation: null, frames: [], hasDetail: false, url: null, spike: null };
+  const { operation, frames, hasDetail, url, spike } = lead;
+  return { operation, frames, hasDetail, url, spike };
 }
 
 function firstOf<T>(
@@ -130,6 +134,36 @@ export function stateCounts(rows: readonly ErrorRow[]): StateCounts {
 
 export function shownRows(rows: readonly ErrorRow[], steady: boolean): ErrorRow[] {
   return steady ? [...rows] : rows.filter((r) => isMoved(r.state));
+}
+
+/** The rows the table keeps: by what is missing on them, then by the text, matched without case. */
+export function filteredRows(rows: readonly ErrorRow[], show: ErrorsShow, text: string | null): ErrorRow[] {
+  const needle = text?.trim().toLowerCase() ?? '';
+  return rows.filter(
+    (r) =>
+      (show !== 'ticketless' || r.tracker?.status !== 'open') &&
+      (show !== 'goalless' || (r.link?.goalRef ?? null) === null) &&
+      (needle === '' || haystack(r).includes(needle)),
+  );
+}
+
+function haystack(row: ErrorRow): string {
+  return [row.title, row.key, row.fingerprint, row.operation ?? '', ...row.frames].join('\n').toLowerCase();
+}
+
+/** `state` keeps the route's moved-first order; the rest put the most first and the latest first. */
+export function sortedRows(rows: readonly ErrorRow[], sort: ErrorsSort): ErrorRow[] {
+  const by: Record<Exclude<ErrorsSort, 'state'>, (a: ErrorRow, b: ErrorRow) => number> = {
+    count: (a, b) => b.count - a.count,
+    last: (a, b) => b.lastSeen.localeCompare(a.lastSeen),
+    first: (a, b) => b.firstSeen.localeCompare(a.firstSeen),
+  };
+  return sort === 'state' ? [...rows] : [...rows].sort(by[sort]);
+}
+
+/** A rate as the spike line says it: whole numbers from ten, one decimal under. */
+export function perDay(rate: number): string {
+  return rate >= 10 ? String(Math.round(rate)) : String(Math.round(rate * 10) / 10);
 }
 
 /** How each linking method is said in the cockpit. */

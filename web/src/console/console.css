@@ -5699,6 +5699,51 @@ button.cn-grow {
 .ae-strip > :last-child {
   margin-left: auto;
 }
+.ae-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.ae-shows,
+.ae-search {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.ae-search {
+  margin-left: auto;
+  flex: 0 1 34ch;
+  min-width: 0;
+}
+.ae-search input {
+  flex: 1;
+  min-width: 0;
+}
+.ae-sort {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.ae-sort.on {
+  color: var(--cn-fg);
+}
+.ae-sort.on::after {
+  content: ' ▾';
+}
+.ae-rate {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--cn-amber);
+  font-variant-numeric: tabular-nums;
+}
 .ae-scroll {
   overflow-x: auto;
   border: 1px solid var(--cn-line);
@@ -5706,7 +5751,7 @@ button.cn-grow {
 }
 .ae-tbl {
   width: 100%;
-  min-width: 980px;
+  min-width: 860px;
   border-collapse: collapse;
   font-size: 12px;
 }

@@ -4,13 +4,14 @@ import type { AppErrorDetail, AppErrorEnvironmentView, AppErrorGroupView, AppErr
 
 const DAY_MS = 86_400_000;
 
-type Group = Omit<AppErrorGroupView, 'environment' | 'daily' | 'returnedAt' | 'link' | 'tracker'> & {
+type Group = Omit<AppErrorGroupView, 'environment' | 'daily' | 'returnedAt' | 'spike' | 'link' | 'tracker'> & {
   series: number[];
+  spike?: AppErrorGroupView['spike'];
   link?: AppErrorGroupView['link'];
 };
 
 function group(environment: string, now: number, g: Group): AppErrorGroupView {
-  const { series, link, ...rest } = g;
+  const { series, spike, link, ...rest } = g;
   const daily = series.map((count, i) => ({
     day: new Date(now - (series.length - 1 - i) * DAY_MS).toISOString().slice(0, 10),
     count,
@@ -20,6 +21,7 @@ function group(environment: string, now: number, g: Group): AppErrorGroupView {
     environment,
     daily,
     returnedAt: null,
+    spike: spike ?? null,
     link: link ?? null,
     tracker: null,
   };
@@ -115,6 +117,7 @@ function stagingGroups(now: number, ago: (hours: number) => string): AppErrorGro
       count: 96,
       ignored: false,
       series: [2, 3, 2, 1, 2, 3, 2, 2, 3, 2, 2, 18, 26, 28],
+      spike: { perDay: 24, baselinePerDay: 2.3 },
       link: {
         goalRef: null,
         how: [],

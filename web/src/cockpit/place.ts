@@ -66,6 +66,12 @@ export interface Place {
   errorsBand: string | null;
   /** Whether the Errors tab draws the steady and gone groups it folds away by default. */
   errorsSteady: boolean;
+  /** Which column the Errors table is ordered by; `state` is the route's own moved-first order. */
+  errorsSort: ErrorsSort;
+  /** Which rows the Errors table keeps by what is missing on them. */
+  errorsShow: ErrorsShow;
+  /** The text the Errors table is narrowed to, or null for none. */
+  errorsText: string | null;
   /** Whether the feature board is read as a board or worked one Feature at a time. */
   featureMode: FeatureMode;
 }
@@ -107,6 +113,12 @@ export type FeatureDensity = 'auto' | 'brief' | 'rows';
 /** Not exported, on `FEATURE_PRS`' terms: nothing iterates it — the control names the
  *  two an operator can ask for, and `auto` is the absent third. */
 const FEATURE_DENSITIES: readonly FeatureDensity[] = ['auto', 'brief', 'rows'];
+
+export type ErrorsSort = 'state' | 'count' | 'last' | 'first';
+const ERRORS_SORTS: readonly ErrorsSort[] = ['state', 'count', 'last', 'first'];
+/** `ticketless` is no open ticket under the key; `goalless` is a link that names no goal, or none. */
+export type ErrorsShow = 'all' | 'ticketless' | 'goalless';
+export const ERRORS_SHOWS: readonly ErrorsShow[] = ['all', 'ticketless', 'goalless'];
 
 export type FeatureSort = 'wants-you' | 'moved' | 'done' | 'spend';
 export const FEATURE_SORTS: readonly FeatureSort[] = ['wants-you', 'moved', 'done', 'spend'];
@@ -211,6 +223,9 @@ export const NOWHERE: Place = {
   featureMode: 'board',
   errorsBand: null,
   errorsSteady: false,
+  errorsSort: 'state',
+  errorsShow: 'all',
+  errorsText: null,
 };
 
 const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mcp', 'notifications', 'theme'];
@@ -361,8 +376,16 @@ function readFeatureBoard(
   };
 }
 
-function readErrors(query: URLSearchParams): Pick<Place, 'errorsBand' | 'errorsSteady'> {
-  return { errorsBand: param(query, 'band'), errorsSteady: query.has('steady') };
+function readErrors(
+  query: URLSearchParams,
+): Pick<Place, 'errorsBand' | 'errorsSteady' | 'errorsSort' | 'errorsShow' | 'errorsText'> {
+  return {
+    errorsBand: param(query, 'band'),
+    errorsSteady: query.has('steady'),
+    errorsSort: ERRORS_SORTS.find((s) => s === param(query, 'esort')) ?? 'state',
+    errorsShow: ERRORS_SHOWS.find((s) => s === param(query, 'eshow')) ?? 'all',
+    errorsText: param(query, 'etext')?.trim() || null,
+  };
 }
 
 export function readPlace(search: string): Place {
@@ -528,6 +551,9 @@ function writeFeatureBoard(query: URLSearchParams, place: Place): void {
 function writeErrors(query: URLSearchParams, place: Place): void {
   if (place.errorsBand !== null) query.set('band', place.errorsBand);
   if (place.errorsSteady) query.set('steady', '1');
+  if (place.errorsSort !== 'state') query.set('esort', place.errorsSort);
+  if (place.errorsShow !== 'all') query.set('eshow', place.errorsShow);
+  if (place.errorsText !== null) query.set('etext', place.errorsText);
 }
 
 export function placeQuery(place: Place): string {

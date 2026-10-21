@@ -18,7 +18,7 @@ import type {
 } from '../wire.js';
 import { retainedDays } from './groups.js';
 import { appErrorKey } from './key.js';
-import { appErrorCount, appErrorState } from './states.js';
+import { appErrorCount, appErrorReading } from './states.js';
 
 // → docs/spec/39-app-errors.md#on-the-wire
 
@@ -52,18 +52,20 @@ export function appErrorsView(input: AppErrorsViewInput): AppErrorsPayload {
         const key = appErrorKey(input.project, g.fingerprint);
         const ignored = ignore.has(g.fingerprint) || ignore.has(key);
         const group = { ...g, daily: dense(g.daily, days) };
+        const { state, spike } = appErrorReading({
+          group,
+          deployedAt: head?.changedAt ?? null,
+          now: input.now,
+          minCount: input.minCount,
+          ignored,
+        });
         return {
           ...group,
           key,
-          state: appErrorState({
-            group,
-            deployedAt: head?.changedAt ?? null,
-            now: input.now,
-            minCount: input.minCount,
-            ignored,
-          }),
+          state,
           count: appErrorCount(group),
           ignored,
+          spike,
           link: null,
           tracker: null,
         };

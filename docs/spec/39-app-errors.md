@@ -585,7 +585,9 @@ counts per group is too much to send every couple of seconds to every open cockp
 - each group an `AppErrorGroupView`: the stored `AppErrorGroup` (title, operation, version, frames,
   `hasDetail`, `url`, first and last seen, `returnedAt`) with `daily` made dense over the last fourteen UTC days,
   plus `key`, `state`, `count` (the total of that dense series, so the two always agree), `ignored`,
-  `link` and `tracker`, both below. The state is computed off the same dense series.
+  `spike`, and `link` and `tracker`, both below. `spike` (`AppErrorSpike`, from `appErrorReading`) is the
+  two daily rates a `spiking` state was read off — `perDay` since the deploy's day and the floored
+  `baselinePerDay` before it — and null in every other state. The state is computed off the same dense series.
   Sorted moved-first — `new`, `returned`, `spiking`, `steady`, `gone` — then most recently seen;
 - `bands` — the [roll-up](#groups).
 
@@ -613,7 +615,7 @@ was `reused`, and for Investigate the label writes that failed.
 
 ## In the cockpit
 
-The **Errors** tab (`tab=errors`, `web/src/components/AppErrorsPage.tsx`), in the nav beside Insights
+The **Errors** tab (`tab=errors`, `web/src/components/AppErrorsPage.tsx`, with its filters in `AppErrorsFilters.tsx` and tracker column in `AppErrorsTracker.tsx`), in the nav beside Insights
 only while `CockpitConfig.appErrors` is true — some environment declares an `errors` block. It reads
 `GET /api/app-errors` on open, every minute after and straight after a tracker press lands, through
 `useAppErrors` — `usePolled` (`web/src/hooks.ts`), the same hook the Bot PRs tab polls through. Every
@@ -635,11 +637,23 @@ liveUs`), and an environment in no group is a band of one under its own name. Ea
   [two-valued reading](#the-output-contract) exists to refuse.
 - **Counts per state**: new, spiking, returned, then _N steady, N gone (hidden)_. `steady` and `gone`
   are folded away by default — the panel is "watch for what moved", not an error list — and **Show
-  steady and gone** is `Place.errorsSteady` (`steady=1`), never a `useState`.
+  steady and gone** is `Place.errorsSteady` (`steady=1`), never a `useState`. The counts are the
+  band's, before any filter below.
+- **Filters under the counts** (`filteredRows`, `web/src/view/appErrors.ts`): _All_, _No open ticket_
+  (the tracker is anything but `open`, null included) and _No goal linked_ (no link, or one whose
+  `goalRef` is null) — `Place.errorsShow` (`eshow=`) — and a text search over the title, key,
+  fingerprint, operation and frames, without case — `Place.errorsText` (`etext=`). The search box
+  holds a draft and commits it on Enter, so typing does not push a history entry per key. A table a
+  filter empties says _Nothing here matches the filter_, never _Nothing has moved here_.
+- **Sortable headers** — State, First seen, Last seen, Count — are `Place.errorsSort` (`esort=`;
+  `sortedRows`). `state` is the route's own moved-first order and the default; the others put the
+  most, the latest or the newest first.
 - **One row per band group**, horizontally scrollable at width: the state chip in its tone (`new` red,
-  `spiking` amber, `returned` violet, `steady` grey, `gone` green), the title, the key in mono, the
-  operation, the members it was seen on when the band has several, first and last seen, the top frame,
-  **Open in App Insights** off `url`, an **Error and stack** fold under the title (`Collapsible`,
+  `spiking` amber, `returned` violet, `steady` grey, `gone` green) — a spiking one with _N/day vs N
+  usual_ under it, off the leading member's `spike` and naming that member when the band has several,
+  since the band's count is summed and its rate is not — the title, the key in mono, the operation, the top frame, the
+  members it was seen on when the band has several, first and last seen, **Open in telemetry** off
+  `url` (the harness never knows which telemetry it is — [what it is not](#what-it-is-not)), an **Error and stack** fold under the title (`Collapsible`,
   `web/src/components/AppErrorDetail.tsx`) that fetches the group's detail on first open — the
   `message`, then the `stack` in a scrolling mono block, or the group's frames under _No stack
   reported_ when the script printed none; absent when there is no detail and no frames, and a
@@ -648,11 +662,12 @@ liveUs`), and an environment in no group is a band of one under its own name. Ea
   the state's hue, the count, the link and the tracker. The roll-up carries state, count and members;
   everything else is taken from the member whose state the band reports (`bandRows`,
   `web/src/view/appErrors.ts`), with the members' days summed.
-- **The link column** draws `link.goalRef` through `<Ref>`, each `how` as a pill (`frame match`, `test
-arrival`, `route hint`), the `why` and _candidates: N_. A link with **no goal** draws a grey _no link_
-  pill, the `tied` goals through `<Ref>` when the frames narrowed to several, the `why`, and
-  _candidates: unknown_ when the window could not be decided — never `0`, which would say the deploy
-  shipped nothing. **The tracker column** draws the status, the ticket through `<Ref>` and the note.
+- **The link column** draws `link.goalRef` through `<Ref>` and each `how` as a pill (`frame match`,
+  `test arrival`, `route hint`); the `why` and _candidates: N_ ride on the cell's hover, so the column
+  stays narrow. A link with **no goal** draws a grey _no link_ pill, the `tied` goals through `<Ref>`
+  when the frames narrowed to several, and its `why` and candidates **in the cell** — the only account
+  of why there is no goal, so never on hover alone — with _candidates: unknown_ when the window could
+  not be decided, never `0`, which would say the deploy shipped nothing. **The tracker column** draws the status, the ticket through `<Ref>` and the note.
   Each is a dash while its field is null — a blank there would read as a stage that ran and found
   nothing.
 - **The tracker column carries the presses**, by what the search found (`trackerPresses`,
@@ -673,7 +688,8 @@ arrival`, `route hint`), the `why` and _candidates: N_. A link with **no goal** 
 **On the goal**, the header's identity row carries _N new errors on test since this arrived_
 (`web/src/console/goalErrors.tsx`) when any environment's group in `new`, `returned` or `spiking` links
 to that goal, with how each link was made on hover; pressing it opens the Errors tab on that
-environment's band. It counts per environment rather than per band, so a fault seen in two regions is
+environment's band, with the show filter and search cleared so a filter left from an earlier visit
+cannot hide the errors it counted. It counts per environment rather than per band, so a fault seen in two regions is
 two there and one row on the tab. **A link made only by hint is not counted** (`countsOnGoal`): an
 operation that looks like the goal's area is a reason to look, not a claim the work caused the error,
 so a link whose every `how` is `route-hint` is left out (`countsOnGoal`: some `how` that is not

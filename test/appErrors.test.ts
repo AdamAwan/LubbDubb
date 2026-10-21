@@ -13,7 +13,7 @@ import {
 } from '../src/appErrors/groups.js';
 import { DAY_MS } from '../src/primitives.js';
 import { Store } from '../src/store/store.js';
-import { appErrorState, BASELINE_DAYS, type AppErrorStateInput } from '../src/appErrors/states.js';
+import { appErrorReading, appErrorState, BASELINE_DAYS, type AppErrorStateInput } from '../src/appErrors/states.js';
 import { loadConfig } from '../src/config/config.js';
 import type { AppErrorDay } from '../src/types.js';
 
@@ -338,4 +338,30 @@ test('the payload carries whether a group has a message or stack, never the text
   assert.ok(listed.every((g) => !('stack' in g) && !('message' in g)));
   assert.deepEqual(store.appErrors.getDetail('live', 'fp'), { message: 'boom', stack: 'at x()' });
   assert.equal(store.appErrors.getDetail('live', 'nope'), null);
+});
+
+test('a spike carries the two rates it was read off: since the deploy day, and the floored baseline', () => {
+  const baseline: Record<string, number> = {};
+  for (let i = 1; i <= BASELINE_DAYS; i++)
+    baseline[new Date(Date.parse('2026-10-19') - i * DAY_MS).toISOString().slice(0, 10)] = 2;
+  const input: AppErrorStateInput = {
+    deployedAt: '2026-10-19T00:00:00.000Z',
+    now: NOW,
+    minCount: 2,
+    ignored: false,
+    group: {
+      firstSeen: '2026-10-10T00:00:00.000Z',
+      lastSeen: '2026-10-20T11:00:00.000Z',
+      returnedAt: null,
+      daily: days({ ...baseline, '2026-10-19': 30, '2026-10-20': 30 }),
+    },
+  };
+  assert.deepEqual(appErrorReading(input), { state: 'spiking', spike: { perDay: 40, baselinePerDay: 2 } });
+  assert.deepEqual(
+    appErrorReading({ ...input, ignored: true }),
+    { state: 'steady', spike: null },
+    'only a spike says its rates',
+  );
+  const quiet = { ...input, group: { ...input.group, daily: days({ '2026-10-19': 30 }) } };
+  assert.equal(appErrorReading(quiet).spike?.baselinePerDay, 1, 'a baseline of nothing is floored at one a day');
 });

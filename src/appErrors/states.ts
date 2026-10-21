@@ -1,4 +1,4 @@
-import type { AppErrorGroup, AppErrorState } from '../types.js';
+import type { AppErrorGroup, AppErrorSpike, AppErrorState } from '../types.js';
 import { DAY_MS, utcDay } from '../primitives.js';
 import { QUIET_MS, dayStart } from './groups.js';
 
@@ -29,6 +29,21 @@ export function appErrorCount(group: Pick<AppErrorGroup, 'daily'>): number {
 }
 
 export function appErrorState(input: AppErrorStateInput): AppErrorState {
+  return appErrorReading(input).state;
+}
+
+/** The state, and the two rates a `spiking` state was read off — null in every other state. */
+export function appErrorReading(input: AppErrorStateInput): { state: AppErrorState; spike: AppErrorSpike | null } {
+  const rates = spikeRates(input);
+  const state = stateOf(input, rates);
+  return {
+    state,
+    spike:
+      state === 'spiking' && rates !== null ? { perDay: rates.perDay, baselinePerDay: rates.baselinePerDay } : null,
+  };
+}
+
+function stateOf(input: AppErrorStateInput, rates: SpikeRates | null): AppErrorState {
   const { group, deployedAt, now } = input;
   if (Date.parse(group.lastSeen) < now - QUIET_MS) return 'gone';
   const muted = input.ignored || appErrorCount(group) < input.minCount;
@@ -36,16 +51,19 @@ export function appErrorState(input: AppErrorStateInput): AppErrorState {
   const firstSeen = Date.parse(group.firstSeen);
   if (deployedAt !== null ? firstSeen >= Date.parse(deployedAt) : firstSeen >= now - NEW_FALLBACK_MS) return 'new';
   if (group.returnedAt !== null && Date.parse(group.returnedAt) >= now - QUIET_MS) return 'returned';
-  if (spiking(input)) return 'spiking';
+  if (rates !== null && rates.current >= input.minCount && rates.perDay >= SPIKE_RATIO * rates.baselinePerDay)
+    return 'spiking';
   return 'steady';
 }
 
-function spiking({ group, deployedAt, now, minCount }: AppErrorStateInput): boolean {
+type SpikeRates = AppErrorSpike & { current: number };
+
+function spikeRates({ group, deployedAt, now }: AppErrorStateInput): SpikeRates | null {
   const windowDay = utcDay(deployedAt !== null ? Date.parse(deployedAt) : now - DAY_MS);
   const windowStart = dayStart(windowDay);
   const baselineFrom = Math.max(windowStart - BASELINE_DAYS * DAY_MS, dayStart(utcDay(Date.parse(group.firstSeen))));
   const baselineDays = Math.round((windowStart - baselineFrom) / DAY_MS);
-  if (baselineDays <= 0) return false;
+  if (baselineDays <= 0) return null;
   let current = 0;
   let before = 0;
   for (const { day, count } of group.daily) {
@@ -53,8 +71,9 @@ function spiking({ group, deployedAt, now, minCount }: AppErrorStateInput): bool
     if (at >= windowStart) current += count;
     else if (at >= baselineFrom) before += count;
   }
-  if (current < minCount) return false;
-  const currentRate = current / Math.max(1, (now - windowStart) / DAY_MS);
-  const baselineRate = Math.max(before / baselineDays, SPIKE_FLOOR_PER_DAY);
-  return currentRate >= SPIKE_RATIO * baselineRate;
+  return {
+    current,
+    perDay: current / Math.max(1, (now - windowStart) / DAY_MS),
+    baselinePerDay: Math.max(before / baselineDays, SPIKE_FLOOR_PER_DAY),
+  };
 }

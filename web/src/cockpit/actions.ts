@@ -191,8 +191,10 @@ export interface CockpitActions {
   placePet(id: string, placed: boolean): Promise<void>;
   blendPet(id: string): Promise<void>;
   showBlendedPets(show: boolean): void;
-  /** The Errors tab, on a band and with steady and gone drawn or folded — a place, never a useState. */
-  openErrors(where: Partial<Pick<Place, 'errorsBand' | 'errorsSteady'>>): void;
+  /** The Errors tab, on a band, with steady and gone drawn or folded, ordered and narrowed — a place, never a useState. */
+  openErrors(
+    where: Partial<Pick<Place, 'errorsBand' | 'errorsSteady' | 'errorsSort' | 'errorsShow' | 'errorsText'>>,
+  ): void;
 
   setObstacleQuery(next: Partial<Pick<Place, 'obstacle' | 'obstacleEnded'>>): void;
 

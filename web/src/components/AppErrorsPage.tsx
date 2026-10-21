@@ -1,27 +1,29 @@
 import type { JSX } from 'react';
 import type { AppErrorBandView, AppErrorEnvironmentView, AppErrorsPayload } from '../types.js';
 import type { CockpitActions } from '../cockpit/actions.js';
+import type { ErrorsShow, ErrorsSort } from '../cockpit/place.js';
+import type { CockpitView } from '../view/viewModel.js';
 import {
   bandLabel,
   bandMembers,
   bandRows,
+  filteredRows,
   HOW_SAID,
   isMoved,
+  perDay,
   pickBand,
   shownRows,
+  sortedRows,
   stateCounts,
   type ErrorLink,
   type ErrorReading,
   type ErrorRow,
   type ErrorState,
-  type ErrorTracker,
   type StateCounts,
-  type TrackerPress,
-  trackerPresses,
 } from '../view/appErrors.js';
-import { api } from '../api.js';
 import { AppErrorDetailFold } from './AppErrorDetail.js';
-import { AsyncButton } from './AsyncButton.js';
+import { AppErrorFilters, SortHead } from './AppErrorsFilters.js';
+import { TrackerCell } from './AppErrorsTracker.js';
 import { BareButton, Button } from './button.js';
 import { Ref } from './refs.js';
 import { Tag, type TagTone } from './tag.js';
@@ -38,40 +40,28 @@ const STATE_TONE: Record<ErrorState, TagTone> = {
   gone: 'green',
 };
 
-const TRACKER_TONE: Record<ErrorTracker['status'], TagTone> = {
-  none: 'grey',
-  open: 'amber',
-  closed: 'green',
-  unknown: 'amber',
-};
-
-const TRACKER_SAID: Record<ErrorTracker['status'], string> = {
-  none: 'no ticket',
-  open: 'open',
-  closed: 'closed',
-  unknown: "search failed — not 'no bug'",
-};
-
 /** How many of the fortnight's days at the end are drawn in the state's own hue. */
 const RECENT_DAYS = 3;
 
-export function AppErrorsPage({
-  band,
-  steady,
-  now,
-  actions,
-}: {
-  band: string | null;
-  steady: boolean;
-  now: number;
-  actions: CockpitActions;
-}): JSX.Element {
+export function AppErrorsPage({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const { reading, failed, reload } = useAppErrors();
   if (failed && reading === null) {
     return <p className="empty">The app errors could not be read. The rest of the cockpit is unaffected.</p>;
   }
   if (reading === null) return <p className="empty">Reading app errors…</p>;
-  return <AppErrorsView payload={reading} band={band} steady={steady} now={now} actions={actions} onPressed={reload} />;
+  return (
+    <AppErrorsView
+      payload={reading}
+      band={view.errorsBand}
+      steady={view.errorsSteady}
+      sort={view.errorsSort}
+      show={view.errorsShow}
+      text={view.errorsText}
+      now={view.now}
+      actions={actions}
+      onPressed={reload}
+    />
+  );
 }
 
 /** @public the seam the page is rendered through in `test/appErrorsCockpit.test.ts` */
@@ -79,6 +69,9 @@ export function AppErrorsView({
   payload,
   band,
   steady,
+  sort,
+  show,
+  text,
   now,
   actions,
   onPressed = () => {},
@@ -86,6 +79,9 @@ export function AppErrorsView({
   payload: AppErrorsPayload;
   band: string | null;
   steady: boolean;
+  sort: ErrorsSort;
+  show: ErrorsShow;
+  text: string | null;
   now: number;
   actions: CockpitActions;
   /** Called once a tracker press lands, so the row redraws from what the route recorded. */
@@ -104,16 +100,21 @@ export function AppErrorsView({
     );
   }
   const rows = bandRows(payload, picked);
+  const shown = shownRows(rows, steady);
   return (
     <div className="ae">
       <Head />
       <BandTabs payload={payload} picked={picked} actions={actions} />
       <Readings members={bandMembers(payload, picked)} project={payload.project} now={now} />
       <Counts counts={stateCounts(rows)} steady={steady} actions={actions} />
+      <AppErrorFilters key={text ?? ''} show={show} text={text} actions={actions} />
       <ErrorTable
-        rows={shownRows(rows, steady)}
+        rows={sortedRows(filteredRows(shown, show, text), sort)}
+        narrowed={shown.length > 0 && (show !== 'all' || text !== null)}
+        sort={sort}
         multi={picked.environments.length > 1}
         now={now}
+        actions={actions}
         onPressed={onPressed}
       />
     </div>
@@ -312,28 +313,44 @@ function Counts({
 
 function ErrorTable({
   rows,
+  narrowed,
+  sort,
   multi,
   now,
+  actions,
   onPressed,
 }: {
   rows: ErrorRow[];
+  narrowed: boolean;
+  sort: ErrorsSort;
   multi: boolean;
   now: number;
+  actions: CockpitActions;
   onPressed: () => void;
 }): JSX.Element {
-  if (rows.length === 0) return <p className="empty">Nothing has moved here.</p>;
+  if (rows.length === 0) {
+    return <p className="empty">{narrowed ? 'Nothing here matches the filter.' : 'Nothing has moved here.'}</p>;
+  }
+  const head = { sort, actions };
   return (
     <div className="ae-scroll">
       <table className="ae-tbl">
         <thead>
           <tr>
-            <th>State</th>
+            <SortHead by="state" {...head}>
+              State
+            </SortHead>
             <th>Error</th>
-            <th>First seen</th>
-            <th>Last seen</th>
-            <th>Top frame</th>
+            <SortHead by="first" {...head}>
+              First seen
+            </SortHead>
+            <SortHead by="last" {...head}>
+              Last seen
+            </SortHead>
             <th>14 days</th>
-            <th className="ae-n">Count</th>
+            <SortHead by="count" className="ae-n" {...head}>
+              Count
+            </SortHead>
             <th>Linked to</th>
             <th>Tracker</th>
           </tr>
@@ -365,26 +382,26 @@ function ErrorTableRow({
         <Tag tone={STATE_TONE[row.state]} fill={isMoved(row.state)} lower>
           {row.state}
         </Tag>
+        {row.state === 'spiking' && row.spike !== null && (
+          <span className="ae-rate">
+            {perDay(row.spike.perDay)}/day vs {perDay(row.spike.baselinePerDay)} usual
+            {multi && ` on ${row.environment}`}
+          </span>
+        )}
       </td>
       <td className="ae-title">
         <b>{row.title}</b>
         <span className="ae-meta">
           <code>{row.key}</code>
           {row.operation !== null && <span>{row.operation}</span>}
+          {row.frames[0] !== undefined && <code className="ae-frame">{row.frames[0]}</code>}
           {multi && <span>on {row.environments.join(', ')}</span>}
-          {row.url !== null && <ExtLink href={row.url}>Open in App Insights</ExtLink>}
+          {row.url !== null && <ExtLink href={row.url}>Open in telemetry</ExtLink>}
         </span>
         <AppErrorDetailFold row={row} />
       </td>
       <td className="ae-when">{relTime(row.firstSeen, now)}</td>
       <td className="ae-when">{relTime(row.lastSeen, now)}</td>
-      <td>
-        {row.frames.length === 0 ? (
-          <span className="ae-none">—</span>
-        ) : (
-          <code className="ae-frame">{row.frames[0]}</code>
-        )}
-      </td>
       <td>
         <Spark daily={row.daily} state={row.state} />
       </td>
@@ -417,8 +434,9 @@ function Spark({ daily, state }: { daily: number[]; state: ErrorState }): JSX.El
 function LinkCell({ link }: { link: ErrorLink | null }): JSX.Element {
   if (link === null) return <span className="ae-none">—</span>;
   const refs = link.goalRef === null ? link.tied : [link.goalRef];
+  const candidates = link.candidates === null ? 'unknown' : String(link.candidates);
   return (
-    <div className="ae-link">
+    <div className="ae-link" title={`${link.why} (candidates: ${candidates})`}>
       {link.goalRef === null && (
         <Tag tone="grey" lower>
           no link
@@ -436,86 +454,14 @@ function LinkCell({ link }: { link: ErrorLink | null }): JSX.Element {
           {HOW_SAID[how]}
         </Tag>
       ))}
-      <span className="ae-note">
-        {link.why} (candidates: {link.candidates === null ? 'unknown' : String(link.candidates)})
-      </span>
-    </div>
-  );
-}
-
-function TrackerCell({ row, onPressed }: { row: ErrorRow; onPressed: () => void }): JSX.Element {
-  const { tracker } = row;
-  if (tracker === null) return <span className="ae-none">—</span>;
-  const presses = trackerPresses(tracker, row.link);
-  return (
-    <div className="ae-link">
-      {tracker.status === 'open' ? (
-        <span className="ae-filed">Filed:</span>
-      ) : (
-        <Tag tone={TRACKER_TONE[tracker.status]} lower>
-          {TRACKER_SAID[tracker.status]}
-        </Tag>
-      )}
-      {tracker.ticketRef !== null && (
-        <span className="cn-refs">
-          <Ref to={tracker.ticketRef} />
-        </span>
-      )}
-      {tracker.note !== null && <span className="ae-note">{tracker.note}</span>}
-      {presses.length > 0 && (
-        <span className="ae-acts">
-          {presses.map((press) => (
-            <TrackerButton key={press} press={press} row={row} onPressed={onPressed} />
-          ))}
+      {link.goalRef === null && (
+        <span className="ae-note">
+          {link.why} (candidates: {candidates})
         </span>
       )}
     </div>
   );
 }
-
-const PRESS_LABEL: Record<TrackerPress, string> = {
-  file: 'File bug',
-  investigate: 'Investigate',
-  reopen: 'Reopen',
-  'file-new': 'File new',
-  'file-anyway': 'File bug anyway',
-  search: 'Retry search',
-};
-
-function TrackerButton({
-  press,
-  row,
-  onPressed,
-}: {
-  press: TrackerPress;
-  row: ErrorRow;
-  onPressed: () => void;
-}): JSX.Element {
-  const act = async (): Promise<void> => {
-    if (press === 'reopen') await api.reopenAppErrorTicket(row.key);
-    else if (press === 'search') await api.searchAppErrorKey(row.key);
-    else
-      await api.fileAppErrorBug(row.environment, row.fingerprint, {
-        investigate: press === 'investigate',
-        unsearched: press === 'file-anyway',
-      });
-    onPressed();
-  };
-  return (
-    <AsyncButton usage={PRESS_USAGE[press]} tone={press === 'file' ? 'primary' : undefined} size="small" onClick={act}>
-      {PRESS_LABEL[press]}
-    </AsyncButton>
-  );
-}
-
-const PRESS_USAGE = {
-  file: 'app-error.create',
-  investigate: 'app-error.send',
-  reopen: 'app-error.undo',
-  'file-new': 'app-error.create',
-  'file-anyway': 'app-error.create',
-  search: 'app-error.refresh',
-} as const satisfies Record<TrackerPress, string>;
 
 function short(sha: string): string {
   return sha

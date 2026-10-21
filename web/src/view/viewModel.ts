@@ -25,7 +25,15 @@ import type { GoalPageView, GoalTab } from './goalPage.js';
 import { buildPrPage } from './prPage.js';
 import type { PrPageView } from './prPage.js';
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsScope, InsightsView } from '../cockpit/actions.js';
-import type { FeatureDensity, FeatureMode, FeaturePrFilter, FeatureSort, OverviewShape } from '../cockpit/place.js';
+import type {
+  ErrorsShow,
+  ErrorsSort,
+  FeatureDensity,
+  FeatureMode,
+  FeaturePrFilter,
+  FeatureSort,
+  OverviewShape,
+} from '../cockpit/place.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -75,6 +83,9 @@ export interface CockpitView {
   petsBlended: boolean;
   errorsBand: string | null;
   errorsSteady: boolean;
+  errorsSort: ErrorsSort;
+  errorsShow: ErrorsShow;
+  errorsText: string | null;
   overviewShape: OverviewShape;
   featureMode: FeatureMode;
   featurePrs: FeaturePrFilter;
@@ -189,6 +200,9 @@ interface ViewInputs {
   petsBlended?: boolean;
   errorsBand?: string | null;
   errorsSteady?: boolean;
+  errorsSort?: ErrorsSort;
+  errorsShow?: ErrorsShow;
+  errorsText?: string | null;
   overviewShape?: OverviewShape;
   featureMode?: FeatureMode;
   featurePrs?: FeaturePrFilter;
@@ -325,6 +339,9 @@ function featuresView(input: ViewInputs) {
     petsBlended: input.petsBlended ?? false,
     errorsBand: input.errorsBand ?? null,
     errorsSteady: input.errorsSteady ?? false,
+    errorsSort: input.errorsSort ?? 'state',
+    errorsShow: input.errorsShow ?? 'all',
+    errorsText: input.errorsText ?? null,
     overviewShape: input.overviewShape ?? 'cards',
     featureMode: input.featureMode ?? 'board',
     featurePrs: input.featurePrs ?? 'open',

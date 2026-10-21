@@ -36,7 +36,7 @@ export function GoalErrorBadge({
       className="cn-gherrors"
       usage={{ counted: 'app-error.view' }}
       title={`${title}. Open the Errors tab on ${first.environment}.`}
-      onClick={() => actions.openErrors({ errorsBand: first.band })}
+      onClick={() => actions.openErrors({ errorsBand: first.band, errorsShow: 'all', errorsText: null })}
     >
       {total} new error{total === 1 ? '' : 's'} on {where} since this arrived
     </Button>
