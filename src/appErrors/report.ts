@@ -6,6 +6,8 @@ const MAX_TEXT_CHARS = 200;
 const MAX_FRAMES = 20;
 const MAX_FRAME_CHARS = 300;
 const MAX_URL_CHARS = 2000;
+const MAX_MESSAGE_CHARS = 2000;
+const MAX_STACK_CHARS = 16_000;
 export const MAX_ROWS_PER_READ = 500;
 
 export const SINCE_TOKEN = '{since}';
@@ -20,6 +22,8 @@ export interface AppErrorRow {
   version: string | null;
   operation: string | null;
   frames: string[];
+  message: string | null;
+  stack: string | null;
   url: string | null;
 }
 
@@ -111,6 +115,8 @@ function readDetail(row: Record<string, unknown>): Omit<AppErrorRow, keyof Ident
     version: optionalText(row['version'], 'version'),
     operation: optionalText(row['operation'], 'operation'),
     frames: readFrames(row['frames']),
+    message: optionalText(row['message'], 'message', MAX_MESSAGE_CHARS),
+    stack: optionalText(row['stack'], 'stack', MAX_STACK_CHARS),
     url: readUrl(row['link']),
   };
 }
@@ -121,11 +127,11 @@ function instant(value: unknown, name: string): string {
   return new Date(ms).toISOString();
 }
 
-function optionalText(value: unknown, name: string): string | null {
+function optionalText(value: unknown, name: string, max = MAX_TEXT_CHARS): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== 'string') throw new Refused(`"${name}" must be a string, or be left out`);
   const text = value.trim();
-  return text === '' ? null : text.slice(0, MAX_TEXT_CHARS);
+  return text === '' ? null : text.slice(0, max);
 }
 
 function readFrames(value: unknown): string[] {

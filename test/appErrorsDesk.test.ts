@@ -215,3 +215,31 @@ test('an errors command that is not bounded by {since} is refused at boot', () =
   assert.throws(() => loadConfig({ environments: [{ name: 'live', at: 'x', errors: { list: ' ' } }] }), /non-empty/);
   assert.throws(() => loadConfig({ appErrorMinCount: 0 }), /appErrorMinCount/);
 });
+
+test('a group’s message and stack are kept from the read, for the cockpit to show', async () => {
+  const stack = 'at OrderService.Submit() in src/Orders/OrderService.cs:118\nat OrdersController.Post()';
+  const reader = new FakeAppErrorReader({
+    test: JSON.stringify([
+      { ...row('Orders.Submit', 5, ago(2 * HOUR), ago(HOUR)), message: 'Object reference not set', stack },
+    ]),
+    liveUk: '[]',
+    liveEu: '[]',
+  });
+  const system = build(reader, new FakeEnvironmentProber({ test: ['aaa'], liveUk: ['bbb'], liveEu: ['bbb'] }));
+
+  await system.harness.runCycle();
+
+  const { app } = await buildApp(system);
+  const listed = (await app.inject({ method: 'GET', url: '/api/app-errors' })).json<AppErrorsPayload>();
+  const shipped = listed.environments.find((e) => e.environment === 'test')?.groups[0];
+  assert.equal(shipped?.hasDetail, true);
+  assert.ok(shipped !== undefined && !('stack' in shipped), 'the poll never carries the text');
+  const detail = await app.inject({
+    method: 'GET',
+    url: '/api/app-errors/detail?environment=test&fingerprint=Orders.Submit',
+  });
+  assert.deepEqual(detail.json(), { message: 'Object reference not set', stack });
+  const missing = await app.inject({ method: 'GET', url: '/api/app-errors/detail?environment=test&fingerprint=nope' });
+  assert.equal(missing.statusCode, 404);
+  await app.close();
+});

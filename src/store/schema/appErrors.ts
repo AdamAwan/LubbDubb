@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS app_error_groups (
   first_seen  TEXT NOT NULL,
   last_seen   TEXT NOT NULL,
   returned_at TEXT,
+  message     TEXT,                -- last, so the hot columns sit before a stack's overflow pages
+  stack       TEXT,
   PRIMARY KEY (environment, fingerprint)
 );
 

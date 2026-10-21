@@ -37,6 +37,7 @@ import type {
   CiPolicyPayload,
   BotPrsPayload,
   AppErrorsPayload,
+  AppErrorDetail,
   AppErrorPressPayload,
   AppErrorSearchPayload,
   FilingTargetProbe,
@@ -276,6 +277,10 @@ const realApi = {
   getCiPolicy: () => authFetch('/api/ci-policy').then((r) => json<CiPolicyPayload>(r)),
   getBotPrs: () => authFetch('/api/bot-prs').then((r) => json<BotPrsPayload>(r)),
   getAppErrors: () => authFetch('/api/app-errors').then((r) => json<AppErrorsPayload>(r)),
+  getAppErrorDetail: (environment: string, fingerprint: string) =>
+    authFetch(`/api/app-errors/detail?${new URLSearchParams({ environment, fingerprint }).toString()}`).then((r) =>
+      json<AppErrorDetail>(r),
+    ),
   fileAppErrorBug: (environment: string, fingerprint: string, opts: { investigate: boolean; unsearched: boolean }) =>
     post<AppErrorPressPayload>('/api/app-errors/file-bug', { environment, fingerprint, ...opts }),
   reopenAppErrorTicket: (key: string) => post<AppErrorPressPayload>('/api/app-errors/reopen', { key }),

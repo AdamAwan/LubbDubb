@@ -260,6 +260,7 @@ export type {
   AppErrorBandView,
   AppErrorEnvironmentView,
   AppErrorGroupView,
+  AppErrorDetail,
   AppErrorPressPayload,
   AppErrorSearchPayload,
   UpdateKind,

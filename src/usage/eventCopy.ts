@@ -278,6 +278,8 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   },
   'app-error.undo': { label: 'Reopened an app error’s bug', blurb: 'The fixed bug an error came back after' },
   'app-error.refresh': { label: 'Searched the tracker again', blurb: 'A failed search for an error key was retried' },
+  'app-error.expand': { label: 'Read an app error', blurb: 'An error group’s message and stack were opened' },
+  'app-error.close': { label: 'Folded an app error', blurb: 'An error group’s message and stack were folded away' },
   'ejection.expand': { label: 'Opened a hand-back', blurb: 'The dialog for settling ejected work was opened' },
   'ejection.accept': { label: 'Handed work back', blurb: 'Ejected work was settled' },
   'ejection.close': { label: 'Closed a hand-back', blurb: 'The dialog was shut unsettled' },

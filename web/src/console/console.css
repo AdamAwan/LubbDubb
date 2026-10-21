@@ -5746,6 +5746,23 @@ button.cn-grow {
   font-family: var(--cn-mono);
   font-size: 11px;
 }
+.ae-detail {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.ae-message {
+  margin: 6px 0;
+  white-space: pre-wrap;
+}
+.ae-stack {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  max-height: 320px;
+  font-size: 11px;
+  white-space: pre;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+}
 .ae-when,
 .ae-n {
   white-space: nowrap;

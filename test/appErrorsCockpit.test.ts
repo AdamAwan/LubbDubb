@@ -21,6 +21,7 @@ import { decode } from './support/html.js';
 (globalThis as { React?: typeof React }).React = React;
 
 const { AppErrorsView } = await import('../web/src/components/AppErrorsPage.js');
+const { DetailBody } = await import('../web/src/components/AppErrorDetail.js');
 const { GoalErrorBadge } = await import('../web/src/console/goalErrors.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 
@@ -35,6 +36,7 @@ function group(environment: string, over: Partial<AppErrorGroupView> = {}): AppE
     operation: 'POST /orders',
     version: null,
     frames: ['src/Orders/OrderService.cs:118'],
+    hasDetail: false,
     url: 'https://portal.example/problem/1',
     firstSeen: '2026-10-20T08:00:00.000Z',
     lastSeen: '2026-10-20T11:00:00.000Z',
@@ -192,7 +194,7 @@ test('a band row folds its members: the most moved member leads, the days are su
   assert.equal(row?.count, 12);
   assert.deepEqual(row?.environments, ['liveEu', 'liveUs']);
   assert.equal(row?.daily[13], 10);
-  assert.equal(row?.frame, 'src/Orders/OrderService.cs:118');
+  assert.equal(row?.frames[0], 'src/Orders/OrderService.cs:118');
   assert.equal(row?.link?.goalRef, 'issue:42');
   const rows = bandRows(data, prod);
   assert.deepEqual(stateCounts(rows), { new: 1, returned: 0, spiking: 0, steady: 1, gone: 0 });
@@ -371,4 +373,21 @@ test('the goal card badge says how many and where, and draws nothing for none', 
   assert.match(out, /1 new error on liveEu since this arrived/);
   assert.match(out, /linked by frame match/);
   assert.equal(html(createElement(GoalErrorBadge, { lines: [], actions: noActions })), '');
+});
+
+test('a row opens onto its message and stack, or its frames when no stack was reported', () => {
+  const frames = ['src/Orders/OrderService.cs:118'];
+  const body = (loaded: Parameters<typeof DetailBody>[0]['loaded']): string =>
+    html(createElement(DetailBody, { frames, loaded }));
+  const withStack = body({ message: 'Object reference not set', stack: 'at OrderService.Submit()\nat Post()' });
+  assert.match(withStack, /<p class="ae-message">Object reference not set<\/p>/);
+  assert.match(withStack, /<pre class="ae-stack">at OrderService.Submit\(\)\nat Post\(\)<\/pre>/);
+  assert.doesNotMatch(withStack, /No stack reported/);
+
+  const framesOnly = body({ message: null, stack: null });
+  assert.match(framesOnly, /No stack reported — the top in-app frames/);
+  assert.match(framesOnly, /<pre class="ae-stack">src\/Orders\/OrderService.cs:118<\/pre>/);
+  assert.match(body('failed'), /could not be read/);
+
+  assert.match(page(), /Error and stack/, 'a row with frames offers the fold');
 });

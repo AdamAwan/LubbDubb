@@ -1186,6 +1186,7 @@ export type {
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './insights/remedyInsights.js';
 export type { ReviewAreaTotal, ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 export type { RemedyCause } from './types.js';
+export type { AppErrorDetail } from './types.js';
 export type {
   AssessedBotPr,
   BotPrOutcome,
