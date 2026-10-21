@@ -220,6 +220,8 @@ async function buildDesk(
 ): Promise<{ system: System; session: Session; close: () => Promise<void> }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
+    prediction: { enabled: false },
+    goalCriteria: { enabled: false },
     selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     environments,

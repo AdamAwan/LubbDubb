@@ -249,6 +249,8 @@ test('the pickup verdict explains an issue parked in the funnel', () => {
 function systemWithPlanning(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
+    prediction: { enabled: false },
+    goalCriteria: { enabled: false },
     selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',

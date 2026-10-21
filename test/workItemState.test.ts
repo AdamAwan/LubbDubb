@@ -15,6 +15,8 @@ import { failAppraisalOpen, failPlanningOpen, planWithOnePart } from './support/
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    prediction: { enabled: false },
+    goalCriteria: { enabled: false },
     selfUpdate: { enabled: false } as never,
     dbPath: ':memory:',
     deskRoot: join(dir, 'desk'),
@@ -211,6 +213,8 @@ function walkSystem(
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-progress-'));
   const config = loadConfig({
+    prediction: { enabled: false },
+    goalCriteria: { enabled: false },
     selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',

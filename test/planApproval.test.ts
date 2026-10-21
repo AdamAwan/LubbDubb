@@ -201,6 +201,8 @@ test('both transports honour the gate, so a verdict lands the same way whichever
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const system = buildSystem(
     loadConfig({
+      prediction: { enabled: false },
+      goalCriteria: { enabled: false },
       selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: '',
@@ -689,6 +691,8 @@ function plannedSystem(opts: { slugs?: string[]; labelPrefix?: string; unsure?: 
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const repoRoot = gitRepo();
   const config = loadConfig({
+    prediction: { enabled: false },
+    goalCriteria: { enabled: false },
     selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     labelPrefix: opts.labelPrefix ?? '',
