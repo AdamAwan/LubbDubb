@@ -407,6 +407,8 @@ function harness(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-regroup-'));
   return buildSystem(
     loadConfig({
+      prediction: { enabled: false },
+      goalCriteria: { enabled: false },
       auth: { enabled: false } as never,
       selfUpdate: { enabled: false } as never,
       labelPrefix: '',

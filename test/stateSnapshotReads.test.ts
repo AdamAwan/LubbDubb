@@ -66,6 +66,8 @@ function repeatedOver(counts: ReadonlyMap<string, number>, tables: readonly stri
 
 function seeded() {
   const config = loadConfig({
+    prediction: { enabled: false },
+    goalCriteria: { enabled: false },
     selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
