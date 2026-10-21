@@ -1390,6 +1390,13 @@ link asks the clone, and the route waits on it for at most five seconds; a linke
 thirty seconds while nothing it was built from has moved ([39](39-app-errors.md#where-it-is-computed)). Each group's `tracker` is what the last search for its
 key found. See [39](39-app-errors.md#on-the-wire).
 
+### `GET /api/app-errors/detail`
+
+One group's `AppErrorDetail` — `{message, stack}`, each null when the script printed none — by
+`?environment=&fingerprint=` (a 400 without either, a 404 for a group the store does not hold). The
+Errors tab fetches it when a row's fold is opened; the poll above carries only `hasDetail`
+([39](39-app-errors.md#the-output-contract)).
+
 ### `POST /api/app-errors/file-bug`, `/reopen`, `/search`
 
 The Errors tab's tracker presses ([39](39-app-errors.md#the-presses)). `file-bug` takes

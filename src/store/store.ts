@@ -15,7 +15,7 @@ import { ProfileOverrideStore } from './profileOverrides.js';
 import { RemedyStore } from './remedies.js';
 import { McpCallStore } from './mcpCalls.js';
 import { ApiErrorStore } from './apiErrors.js';
-import { AppErrorStore } from './appErrors.js';
+import { APP_ERROR_COLUMNS, AppErrorStore } from './appErrors.js';
 import { AppErrorTicketStore } from './appErrorTickets.js';
 import { SurfaceReachStore } from './surfaceReach.js';
 import { declineRetiredOutcomeRows, HumanTaskStore, HUMAN_TASK_COLUMNS, indexHumanTasksByKind } from './humanTasks.js';
@@ -114,6 +114,7 @@ function migrate(db: Database.Database, clock: Clock): void {
     EJECTION_COLUMNS,
     PREDICTION_COLUMNS,
     PR_DESCRIPTION_COLUMNS,
+    APP_ERROR_COLUMNS,
   ]) {
     addedColumns.push(...ensureColumns(db, columns));
   }

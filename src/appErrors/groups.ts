@@ -1,5 +1,5 @@
 import { DAY_MS, utcDay } from '../primitives.js';
-import type { AppErrorDay, AppErrorGroup } from '../types.js';
+import type { AppErrorDay, AppErrorDetail, AppErrorGroup } from '../types.js';
 import type { AppErrorRow } from './report.js';
 
 // → docs/spec/39-app-errors.md#what-is-stored-and-for-how-long
@@ -15,7 +15,7 @@ export const MAX_LOOKBACK_MS = RETENTION_DAYS * DAY_MS;
 /** A group not seen for this long is forgotten; seen again after it, it is `new` once more. */
 export const GROUP_RETENTION_DAYS = 30;
 
-export type AppErrorGroupWrite = Omit<AppErrorGroup, 'daily'>;
+export type AppErrorGroupWrite = Omit<AppErrorGroup, 'daily' | 'hasDetail'> & AppErrorDetail;
 
 /** What a read needs of a group already held to merge a new sighting into it. */
 export type AppErrorMarks = Pick<AppErrorGroup, 'firstSeen' | 'lastSeen' | 'returnedAt'>;
@@ -49,6 +49,8 @@ export function mergeGroup(
     operation: row.operation,
     version: row.version,
     frames: row.frames,
+    message: row.message,
+    stack: row.stack,
     url: row.url,
     firstSeen: existing !== undefined && existing.firstSeen < row.firstSeen ? existing.firstSeen : row.firstSeen,
     lastSeen: existing !== undefined && existing.lastSeen > row.lastSeen ? existing.lastSeen : row.lastSeen,

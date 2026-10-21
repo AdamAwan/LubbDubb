@@ -72,6 +72,8 @@ The command prints one JSON **list**, one object per error group:
     "version": "2026.10.14.3", // optional
     "operation": "POST /orders", // optional
     "frames": ["src/Orders/OrderService.cs:118"], // optional: top in-app frames
+    "message": "Object reference not set to an instance of an object.", // optional: a sample message
+    "stack": "at OrderService.Submit() in …", // optional: the full stack trace of a sample occurrence
     "link": "https://portal.azure.com/…", // optional: absolute http(s)
   },
 ]
@@ -90,8 +92,18 @@ The command prints one JSON **list**, one object per error group:
   title and detail kept. A script grouping by `problemId` _and_ version prints exactly this.
 - **A read is bounded to the 500 most frequent groups.** What was left out is said on the reading's
   `detail`; the reading is still `ok`.
-- Titles are capped at 300 characters, `version` and `operation` at 200, `frames` at twenty of 300.
-  Anything else in an object is ignored.
+- Titles are capped at 300 characters, `version` and `operation` at 200, `frames` at twenty of 300,
+  `message` at 2,000 and `stack` at 16,000.
+- **`message` and `stack` are for the operator's eyes only.** They are what the Errors tab opens a
+  row onto, and they go nowhere else: not into a filed bug, not into the pool, not into a prompt.
+  A message carries user data, and a stack can; the harness never matches or links on either — the
+  frames do that. **Nor do they ride the minute poll**: a group carries only `hasDetail`, and the
+  text is fetched per group when its row is opened (`GET /api/app-errors/detail`) — 500 groups of
+  16,000-character stacks would otherwise be shipped every minute to every open tab, and read out of
+  SQLite on every tracker pass, to be shown for one row. The two columns are declared **last** in
+  `app_error_groups` so the hot columns sit before a long stack's overflow pages.
+
+Anything else in an object is ignored.
 
 **The reading is two-valued — `ok` or `unknown` — and `unknown` is never "no errors".** `[]` is the
 only way to say nothing went wrong. A non-zero exit, a signal, a timeout, empty output, output that is
@@ -106,11 +118,11 @@ seconds — twice the health check's, because a telemetry query over a fortnight
 Three tables, all owned by `AppErrorStore` (`src/store/appErrors.ts`). A read's reading row, groups
 and day counts are written in one transaction; the prune is a second, once per desk pass:
 
-| Table              | One row per                       | Holds                                                                                                          |
-| ------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `app_error_reads`  | environment                       | The last read: status, detail, `read_at` and `ok_at` (last _answered_ read)                                    |
-| `app_error_groups` | `(environment, fingerprint)`      | Title, operation, version, frames, url; first and last seen as the harness has accumulated them; `returned_at` |
-| `app_error_days`   | `(environment, fingerprint, day)` | Occurrences on one UTC day                                                                                     |
+| Table              | One row per                       | Holds                                                                                                     |
+| ------------------ | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `app_error_reads`  | environment                       | The last read: status, detail, `read_at` and `ok_at` (last _answered_ read)                               |
+| `app_error_groups` | `(environment, fingerprint)`      | Title, operation, version, frames, message, stack, url; first and last seen as accumulated; `returned_at` |
+| `app_error_days`   | `(environment, fingerprint, day)` | Occurrences on one UTC day                                                                                |
 
 A fourth, `app_error_tickets`, is the [tracker lock](#the-tracker-lock)'s cache, one row per key and
 owned by `AppErrorTicketStore` (`src/store/appErrorTickets.ts`) — its own module, because it is keyed
@@ -571,7 +583,7 @@ counts per group is too much to send every couple of seconds to every open cockp
   `readAt`, `okAt`), its `head` (a `DeployedHead`, or null before the probe first answered — the
   [deploy window](#the-deploy-window)), and its `groups`;
 - each group an `AppErrorGroupView`: the stored `AppErrorGroup` (title, operation, version, frames,
-  `url`, first and last seen, `returnedAt`) with `daily` made dense over the last fourteen UTC days,
+  `hasDetail`, `url`, first and last seen, `returnedAt`) with `daily` made dense over the last fourteen UTC days,
   plus `key`, `state`, `count` (the total of that dense series, so the two always agree), `ignored`,
   `link` and `tracker`, both below. The state is computed off the same dense series.
   Sorted moved-first — `new`, `returned`, `spiking`, `steady`, `gone` — then most recently seen;
@@ -627,7 +639,12 @@ liveUs`), and an environment in no group is a band of one under its own name. Ea
 - **One row per band group**, horizontally scrollable at width: the state chip in its tone (`new` red,
   `spiking` amber, `returned` violet, `steady` grey, `gone` green), the title, the key in mono, the
   operation, the members it was seen on when the band has several, first and last seen, the top frame,
-  **Open in App Insights** off `url`, a fourteen-bar sparkline of `daily` with the last three days in
+  **Open in App Insights** off `url`, an **Error and stack** fold under the title (`Collapsible`,
+  `web/src/components/AppErrorDetail.tsx`) that fetches the group's detail on first open — the
+  `message`, then the `stack` in a scrolling mono block, or the group's frames under _No stack
+  reported_ when the script printed none; absent when there is no detail and no frames, and a
+  warning, never an empty fold, when the fetch fails — a
+  fourteen-bar sparkline of `daily` with the last three days in
   the state's hue, the count, the link and the tracker. The roll-up carries state, count and members;
   everything else is taken from the member whose state the band reports (`bandRows`,
   `web/src/view/appErrors.ts`), with the members' days summed.

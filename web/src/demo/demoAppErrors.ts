@@ -1,4 +1,4 @@
-import type { AppErrorEnvironmentView, AppErrorGroupView, AppErrorsPayload } from '../types.js';
+import type { AppErrorDetail, AppErrorEnvironmentView, AppErrorGroupView, AppErrorsPayload } from '../types.js';
 
 // → docs/spec/39-app-errors.md#in-the-cockpit
 
@@ -84,6 +84,7 @@ function stagingGroups(now: number, ago: (hours: number) => string): AppErrorGro
       operation: 'POST /api/refunds',
       version: '2026.10.20.1',
       frames: ['apps/api/src/features/refunds/issue.ts:88'],
+      hasDetail: true,
       url: 'https://portal.azure.com/',
       firstSeen: ago(18),
       lastSeen: ago(1),
@@ -106,6 +107,7 @@ function stagingGroups(now: number, ago: (hours: number) => string): AppErrorGro
       operation: 'POST /api/checkout/pay',
       version: null,
       frames: ['apps/api/src/checkout/pay.ts:142'],
+      hasDetail: true,
       url: 'https://portal.azure.com/',
       firstSeen: ago(300),
       lastSeen: ago(2),
@@ -128,6 +130,7 @@ function stagingGroups(now: number, ago: (hours: number) => string): AppErrorGro
       operation: 'GET /api/books/:isbn',
       version: null,
       frames: [],
+      hasDetail: false,
       url: null,
       firstSeen: ago(320),
       lastSeen: ago(3),
@@ -137,4 +140,21 @@ function stagingGroups(now: number, ago: (hours: number) => string): AppErrorGro
       series: quiet,
     }),
   ];
+}
+
+const DETAILS: Record<string, AppErrorDetail> = {
+  'refund-null-ledger': {
+    message: 'Cannot read properties of null (reading "ledgerId")',
+    stack: [
+      'TypeError: Cannot read properties of null (reading "ledgerId")',
+      '    at issueRefund (apps/api/src/features/refunds/issue.ts:88:31)',
+      '    at RefundsController.create (apps/api/src/features/refunds/controller.ts:41:12)',
+      '    at processTicksAndRejections (node:internal/process/task_queues:95:5)',
+    ].join('\n'),
+  },
+  'checkout-timeout': { message: 'payment provider did not answer within 10s', stack: null },
+};
+
+export function demoAppErrorDetail(fingerprint: string): AppErrorDetail | null {
+  return DETAILS[fingerprint] ?? null;
 }

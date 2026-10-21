@@ -20,6 +20,7 @@ import {
   trackerPresses,
 } from '../view/appErrors.js';
 import { api } from '../api.js';
+import { AppErrorDetailFold } from './AppErrorDetail.js';
 import { AsyncButton } from './AsyncButton.js';
 import { BareButton, Button } from './button.js';
 import { Ref } from './refs.js';
@@ -373,10 +374,17 @@ function ErrorTableRow({
           {multi && <span>on {row.environments.join(', ')}</span>}
           {row.url !== null && <ExtLink href={row.url}>Open in App Insights</ExtLink>}
         </span>
+        <AppErrorDetailFold row={row} />
       </td>
       <td className="ae-when">{relTime(row.firstSeen, now)}</td>
       <td className="ae-when">{relTime(row.lastSeen, now)}</td>
-      <td>{row.frame === null ? <span className="ae-none">—</span> : <code className="ae-frame">{row.frame}</code>}</td>
+      <td>
+        {row.frames.length === 0 ? (
+          <span className="ae-none">—</span>
+        ) : (
+          <code className="ae-frame">{row.frames[0]}</code>
+        )}
+      </td>
       <td>
         <Spark daily={row.daily} state={row.state} />
       </td>

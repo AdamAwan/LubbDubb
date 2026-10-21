@@ -1670,6 +1670,12 @@ export interface AppErrorDay {
   count: number;
 }
 
+/** A sample occurrence's message and stack: drawn on the Errors tab when opened, and sent nowhere else. */
+export interface AppErrorDetail {
+  message: string | null;
+  stack: string | null;
+}
+
 /** One fingerprint on one environment, as the harness has accumulated it across reads. */
 export interface AppErrorGroup {
   environment: string;
@@ -1678,6 +1684,7 @@ export interface AppErrorGroup {
   operation: string | null;
   version: string | null;
   frames: string[];
+  hasDetail: boolean;
   url: string | null;
   firstSeen: string;
   lastSeen: string;

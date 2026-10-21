@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import type { AppErrorSearchPayload, AppErrorsPayload } from '../../wire.js';
+import type { AppErrorDetail, AppErrorSearchPayload, AppErrorsPayload } from '../../wire.js';
 import {
   fileAppErrorBug,
   reopenAppErrorTicket,
@@ -18,6 +18,11 @@ const GroupBody = z.object({
   fingerprint: requiredText('fingerprint is required'),
   investigate: z.boolean({ error: 'investigate must be a boolean' }).optional(),
   unsearched: z.boolean({ error: 'unsearched must be a boolean' }).optional(),
+});
+
+const GroupQuery = z.object({
+  environment: requiredText('environment is required'),
+  fingerprint: requiredText('fingerprint is required'),
 });
 
 const KeyBody = z.object({
@@ -55,6 +60,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.get(
     '/api/app-errors',
     checked({}, (): Promise<AppErrorsPayload> => current()),
+  );
+
+  app.get(
+    '/api/app-errors/detail',
+    checked({ query: GroupQuery }, ({ query, reply }): AppErrorDetail | FastifyReply => {
+      const detail = store.appErrors.getDetail(query.environment, query.fingerprint);
+      return detail ?? reply.code(404).send({ error: 'no such error group' });
+    }),
   );
 
   app.post(

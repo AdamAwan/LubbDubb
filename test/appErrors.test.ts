@@ -26,6 +26,8 @@ const ROW = {
   version: '2026.10.14.3',
   operation: 'POST /orders',
   frames: ['src/Orders/OrderService.cs:118'],
+  message: 'Object reference not set to an instance of an object.',
+  stack: 'at OrderService.Submit() in src/Orders/OrderService.cs:118\nat OrdersController.Post()',
   link: 'https://portal.azure.com/x',
 };
 
@@ -44,6 +46,8 @@ test('a well-formed report is read row by row, with the link carried as the url'
       version: ROW.version,
       operation: ROW.operation,
       frames: ROW.frames,
+      message: ROW.message,
+      stack: ROW.stack,
       url: ROW.link,
     },
   ]);
@@ -303,4 +307,35 @@ test('a group running well above its pre-deploy baseline is spiking', () => {
     'steady',
     'an ignored group never moves',
   );
+});
+
+test('the payload carries whether a group has a message or stack, never the text itself', () => {
+  const store = new Store(':memory:');
+  const group = {
+    environment: 'live',
+    fingerprint: 'fp',
+    title: 't',
+    operation: null,
+    version: null,
+    frames: [],
+    url: null,
+    firstSeen: '2026-10-20T08:00:00.000Z',
+    lastSeen: '2026-10-20T09:00:00.000Z',
+    returnedAt: null,
+  };
+  store.appErrors.recordRead({ environment: 'live', status: 'ok', detail: null, readAt: '2026-10-20T10:00:00.000Z' }, [
+    { group: { ...group, message: 'boom', stack: 'at x()' }, days: [] },
+    { group: { ...group, fingerprint: 'bare', message: null, stack: null }, days: [] },
+  ]);
+  const listed = store.appErrors.listGroups();
+  assert.deepEqual(
+    new Map(listed.map((g) => [g.fingerprint, g.hasDetail])),
+    new Map([
+      ['fp', true],
+      ['bare', false],
+    ]),
+  );
+  assert.ok(listed.every((g) => !('stack' in g) && !('message' in g)));
+  assert.deepEqual(store.appErrors.getDetail('live', 'fp'), { message: 'boom', stack: 'at x()' });
+  assert.equal(store.appErrors.getDetail('live', 'nope'), null);
 });

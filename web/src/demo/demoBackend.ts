@@ -109,7 +109,7 @@ import type { PredictionDraft, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, DEMO_FEATURE_SUMMARIES, demoPlanHistory } from './fixtures.js';
 import { buildAskQueue } from './askQueue.js';
-import { demoAppErrors } from './demoAppErrors.js';
+import { demoAppErrorDetail, demoAppErrors } from './demoAppErrors.js';
 import { DemoPredictions } from './predictions.js';
 import { isContainerType } from '../issueGroups.js';
 import { inFlight } from '../view/localValidation.js';
@@ -5032,6 +5032,10 @@ export const demoApi = {
     Promise.resolve({ policy: { rules: [], unmatched: 'dispatch', policyKinds: null } as CiPolicyDescription }),
   getBotPrs: () => Promise.resolve(demoBotPrs(Date.now())),
   getAppErrors: () => Promise.resolve(demoAppErrors(Date.now())),
+  getAppErrorDetail: (_environment: string, fingerprint: string) => {
+    const detail = demoAppErrorDetail(fingerprint);
+    return detail === null ? Promise.reject(new Error('no such error group')) : Promise.resolve(detail);
+  },
   fileAppErrorBug: (
     _environment: string,
     _fingerprint: string,

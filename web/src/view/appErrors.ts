@@ -28,7 +28,8 @@ export interface ErrorRow {
   operation: string | null;
   firstSeen: string;
   lastSeen: string;
-  frame: string | null;
+  frames: string[];
+  hasDetail: boolean;
   url: string | null;
   daily: number[];
   link: ErrorLink | null;
@@ -73,15 +74,19 @@ function bandRow(bandGroup: AppErrorBandView['groups'][number], held: readonly A
     state: bandGroup.state,
     count: bandGroup.count,
     environments: bandGroup.environments,
-    operation: lead?.operation ?? null,
+    ...leadDetail(lead),
     firstSeen: held.map((g) => g.firstSeen).sort()[0] ?? bandGroup.lastSeen,
     lastSeen: bandGroup.lastSeen,
-    frame: lead?.frames[0] ?? null,
-    url: lead?.url ?? null,
     daily: sumDaily(held),
     link: firstOf(lead, held, (g) => g.link),
     tracker: firstOf(lead, held, (g) => g.tracker),
   };
+}
+
+function leadDetail(lead: AppErrorGroupView | undefined): Pick<ErrorRow, 'operation' | 'frames' | 'hasDetail' | 'url'> {
+  if (lead === undefined) return { operation: null, frames: [], hasDetail: false, url: null };
+  const { operation, frames, hasDetail, url } = lead;
+  return { operation, frames, hasDetail, url };
 }
 
 function firstOf<T>(

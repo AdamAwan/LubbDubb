@@ -1,9 +1,14 @@
-import type { AppErrorDay, AppErrorGroup, AppErrorRead, AppErrorReadStatus } from '../types.js';
+import type { AppErrorDay, AppErrorDetail, AppErrorGroup, AppErrorRead, AppErrorReadStatus } from '../types.js';
 import type { AppErrorGroupWrite, AppErrorMarks } from '../appErrors/groups.js';
 import { groupBy } from '../primitives.js';
 import type { StoreContext } from './context.js';
+import type { ColumnMigrations } from './migrate.js';
 
 // → docs/spec/14-persistence.md, docs/spec/39-app-errors.md
+
+export const APP_ERROR_COLUMNS: ColumnMigrations = {
+  app_error_groups: { message: 'TEXT', stack: 'TEXT' },
+};
 
 interface GroupInput {
   group: AppErrorGroupWrite;
@@ -34,8 +39,9 @@ export class AppErrorStore {
         this.ctx
           .prep(
             `INSERT OR REPLACE INTO app_error_groups
-               (environment, fingerprint, title, operation, version, frames, url, first_seen, last_seen, returned_at)
-             VALUES (@environment, @fingerprint, @title, @operation, @version, @frames, @url,
+               (environment, fingerprint, title, operation, version, frames, message, stack, url, first_seen, last_seen,
+                returned_at)
+             VALUES (@environment, @fingerprint, @title, @operation, @version, @frames, @message, @stack, @url,
                 @firstSeen, @lastSeen, @returnedAt)`,
           )
           .run({ ...group, frames: JSON.stringify(group.frames) });
@@ -86,9 +92,20 @@ export class AppErrorStore {
     );
   }
 
+  getDetail(environment: string, fingerprint: string): AppErrorDetail | null {
+    const row = this.ctx
+      .prep(`SELECT message, stack FROM app_error_groups WHERE environment = ? AND fingerprint = ?`)
+      .get(environment, fingerprint) as AppErrorDetail | undefined;
+    return row ?? null;
+  }
+
   listGroups(): AppErrorGroup[] {
     const groups = this.ctx
-      .prep(`SELECT * FROM app_error_groups ORDER BY environment, last_seen DESC`)
+      .prep(
+        `SELECT environment, fingerprint, title, operation, version, frames, url, first_seen, last_seen, returned_at,
+                (message IS NOT NULL OR stack IS NOT NULL) AS has_detail
+               FROM app_error_groups ORDER BY environment, last_seen DESC`,
+      )
       .all() as GroupRow[];
     const days = groupBy(
       this.ctx.prep(`SELECT * FROM app_error_days ORDER BY day`).all() as DayRow[],
@@ -101,6 +118,7 @@ export class AppErrorStore {
       operation: g.operation,
       version: g.version,
       frames: readFrames(g.frames),
+      hasDetail: g.has_detail === 1,
       url: g.url,
       firstSeen: g.first_seen,
       lastSeen: g.last_seen,
@@ -135,6 +153,7 @@ interface GroupRow {
   operation: string | null;
   version: string | null;
   frames: string;
+  has_detail: number;
   url: string | null;
   first_seen: string;
   last_seen: string;

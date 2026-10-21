@@ -56,6 +56,8 @@ function group(
       operation: 'POST /orders',
       version: null,
       frames: over.frames ?? [],
+      message: null,
+      stack: null,
       url: null,
       firstSeen,
       lastSeen: firstSeen,
