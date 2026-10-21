@@ -205,7 +205,7 @@ export interface AzureDevOpsConfig {
 }
 
 /**
- * The reveal gate's prediction record. Off by default, and off means *nothing is
+ * The reveal gate's prediction record. On by default; off means *nothing is
  * stamped* — no reveal, no decline, no offer — so that turning it on later does not
  * present a backlog of never-offered goals as declines.
  * → docs/spec/02-configuration.md#the-reveal-gate
@@ -214,7 +214,7 @@ interface PredictionConfig {
   enabled: boolean;
 }
 
-/** Goal-level, human-authored acceptance criteria. Off by default, on the same terms. */
+/** Goal-level, human-authored acceptance criteria. On by default, on the same terms. */
 interface GoalCriteriaConfig {
   enabled: boolean;
 }
@@ -266,20 +266,20 @@ const DEFAULTS: Config = {
   issueParentedTypes: [...DEFAULT_PARENTED_TYPES],
   issueFilingTypes: [...DEFAULT_FILING_TYPES],
   planning: DEFAULT_PLANNING,
-  featureBoard: false,
+  featureBoard: true,
   spendBurn: DEFAULT_BURN,
   runway: DEFAULT_RUNWAY,
   pets: { enabled: true, visible: true },
-  prediction: { enabled: false },
+  prediction: { enabled: true },
   predictionAggregateMinGoals: 10,
-  goalCriteria: { enabled: false },
+  goalCriteria: { enabled: true },
   autoUseAgentDescriptions: false,
   selfUpdate: {
     enabled: true,
     remote: 'origin',
     branch: 'main',
     checkIntervalMs: 15 * 60 * 1000,
-    autoUpdate: false,
+    autoUpdate: true,
     drainDeadlineMs: 2 * 60 * 60 * 1000,
     projectAutoPull: true,
     snoozeMs: 30 * 60 * 1000,
