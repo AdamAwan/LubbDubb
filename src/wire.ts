@@ -48,6 +48,7 @@ import type {
   AppErrorLink,
   AppErrorRead,
   AppErrorReadStatus,
+  AppErrorSpike,
   AppErrorState,
   AppErrorTicketSearch,
   AppErrorTracker,
@@ -934,6 +935,8 @@ export interface AppErrorGroupView extends AppErrorGroup {
   state: AppErrorState;
   count: number;
   ignored: boolean;
+  /** The rates behind a `spiking` state; null in every other state. */
+  spike: AppErrorSpike | null;
   link: AppErrorLink | null;
   tracker: AppErrorTracker | null;
 }

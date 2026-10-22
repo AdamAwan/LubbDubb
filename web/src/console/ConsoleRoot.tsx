@@ -204,7 +204,7 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
     case 'bots':
       return <BotPrsPage now={view.now} />;
     case 'errors':
-      return <AppErrorsPage band={view.errorsBand} steady={view.errorsSteady} now={view.now} actions={actions} />;
+      return <AppErrorsPage view={view} actions={actions} />;
     case 'features':
       return view.state.config.featureBoard ? (
         <FeatureBoard view={view} actions={actions} />

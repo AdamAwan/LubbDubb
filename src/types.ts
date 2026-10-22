@@ -1692,6 +1692,12 @@ export interface AppErrorGroup {
   daily: AppErrorDay[];
 }
 
+/** The two daily rates a `spiking` group was read off: since the deploy's day, and the baseline before it, floored at one. */
+export interface AppErrorSpike {
+  perDay: number;
+  baselinePerDay: number;
+}
+
 /** What made a link: the group's frames in a goal's landed diff, its first sighting on another environment, its operation. */
 export type AppErrorLinkHow = 'frame-match' | 'test-arrival' | 'route-hint';
 
