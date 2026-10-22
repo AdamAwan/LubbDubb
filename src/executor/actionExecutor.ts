@@ -54,6 +54,7 @@ interface ExecutorDeps {
   agentPermissionMode?: string;
   deskRoot: string;
   defaultBranch: string;
+  fetch?: () => Promise<void>;
   runtime: RuntimeControl;
   errors: ErrorRecorder;
   ciEvidence?: CiEvidenceReader;
@@ -495,11 +496,11 @@ export class ActionExecutor {
     };
   }
 
-  private codeWorkingDirectory(action: ValidatedAction & { type: 'dispatch_code_agent' }): Promise<string> {
+  private async codeWorkingDirectory(action: ValidatedAction & { type: 'dispatch_code_agent' }): Promise<string> {
     const at = action.base ?? this.deps.defaultBranch;
-    return action.readOnly
-      ? this.deps.worktrees.ensureReadOnly(action.branch, at)
-      : this.deps.worktrees.ensure(action.branch, at);
+    if (!action.readOnly) return this.deps.worktrees.ensure(action.branch, at);
+    await this.deps.fetch?.();
+    return this.deps.worktrees.ensureReadOnly(action.branch, at);
   }
 
   private deskScratch(task: Task): string {

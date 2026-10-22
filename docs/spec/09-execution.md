@@ -1040,6 +1040,18 @@ local ref as everywhere else). The lease key is the name the rule would have use
 what the task row carries, what the [branch gate](#2-branch-gate--deferred-code-dispatches-only)
 reads, and what `remove` is called with when the agent is reaped — and it never becomes a ref.
 
+- **It is cut from a freshly fetched remote.** The executor runs `git fetch --prune origin` immediately
+  before every `ensureReadOnly`, and a branch dispatch fetches nothing. Every read-only agent is
+  sent to answer a question about the default branch _as it is now_, and the only other fetch is
+  the plan reconciler's — floored by `planning.gitFetchIntervalMs` and skipped outright on a
+  deployment with no `active`/`complete` plan ([08](08-planning.md#git-fetch)). Without this the
+  assessor's case is the common one: rule `issue-assess` fires on the first pulse with no open pull
+  request, which is the pulse after the merge, so it stood on an `origin/<default>` that did not hold
+  the merge, reported the goal not reached, and the shortfall it wrote raised rule
+  `work-item-back-to-pickup`'s "move it back" card on a ticket whose work had just landed. A failed
+  fetch **fails open** — the checkout is cut from what the clone holds, and the failure is recorded
+  once per distinct message. Wired only with the real worktree manager; a test injects
+  `remoteFetch` to observe it.
 - **The lease is untouched, which is the point.** Several read-only agents pinned to one directory is
   precisely the case the lease was written to refuse, and "none of them writes" is a property of a
   _prompt_, not of the runtime. So a read-only checkout takes a whole slot, leased under its key,
