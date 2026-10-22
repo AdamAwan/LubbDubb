@@ -257,6 +257,74 @@ test('the executor is the one place the shape is chosen', async () => {
   system.store.close();
 });
 
+test('a read-only checkout is cut from a freshly fetched remote, and a branch dispatch fetches nothing', async () => {
+  const worktrees = new FakeWorktreeManager();
+  const fetchedBefore: number[] = [];
+  const system = buildSystem(testConfig(), {
+    worktrees,
+    remoteFetch: async () => {
+      fetchedBefore.push(worktrees.ensured.length);
+    },
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+
+  await system.executor.execute(
+    'cyc',
+    planWith([
+      {
+        type: 'dispatch_code_agent',
+        branch: 'issue/13',
+        title: 'Resolve issue #13',
+        prompt: 'build it',
+        originRef: 'issue:13',
+        reason: 'r',
+      },
+      {
+        type: 'dispatch_code_agent',
+        ...readOnlyDispatch('assess/issue/12', 'main'),
+        title: 'Assess issue #12',
+        prompt: 'read it',
+        originRef: 'issue:12:assess',
+        reason: 'r',
+      },
+    ]),
+  );
+
+  assert.deepEqual(fetchedBefore, [1], 'one fetch, after the branch checkout and before the read-only one');
+  assert.equal(worktrees.ensured.length, 2);
+  system.store.close();
+});
+
+test('a failed fetch still hands the read-only agent its checkout, and is recorded', async () => {
+  const worktrees = new FakeWorktreeManager();
+  const logged: string[] = [];
+  const system = buildSystem(testConfig(), {
+    worktrees,
+    remoteFetch: () => Promise.reject(new Error('no origin')),
+    backend: new FakePtyBackend(),
+    errorMirror: (e) => logged.push(e.message),
+  });
+
+  await system.executor.execute(
+    'cyc',
+    planWith([
+      {
+        type: 'dispatch_code_agent',
+        ...readOnlyDispatch('assess/issue/12', 'main'),
+        title: 'Assess issue #12',
+        prompt: 'read it',
+        originRef: 'issue:12:assess',
+        reason: 'r',
+      },
+    ]),
+  );
+
+  assert.deepEqual(worktrees.ensured, [{ branch: 'assess/issue/12', base: 'main', readOnly: true }]);
+  assert.ok(logged.some((m) => m.includes('could not fetch: no origin')));
+  system.store.close();
+});
+
 function git(dir: string, args: string[]): string {
   return execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
 }

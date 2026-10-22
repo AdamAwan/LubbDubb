@@ -12,6 +12,8 @@ import { PermissionDesk } from '../agents/permissionDesk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
 import { EjectionDesk } from '../ejection/desk.js';
 import { ActionExecutor } from '../executor/actionExecutor.js';
+import { readOnlyFetch } from '../executor/readOnlyFetch.js';
+import { fetchRemote } from '../git/gitCli.js';
 import { ReadyingBoard } from '../executor/readying.js';
 import { RuleDispatcher } from '../dispatcher/ruleDispatcher.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
@@ -150,6 +152,7 @@ export function buildFleet(
     agentPermissionMode: config.agentPermissionMode,
     deskRoot: config.deskRoot,
     defaultBranch: config.defaultBranch,
+    fetch: readOnlyFetch(opts.remoteFetch ?? (opts.worktrees ? undefined : () => fetchRemote(config.repoRoot)), errors),
     runtime: runtimeControl,
     errors,
     autoSendReplies: () => config.sendPrRepliesWithoutApproval,

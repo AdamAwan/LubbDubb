@@ -70,6 +70,7 @@ export interface BuildOptions {
   gitObserver?: GitObserver;
   portLister?: PortLister;
   worktrees?: Worktrees;
+  remoteFetch?: () => Promise<void>;
   environmentProber?: EnvironmentProber;
   environmentHealthProber?: EnvironmentHealthProber;
   appErrorReader?: AppErrorReader;
