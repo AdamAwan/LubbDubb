@@ -196,9 +196,30 @@ before either transport spawns, because both fail _silently_ on a missing binary
 event. Resolving up front turns either into one clear message at spawn time, and hands the runtime a
 path so the child no longer depends on inheriting a correct `PATH`.
 
-A command with a separator in it is checked and returned as-is. A bare one is walked against `PATH`,
-each directory tried with the base name first and then each `PATHEXT` extension — Windows finds
+A command with a separator in it is checked and returned as-is. A bare one is walked against `PATH`.
+On POSIX each directory is tried for the name itself. On Windows it is tried for the name plus each
+`PATHEXT` extension and **never for the bare name**, unless that already carries one — Windows finds
 `claude.exe` from `claude` only that way.
+
+**An extensionless file is never a Windows answer.** `X_OK` means nothing there, so any file that
+exists passes the check — and an npm global install puts a POSIX sh shim called `claude` beside
+`claude.cmd` in the same directory. Tried first, it won: the harness resolved it, `spawn` could not
+execute it, and the child failed `ENOENT` after `spawn` had returned — the asynchronous failure
+resolving up front exists to prevent.
+
+**An npm `.cmd` shim is followed to the `.exe` it launches.** Node refuses to spawn a `.cmd` or
+`.bat` without a shell, so the npm install's `claude.cmd` is no more launchable by the stream
+runtime than its sh sibling. When a resolved `.cmd`/`.bat` launches an existing `"%dp0%\….exe" %*`,
+that exe is the answer (not the `IF EXIST "%dp0%\node.exe"` probe a node-script shim carries), which
+makes a default `claudeCommand` of `claude` work on an npm install. A batch
+file naming no exe is returned as found: `node-pty` can launch one, and on the stream runtime `spawn`
+throws `EINVAL` synchronously, which `AgentManager`'s start-failure path already reports.
+
+**A child that fails after `spawn` returns fails its agent, never the server.** `StreamJsonSession`
+listens for the child's `error` event and turns it into the ordinary failure path: the reason goes on
+the transcript as output, then an exit with code 1. An `error` arriving once the session has already
+ended — a failed signal on a child that exited — is ignored, so it cannot announce a second exit. Unlistened, that event is thrown by
+`EventEmitter`, and one agent's bad launch took down the whole harness with every other agent in it.
 
 **The env it reads is a spread copy, so both variables are looked up case-insensitively on Windows.**
 Every caller hands it `{...process.env, ...spec.env}`, which is an ordinary object — `process.env`'s
