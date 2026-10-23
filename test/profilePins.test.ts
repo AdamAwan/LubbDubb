@@ -13,7 +13,7 @@ import { appraisalHold, goalFingerprint } from '../src/intake/appraisal.js';
 import type { Issue, IssueAppraisal } from '../src/types.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 const PROFILES = {
   fast: { model: 'haiku', rank: 1, description: 'mechanical work' },
@@ -21,10 +21,10 @@ const PROFILES = {
   deep: { model: 'opus', effort: 'medium', rank: 3, description: 'work whose shape is unclear' },
 } as const;
 
-const MODELS = { profiles: PROFILES, default: 'standard', byRule: { 'issue-pickup': 'fast' } };
+const MODELS = { profiles: PROFILES, default: 'standard', byRule: { 'plan-part': 'fast' } };
 
 test('a pin beats the rule, the rule beats the default, and each says which answered', () => {
-  assert.deepEqual(resolveAgentProfile(MODELS, 'issue-pickup', 'deep'), {
+  assert.deepEqual(resolveAgentProfile(MODELS, 'plan-part', 'deep'), {
     name: 'deep',
     model: 'opus',
     effort: 'medium',
@@ -32,7 +32,7 @@ test('a pin beats the rule, the rule beats the default, and each says which answ
     autoApprove: false,
     source: 'pin',
   });
-  assert.deepEqual(resolveAgentProfile(MODELS, 'issue-pickup', null), {
+  assert.deepEqual(resolveAgentProfile(MODELS, 'plan-part', null), {
     name: 'fast',
     model: 'haiku',
     effort: null,
@@ -55,7 +55,7 @@ test('a pin wins whether it is deeper or cheaper than the rule — it is not an 
 });
 
 test('a pin naming a profile this deployment does not have falls through rather than resolving to nothing', () => {
-  const resolved = resolveAgentProfile(MODELS, 'issue-pickup', 'thorough');
+  const resolved = resolveAgentProfile(MODELS, 'plan-part', 'thorough');
   assert.equal(resolved?.name, 'fast');
   assert.equal(resolved?.source, 'rule');
 });
@@ -235,7 +235,7 @@ async function dispatchTagged(n: number, labels: string[]) {
   };
   const system = buildSystem(pinConfig(), { worktrees: new FakeWorktreeManager(), streamSpawner: spawner });
   system.connector.inject({ kind: 'new_issue', number: n, title: 'Add login', labels });
-  failPlanningOpen(system.store, n);
+  workedAsOnePart(system.store, n);
   await system.harness.runCycle('manual');
   const task = system.store.tasks.getTask(system.store.agents.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
   return { args: launches[0]!, task, system };
@@ -243,7 +243,7 @@ async function dispatchTagged(n: number, labels: string[]) {
 
 test('a tagged goal launches on its pin rather than its rule, and the row says it was pinned', async () => {
   const { args, task, system } = await dispatchTagged(941, ['lubbdubb-watch', 'lubbdubb-model-deep']);
-  assert.equal(task.rule, 'issue-pickup');
+  assert.equal(task.rule, 'plan-part');
   assert.equal(task.model, 'opus');
   assert.equal(task.effort, 'medium');
   assert.equal(task.profile, 'deep');

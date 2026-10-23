@@ -500,8 +500,8 @@ prompt.
 - **Only what no prompt already renders.** The rule that stops it becoming a second account of things
   the harness already says. It carries the **pad**; the planner's **`document` / `risks` /
   `outOfScope`**, which reach the plan sheet and no agent — and on a one-part plan are the entire
-  product of a code agent that read the whole repository, while rule `issue-pickup`'s prompt is the issue title and
-  body; a part's **`rationale` / `acceptance`**, stored and rendered nowhere at all; the **prose
+  product of a code agent that read the whole repository, while rule `plan-part`'s prompt carries only
+  the plan's reason and the part's scope; a part's **`rationale` / `acceptance`**, stored and rendered nowhere at all; the **prose
   behind each standing verdict** (appraisal, conclusion, delivery, shortfall); **the paths the goal has
   been edited in**; and **the retrospectives of the goals that have been in those same paths**. It
   therefore omits

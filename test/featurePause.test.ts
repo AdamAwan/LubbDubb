@@ -9,7 +9,7 @@ import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { Store } from '../src/store/store.js';
 import type { GoalPause, Issue } from '../src/types.js';
 import type { MirroredTicket } from '../src/store/tickets.js';
-import { pastTheFunnel } from './support/plans.js';
+import { spentAppraisalAttempts } from './support/plans.js';
 
 const NOW = '2026-09-06T12:00:00.000Z';
 const WATCH = 'lubbdubb-watch';
@@ -50,7 +50,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: pastTheFunnel(12),
+    recentDecisions: spentAppraisalAttempts(12),
     agentHeadroom: 3,
     ...over,
   };
@@ -114,13 +114,17 @@ test('a pause reads as its own standing, never as "nobody watched this"', () => 
     cooldown: DEFAULT_COOLDOWN,
     now: NOW,
     tasks: [],
-    recentDecisions: pastTheFunnel(12),
+    recentDecisions: spentAppraisalAttempts(12),
     openPrs: [],
     headroom: 3,
     paused: false,
   };
 
-  assert.equal(issuePickupStatus(story(), base).status, 'eligible');
+  assert.deepEqual(issuePickupStatus(story(), base), {
+    eligible: false,
+    status: 'planning',
+    reasons: ['awaiting a planning agent'],
+  });
 
   const held = issuePickupStatus(story(), {
     ...base,

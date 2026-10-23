@@ -1084,7 +1084,7 @@ the `profileSource` that names which level of the chain below answered — see
 `byRule` prices work by **kind**, which is right as the default axis — it is the vocabulary
 `Task.rule`, the decision log and `rollUpTaskTypes` already share. It has no answer for the case an
 operator actually hits: _this issue is harder than the rule it arrived on._ Editing config moves every
-`issue-pickup` in the fleet, which is both too big and too slow to be the answer to one hard ticket
+`plan-part` in the fleet, which is both too big and too slow to be the answer to one hard ticket
 (issue #342).
 
 The answer is a **tag on the ticket**:

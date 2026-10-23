@@ -29,10 +29,6 @@ export function investigationChip(
 
 const FINDINGS_ANSWER: Record<InvestigationResolution, { label: string; title: string }> = {
   plan: { label: 'Plan it', title: 'Send it to a planner, with these findings in its brief' },
-  pickup: {
-    label: 'Straight to pickup',
-    title: 'Skip planning — one agent works the issue whole, with these findings in its brief',
-  },
   close: {
     label: 'Close',
     title: 'Hold it for closing — nothing is planned or picked up while the label stays on',
@@ -43,6 +39,6 @@ const FINDINGS_ANSWER: Record<InvestigationResolution, { label: string; title: s
   },
 };
 
-/** The four answers to an investigation, in the order the ask draws them. → docs/spec/06-issue-pickup.md */
+/** The three answers to an investigation, in the order the ask draws them. → docs/spec/06-issue-pickup.md */
 export const FINDINGS_ANSWERS: readonly { resolution: InvestigationResolution; label: string; title: string }[] =
   INVESTIGATION_RESOLUTIONS.map((resolution) => ({ resolution, ...FINDINGS_ANSWER[resolution] }));

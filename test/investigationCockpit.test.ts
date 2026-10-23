@@ -50,7 +50,7 @@ function findings(i: Pick<Issue, 'title' | 'body'>, over: Partial<IssueInvestiga
     confidence: 'high',
     locations: 'src/export/csv.ts:42',
     blastRadius: 'Only the CSV export.',
-    recommendation: 'pickup',
+    recommendation: 'close',
     decidedAt: NOW,
     resolution: null,
     resolvedAt: null,
@@ -267,14 +267,14 @@ test('unanswered findings are an ask that draws them, the four answers and a re-
     'src/export/csv.ts:42',
     'Only the CSV export.',
     'Plan it',
-    'Straight to pickup',
     'Close',
     'Ask for info',
     'Investigate again',
   ]) {
     assert.ok(html.includes(text), `the ask does not draw “${text}”`);
   }
-  assert.match(html, /Straight to pickup · recommended/, 'the recommended answer is marked');
+  assert.match(html, /Close · recommended/, 'the recommended answer is marked');
+  assert.doesNotMatch(html, /pickup/i, 'no answer sends a fix straight to pickup');
   assert.doesNotMatch(html, /Plan it · recommended/, 'only the recommended answer is marked');
 });
 
@@ -330,7 +330,6 @@ test('each answer resolves the investigation, and Investigate again clears it', 
   for (const b of buttons) b.props.onClick();
   assert.deepEqual(calls, [
     [number, 'plan'],
-    [number, 'pickup'],
     [number, 'close'],
     [number, 'ask'],
     [number, null],

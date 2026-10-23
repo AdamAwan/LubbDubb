@@ -10,7 +10,8 @@ import { buildStateSections, buildStateSnapshot, STATE_SECTIONS } from '../src/s
 import type { StateSection } from '../src/wire.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
+import { partBranch, partOrigin } from '../src/plans/parts.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -112,13 +113,13 @@ test('a section asked for alone answers exactly what a full snapshot answers for
   const system = build();
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat/x' });
   system.connector.inject({ kind: 'new_issue', number: 13, title: 'Bug' });
-  failPlanningOpen(system.store, 13);
+  workedAsOnePart(system.store, 13);
   system.store.tasks.createTask({
     kind: 'code',
-    title: 'Resolve issue #13',
+    title: 'Issue #13 part: Issue #13',
     prompt: 'p',
-    branch: 'issue/13',
-    originRef: 'issue:13',
+    branch: partBranch(13, 'whole'),
+    originRef: partOrigin(13, 'whole'),
   });
   system.store.world.recordWorldEvents([{ kind: 'pr_merged', ref: 'pr:91', summary: 'PR #91 merged' }]);
   system.store.world.setWorldBaseline(await system.connector.getState());

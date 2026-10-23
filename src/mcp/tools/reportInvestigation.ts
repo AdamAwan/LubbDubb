@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { goalFingerprint } from '../../intake/appraisal.js';
 import { issueOriginNumber } from '../../issueOrigins.js';
 import { issueOrigin } from '../../plans/planning.js';
-import { INVESTIGATION_RESOLUTIONS } from '../../intake/investigationResolutions.js';
+import { INVESTIGATION_RESOLUTIONS, withdrawnPickup } from '../../intake/investigationResolutions.js';
 import type { InvestigationConfidence } from '../../types.js';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
@@ -22,10 +22,10 @@ const InvestigationInput = z.object({
   locations: finding('The files, functions and lines involved.'),
   blast_radius: finding('What else shares the cause or would be touched by fixing it.'),
   recommendation: z
-    .enum(INVESTIGATION_RESOLUTIONS)
+    .preprocess((v) => (typeof v === 'string' ? withdrawnPickup(v) : v), z.enum(INVESTIGATION_RESOLUTIONS))
     .describe(
-      'plan: the fix needs a planner to decompose it. pickup: one contained change an agent can make ' +
-        'directly. close: not a bug, or already fixed. ask: only the reporter can say what is missing.',
+      'plan: there is a fix to make — a planner decomposes it, however small. close: not a bug, or already ' +
+        'fixed. ask: only the reporter can say what is missing.',
     ),
 });
 
@@ -63,7 +63,7 @@ export const reportInvestigation: ToolFactory = ({ deps, agent, task, ok }) => (
       issue: recorded.originRef,
       recommendation: recorded.recommendation,
       note:
-        'Recorded. The findings wait on an operator, who resolves them to plan, pickup, close or ask. ' +
+        'Recorded. The findings wait on an operator, who resolves them to plan, close or ask. ' +
         'There is nothing further for you to do.',
     });
   },

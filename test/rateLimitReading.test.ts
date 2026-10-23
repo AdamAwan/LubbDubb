@@ -10,7 +10,7 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { Store } from '../src/store/store.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 555;
@@ -68,7 +68,7 @@ async function fleet(issue: number) {
     { worktrees: new FakeWorktreeManager(), streamSpawner: spawner, errorMirror: () => {} },
   );
   system.connector.inject({ kind: 'new_issue', number: issue, title: 'Add login' });
-  failPlanningOpen(system.store, issue);
+  workedAsOnePart(system.store, issue);
   await system.harness.runCycle('manual');
   const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   return { system, agent, child: children[0]! };

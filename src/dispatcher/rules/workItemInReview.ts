@@ -1,6 +1,16 @@
 import { openPrForIssue } from '../issuePickup.js';
 import type { RawAction, StageContext } from './context.js';
 import { workItemRelease } from './workItemRelease.js';
+import { liveWorkTask } from './workItemInProgress.js';
+import type { Issue } from '../../types.js';
+
+const STARTED: ReadonlySet<string> = new Set(['dispatched', 'in_review', 'merged', 'concluded']);
+
+function planUnderway(s: StageContext, issue: Issue): boolean {
+  const plan = s.partsPlanFor(issue.number);
+  if (plan === null || liveWorkTask(s, issue) !== undefined) return false;
+  return (s.ctx.planParts ?? []).some((p) => p.planId === plan.id && STARTED.has(p.status));
+}
 
 // → docs/spec/05-dispatcher.md (rule `work-item-in-review`)
 
@@ -13,7 +23,7 @@ export function workItemInReview(s: StageContext): void {
     if (state === undefined || issue.state !== 'open') continue;
     if (!pickupStates.includes(state)) continue;
     const pr = openPrForIssue(issue, s.openPrs);
-    const decomposed = s.partsPlanFor(issue.number) !== null;
+    const decomposed = planUnderway(s, issue);
     if (!pr && !decomposed) continue;
     if (workItemRelease(s, issue)) continue;
     s.raw.push({

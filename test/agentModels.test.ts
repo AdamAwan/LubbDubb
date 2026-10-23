@@ -7,10 +7,10 @@ import { join } from 'node:path';
 import { loadConfig, type Config } from '../src/config/config.js';
 import { buildSystem } from '../src/system/system.js';
 import { buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
-import { resolveAgentProfile } from '../src/agents/modelPolicy.js';
+import { resolveAgentProfile, validateAgentModels } from '../src/agents/modelPolicy.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 const PROFILES = {
   fast: { model: 'haiku', permissionMode: 'acceptEdits', rank: 1, description: 'mechanical work' },
@@ -87,6 +87,12 @@ test('config load rejects a byRule entry naming a profile that does not exist', 
 test('config load rejects a byRule key that is not a dispatch rule id', () => {
   assert.throws(() => load({ profiles: PROFILES, byRule: { 'issue-planning': 'deep' } }), /"issue-planning"/);
   assert.throws(() => load({ profiles: PROFILES, byRule: { 'cooldown-escalate': 'deep' } }), /"cooldown-escalate"/);
+});
+
+test('a byRule entry naming the retired issue-pickup still boots', () => {
+  const models = { profiles: PROFILES, default: 'standard', byRule: { 'issue-pickup': 'deep' } };
+  assert.doesNotThrow(() => validateAgentModels(models));
+  assert.deepEqual(load(models).agentModels, models);
 });
 
 test('config load rejects a profile written as a bare model string', () => {
@@ -193,7 +199,7 @@ async function dispatch(agentModels: Config['agentModels'], n: number) {
     streamSpawner: spawner,
   });
   system.connector.inject({ kind: 'new_issue', number: n, title: 'Add login' });
-  failPlanningOpen(system.store, n);
+  workedAsOnePart(system.store, n);
   await system.harness.runCycle('manual');
   const task = system.store.tasks.getTask(system.store.agents.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
   system.store.close();
@@ -201,11 +207,8 @@ async function dispatch(agentModels: Config['agentModels'], n: number) {
 }
 
 test('an assigned rule launches on its profile, and the task row records what it ran on', async () => {
-  const { args, task } = await dispatch(
-    { profiles: PROFILES, default: 'fast', byRule: { 'issue-pickup': 'deep' } },
-    931,
-  );
-  assert.equal(task.rule, 'issue-pickup');
+  const { args, task } = await dispatch({ profiles: PROFILES, default: 'fast', byRule: { 'plan-part': 'deep' } }, 931);
+  assert.equal(task.rule, 'plan-part');
   assert.equal(task.model, 'opus', 'the resolved string is persisted, not the profile name');
   assert.equal(task.effort, 'medium', 'and the depth beside it, off the same profile');
   assert.equal(args[args.indexOf('--model') + 1], 'opus');

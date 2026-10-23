@@ -3,20 +3,26 @@ import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext, DispatchResult } from '../src/dispatcher/dispatcher.js';
 import type { Action, Decision, DecisionOutcome, PullRequest, Task, WorldSnapshot } from '../src/types.js';
-import { pastTheFunnel } from './support/plans.js';
+import { onePartPlanRows, spentAppraisalAttempts } from './support/plans.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
+  const rows = (world.issues ?? []).map((i) => onePartPlanRows(i.number));
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
-    plans: [],
+    plans: rows.flatMap((r) => r.plans),
+    planParts: rows.flatMap((r) => r.planParts),
     tasks: [],
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
+    recentDecisions: (world.issues ?? []).flatMap((i) => spentAppraisalAttempts(i.number)),
     agentHeadroom: 3,
     ...over,
   };
+}
+
+function unplanned(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
+  return ctx(world, { plans: [], planParts: [], ...over });
 }
 
 test('failing CI produces a code agent dispatch', async () => {
@@ -123,10 +129,10 @@ test('an open issue with no linked PR is dispatched to a code agent', async () =
     }),
   );
   assert.equal(actions[0]?.type, 'dispatch_code_agent');
-  assert.equal((actions[0] as { branch: string }).branch, 'issue/101');
-  assert.equal((actions[0] as { originRef: string }).originRef, 'issue:101');
-  assert.equal((actions[0] as { originTitle: string }).originTitle, 'Login broken');
-  assert.equal((actions[0] as { originSummary: string }).originSummary, 'steps');
+  assert.equal((actions[0] as { branch: string }).branch, 'issue/101/whole');
+  assert.equal((actions[0] as { originRef: string }).originRef, 'issue:101:part:whole');
+  assert.equal((actions[0] as { originTitle: string }).originTitle, 'Login broken — Issue #101');
+  assert.equal((actions[0] as { originSummary: string }).originSummary, 'the whole issue');
 });
 
 test('with a pickup label set, only issues carrying it are dispatched', async () => {
@@ -149,7 +155,7 @@ test('with a pickup label set, only issues carrying it are dispatched', async ()
   );
   const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
   assert.equal(dispatched.length, 1, 'only the labelled issue is dispatched');
-  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101:part:whole');
 });
 
 test("the container-type gate the dispatcher applies is the operator's, not the default pair", async () => {
@@ -176,17 +182,17 @@ test("the container-type gate the dispatcher applies is the operator's, not the 
     },
   ];
 
-  const off = await new RuleDispatcher({ pickup: { containerTypes: [] } }).decide(ctx({ issues }));
+  const off = await new RuleDispatcher({ pickup: { containerTypes: [] } }).decide(unplanned({ issues }));
   assert.deepEqual(
     off.actions.filter((a) => a.type === 'dispatch_code_agent').map((a) => (a as { originRef: string }).originRef),
-    ['issue:101', 'issue:102'],
+    ['issue:101:plan', 'issue:102:plan'],
     'an empty list turns the gate off for both',
   );
 
-  const renamed = await new RuleDispatcher({ pickup: { containerTypes: ['Widget'] } }).decide(ctx({ issues }));
+  const renamed = await new RuleDispatcher({ pickup: { containerTypes: ['Widget'] } }).decide(unplanned({ issues }));
   assert.deepEqual(
     renamed.actions.filter((a) => a.type === 'dispatch_code_agent').map((a) => (a as { originRef: string }).originRef),
-    ['issue:101'],
+    ['issue:101:plan'],
     'a process template with its own container name gates on that name alone',
   );
 });
@@ -221,7 +227,7 @@ test('requireOwnLabel: a pickup tag added by someone else does not dispatch', as
   );
   const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
   assert.equal(dispatched.length, 1, 'only the issue the viewer tagged is dispatched');
-  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101:part:whole');
 });
 
 test('with no pickup label configured, all open issues stay eligible (no regression)', async () => {
@@ -246,7 +252,7 @@ test('higher-priority issues win limited headroom; equal priority breaks by issu
     },
   });
   const { actions } = await d.decide(
-    ctx(
+    unplanned(
       {
         issues: [
           {
@@ -275,13 +281,17 @@ test('higher-priority issues win limited headroom; equal priority breaks by issu
   );
   const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
   assert.equal(dispatched.length, 1, 'headroom of 1 dispatches one issue');
-  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:102', 'the priority:high issue goes first');
+  assert.equal(
+    (dispatched[0] as { originRef: string }).originRef,
+    'issue:102:plan',
+    'the priority:high issue is planned first',
+  );
 });
 
 test('among equal-priority issues the lowest issue number is dispatched first', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
-    ctx(
+    unplanned(
       {
         issues: [
           { id: 'i1', number: 205, title: 'later', body: '', labels: [], state: 'open', linkedPrNumber: null },
@@ -292,13 +302,13 @@ test('among equal-priority issues the lowest issue number is dispatched first', 
     ),
   );
   const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
-  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
+  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101:plan');
 });
 
 test('an issue whose linked PR is still open is not re-dispatched', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
-    ctx({
+    unplanned({
       issues: [{ id: 'i1', number: 101, title: 'X', body: '', labels: [], state: 'open', linkedPrNumber: 43 }],
       pullRequests: [
         { id: 'p', number: 43, title: 'wip', branch: 'issue/101', ciStatus: 'pending', unresolvedComments: [] },
@@ -311,20 +321,20 @@ test('an issue whose linked PR is still open is not re-dispatched', async () => 
 test('an issue whose only PR merged is picked up again', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
-    ctx({
+    unplanned({
       issues: [{ id: 'i1', number: 101, title: 'X', body: '', labels: [], state: 'open', linkedPrNumber: 43 }],
       pullRequests: [],
     }),
   );
   assert.equal(actions[0]?.type, 'dispatch_code_agent');
-  assert.equal((actions[0] as { originRef: string }).originRef, 'issue:101');
-  assert.match((actions[0] as { reason: string }).reason, /has no open PR/);
+  assert.equal((actions[0] as { originRef: string }).originRef, 'issue:101:plan');
+  assert.match((actions[0] as { reason: string }).reason, /has no plan yet/);
 });
 
 test('an unwatched PR still holds its issue back', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
-    ctx(
+    unplanned(
       { issues: [{ id: 'i1', number: 101, title: 'X', body: '', labels: [], state: 'open', linkedPrNumber: 43 }] },
       {
         hiddenPrs: [
@@ -943,7 +953,7 @@ test('does not duplicate work already in flight for the same origin', async () =
 test('state gate: only work items in a pickup state are dispatched', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'] } });
   const { actions } = await d.decide(
-    ctx({
+    unplanned({
       issues: [
         {
           id: 'i1',
@@ -991,7 +1001,7 @@ test('state gate: only work items in a pickup state are dispatched', async () =>
   const dispatched = actions.filter((a) => a.type === 'dispatch_code_agent');
   assert.deepEqual(
     dispatched.map((a) => (a as { originRef: string }).originRef).sort(),
-    ['issue:1', 'issue:2'],
+    ['issue:1:plan', 'issue:2:plan'],
     'only Ready/Doing items are dispatched; In Review and New are left alone',
   );
 });
@@ -999,7 +1009,7 @@ test('state gate: only work items in a pickup state are dispatched', async () =>
 test('in-review back-off: an open PR on a work item branch moves it to the review state', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
-    ctx({
+    unplanned({
       issues: [
         {
           id: 'i1',
@@ -1026,7 +1036,7 @@ test('in-review back-off: an open PR on a work item branch moves it to the revie
 test('in-review back-off: matches via linkedPrNumber when the branch differs', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
-    ctx({
+    unplanned({
       issues: [
         {
           id: 'i1',
@@ -1050,7 +1060,7 @@ test('in-review back-off: matches via linkedPrNumber when the branch differs', a
 test('in-review back-off: an item already in the review state is not re-transitioned', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
-    ctx({
+    unplanned({
       issues: [
         {
           id: 'i1',
@@ -1074,7 +1084,7 @@ test('in-review back-off: an item already in the review state is not re-transiti
 test('in-review back-off is off unless both pickupStates and inReviewState are set', async () => {
   const d = new RuleDispatcher({ pickup: { inReviewState: 'In Review' } });
   const { actions } = await d.decide(
-    ctx({
+    unplanned({
       issues: [
         {
           id: 'i1',
@@ -1132,19 +1142,19 @@ function acted(actions: readonly { type: string }[]): boolean {
 
 test('return-from-review: an undeclared item whose PR merged stays parked in review', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
-  const { actions } = await d.decide(ctx(reviewedIssue(9, 94)));
+  const { actions } = await d.decide(unplanned(reviewedIssue(9, 94)));
   assert.ok(!acted(actions), 'nobody said there is more to do, so the item is left for a human rather than re-picked');
 });
 
 test('return-from-review: a concluded-done item stays parked in review', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
-  const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'done')] }));
+  const { actions } = await d.decide(unplanned(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'done')] }));
   assert.ok(!acted(actions));
 });
 
 test('return-from-review: a more_work verdict asks a human to move the item back, and moves nothing', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready', 'Doing'], inReviewState: 'In Review' } });
-  const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'more_work')] }));
+  const { actions } = await d.decide(unplanned(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'more_work')] }));
   assert.ok(!actions.some((a) => a.type === 'set_work_item_state'), 'the harness never moves a work item backwards');
   const ask = actions.find((a) => a.type === 'escalate_to_human');
   assert.ok(ask, 'the agent said work is outstanding, so a human is told the item is stranded in review');
@@ -1155,7 +1165,7 @@ test('return-from-review: a more_work verdict asks a human to move the item back
 test("return-from-review: an operator's more_work verdict is asked about too", async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
-    ctx(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'more_work', 'operator')] }),
+    unplanned(reviewedIssue(9, 94), { conclusions: [conclusion(9, 'more_work', 'operator')] }),
   );
   const ask = actions.find((a) => a.type === 'escalate_to_human');
   assert.ok(ask);
@@ -1164,14 +1174,14 @@ test("return-from-review: an operator's more_work verdict is asked about too", a
 
 test('return-from-review: a verdict on another issue does not release this one', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
-  const { actions } = await d.decide(ctx(reviewedIssue(9, 94), { conclusions: [conclusion(11, 'more_work')] }));
+  const { actions } = await d.decide(unplanned(reviewedIssue(9, 94), { conclusions: [conclusion(11, 'more_work')] }));
   assert.ok(!acted(actions));
 });
 
 test('return-from-review: an item whose PR is still open stays in review', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
-    ctx({
+    unplanned({
       issues: [
         {
           id: 'i1',
@@ -1195,7 +1205,7 @@ test('return-from-review: an item whose PR is still open stays in review', async
 test('return-from-review: a closed item is left in the review state', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
-    ctx({
+    unplanned({
       issues: [
         {
           id: 'i1',
@@ -1216,7 +1226,7 @@ test('return-from-review: a closed item is left in the review state', async () =
 test('return-from-review: an ignore-tagged open PR keeps the item in review', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inReviewState: 'In Review' } });
   const { actions } = await d.decide(
-    ctx(
+    unplanned(
       {
         issues: [
           {
@@ -1252,7 +1262,7 @@ test('return-from-review: an ignore-tagged open PR keeps the item in review', as
 test('return-from-review is off unless both pickupStates and inReviewState are set', async () => {
   const d = new RuleDispatcher({ pickup: { inReviewState: 'In Review' } });
   const { actions } = await d.decide(
-    ctx({
+    unplanned({
       issues: [
         {
           id: 'i1',
@@ -1307,7 +1317,7 @@ function runningTask(id: string, originRef: string): Task {
 
 test('in-progress: a live work agent moves the item to the in-progress state', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inProgressState: 'Doing' } });
-  const { actions } = await d.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
+  const { actions } = await d.decide(unplanned(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
   const move = actions.find((a) => a.type === 'set_work_item_state');
   assert.ok(move, 'a transition is emitted');
   assert.equal((move as { state: string }).state, 'Doing');
@@ -1316,25 +1326,27 @@ test('in-progress: a live work agent moves the item to the in-progress state', a
 
 test('in-progress: a plan part counts as work on the goal', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inProgressState: 'Doing' } });
-  const { actions } = await d.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30:part:api')] }));
+  const { actions } = await d.decide(
+    unplanned(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30:part:api')] }),
+  );
   assert.ok(actions.some((a) => a.type === 'set_work_item_state'));
 });
 
 test('in-progress: an appraisal, a planner or an assessor is not work on the goal', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inProgressState: 'Doing' } });
   for (const origin of ['issue:30:appraisal', 'issue:30:plan', 'issue:30:assess', 'issue:30:retro']) {
-    const { actions } = await d.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', origin)] }));
+    const { actions } = await d.decide(unplanned(tracked(30, 'Ready'), { tasks: [runningTask('t1', origin)] }));
     assert.ok(!actions.some((a) => a.type === 'set_work_item_state'), `${origin} moved the item`);
   }
 });
 
 test('in-progress: no agent, an open PR, or the state already reached, moves nothing', async () => {
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inProgressState: 'Doing' } });
-  const idle = await d.decide(ctx(tracked(30, 'Ready')));
+  const idle = await d.decide(unplanned(tracked(30, 'Ready')));
   assert.ok(!idle.actions.some((a) => a.type === 'set_work_item_state'), 'a dispatch candidate is not a live agent');
 
   const withPr = await d.decide(
-    ctx(
+    unplanned(
       {
         ...tracked(30, 'Ready'),
         pullRequests: [
@@ -1346,17 +1358,17 @@ test('in-progress: no agent, an open PR, or the state already reached, moves not
   );
   assert.ok(!withPr.actions.some((a) => a.type === 'set_work_item_state'), "an open PR is the review state's business");
 
-  const already = await d.decide(ctx(tracked(30, 'Doing'), { tasks: [runningTask('t1', 'issue:30')] }));
+  const already = await d.decide(unplanned(tracked(30, 'Doing'), { tasks: [runningTask('t1', 'issue:30')] }));
   assert.ok(!already.actions.some((a) => a.type === 'set_work_item_state'), 'the move does not repeat');
 });
 
 test('in-progress is off unless both pickupStates and inProgressState are set', async () => {
   const noStates = new RuleDispatcher({ pickup: { inProgressState: 'Doing' } });
-  const a = await noStates.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
+  const a = await noStates.decide(unplanned(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
   assert.ok(!a.actions.some((x) => x.type === 'set_work_item_state'));
 
   const noProgress = new RuleDispatcher({ pickup: { pickupStates: ['Ready'] } });
-  const b = await noProgress.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
+  const b = await noProgress.decide(unplanned(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
   assert.ok(!b.actions.some((x) => x.type === 'set_work_item_state'));
 });
 
@@ -1372,12 +1384,12 @@ test('the in-progress state keeps an item pickup-eligible, but does not lift a d
     updatedAt: '2026-07-25T00:00:00.000Z',
   };
   const d = new RuleDispatcher({ pickup: { pickupStates: ['Ready'], inProgressState: 'Doing' } });
-  const parked = await d.decide(ctx(tracked(31, 'Doing'), { deliveries: [delivered] }));
+  const parked = await d.decide(unplanned(tracked(31, 'Doing'), { deliveries: [delivered] }));
   assert.ok(
     !parked.actions.some((a) => a.type === 'dispatch_code_agent'),
     'a delivered item in the in-progress state stays parked',
   );
-  const free = await d.decide(ctx(tracked(31, 'Doing')));
+  const free = await d.decide(unplanned(tracked(31, 'Doing')));
   assert.ok(
     free.actions.some((a) => a.type === 'dispatch_code_agent'),
     'the state gate itself lets "Doing" through',

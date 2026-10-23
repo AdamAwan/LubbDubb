@@ -8,7 +8,7 @@ import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system/system.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 555;
@@ -52,7 +52,7 @@ test('stream-mode: persisted transcript is clean and structured (no leaked senti
 
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
 
-  failPlanningOpen(system.store, 901);
+  workedAsOnePart(system.store, 901);
   await system.harness.runCycle('manual');
   const child = children[0]!;
   const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
@@ -92,14 +92,14 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
 
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
 
-  failPlanningOpen(system.store, 902);
+  workedAsOnePart(system.store, 902);
   await system.harness.runCycle('manual');
 
   assert.equal(children.length, 1);
   const child = children[0]!;
   const firstMsg = JSON.parse(child.writes[0]!.trim());
   assert.equal(firstMsg.type, 'user');
-  assert.match(firstMsg.message.content, /issue #902/);
+  assert.match(firstMsg.message.content, /Issue #902 \("Add login"\)/);
 
   const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
 

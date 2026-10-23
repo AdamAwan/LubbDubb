@@ -12,7 +12,7 @@ import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { blockedGoals } from '../obstacles/blocked.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { appraisalHold } from '../intake/appraisal.js';
-import { investigationSkipsPlanning, investigationStanding, investigationStandings } from '../intake/investigation.js';
+import { investigationStandings } from '../intake/investigation.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { pinnedProfileFor } from '../intake/profilePin.js';
 import { issueOrigin, plannerVerdict, resolvePlanRoute, type PlanRouteVerdict } from '../plans/planning.js';
@@ -76,7 +76,6 @@ export function planRoutes(
   eligibleIssues: StageContext['eligibleIssues'],
   plansByOrigin: ReadonlyMap<string, Plan>,
   cooldown: CooldownPolicy,
-  investigations: StageContext['investigations'],
 ): Map<number, PlanRouteVerdict> {
   const routes = new Map<number, PlanRouteVerdict>();
   for (const { issue } of eligibleIssues) {
@@ -87,7 +86,6 @@ export function planRoutes(
         plan,
         verdict: plannerVerdict(issue.number, plan, ctx.world.takenAt, ctx.recentDecisions, cooldown),
         existingParts: plan ? liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id)).length : 0,
-        skipPlanning: investigationSkipsPlanning(investigationStanding(investigations, issue.number)),
       }),
     );
   }

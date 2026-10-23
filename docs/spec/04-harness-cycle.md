@@ -494,7 +494,7 @@ flowchart TD
    dispatched — their own reports being taken up or settled, and what a second voice has since
    corroborated. The **ownership** then records who owns each row and which goals the board has let
    back out. The whole pass is **above `decide`**, and both halves matter: a block cleared here is a
-   goal rule `issue-pickup` sees this pulse rather than next, and a row owned here reads as owned in
+   goal rule `issue-plan` sees this pulse rather than next, and a row owned here reads as owned in
    the prompt of every dispatch composed below — an agent told _do not fix it, #841 has it_ on the
    pulse the ticket was filed. The desk also sits **below `notices`** for the reason it sits above
    `decide`: an agent whose report was taken up is told so by the pulse that took it. Awaited but never

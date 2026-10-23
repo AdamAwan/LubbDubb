@@ -809,9 +809,9 @@ gates anything would be a chore. It is `blocking` and `now` on the `sitting` row
 waiting on the answer — and stage `plan` on the goal's track.
 
 The band draws the findings whole — reproduction, root cause with its confidence, where, blast radius —
-and names the agent's recommendation. Under them are the four resolutions (**Plan it**, **Straight to
-pickup**, **Close**, **Ask for info**), the recommended one in the primary tone and marked
-`· recommended`, and **Investigate again**, which clears the row so a fresh agent looks. All five go
+and names the agent's recommendation. Under them are the three resolutions (**Plan it**, **Close**,
+**Ask for info**), the recommended one in the primary tone and marked `· recommended`, and
+**Investigate again**, which clears the row so a fresh agent looks. All four go
 through `POST /api/issues/:number/investigation`
 ([16](16-http-api.md#post-apiissuesnumberinvestigation)). The goal header carries an `Investigation ·`
 chip for a current record (`investigationChip`, `web/src/view/issueAsks.ts`) — green with the answer
@@ -4263,7 +4263,8 @@ card is the drift `PanelRowModel` exists to end, one level up.
   drawn as a way onto its page, behind the word **`delivers`** — two bare refs state that the row names
   two things and nothing about how they are joined, and on this card the joining is the row's whole
   reason for existing. Through the parts alone the goal was drawn for almost no PR at all: a goal
-  the funnel failed open on has no parts and its PR is on the flat `issue/<n>` branch. A PR no ticket owns
+  worked whole — the funnel's old fail-open arm, retired, though its pull requests outlive it — has no
+  parts and its PR is on the flat `issue/<n>` branch. A PR no ticket owns
   resolves to nothing and draws nothing — the word goes with it — which is honest about what is known. The toggle is **disabled rather than absent** with no watch label configured: the gate
   being off is a fact about the deployment worth seeing, and a control that comes and goes with a
   config key reads as a bug in the page. The merged count is drawn only where the snapshot carries a

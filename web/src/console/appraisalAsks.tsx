@@ -113,8 +113,8 @@ export function findingsBody(row: NeedRow, view: CockpitView, actions: CockpitAc
       <Finding label="Blast radius" text={found.blastRadius} />
       <p className="cn-tick">
         The agent recommends{' '}
-        <strong>{FINDINGS_ANSWERS.find((a) => a.resolution === found.recommendation)?.label}</strong>. Planning it or
-        sending it straight to pickup carries these findings into the agent&rsquo;s brief.
+        <strong>{FINDINGS_ANSWERS.find((a) => a.resolution === found.recommendation)?.label}</strong>. Planning it
+        carries these findings into the planner&rsquo;s brief.
       </p>
       <ButtonRow bar>
         {FINDINGS_ANSWERS.map(({ resolution, label, title }) => {
@@ -123,7 +123,7 @@ export function findingsBody(row: NeedRow, view: CockpitView, actions: CockpitAc
             <AsyncButton
               key={resolution}
               tone={recommended ? 'primary' : undefined}
-              usage={resolution === 'plan' || resolution === 'pickup' ? 'investigation.accept' : 'investigation.reject'}
+              usage={resolution === 'plan' ? 'investigation.accept' : 'investigation.reject'}
               onClick={() => actions.resolveInvestigation(issue.number, resolution)}
               title={recommended ? `Recommended — ${title}` : title}
             >

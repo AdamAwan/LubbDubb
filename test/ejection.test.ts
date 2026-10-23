@@ -7,7 +7,7 @@ import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { gitRepo } from './support/gitRepo.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 import { pinnedPool } from './support/worktrees.js';
 import type { TaskSummary } from '../src/types.js';
 
@@ -37,9 +37,11 @@ function build(overrides: Record<string, unknown> = {}): { system: System; backe
 
 async function codeAgent(system: System, issueNumber: number): Promise<TaskSummary> {
   system.connector.inject({ kind: 'new_issue', number: issueNumber, title: `Bug ${issueNumber}` });
-  failPlanningOpen(system.store, issueNumber);
+  workedAsOnePart(system.store, issueNumber);
   await system.harness.runCycle('manual');
-  const task = system.store.tasks.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}`);
+  const task = system.store.tasks
+    .listTasks()
+    .find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}/whole`);
   assert.ok(task, 'a code task should have been dispatched');
   return task;
 }

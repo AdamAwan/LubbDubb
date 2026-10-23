@@ -55,7 +55,6 @@ import { planAmendment } from './rules/planAmendment.js';
 import { planApproval } from './rules/planApproval.js';
 import { planBlocked } from './rules/planBlocked.js';
 import { planPart } from './rules/planPart.js';
-import { issuePickup } from './rules/issuePickup.js';
 import { localValidation } from './rules/localValidation.js';
 import { localValidationFix } from './rules/localValidationFix.js';
 import { validateCheck } from './rules/validateCheck.js';
@@ -93,7 +92,6 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'plan-amendment': planAmendment,
   'plan-blocked': planBlocked,
   'plan-part': planPart,
-  'issue-pickup': issuePickup,
   'local-validation': localValidation,
   'local-validation-fix': localValidationFix,
   'validation-plan': validationPlan,
@@ -309,12 +307,11 @@ export class RuleDispatcher implements Dispatcher {
       profileOverrides,
       pinFor: pinResolver(ctx, plansByOrigin, profileOverrides),
       parentCandidates: candidateParents(ctx.world.issues, pickup.containerTypes),
-      routes: planRoutes(ctx, gates.eligibleIssues, plansByOrigin, this.cooldown, investigations),
+      routes: planRoutes(ctx, gates.eligibleIssues, plansByOrigin, this.cooldown),
       validationChecks: checksByOrigin(ctx.validationChecks ?? []),
       appraising: new Set<number>(),
       investigating: new Set<number>(),
       investigations,
-      assessing: new Set<number>(),
       redBaseChecks: redBaseChecks(openPrs),
       consider: considerWith(ctx, this.cooldown, raw, candidates),
       pickup,

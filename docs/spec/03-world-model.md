@@ -86,7 +86,7 @@ retained issue is one an assessor can actually read.
 
 **Every rule but those two skips a retained issue in its own body.** A retained stub reads `closed`,
 which most gates refuse already — and that is the point: safety by coincidence is what a later change
-removes with nothing failing. `issue-pickup` and `issue-plan` are gated at `eligibleIssues`, the two
+removes with nothing failing. `issue-plan` is gated at `eligibleIssues`, the two
 work-item rules test `retained` directly, and the plan- and shortfall-driven rules reach their issue
 through `StageContext.liveIssue`, which returns null for one. See
 [05](05-dispatcher.md#the-rule-book).

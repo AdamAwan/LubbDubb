@@ -711,8 +711,8 @@ instruction is what reaches the agent, appended to every dispatch on the goal un
 everything else the route does, and it is the half that used not to happen: the two states an
 operator presses **More work** in are exactly the two the funnel has already stopped in — a standing
 delivery, which holds the goal out of `eligibleIssues` altogether, and a settled plan, which
-`resolvePlanRoute` answers `parts` whatever its status, so rule `issue-pickup` skips it as planned
-while rule `plan-part` finds every part finished. The words landed, the cockpit drew them and no agent
+`resolvePlanRoute` answers `parts` whatever its status, so no planner is owed while rule `plan-part`
+finds every part finished. The words landed, the cockpit drew them and no agent
 was ever dispatched to read them. That is the gap [`src/delivery/shortfall.ts`](../../src/delivery/shortfall.ts)
 names for the _assessor's_ negative verdict, reached through the operator's door instead.
 
@@ -899,10 +899,10 @@ snapshot does not carry ([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-h
 
 ### `POST /api/issues/:number/investigation`
 
-Body `{resolution: 'plan'|'pickup'|'close'|'ask'}` or `{clear: true}`. The operator's answer to a bug
+Body `{resolution: 'plan'|'close'|'ask'}` or `{clear: true}`. The operator's answer to a bug
 investigation's findings ([38](38-bug-investigation.md#resolving-the-findings)): _plan_ releases the
-planner with the findings appended, _pickup_ skips planning, _close_ and _ask_ keep the issue held while
-the label is on, and `clear` deletes the row — which, with the label still on, investigates again.
+planner with the findings appended, _close_ and _ask_ keep the issue held while the label is on, a
+withdrawn `pickup` is a 400 ([38](38-bug-investigation.md#no-fix-without-a-plan)), and `clear` deletes the row — which, with the label still on, investigates again.
 **404** when no investigation is recorded for the issue; **409** on a resolution when the record is
 not in force, read through `investigationStanding` — the issue is not in the last world snapshot, its
 text has been edited since the findings, or it no longer carries the investigate label — so a row
@@ -2815,7 +2815,7 @@ and that a goal's older runs come back from its route — including that `issue:
 
 Eight consistency points:
 
-- **The pickup verdict uses the same inputs rule `issue-pickup` consults** — the policy, `DEFAULT_COOLDOWN`, the
+- **The pickup verdict uses the same inputs the dispatcher's issue rules consult** — the policy, `DEFAULT_COOLDOWN`, the
   world's `takenAt`, tasks, the last 200 decisions, the **unfiltered** open PR list, the plan graph,
   the planning policy, and the same headroom arithmetic — so the chip predicts what happens next cycle.
 - **PR health is passed the full open-PR list** as stack context, so an inherited CI failure names the

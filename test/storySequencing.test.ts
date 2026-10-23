@@ -4,9 +4,13 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { linkEdges, sequenceHoldReason, sequenceReadiness } from '../src/sequence/readiness.js';
 import type { DispatchContext, QueueItem } from '../src/dispatcher/dispatcher.js';
 import type { Issue, IssueRelative, PullRequest } from '../src/types.js';
-import { pastTheFunnel } from './support/plans.js';
+import { spentAppraisalAttempts } from './support/plans.js';
+import { planOrigin } from '../src/plans/planning.js';
+import { partBranch } from '../src/plans/parts.js';
 
 const NOW = '2026-09-04T12:00:00.000Z';
+const PLAN_11 = planOrigin(11);
+const PLAN_12 = planOrigin(12);
 
 function issue(number: number, over: Partial<Issue> = {}): Issue {
   return {
@@ -36,7 +40,7 @@ function ctx(issues: Issue[], over: Partial<DispatchContext> = {}): DispatchCont
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: issues.flatMap((i) => pastTheFunnel(i.number)),
+    recentDecisions: issues.flatMap((i) => spentAppraisalAttempts(i.number)),
     agentHeadroom: 5,
     ...over,
   };
@@ -98,52 +102,52 @@ test('the held reason names what the story waits behind, not the mechanism', () 
   assert.match(sequenceHoldReason({ on: [593, 597], unworkable: [] }), /#593, #597, none of which/);
 });
 
-test('a held story is queued with its reason, not dropped', async () => {
+test('a held story’s planner is queued with its reason, not dropped', async () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
   const { upcoming, actions } = await linksOn().decide(ctx(issues));
 
-  const held = queued(upcoming, 'issue:12');
+  const held = queued(upcoming, PLAN_12);
   assert.ok(held, 'it is in Up next — a dispatch that silently never appears is one nobody can read');
   assert.equal(held.status, 'sequenced');
-  assert.equal(held.rule, 'issue-pickup', 'attributed to the rule that proposed it, not to what held it');
+  assert.equal(held.rule, 'issue-plan', 'attributed to the rule that proposed it, not to what held it');
   assert.match(held.reason, /waits on #11/);
   assert.ok(
-    !actions.some((a) => a.type === 'dispatch_code_agent' && a.originRef === 'issue:12'),
+    !actions.some((a) => a.type === 'dispatch_code_agent' && a.originRef === PLAN_12),
     'and it does not go out',
   );
-  assert.equal(queued(upcoming, 'issue:11')?.status, 'dispatching', 'the story it waits on does');
+  assert.equal(queued(upcoming, PLAN_11)?.status, 'dispatching', 'the story it waits on does');
 });
 
-test('the same story is still held once its predecessor opens a pull request — it is not based on that branch', async () => {
+test('the same story’s planner is still held once its predecessor opens a pull request — it is not based on that branch', async () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
   const { upcoming } = await linksOn().decide(
-    ctx(issues, { world: { takenAt: NOW, pullRequests: [pr(7, 'issue/11')], issues } }),
+    ctx(issues, { world: { takenAt: NOW, pullRequests: [pr(7, partBranch(11, 'whole'))], issues } }),
   );
-  assert.equal(queued(upcoming, 'issue:12')?.status, 'sequenced');
+  assert.equal(queued(upcoming, PLAN_12)?.status, 'sequenced');
 });
 
-test('the same story dispatches once its predecessor closes', async () => {
+test('the same story’s planner dispatches once its predecessor closes', async () => {
   const issues = [issue(11, { state: 'closed' }), issue(12, { dependsOn: [relative(11)] })];
   const { upcoming } = await linksOn().decide(ctx(issues));
-  assert.equal(queued(upcoming, 'issue:12')?.status, 'dispatching');
+  assert.equal(queued(upcoming, PLAN_12)?.status, 'dispatching');
 });
 
 test('a dispatcher given no sequencing policy holds nothing', async () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
   const { upcoming } = await new RuleDispatcher().decide(ctx(issues));
-  assert.equal(queued(upcoming, 'issue:12')?.status, 'dispatching');
+  assert.equal(queued(upcoming, PLAN_12)?.status, 'dispatching');
 });
 
 test('a flagged goal is dispatched through the hold', async () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
   const { upcoming } = await linksOn().decide(ctx(issues, { goalPriorities: [{ originRef: 'issue:12', since: NOW }] }));
-  assert.equal(queued(upcoming, 'issue:12')?.status, 'dispatching');
+  assert.equal(queued(upcoming, PLAN_12)?.status, 'dispatching');
 });
 
 test('a dragged row is dispatched through the hold', async () => {
   const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
-  const { upcoming } = await linksOn().decide(ctx(issues, { priorityOverrides: [{ origin: 'issue:12', rank: 0 }] }));
-  assert.equal(queued(upcoming, 'issue:12')?.status, 'dispatching');
+  const { upcoming } = await linksOn().decide(ctx(issues, { priorityOverrides: [{ origin: PLAN_12, rank: 0 }] }));
+  assert.equal(queued(upcoming, PLAN_12)?.status, 'dispatching');
 });
 
 test('a drag clears the sequence hold and nothing else', async () => {
@@ -156,17 +160,6 @@ test('a drag clears the sequence hold and nothing else', async () => {
     'superseded',
     'the appraisal still holds the planner it claimed this cycle',
   );
-});
-
-test('the planner is held by the order too, and says so rather than blaming a cooldown', async () => {
-  const issues = [issue(11), issue(12, { dependsOn: [relative(11)] })];
-  const { upcoming } = await linksOn().decide(
-    ctx(issues, { recentDecisions: issues.flatMap((i) => pastTheFunnel(i.number).slice(0, 3)) }),
-  );
-  const planner = queued(upcoming, 'issue:12:plan');
-  assert.ok(planner);
-  assert.equal(planner.status, 'sequenced');
-  assert.match(planner.reason, /waits on #11/);
 });
 
 test('the appraiser is held by the order too, rather than judging a goal against a repository that is missing its predecessor', async () => {

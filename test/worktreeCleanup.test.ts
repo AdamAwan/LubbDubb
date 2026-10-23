@@ -8,7 +8,7 @@ import { buildSystem } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { gitRepo, tmpDir } from './support/gitRepo.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 import { pinnedPool } from './support/worktrees.js';
 
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -78,9 +78,9 @@ function buildStream() {
 
 async function codeAgent(sys: ReturnType<typeof build>['system'], issueNumber: number) {
   sys.connector.inject({ kind: 'new_issue', number: issueNumber, title: `Bug ${issueNumber}` });
-  failPlanningOpen(sys.store, issueNumber);
+  workedAsOnePart(sys.store, issueNumber);
   await sys.harness.runCycle('manual');
-  const task = sys.store.tasks.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}`);
+  const task = sys.store.tasks.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}/whole`);
   assert.ok(task, 'a code task should have been dispatched');
   return task!;
 }

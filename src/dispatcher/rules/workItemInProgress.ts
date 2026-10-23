@@ -1,9 +1,14 @@
 import { openPrForIssue } from '../issuePickup.js';
 import { issueOriginRole } from '../../issueOrigins.js';
 import { isActiveTask } from '../../tasks.js';
+import type { Issue, TaskSummary } from '../../types.js';
 import type { RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `work-item-in-progress`)
+
+export function liveWorkTask(s: StageContext, issue: Issue): TaskSummary | undefined {
+  return s.ctx.tasks.find((t) => isActiveTask(t) && issueOriginRole(issue.number, t.originRef) === 'work');
+}
 
 export function workItemInProgress(s: StageContext): void {
   if (!s.workItemInProgress) return;
@@ -15,8 +20,7 @@ export function workItemInProgress(s: StageContext): void {
     if (!pickupStates.includes(state)) continue;
     if (state === inProgressState) continue;
     if (openPrForIssue(issue, s.openPrs)) continue;
-    if (s.partsPlanFor(issue.number) !== null) continue;
-    const task = s.ctx.tasks.find((t) => isActiveTask(t) && issueOriginRole(issue.number, t.originRef) === 'work');
+    const task = liveWorkTask(s, issue);
     if (!task) continue;
     s.raw.push({
       type: 'set_work_item_state',

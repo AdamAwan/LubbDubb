@@ -32,7 +32,7 @@ import { renderPlanComment } from '../src/plans/planComment.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
-import { pastTheFunnel, spentAppraisalAttempts } from './support/plans.js';
+import { spentAppraisalAttempts, spentPlannerAttempts } from './support/plans.js';
 
 const enabled = { ...DEFAULT_PLANNING, enabled: true };
 
@@ -242,18 +242,19 @@ test('a part stacks on its dependency while that dependency is still open', asyn
   );
 });
 
-test('parts rank after planners, before pickups, bottom of the stack first', async () => {
+test('parts rank after planners, bottom of the stack first, and a capped planner queues no work', async () => {
   const plans: Plan[] = [{ ...plan(), id: 'plan_9', originRef: 'issue:9' }];
   const parts = [
     { ...part('b', 2, { dependsOn: ['a'] }), id: 'plan_9:b', planId: 'plan_9' },
     { ...part('a', 1), id: 'plan_9:a', planId: 'plan_9' },
   ];
-  const result = await new RuleDispatcher({ defaultBranch: 'main', planning: enabled }).decide(
+  const dispatcher = new RuleDispatcher({ defaultBranch: 'main', planning: enabled });
+  const result = await dispatcher.decide(
     context([issue(7), issue(9), issue(14)], {
       plans,
       planParts: parts,
       agentHeadroom: 0,
-      recentDecisions: pastTheFunnel(14),
+      recentDecisions: spentPlannerAttempts(14),
     }),
   );
   assert.deepEqual(
@@ -262,9 +263,31 @@ test('parts rank after planners, before pickups, bottom of the stack first', asy
       ['issue-plan', 'issue:7:plan'],
       ['plan-part', 'issue:9:part:a'],
       ['plan-part', 'issue:9:part:b'],
-      ['issue-pickup', 'issue:14'],
     ],
+    'issue 14 has no plan, so nothing is queued to implement it',
   );
+  const asks = result.actions.filter((a) => a.type === 'escalate_to_human');
+  assert.deepEqual(
+    asks.map((a) => [a.rule, (a.context as { originRef: string }).originRef]),
+    [['issue-plan', 'issue:14:plan']],
+    'the capped planner escalates instead',
+  );
+
+  const escalated: Decision = {
+    id: 'dec_escalated_14',
+    cycleId: 'cyc_escalated_14',
+    action: asks[0]!,
+    outcome: 'executed',
+    detail: '',
+    rule: 'issue-plan',
+    admission: 'cooldown-escalate',
+    createdAt: '2026-07-25T01:00:00.000Z',
+  };
+  const after = await dispatcher.decide(
+    context([issue(14)], { agentHeadroom: 5, recentDecisions: [...spentPlannerAttempts(14), escalated] }),
+  );
+  assert.ok(!after.actions.some((a) => a.type === 'escalate_to_human'), 'it escalates once, then holds');
+  assert.ok(!after.actions.some((a) => a.type === 'dispatch_code_agent'), 'and still dispatches no implementation');
 });
 
 test('maxConcurrentPartsPerIssue caps how many parts of one plan get agents', async () => {

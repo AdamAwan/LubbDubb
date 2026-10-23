@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS issue_investigations (
   confidence     TEXT NOT NULL,     -- high | medium | low
   locations      TEXT NOT NULL,
   blast_radius   TEXT NOT NULL,
-  recommendation TEXT NOT NULL,     -- plan | pickup | close | ask
+  recommendation TEXT NOT NULL,     -- plan | close | ask (a pickup row reads as plan)
   decided_at     TEXT NOT NULL,
   resolution     TEXT,              -- null while it waits on the operator; else plan | pickup | close | ask
   resolved_at    TEXT

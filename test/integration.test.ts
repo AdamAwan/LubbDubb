@@ -8,7 +8,7 @@ import { buildSystem, type System } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Escalation } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -30,7 +30,7 @@ async function agentWithOpenEscalation(
   backend: FakePtyBackend,
 ): Promise<{ agentId: string; escalationId: string }> {
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Needs a call' });
-  failPlanningOpen(system.store, 901);
+  workedAsOnePart(system.store, 901);
   await system.harness.runCycle('manual');
   const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
   backend.last().emit('@@LUBBDUBB_WAITING:Which provider should I use?@@');
@@ -43,7 +43,7 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
   const system = buildSystem(testConfig(), { backend });
 
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
-  failPlanningOpen(system.store, 902);
+  workedAsOnePart(system.store, 902);
   await system.harness.runCycle('manual');
 
   const live = system.store.agents.listAgentsByStatus('starting', 'running');
@@ -59,7 +59,7 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
   assert.equal(system.store.agents.getAgent(agentId)!.status, 'waiting');
   const ctx = open[0]!.context;
   assert.equal(ctx.originRef, system.store.tasks.getTask(live[0]!.taskId)!.originRef);
-  assert.match(String(ctx.originRef), /^issue:902$/);
+  assert.match(String(ctx.originRef), /^issue:902:part:whole$/);
   assert.match(String(ctx.recentOutput), /identity provider/);
   assert.doesNotMatch(String(ctx.recentOutput), /LUBBDUBB/, 'sentinels are stripped from the excerpt');
 
@@ -84,15 +84,15 @@ test('the watch gate gates dispatch at the buildSystem seam; untagged issues sta
 
   system.connector.inject({ kind: 'new_issue', number: 101, title: 'tagged', labels: ['agent-watch'] });
 
-  failPlanningOpen(system.store, 101);
+  workedAsOnePart(system.store, 101);
   system.connector.inject({ kind: 'new_issue', number: 102, title: 'untagged', labels: ['bug'] });
-  failPlanningOpen(system.store, 102);
+  workedAsOnePart(system.store, 102);
   await system.harness.runCycle('manual');
 
   const live = system.store.agents.listAgentsByStatus('starting', 'running');
   assert.equal(live.length, 1, 'only the labelled issue is picked up');
   const task = system.store.tasks.getTask(live[0]!.taskId)!;
-  assert.equal(task.branch, 'issue/101');
+  assert.equal(task.branch, 'issue/101/whole');
 
   const world = await system.connector.getState();
   assert.deepEqual(
@@ -111,7 +111,7 @@ test('whitelisted waiting prompts are auto-answered without escalating', async (
 
   system.connector.inject({ kind: 'new_issue', number: 903, title: 'Trivial' });
 
-  failPlanningOpen(system.store, 903);
+  workedAsOnePart(system.store, 903);
   await system.harness.runCycle('manual');
 
   backend.last().emit('@@LUBBDUBB_WAITING:Allow running tests?@@');
@@ -151,7 +151,7 @@ test('boot detection parks an orphaned agent for a decision instead of burying i
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });
   system.connector.inject({ kind: 'new_issue', number: 904, title: 'Work' });
-  failPlanningOpen(system.store, 904);
+  workedAsOnePart(system.store, 904);
   await system.harness.runCycle('manual');
 
   const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;

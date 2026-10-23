@@ -12,17 +12,19 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { Store } from '../src/store/store.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { failPlanningOpen, pastTheFunnel } from './support/plans.js';
+import { onePartPlanRows, spentAppraisalAttempts, workedAsOnePart } from './support/plans.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
+  const rows = (world.issues ?? []).map((i) => onePartPlanRows(i.number));
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
-    plans: [],
+    plans: rows.flatMap((r) => r.plans),
+    planParts: rows.flatMap((r) => r.planParts),
     tasks: [],
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
+    recentDecisions: (world.issues ?? []).flatMap((i) => spentAppraisalAttempts(i.number)),
     agentHeadroom: 3,
     ...over,
   };
@@ -49,9 +51,9 @@ test('upcoming lists every candidate in rank order with the headroom cut', async
   assert.deepEqual(
     result.upcoming.map((q) => [q.origin, q.status]),
     [
-      ['issue:101', 'dispatching'],
-      ['issue:102', 'waiting'],
-      ['issue:103', 'waiting'],
+      ['issue:101:part:whole', 'dispatching'],
+      ['issue:102:part:whole', 'waiting'],
+      ['issue:103:part:whole', 'waiting'],
     ],
     'above-cut items dispatch; the rest wait on a free slot',
   );
@@ -63,20 +65,22 @@ test('upcoming items carry rule, title, kind and branch for the cockpit', async 
   assert.equal(result.actions[0]?.type, 'no_op', 'nothing dispatches at zero headroom');
   const item = result.upcoming?.[0];
   assert.ok(item);
-  assert.equal(item.rule, 'issue-pickup');
-  assert.equal(item.title, 'Resolve issue #7');
+  assert.equal(item.rule, 'plan-part');
+  assert.equal(item.title, 'Issue #7 part: Issue #7');
   assert.equal(item.kind, 'code');
-  assert.equal(item.branch, 'issue/7');
+  assert.equal(item.branch, 'issue/7/whole');
   assert.equal(item.status, 'waiting');
   assert.ok(item.reason.length > 0);
 });
 
 test('label-encoded priority orders the queue', async () => {
   const d = new RuleDispatcher({ pickup: { priorityLabels: { hot: 5 }, defaultPriority: 1 } });
-  const result = await d.decide(ctx({ issues: [issue(101), issue(102, ['hot'])] }, { agentHeadroom: 1 }));
+  const result = await d.decide(
+    ctx({ issues: [issue(101), issue(102, ['hot'])] }, { agentHeadroom: 1, plans: [], planParts: [] }),
+  );
   assert.deepEqual(
     result.upcoming?.map((q) => q.origin),
-    ['issue:102', 'issue:101'],
+    ['issue:102:plan', 'issue:101:plan'],
     'the hot issue outranks the older one',
   );
   assert.equal(result.upcoming?.[0]?.status, 'dispatching');
@@ -168,8 +172,8 @@ test('an origin with an active task never enters the queue', async () => {
             id: 't1',
             kind: 'code',
             title: 'x',
-            branch: 'issue/5',
-            originRef: 'issue:5',
+            branch: 'issue/5/whole',
+            originRef: 'issue:5:part:whole',
             originTitle: null,
             originSummary: null,
             dispatchReason: null,
@@ -203,19 +207,23 @@ test('an operator override jumps a world item ahead of the natural ranking', asy
   const result = await d.decide(
     ctx(
       { issues: [issue(101), issue(102), issue(103)] },
-      { agentHeadroom: 1, priorityOverrides: [{ origin: 'issue:103', rank: 0 }] },
+      { agentHeadroom: 1, priorityOverrides: [{ origin: 'issue:103:part:whole', rank: 0 }] },
     ),
   );
   assert.deepEqual(
     result.upcoming?.map((q) => [q.origin, q.status]),
     [
-      ['issue:103', 'dispatching'],
-      ['issue:101', 'waiting'],
-      ['issue:102', 'waiting'],
+      ['issue:103:part:whole', 'dispatching'],
+      ['issue:101:part:whole', 'waiting'],
+      ['issue:102:part:whole', 'waiting'],
     ],
   );
   const dispatched = result.actions.filter((a) => a.type === 'dispatch_code_agent');
-  assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:103', 'the pinned issue wins the slot');
+  assert.equal(
+    (dispatched[0] as { originRef: string }).originRef,
+    'issue:103:part:whole',
+    'the pinned issue wins the slot',
+  );
 });
 
 test('`manual-job` items stay first whatever the override', async () => {
@@ -223,12 +231,16 @@ test('`manual-job` items stay first whatever the override', async () => {
   const result = await d.decide(
     ctx(
       { issues: [issue(5)] },
-      { agentHeadroom: 2, queuedJobs: [queuedJob('j1')], priorityOverrides: [{ origin: 'issue:5', rank: 0 }] },
+      {
+        agentHeadroom: 2,
+        queuedJobs: [queuedJob('j1')],
+        priorityOverrides: [{ origin: 'issue:5:part:whole', rank: 0 }],
+      },
     ),
   );
   assert.deepEqual(
     result.upcoming?.map((q) => q.origin),
-    ['job:j1', 'issue:5'],
+    ['job:j1', 'issue:5:part:whole'],
   );
 });
 
@@ -257,7 +269,7 @@ test('an override re-orders a held item but never un-holds it', async () => {
         agentHeadroom: 1,
         priorityOverrides: [{ origin: 'pr:42:mergeable', rank: 0 }],
         recentDecisions: [
-          ...pastTheFunnel(5),
+          ...spentAppraisalAttempts(5),
           {
             id: 'd1',
             cycleId: 'c',
@@ -276,7 +288,7 @@ test('an override re-orders a held item but never un-holds it', async () => {
     result.upcoming?.map((q) => [q.origin, q.status]),
     [
       ['pr:42:mergeable', 'cooldown'],
-      ['issue:5', 'dispatching'],
+      ['issue:5:part:whole', 'dispatching'],
     ],
   );
 });
@@ -302,9 +314,9 @@ test('buildStateSnapshot ships the last cycle plan as upcoming', async () => {
     backend: new FakePtyBackend(),
   });
   system.connector.inject({ kind: 'new_issue', number: 7101, title: 'A' });
-  failPlanningOpen(system.store, 7101);
+  workedAsOnePart(system.store, 7101);
   system.connector.inject({ kind: 'new_issue', number: 7102, title: 'B' });
-  failPlanningOpen(system.store, 7102);
+  workedAsOnePart(system.store, 7102);
 
   const before = await buildStateSnapshot(system);
   assert.equal(before.upcoming, null, 'no plan before the first cycle');
@@ -316,8 +328,8 @@ test('buildStateSnapshot ships the last cycle plan as upcoming', async () => {
   assert.deepEqual(
     snap.upcoming.items.map((q) => [q.origin, q.status]),
     [
-      ['issue:7101', 'waiting'],
-      ['issue:7102', 'waiting'],
+      ['issue:7101:part:whole', 'waiting'],
+      ['issue:7102:part:whole', 'waiting'],
     ],
   );
   system.store.close();
@@ -341,22 +353,22 @@ test('a priority override holds after the next pulse and after a restart', async
 
   const system = buildSystem(cfg(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 8101, title: 'A' });
-  failPlanningOpen(system.store, 8101);
+  workedAsOnePart(system.store, 8101);
   system.connector.inject({ kind: 'new_issue', number: 8102, title: 'B' });
-  failPlanningOpen(system.store, 8102);
+  workedAsOnePart(system.store, 8102);
   await system.harness.runCycle('manual');
   let snap = await buildStateSnapshot(system);
   assert.deepEqual(
     snap.upcoming!.items.map((q) => q.origin),
-    ['issue:8101', 'issue:8102'],
+    ['issue:8101:part:whole', 'issue:8102:part:whole'],
   );
 
-  system.store.priority.setPriorityOverrides(['issue:8102']);
+  system.store.priority.setPriorityOverrides(['issue:8102:part:whole']);
   await system.harness.runCycle('manual');
   snap = await buildStateSnapshot(system);
   assert.deepEqual(
     snap.upcoming!.items.map((q) => q.origin),
-    ['issue:8102', 'issue:8101'],
+    ['issue:8102:part:whole', 'issue:8101:part:whole'],
     'the override holds after the pulse',
   );
   system.store.close();
@@ -366,7 +378,7 @@ test('a priority override holds after the next pulse and after a restart', async
   snap = await buildStateSnapshot(restarted);
   assert.deepEqual(
     snap.upcoming!.items.map((q) => q.origin),
-    ['issue:8102', 'issue:8101'],
+    ['issue:8102:part:whole', 'issue:8101:part:whole'],
     'the override survives a restart',
   );
   restarted.store.close();

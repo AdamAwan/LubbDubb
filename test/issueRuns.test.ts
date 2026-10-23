@@ -1,3 +1,4 @@
+import { deliveredPlanRows } from './support/plans.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
@@ -432,6 +433,7 @@ test('a retained run is still assessed after its ticket closed', async () => {
       world: { takenAt: NOW, pullRequests: [], issues: [closedIssue] },
       retainedIssues: [12],
       tasks: [task()],
+      ...deliveredPlanRows(12),
     }),
   );
   const dispatched = retained.actions.filter((a) => a.type === 'dispatch_code_agent');

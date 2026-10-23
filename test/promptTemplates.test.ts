@@ -19,7 +19,7 @@ import { overridePath } from '../web/src/components/PromptsTab.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { WorldSnapshot } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { pastTheFunnel } from './support/plans.js';
+import { onePartPlanRows, spentAppraisalAttempts } from './support/plans.js';
 
 function tmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'lubbdubb-prompts-'));
@@ -38,38 +38,36 @@ test('stripTemplateDoc removes only a leading comment and trims', () => {
 test('defaults render the built-in prompt', () => {
   const t = defaultPromptTemplates();
   assert.equal(
-    t.render('issue-pickup', { number: 3, title: 'Bug', body: 'It breaks', branch: 'issue/3' }),
-    'GitHub issue #3 ("Bug") needs resolving.\n\nIt breaks\n\nImplement the fix on branch issue/3 and open a pull request that resolves it, ' +
-      'using the open_pr tool — it resolves the branch and the base from your own origin and writes the issue ' +
-      'reference itself. If that tool is unavailable, open the pull request yourself from issue/3. Whether the ' +
-      'issue closes is yours to say in the body: reference the issue as "closes #3" only if this PR completes ' +
-      'the whole thing; if work remains afterwards, reference it as "part of #3" so it stays open for the rest.',
+    t.render('issue-plan-escalation', { number: 3, title: 'Bug', attempts: 3 }),
+    'Planning issue #3 ("Bug") keeps failing: 3 planner attempt(s) produced no plan. Nothing is implemented for an ' +
+      'issue without a plan, so it waits on you. Look at why the planner could not decompose it: usually the ' +
+      'ticket needs rewriting, or the work is already done.',
   );
 });
 
 test('sampleTemplateFile carries a doc header that strips back to the default', () => {
-  const file = sampleTemplateFile('issue-pickup');
+  const file = sampleTemplateFile('plan-part');
   assert.match(file, /^<!--/);
   const body = stripTemplateDoc(file);
-  assert.equal(defaultPromptTemplates().render('issue-pickup', {}), renderTemplate(body, {}));
+  assert.equal(defaultPromptTemplates().render('plan-part', {}), renderTemplate(body, {}));
 });
 
 test('loadPromptTemplates: absent dir yields defaults', () => {
   const t = loadPromptTemplates(join(tmpDir(), 'does-not-exist'));
-  assert.match(t.render('issue-pickup', { number: 7, title: 'T', body: 'B', branch: 'issue/7' }), /#7/);
+  assert.match(t.render('plan-part', { number: 7, title: 'T', part: 'P', branch: 'issue/7/p' }), /#7/);
 });
 
 test('loadPromptTemplates: an override file (with doc header) replaces the default', () => {
   const dir = tmpDir();
   try {
     writeFileSync(
-      join(dir, 'issue-pickup.md'),
+      join(dir, 'plan-part.md'),
       '<!-- our house flow -->\n\nPlease fix #{number}: {title}. Branch {branch}.',
     );
     const t = loadPromptTemplates(dir);
     assert.equal(
-      t.render('issue-pickup', { number: 9, title: 'Z', body: 'b', branch: 'issue/9' }),
-      'Please fix #9: Z. Branch issue/9.',
+      t.render('plan-part', { number: 9, title: 'Z', part: 'P', branch: 'issue/9/p' }),
+      'Please fix #9: Z. Branch issue/9/p.',
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -118,10 +116,44 @@ test('describe: every id carries its doc, placeholders and effective text', () =
       assert.doesNotThrow(() => renderTemplate(`{${p}}`, { [p]: 'x' }));
     }
   }
-  const pickup = book.find((t) => t.id === 'issue-pickup');
-  assert.ok(pickup);
-  assert.deepEqual([...pickup.placeholders], ['number', 'title', 'body', 'branch']);
-  assert.equal(pickup.template, renderTemplate(stripTemplateDoc(sampleTemplateFile('issue-pickup')), {}));
+  const part = book.find((t) => t.id === 'plan-part');
+  assert.ok(part);
+  assert.deepEqual(
+    [...part.placeholders],
+    ['number', 'title', 'part', 'scope', 'branch', 'base', 'plan', 'done', 'remaining'],
+  );
+  assert.equal(part.template, renderTemplate(stripTemplateDoc(sampleTemplateFile('plan-part')), {}));
+});
+
+test('the issue-pickup prompts are retired, and an override of one still loads', () => {
+  const retired = defaultPromptTemplates()
+    .describe()
+    .filter((t) => t.retired)
+    .map((t) => t.id);
+  assert.ok(retired.includes('issue-pickup'));
+  assert.ok(retired.includes('issue-pickup-escalation'));
+  assert.equal(
+    defaultPromptTemplates()
+      .describe()
+      .find((t) => t.id === 'issue-plan-escalation')?.retired,
+    false,
+  );
+
+  const dir = tmpDir();
+  try {
+    writeFileSync(join(dir, 'issue-pickup.md'), 'Handle #{number} on {branch}.');
+    writeFileSync(join(dir, 'issue-pickup-escalation.md'), 'Issue #{number} is stuck.');
+    const book = loadPromptTemplates(dir).describe();
+    assert.deepEqual(
+      book
+        .filter((t) => t.overridden)
+        .map((t) => t.id)
+        .sort(),
+      ['issue-pickup', 'issue-pickup-escalation'],
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('describe: overridden is true only for ids the loader actually replaced', () => {
@@ -132,21 +164,15 @@ test('describe: overridden is true only for ids the loader actually replaced', (
     const overridden = book.filter((t) => t.overridden).map((t) => t.id);
     assert.deepEqual(overridden, ['pr-ci-fix']);
     assert.equal(book.find((t) => t.id === 'pr-ci-fix')?.template, 'Fix CI on PR #{number}.');
-    assert.match(book.find((t) => t.id === 'issue-pickup')?.template ?? '', /issue/i);
+    assert.match(book.find((t) => t.id === 'plan-part')?.template ?? '', /issue/i);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
 test('the panel names the override file in the server\u2019s own path dialect', () => {
-  assert.equal(
-    overridePath('C:\\repo\\.lubbdubb\\prompts', 'issue-pickup'),
-    'C:\\repo\\.lubbdubb\\prompts\\issue-pickup.md',
-  );
-  assert.equal(
-    overridePath('/srv/repo/.lubbdubb/prompts', 'issue-pickup'),
-    '/srv/repo/.lubbdubb/prompts/issue-pickup.md',
-  );
+  assert.equal(overridePath('C:\\repo\\.lubbdubb\\prompts', 'plan-part'), 'C:\\repo\\.lubbdubb\\prompts\\plan-part.md');
+  assert.equal(overridePath('/srv/repo/.lubbdubb/prompts', 'plan-part'), '/srv/repo/.lubbdubb/prompts/plan-part.md');
   assert.equal(overridePath('/srv/prompts/', 'pr-ci-fix'), '/srv/prompts/pr-ci-fix.md');
   assert.equal(overridePath('C:\\prompts\\', 'pr-ci-fix'), 'C:\\prompts\\pr-ci-fix.md');
   assert.equal(overridePath(null, 'pr-ci-fix'), '<promptTemplatesDir>/pr-ci-fix.md');
@@ -210,16 +236,20 @@ function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {})
 test('a custom template flows through the dispatcher into the dispatched prompt', async () => {
   const dir = tmpDir();
   try {
-    writeFileSync(join(dir, 'issue-pickup.md'), 'Handle #{number} on {branch}.');
+    writeFileSync(join(dir, 'plan-part.md'), 'Handle #{number} on {branch}.');
     const d = new RuleDispatcher({ templates: loadPromptTemplates(dir) });
     const { actions } = await d.decide(
       ctx(
         { issues: [{ id: 'i1', number: 12, title: 'T', body: 'B', state: 'open', labels: [], linkedPrNumber: null }] },
-        { recentDecisions: pastTheFunnel(12) },
+        { ...onePartPlanRows(12), recentDecisions: spentAppraisalAttempts(12) },
       ),
     );
     assert.equal(actions[0]?.type, 'dispatch_code_agent');
-    assert.equal((actions[0] as { prompt: string }).prompt, 'Handle #12 on issue/12.');
+    assert.match(
+      (actions[0] as { prompt: string }).prompt,
+      /^Handle #12 on issue\/12\/whole\.(\n\n|$)/,
+      'the override is the prompt; the harness appends its notes after it',
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -228,7 +258,7 @@ test('a custom template flows through the dispatcher into the dispatched prompt'
 test('an escalation-only template is a single-line lede', () => {
   const t = defaultPromptTemplates();
   const rendered = {
-    'issue-pickup-escalation': t.render('issue-pickup-escalation', { number: 12, title: 'T', attempts: 3 }),
+    'issue-plan-escalation': t.render('issue-plan-escalation', { number: 12, title: 'T', attempts: 3 }),
     'plan-part-escalation': t.render('plan-part-escalation', { number: 12, part: 'signer', attempts: 3 }),
     'pr-concern-escalation': t.render('pr-concern-escalation', { number: 42, title: 'T', attempts: 3 }),
   };

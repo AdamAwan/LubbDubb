@@ -16,7 +16,8 @@ import {
 } from '../src/sequence/sequence.js';
 import { linkEdges } from '../src/sequence/readiness.js';
 import { heldByAccepting, waitingOnThis, waitsOn, waveOf, wavesOf } from '../web/src/view/sequence.js';
-import { pastTheFunnel } from './support/plans.js';
+import { spentAppraisalAttempts } from './support/plans.js';
+import { planOrigin } from '../src/plans/planning.js';
 import { predecessorNote, sequenceBriefing } from '../src/sequence/dossier.js';
 import type { DispatchContext, QueueItem } from '../src/dispatcher/dispatcher.js';
 import type { FeatureSequence, FeatureSequenceEdge, Issue, IssueRelative } from '../src/types.js';
@@ -263,15 +264,15 @@ test('the rule is in the registry and names itself', () => {
   assert.equal(DISPATCH_RULES['feature-sequence'].kind, 'rule');
 });
 
-test('an accepted order holds the story it puts second', async () => {
+test('an accepted order holds the planner of the story it puts second', async () => {
   const issues = [story(11), story(12)];
   const { upcoming } = await full().decide(
-    ctx(issues, { featureSequences: [sequence()], recentDecisions: pastTheFunnelFor(issues) }),
+    ctx(issues, { featureSequences: [sequence()], recentDecisions: appraisedAll(issues) }),
   );
-  const held = queued(upcoming, 'issue:12');
+  const held = queued(upcoming, planOrigin(12));
   assert.equal(held?.status, 'sequenced');
   assert.match(held?.reason ?? '', /waits on #11/);
-  assert.equal(queued(upcoming, 'issue:11')?.status, 'dispatching');
+  assert.equal(queued(upcoming, planOrigin(11))?.status, 'dispatching');
 });
 
 test('a proposed order holds nothing — nobody has answered it', async () => {
@@ -279,18 +280,18 @@ test('a proposed order holds nothing — nobody has answered it', async () => {
   const { upcoming } = await full().decide(
     ctx(issues, {
       featureSequences: [sequence({ status: 'proposed', answeredBy: null, answeredAt: null })],
-      recentDecisions: pastTheFunnelFor(issues),
+      recentDecisions: appraisedAll(issues),
     }),
   );
-  assert.equal(queued(upcoming, 'issue:12')?.status, 'dispatching');
+  assert.equal(queued(upcoming, planOrigin(12))?.status, 'dispatching');
 });
 
 test('a declined order holds nothing', async () => {
   const issues = [story(11), story(12)];
   const { upcoming } = await full().decide(
-    ctx(issues, { featureSequences: [sequence({ status: 'declined' })], recentDecisions: pastTheFunnelFor(issues) }),
+    ctx(issues, { featureSequences: [sequence({ status: 'declined' })], recentDecisions: appraisedAll(issues) }),
   );
-  assert.equal(queued(upcoming, 'issue:12')?.status, 'dispatching');
+  assert.equal(queued(upcoming, planOrigin(12))?.status, 'dispatching');
 });
 
 test('an order is written as a set, never merged', () => {
@@ -378,8 +379,8 @@ test('nothing is appended for a caller that is not a sequencer', () => {
   assert.equal(sequenceBriefing('issue:12', [story(11), story(12)]), null);
 });
 
-function pastTheFunnelFor(issues: Issue[]) {
-  return issues.flatMap((i) => pastTheFunnel(i.number));
+function appraisedAll(issues: Issue[]) {
+  return issues.flatMap((i) => spentAppraisalAttempts(i.number));
 }
 
 test('the tracker’s own links need no sequence row', () => {

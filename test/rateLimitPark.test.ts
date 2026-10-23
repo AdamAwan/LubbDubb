@@ -15,7 +15,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import { askRows } from './support/asks.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -113,7 +113,7 @@ async function fleet(issue = 701, patch: Record<string, unknown> = {}) {
     errorMirror: () => {},
   });
   system.connector.inject({ kind: 'new_issue', number: issue, title: 'Add login' });
-  failPlanningOpen(system.store, issue);
+  workedAsOnePart(system.store, issue);
   await system.harness.runCycle('manual');
   const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   return { system, agent, child: children[0]!, children };

@@ -36,13 +36,12 @@ export type PlanRouteVerdict =
   | { route: 'parts' }
   | { route: 'awaiting_approval' }
   | { route: 'planning'; planner: 'dispatch' | 'cooldown' }
-  | { route: 'unplanned' };
+  | { route: 'escalated'; raise: { attempts: number } | null };
 
 interface PlanRouteInput {
   plan: Plan | null;
   verdict: DispatchVerdict;
   existingParts?: number;
-  skipPlanning?: boolean;
 }
 
 export function plannerVerdict(
@@ -64,12 +63,14 @@ export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
   if (plan) {
     if (plan.status === 'awaiting_approval') return { route: 'awaiting_approval' };
     if (plan.status !== 'planning') return { route: 'parts' };
-  } else if (input.skipPlanning === true) {
-    return { route: 'unplanned' };
   }
   const kind = input.verdict.kind;
   if (kind === 'escalate' || kind === 'hold') {
-    return (input.existingParts ?? 0) > 0 ? { route: 'parts' } : { route: 'unplanned' };
+    if ((input.existingParts ?? 0) > 0) return { route: 'parts' };
+    return {
+      route: 'escalated',
+      raise: input.verdict.kind === 'escalate' ? { attempts: input.verdict.attempts } : null,
+    };
   }
   return { route: 'planning', planner: kind === 'cooldown' ? 'cooldown' : 'dispatch' };
 }

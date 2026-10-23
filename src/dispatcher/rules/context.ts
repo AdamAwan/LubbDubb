@@ -80,7 +80,6 @@ export interface StageContext {
   appraising: Set<number>;
   investigating: Set<number>;
   investigations: InvestigationStandings;
-  assessing: Set<number>;
   /**
    * The cooldown gate every proposing rule shares: reads `dispatchVerdict` for the candidate's
    * origin, queues it as `held: 'cooldown'` inside the gap, and drops it once the cap is spent.

@@ -15,7 +15,7 @@ import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { foldWorkGraph } from '../src/graph/workGraph.js';
 import type { Agent, Decision, Issue, IssueDelivery, Plan, PlanPart, Task } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { pastTheFunnel } from './support/plans.js';
+import { spentAppraisalAttempts } from './support/plans.js';
 
 const NOW = '2026-07-28T12:00:00.000Z';
 
@@ -36,10 +36,10 @@ function task(over: Partial<Task> = {}): Task {
   return {
     id: 't1',
     kind: 'code',
-    title: 'Resolve issue #12',
+    title: 'Issue #12 part: Add the thing',
     prompt: 'do it',
-    branch: 'issue/12',
-    originRef: 'issue:12',
+    branch: 'issue/12/whole',
+    originRef: 'issue:12:part:whole',
     originTitle: null,
     originSummary: null,
     dispatchReason: null,
@@ -54,12 +54,13 @@ function task(over: Partial<Task> = {}): Task {
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
-    plans: [],
+    plans: [plan('complete')],
+    planParts: [],
     tasks: [task()],
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: pastTheFunnel(12),
+    recentDecisions: spentAppraisalAttempts(12),
     agentHeadroom: 3,
     ...over,
   };
@@ -128,7 +129,7 @@ function origins(actions: { type: string; originRef?: string | null }[]): string
   return actions.filter((a) => a.type.startsWith('dispatch_')).map((a) => a.originRef ?? '');
 }
 
-test('an issue whose delivering PR has merged and left the world is assessed, not re-picked', async () => {
+test('an issue whose delivering PR has merged and left the world is assessed, not re-worked', async () => {
   const { actions } = await assessor().decide(ctx());
 
   assert.deepEqual(origins(actions), ['issue:12:assess']);
@@ -137,18 +138,14 @@ test('an issue whose delivering PR has merged and left the world is assessed, no
     base?: string;
     rule: string;
   };
-  assert.equal(
-    dispatch.branch,
-    'assess/issue/12',
-    'its own namespace — git cannot put issue/12/assess beside issue/12',
-  );
+  assert.equal(dispatch.branch, 'assess/issue/12', 'its own namespace, outside the issue/12 work branches');
   assert.equal(dispatch.base, 'main', 'cut from the default branch, where the merged work actually is');
   assert.equal(dispatch.rule, 'issue-assess');
 });
 
-test('a fresh issue is picked up, not assessed', async () => {
-  const { actions } = await assessor().decide(ctx({ tasks: [] }));
-  assert.deepEqual(origins(actions), ['issue:12']);
+test('a fresh issue is planned, not assessed', async () => {
+  const { actions } = await assessor().decide(ctx({ plans: [], tasks: [] }));
+  assert.deepEqual(origins(actions), ['issue:12:plan']);
 });
 
 test('prior work is an origin that could have delivered something, and nothing else', () => {
@@ -200,26 +197,32 @@ test('every origin the harness dispatches under an issue is classified deliberat
 test('a planner having run is not work having been done', async () => {
   const { actions } = await planningAssessor().decide(
     ctx({
+      plans: [plan('active')],
+      planParts: [part()],
       tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12', title: 'Plan issue #12' })],
     }),
   );
-  assert.deepEqual(origins(actions), ['issue:12'], 'the funnel failed open, so the work is released');
+  assert.deepEqual(origins(actions), ['issue:12:part:a'], 'nothing has been worked, so the plan releases its part');
 });
 
 test('once the PR has been worked, the assessor gets its turn', async () => {
   const { actions } = await planningAssessor().decide(
     ctx({
-      tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12' }), task({ id: 't2', originRef: 'issue:12' })],
+      tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12' }), task({ id: 't2' })],
     }),
   );
   assert.deepEqual(origins(actions), ['issue:12:assess']);
 });
 
-test('assess and pickup never both fire for one issue', async () => {
+test('a worked issue gets one agent, the assessor, and the retired pickup never fires', async () => {
   const { actions } = await assessor().decide(ctx());
   const dispatched = origins(actions);
-  assert.equal(dispatched.filter((o) => o.startsWith('issue:12')).length, 1, 'one agent on the issue, not two');
-  assert.ok(!dispatched.includes('issue:12'), 'the assessor suppresses the pickup it ranks ahead of');
+  assert.deepEqual(
+    dispatched.filter((o) => o.startsWith('issue:12')),
+    ['issue:12:assess'],
+    'one agent on the issue, not two',
+  );
+  assert.ok(!actions.some((a) => a.rule === 'issue-pickup'));
 });
 
 test('an open PR means the answer is not yet knowable', async () => {
@@ -243,7 +246,7 @@ test('anything live under the issue stands the assessor down', async () => {
   }
 });
 
-test('a running assessor keeps standing pickup down, cycle after cycle', async () => {
+test('a running assessor keeps everything else off the issue, cycle after cycle', async () => {
   const { actions } = await assessor().decide(
     ctx({ tasks: [task(), task({ id: 't2', originRef: 'issue:12:assess', status: 'running' })] }),
   );
@@ -294,7 +297,7 @@ test('the watch gate applies, evaluated once on the issue', async () => {
   assert.deepEqual(origins(watched.actions), ['issue:12:assess']);
 });
 
-test('a spent attempt cap returns the issue to ordinary pickup, with no escalation', async () => {
+test('a spent attempt cap fails open, with no escalation', async () => {
   const attempt = (i: number): Decision => ({
     id: `d${i}`,
     cycleId: `c${i}`,
@@ -314,15 +317,15 @@ test('a spent attempt cap returns the issue to ordinary pickup, with no escalati
   });
   const spent = [attempt(1), attempt(2), attempt(3)];
 
-  const { actions } = await assessor().decide(ctx({ recentDecisions: [...pastTheFunnel(12), ...spent] }));
-  assert.deepEqual(origins(actions), ['issue:12'], 'the issue falls back to pickup');
+  const { actions } = await assessor().decide(ctx({ recentDecisions: [...spentAppraisalAttempts(12), ...spent] }));
+  assert.deepEqual(origins(actions), [], 'nothing is re-worked: the plan is complete');
   assert.ok(
     !actions.some((a) => a.type === 'escalate_to_human'),
     'no escalation: there is nothing a human can do about an assessment that did not happen',
   );
 });
 
-test('a cooling assessor still suppresses pickup for that cycle, and stays visible', async () => {
+test('a cooling assessor dispatches nothing that cycle, and stays visible', async () => {
   const recent: Decision[] = [
     {
       id: 'd1',
@@ -342,7 +345,9 @@ test('a cooling assessor still suppresses pickup for that cycle, and stays visib
       createdAt: '2026-07-28T11:55:00.000Z',
     },
   ];
-  const { actions, upcoming } = await assessor().decide(ctx({ recentDecisions: [...pastTheFunnel(12), ...recent] }));
+  const { actions, upcoming } = await assessor().decide(
+    ctx({ recentDecisions: [...spentAppraisalAttempts(12), ...recent] }),
+  );
 
   assert.deepEqual(origins(actions), [], 'cooling, so nothing is dispatched');
   const queued = upcoming?.find((i) => i.origin === 'issue:12:assess');

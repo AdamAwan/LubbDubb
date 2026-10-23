@@ -9,7 +9,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Agent, Decision, Issue, PullRequest, Task } from '../src/types.js';
-import { pastTheFunnel } from './support/plans.js';
+import { spentAppraisalAttempts } from './support/plans.js';
 
 const NOW = '2026-07-28T12:00:00.000Z';
 
@@ -69,7 +69,7 @@ test('only admission-kind ids are ever emitted into the admission field', async 
   const { actions } = await d.decide(
     ctx({
       world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
-      recentDecisions: [...pastTheFunnel(12), ...spentCap('issue:12', 'issue-pickup')],
+      recentDecisions: [...spentAppraisalAttempts(12), ...spentCap('issue:12:plan', 'issue-plan')],
     }),
   );
   for (const a of actions) {
@@ -79,17 +79,17 @@ test('only admission-kind ids are ever emitted into the admission field', async 
   }
 });
 
-test('a throttled pickup names issue-pickup as its proposer, not the cap that stopped it', async () => {
+test('a throttled planner names issue-plan as its proposer, not the cap that stopped it', async () => {
   const d = new RuleDispatcher({ defaultBranch: 'main' });
   const { actions } = await d.decide(
     ctx({
       world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
-      recentDecisions: [...pastTheFunnel(12), ...spentCap('issue:12', 'issue-pickup')],
+      recentDecisions: [...spentAppraisalAttempts(12), ...spentCap('issue:12:plan', 'issue-plan')],
     }),
   );
   const escalation = actions.find((a) => a.type === 'escalate_to_human');
   assert.ok(escalation, 'the spent cap escalates rather than looping');
-  assert.equal(escalation.rule, 'issue-pickup', 'what got throttled — the fact the single column lost');
+  assert.equal(escalation.rule, 'issue-plan', 'what got throttled — the fact the single column lost');
   assert.equal(escalation.admission, 'cooldown-escalate', 'and what throttling did to it');
 });
 
@@ -167,16 +167,16 @@ test('recordDecision lifts both ids off the action into their own columns', () =
     action: {
       type: 'escalate_to_human',
       reason: 'capped',
-      rule: 'issue-pickup',
+      rule: 'issue-plan',
       admission: 'cooldown-escalate',
     },
     outcome: 'executed',
     detail: '',
   });
-  assert.equal(d.rule, 'issue-pickup');
+  assert.equal(d.rule, 'issue-plan');
   assert.equal(d.admission, 'cooldown-escalate');
   const [read] = store.decisions.listDecisions();
-  assert.equal(read?.rule, 'issue-pickup', 'and survives the round trip');
+  assert.equal(read?.rule, 'issue-plan', 'and survives the round trip');
   assert.equal(read?.admission, 'cooldown-escalate');
   store.close();
 });
@@ -233,7 +233,7 @@ test('the migration is additive on a database created before the column', () => 
 
   store.decisions.recordDecision({
     cycleId: 'cyc2',
-    action: { type: 'escalate_to_human', reason: 'x', rule: 'issue-pickup', admission: 'cooldown-escalate' },
+    action: { type: 'escalate_to_human', reason: 'x', rule: 'issue-plan', admission: 'cooldown-escalate' },
     outcome: 'executed',
     detail: '',
   });

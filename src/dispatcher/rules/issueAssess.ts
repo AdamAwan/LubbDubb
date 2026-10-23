@@ -11,14 +11,11 @@ import type { RawAction, StageContext } from './context.js';
 // → docs/spec/05-dispatcher.md (rule `issue-assess`)
 
 /**
- * The assessor's second output, on `validation.checkSets` and the two gates rule `validation-plan` used
- * to carry alone: the goal has a plan (`covers` names live part slugs, and `validation_plan` refuses a goal without one) and
- * nobody has authored a check set yet. Empty for a goal failing either, so the prompt never asks for
- * something the tool would refuse.
+ * The assessor's second output, on `validation.checkSets` and while nobody has authored a check set
+ * yet. Empty otherwise, so the prompt never asks for something the tool would refuse.
  */
-function authoringAppendix(s: StageContext, root: string, plan: Plan | undefined, issueNumber: number): string {
+function authoringAppendix(s: StageContext, root: string, plan: Plan, issueNumber: number): string {
   if (!s.checkSets) return '';
-  if (!plan) return '';
   const record = s.validationPlans.get(root) ?? null;
   if (checkSetAuthored({ record, checks: s.validationChecks.get(root) ?? [] })) return '';
   return (
@@ -42,18 +39,15 @@ export function issueAssess(s: StageContext): void {
     if (!hasPriorWork(issue.number, ctx.tasks)) continue;
     const root = issueOrigin(issue.number);
     const plan = s.plansByOrigin.get(root);
-    if (plan && planInFlight(plan)) continue;
+    if (!plan || planInFlight(plan)) continue;
     const origin = assessOrigin(issue.number);
-    if (s.activeOrigins.has(origin)) {
-      s.assessing.add(issue.number);
-      continue;
-    }
+    if (s.activeOrigins.has(origin)) continue;
     if ([...s.activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
 
     const branch = assessBranch(issue.number);
     const title = `Assess issue #${issue.number}`;
     const reason = `Issue #${issue.number} has had work and has nothing in flight; assess whether it is finished.`;
-    const proposed = s.consider({
+    s.consider({
       origin,
       rule: 'issue-assess',
       title,
@@ -78,6 +72,5 @@ export function issueAssess(s: StageContext): void {
         reason,
       } satisfies RawAction,
     });
-    if (proposed) s.assessing.add(issue.number);
   }
 }

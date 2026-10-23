@@ -4,8 +4,8 @@ import { RuleDispatcher, STAGES } from '../src/dispatcher/ruleDispatcher.js';
 import { DISPATCH_PIPELINE, DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { askedAlready } from '../src/dispatcher/admission.js';
 import type { DispatchContext, QueueItem } from '../src/dispatcher/dispatcher.js';
-import type { Decision, Escalation, Issue, PullRequest, Task } from '../src/types.js';
-import { pastTheFunnel } from './support/plans.js';
+import type { Decision, Escalation, Issue, PullRequest } from '../src/types.js';
+import { onePartPlanRows, spentAppraisalAttempts } from './support/plans.js';
 
 const NOW = '2026-07-28T12:00:00.000Z';
 
@@ -94,7 +94,7 @@ test('the PR concern pass owns the concerns, and is the only stage that does', (
 
 test('the non-rules stay in the registry but take no position', () => {
   const positions: string[] = DISPATCH_PIPELINE.map((e) => e.id);
-  for (const id of ['branch-notify', 'cooldown-escalate', 'idle'] as const) {
+  for (const id of ['branch-notify', 'cooldown-escalate', 'idle', 'issue-pickup'] as const) {
     assert.ok(id in DISPATCH_RULES, `${id} still resolves for an old decision row`);
     assert.notEqual(DISPATCH_RULES[id].kind, 'rule');
     assert.ok(!positions.includes(id), `${id} is not a stage — it transforms a proposal, or ends the cycle`);
@@ -118,35 +118,12 @@ test('a planner the appraisal supersedes is queued with the reason, not dropped'
   assert.match(planner.reason, /superseded this cycle by "Issue goal needs checking"/);
 });
 
-test('a pickup the assessor supersedes names the assessor', async () => {
-  const done: Task = {
-    id: 't1',
-    kind: 'code',
-    title: 'Resolve issue #12',
-    prompt: 'do it',
-    branch: 'issue/12',
-    originRef: 'issue:12',
-    originTitle: null,
-    originSummary: null,
-    dispatchReason: null,
-    status: 'done',
-    agentId: null,
-    createdAt: NOW,
-    updatedAt: NOW,
-  };
-  const d = new RuleDispatcher();
-  const { upcoming } = await d.decide(ctx({ tasks: [done], recentDecisions: pastTheFunnel(12) }));
-
-  const pickup = queued(upcoming, 'issue:12');
-  assert.ok(pickup);
-  assert.equal(pickup.status, 'superseded');
-  assert.match(pickup.reason, /superseded this cycle by "Issue may be finished"/);
-});
-
-test('nothing is superseded when no rule in front of pickup is on', async () => {
-  const { upcoming } = await new RuleDispatcher().decide(ctx({ recentDecisions: pastTheFunnel(12) }));
-  const pickup = queued(upcoming, 'issue:12');
-  assert.equal(pickup?.status, 'dispatching', 'the default path is untouched by any of this');
+test('nothing is superseded when no rule in front of a plan part is on', async () => {
+  const { upcoming } = await new RuleDispatcher().decide(
+    ctx({ ...onePartPlanRows(12), recentDecisions: spentAppraisalAttempts(12) }),
+  );
+  const part = queued(upcoming, 'issue:12:part:whole');
+  assert.equal(part?.status, 'dispatching', 'the default path is untouched by any of this');
 });
 
 test('a review comment outranks CI on one PR, because that is their pipeline order', async () => {

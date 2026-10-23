@@ -219,9 +219,9 @@ rule that holds on it is the same rule that holds on any red check nobody here c
 
 - **Agent reviews its own work.** The code arm draws it on every pull request; nothing runs it. There
   is no `pr-self-review` rule, no stage in `DISPATCH_PIPELINE`, and no built-in prompt asks for it —
-  `issue-pickup` and `plan-part` tell an agent to implement the work and open a pull request, and the
-  next thing to read the diff is a quality gate. An operator who wants it today appends the
-  instruction to those two prompt templates, which is a prompt change rather than a stage: it runs in
+  `plan-part` tells an agent to implement the work and open a pull request, and the next thing to
+  read the diff is a quality gate. An operator who wants it today appends the instruction to that
+  prompt template, which is a prompt change rather than a stage: it runs in
   the same agent on the same attempt, and nothing records that it happened.
 
 **Narrower than drawn:**

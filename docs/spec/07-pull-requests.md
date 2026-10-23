@@ -1372,7 +1372,7 @@ pulses changes no decision).
 
 The concern list and the merge-readiness test are re-derived here from the same predicates rather
 than shared with the dispatcher, which builds prompt-bearing concerns it has no use for — the same
-relationship `issuePickupStatus` has to rule `issue-pickup`. The orders are stated once, above and in
+relationship `issuePickupStatus` has to the dispatcher's issue rules. The orders are stated once, above and in
 [05](05-dispatcher.md), for both — and **asked for** once, through `concernUrgency`, rather than
 re-derived: three re-derivations of one ordering is the arrangement the rule numbers rotted under, and
 a lens on the wrong one of them drifts silently, because both readings stay individually plausible.

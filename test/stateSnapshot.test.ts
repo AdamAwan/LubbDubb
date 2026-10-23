@@ -10,7 +10,9 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakePortLister } from '../src/localRun/fakePortLister.js';
-import { failPlanningOpen } from './support/plans.js';
+import { failAppraisalOpen, workedAsOnePart } from './support/plans.js';
+import { partBranch, partOrigin } from '../src/plans/parts.js';
+import { planOrigin } from '../src/plans/planning.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -30,14 +32,14 @@ test('buildStateSnapshot ships a refUrls map covering world items and task branc
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat/x' });
   system.connector.inject({ kind: 'new_issue', number: 13, title: 'Bug' });
-  failPlanningOpen(system.store, 13);
+  workedAsOnePart(system.store, 13);
   system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
   system.store.tasks.createTask({
     kind: 'code',
-    title: 'Resolve issue #13',
+    title: 'Issue #13 part: Issue #13',
     prompt: 'p',
-    branch: 'issue/13',
-    originRef: 'issue:13',
+    branch: partBranch(13, 'whole'),
+    originRef: partOrigin(13, 'whole'),
   });
   system.store.world.setWorldBaseline(await system.connector.getState());
 
@@ -46,7 +48,7 @@ test('buildStateSnapshot ships a refUrls map covering world items and task branc
   assert.equal(snap.refUrls['#42'], 'https://example.test/pr:42');
   assert.equal(snap.refUrls['#13'], 'https://example.test/issue:13');
   assert.equal(snap.refUrls['feat/x'], 'https://example.test/feat/x');
-  assert.equal(snap.refUrls['issue/13'], 'https://example.test/issue/13');
+  assert.equal(snap.refUrls['issue/13/whole'], 'https://example.test/issue/13/whole');
   system.store.close();
 });
 
@@ -87,7 +89,7 @@ test('buildStateSnapshot keys each task origin ref so agent/overlap/recovery car
 test('buildStateSnapshot keys every goal by its canonical ref, so the cockpit can link it', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 13, title: 'Bug' });
-  failPlanningOpen(system.store, 13);
+  workedAsOnePart(system.store, 13);
   system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
   system.store.world.setWorldBaseline(await system.connector.getState());
 
@@ -126,30 +128,41 @@ test('buildStateSnapshot gives each decision the ref it is about, and keys it', 
 test('buildStateSnapshot attaches a pickup verdict to every issue', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 7, title: 'Bug' });
-  failPlanningOpen(system.store, 7);
+  workedAsOnePart(system.store, 7);
   system.connector.inject({ kind: 'new_issue', number: 8, title: 'Staffed' });
-  failPlanningOpen(system.store, 8);
+  failAppraisalOpen(system.store, 8);
   system.store.tasks.createTask({
     kind: 'code',
-    title: 'Resolve issue #8',
+    title: 'Plan issue #8',
     prompt: 'p',
-    branch: 'issue/8',
-    originRef: 'issue:8',
+    branch: 'plan/issue/8',
+    originRef: planOrigin(8),
   });
   system.store.world.setWorldBaseline(await system.connector.getState());
 
   const snap = await buildStateSnapshot(system);
 
   const byNumber = new Map(snap.world.issues.map((i) => [i.number, i]));
-  assert.deepEqual(byNumber.get(7)?.pickup, { eligible: true, status: 'eligible', reasons: [] });
-  assert.deepEqual(byNumber.get(8)?.pickup, { eligible: false, status: 'active', reasons: ['agent queued'] });
+  assert.deepEqual(byNumber.get(7)?.pickup, {
+    eligible: false,
+    status: 'planning',
+    reasons: ['0/1 parts done'],
+  });
+  assert.deepEqual(byNumber.get(8)?.pickup, {
+    eligible: false,
+    status: 'planning',
+    reasons: ['planning agent queued'],
+  });
   system.store.close();
 });
 
-test('buildStateSnapshot pickup verdict reflects paused dispatch', async () => {
-  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
+test('buildStateSnapshot pickup verdict says paused dispatch where a planner is owed', async () => {
+  const config = { ...testConfig() };
+  config.prediction = { ...config.prediction, enabled: false };
+  config.goalCriteria = { ...config.goalCriteria, enabled: false };
+  const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 9, title: 'Bug' });
-  failPlanningOpen(system.store, 9);
+  failAppraisalOpen(system.store, 9);
   system.runtimeControl.apply({ paused: true });
   system.store.world.setWorldBaseline(await system.connector.getState());
 
@@ -167,7 +180,7 @@ test('buildStateSnapshot never reads the provider — the pulse is the only read
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_pr', number: 77, title: 'X', branch: 'feat/x' });
   system.connector.inject({ kind: 'new_issue', number: 78, title: 'Bug' });
-  failPlanningOpen(system.store, 78);
+  workedAsOnePart(system.store, 78);
   await system.harness.runCycle('manual');
 
   let reads = 0;
@@ -211,12 +224,12 @@ test('buildStateSnapshot with no baseline ships an empty world, not a live fetch
 test('buildStateSnapshot puts a local run’s spend on the goal it ran', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 31, title: 'A goal somebody looked at' });
-  failPlanningOpen(system.store, 31);
+  workedAsOnePart(system.store, 31);
   system.store.world.setWorldBaseline(await system.connector.getState());
 
   const run = system.store.localRuns.beginLocalRun({
     originRef: 'issue:31',
-    ref: 'issue/31',
+    ref: partBranch(31, 'whole'),
     dir: '/preview',
     commit: 'abc123',
     url: null,
@@ -282,8 +295,8 @@ test('buildStateSnapshot ships the local run’s targets, matched by branch', as
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 21, title: 'Stacked goal' });
   system.connector.inject({ kind: 'new_issue', number: 22, title: 'Nothing started' });
-  failPlanningOpen(system.store, 21);
-  failPlanningOpen(system.store, 22);
+  failAppraisalOpen(system.store, 21);
+  failAppraisalOpen(system.store, 22);
   const plan = system.store.plans.upsertPlan({
     originRef: 'issue:21',
     title: 'Stacked goal',

@@ -654,12 +654,7 @@ test('the assessor is briefed to write the check set, and only where there is on
   assert.match(owed, /What the plan said was worth checking/, 'and carries the briefing it is written from');
 
   const noPlan = assessPrompt((await d.decide(assessable({ plans: [] }))).actions);
-  assert.ok(noPlan !== null, 'an unplanned goal is still assessed');
-  assert.doesNotMatch(
-    noPlan,
-    /write the check set too/,
-    '`covers` names live part slugs, so validation_plan would refuse it — asking is spend with no outcome',
-  );
+  assert.equal(noPlan, null, 'an unplanned goal is not assessed: there is no plan to read delivery against');
 });
 
 test('an assessor may write the check set, and only for a goal it has just delivered', async () => {
