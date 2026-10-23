@@ -132,7 +132,7 @@ runway.
 
 There is no new taxonomy. `issuePickupStatus` ([06](06-issue-pickup.md)) already sorts every open
 issue, and the lens re-reads that one function's answer — it never asks the world a second question
-of its own, which is what stops it and rule `issue-pickup` coming to different conclusions about the
+of its own, which is what stops it and the dispatcher coming to different conclusions about the
 same issue.
 
 | Bucket        | Pickup status                                                      | What it means                                   |

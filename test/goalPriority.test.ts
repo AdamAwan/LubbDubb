@@ -17,17 +17,19 @@ import { buildApp } from '../src/server/app.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { pastTheFunnel } from './support/plans.js';
+import { onePartPlanRows, spentAppraisalAttempts } from './support/plans.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
+  const rows = (world.issues ?? []).map((i) => onePartPlanRows(i.number));
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
-    plans: [],
+    plans: rows.flatMap((r) => r.plans),
+    planParts: rows.flatMap((r) => r.planParts),
     tasks: [],
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
+    recentDecisions: (world.issues ?? []).flatMap((i) => spentAppraisalAttempts(i.number)),
     agentHeadroom: 3,
     ...over,
   };
@@ -114,13 +116,13 @@ test('a part of an unflagged plan is not covered by another goal being flagged',
   assert.equal(covers('pr:60:ci'), false);
 });
 
-test("a flagged goal's pickup jumps the natural cross-rule order", async () => {
+test("a flagged goal's plan part jumps the natural cross-rule order", async () => {
   const d = new RuleDispatcher();
   const world = { pullRequests: [pr(1, 'unrelated')], issues: [issue(101)] };
   const natural = await d.decide(ctx(world, { agentHeadroom: 1 }));
   assert.deepEqual(
     natural.upcoming?.map((q) => q.origin),
-    ['pr:1:ci', 'issue:101'],
+    ['pr:1:ci', 'issue:101:part:whole'],
   );
 
   const flagged = await d.decide(
@@ -129,7 +131,7 @@ test("a flagged goal's pickup jumps the natural cross-rule order", async () => {
   assert.deepEqual(
     flagged.upcoming?.map((q) => [q.origin, q.status]),
     [
-      ['issue:101', 'dispatching'],
+      ['issue:101:part:whole', 'dispatching'],
       ['pr:1:ci', 'waiting'],
     ],
     'the flagged goal takes the slot the red build would have had',
@@ -143,7 +145,7 @@ test("a flagged goal's pull request is lifted with it", async () => {
   const result = await d.decide(
     ctx(
       { pullRequests: [pr(7, 'other'), pr(8, 'issue/55')], issues: [issue(55, { linkedPrNumber: 8 })] },
-      { agentHeadroom: 1, goalPriorities: [{ originRef: 'issue:55', since: 'now' }] },
+      { agentHeadroom: 1, goalPriorities: [{ originRef: 'issue:55', since: 'now' }], plans: [], planParts: [] },
     ),
   );
   assert.deepEqual(
@@ -191,7 +193,7 @@ test('a flagged goal is still held by its cooldown', async () => {
       {
         goalPriorities: [{ originRef: 'issue:9', since: 'now' }],
         recentDecisions: [
-          ...pastTheFunnel(9),
+          ...spentAppraisalAttempts(9),
           {
             id: 'd1',
             cycleId: 'c',
@@ -200,7 +202,7 @@ test('a flagged goal is still held by its cooldown', async () => {
             rule: null,
             admission: null,
             createdAt: '2026-07-21T00:00:00Z',
-            action: { type: 'dispatch_code_agent', reason: 'r', originRef: 'issue:9' },
+            action: { type: 'dispatch_code_agent', reason: 'r', originRef: 'issue:9:part:whole' },
           },
         ],
       },
@@ -208,7 +210,7 @@ test('a flagged goal is still held by its cooldown', async () => {
   );
   assert.deepEqual(
     result.upcoming?.map((q) => [q.origin, q.status]),
-    [['issue:9', 'cooldown']],
+    [['issue:9:part:whole', 'cooldown']],
     'flagged, first in the queue, and going nowhere until the cooldown lapses',
   );
   assert.ok(!result.actions.some((a) => a.type.startsWith('dispatch_')));

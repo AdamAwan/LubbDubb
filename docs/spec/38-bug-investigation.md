@@ -109,10 +109,10 @@ code it would be investigating without ([33](33-story-sequencing.md#the-appraise
 
 ## The holds
 
-While the investigation is owed, **rule `issue-plan` and rule `issue-pickup` stand aside**. Both ask
-`investigationSupersedes`, and it holds in two cases, both only while the label is on:
+While the investigation is owed, **rule `issue-plan` stands aside** — and with it all
+implementation, since nothing is implemented without a plan. It asks `investigationSupersedes`, and it holds in two cases, both only while the label is on:
 
-| Case                                                                  | Plan and pickup are queued                             |
+| Case                                                                  | The planner is queued                                  |
 | --------------------------------------------------------------------- | ------------------------------------------------------ |
 | An investigator is proposed, on cooldown, sequenced, or running       | `superseded`, naming `issue-investigate`               |
 | A current record waits on the operator, or was resolved _close_/_ask_ | `superseded`, with `investigationHold`'s reason quoted |
@@ -124,8 +124,8 @@ when the investigator's own origin is what is active, so the hold lasts as long 
 rather than only the pulse that proposed it. And it is load-bearing state: moved below `issue-plan`,
 the rule would compile, stop holding, and put a planner beside the investigator.
 
-**Removing the label lifts everything**, on the next pulse: both holds, a _pickup_ resolution's
-skipped planning, and the findings appended to the planner's or the pickup's prompt. It is the one
+**Removing the label lifts everything**, on the next pulse: both holds, and the findings appended to
+the planner's prompt. It is the one
 lever, so it has to be total: an operator who has decided the findings do not matter, or that a
 closed-out finding was wrong, should not have to find a second control to release the issue — and
 an issue with the label off is worked exactly as one that never had it
@@ -143,16 +143,15 @@ keyed `issue:<n>` — one row per issue, overwritten by each new report, which r
 | `confidence`     | `high`, `medium` or `low`.                                                       |
 | `locations`      | The files, functions and lines involved.                                         |
 | `blast_radius`   | What else shares the cause or would be touched by fixing it.                     |
-| `recommendation` | `plan`, `pickup`, `close` or `ask` — the agent's advice.                         |
-| `resolution`     | Null while it waits on the operator; then theirs, from the same four.            |
+| `recommendation` | `plan`, `close` or `ask` — the agent's advice.                                   |
+| `resolution`     | Null while it waits on the operator; then theirs, from the same three.           |
 
 **It is fingerprinted to the ticket text.** `goal_ref` is `goalFingerprint` of the title and body the
 investigator was **dispatched with**, read off its task, so an edit made mid-run is not swallowed.
 `investigationStandings` (`src/intake/investigation.ts`) reads each issue once into an
 `InvestigationStanding` — the record for its current text (`current`), whether the label is on, the
 record **in force** (`inForce`: `current` while the label is on, else null) and the hold computed from
-it. That is the one place the label rule is applied: `investigationSkipsPlanning`, `investigationNote`
-and the hold read `inForce` and never re-check the label, and the cockpit reads the hold. Every reader
+it. That is the one place the label rule is applied: `investigationNote` and the hold read `inForce` and never re-check the label, and the cockpit reads the hold. Every reader
 goes through it, the dispatcher's `StageContext.investigations` and the pickup
 verdict's `IssuePickupContext.investigations` alike, so the two cannot disagree. A record whose
 fingerprint no longer matches is not current: an edited ticket has no current findings, so its holds lift and — with the label still on
@@ -163,14 +162,14 @@ The issue's state snapshot carries the current record as `Issue.investigation`, 
 none, and the standing's hold beside it as `Issue.investigationHold`
 ([16](16-http-api.md#post-apiissuesnumberinvestigation)), and its pickup verdict reads
 `investigation`, with the reason, while the label holds it ([06](06-issue-pickup.md#a-bug-whose-cause-is-not-known)).
-The four answers are declared once, `INVESTIGATION_RESOLUTIONS` in `src/intake/investigationResolutions.ts`:
+The three answers are declared once, `INVESTIGATION_RESOLUTIONS` in `src/intake/investigationResolutions.ts`:
 the type, the tool's `recommendation` enum, the route's body and the cockpit's buttons (through
 `src/wire.ts`) all read it, so the cockpit cannot offer an answer the route refuses.
 
 In the cockpit the findings are a **`findings` ask** on the rail, standing while `investigationHold` is
 set and the findings are unanswered — the hold, not the pickup verdict, which a higher-ranked status
 (`blocked`, say) would hide while the findings still hold the goal: the four fields drawn whole, the agent's recommendation marked on its button among the
-four resolutions, and **Investigate again** beside them. The goal header carries an `Investigation ·`
+three resolutions, and **Investigate again** beside them. The goal header carries an `Investigation ·`
 chip for a current record: the operator's answer once resolved, and _waiting on you_ only on the
 findings ask's own terms — `investigationHold` — so with the label off it says nothing
 asks. → [17](17-cockpit.md#hue-is-the-kind-weight-is-the-group)
@@ -185,24 +184,43 @@ findings about an earlier text would be read back as an answer about this one if
 reverted, and it holds or releases nothing now. So is a current row with the label off, for the same
 second reason — the findings gate nothing, and the answer would act only if the label came back.
 
-| Resolution | What happens                                                                                                                                                                                                          |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `plan`     | The holds lift and the planner runs, with the findings **appended** to its prompt by `investigationNote`.                                                                                                             |
-| `pickup`   | The holds lift and planning is skipped: `resolvePlanRoute` answers `unplanned` for an issue with no plan row ([08](08-planning.md#the-four-arms)), so rule `issue-pickup` works it whole, with the findings appended. |
-| `close`    | The issue stays held while the label is on. The harness closes nothing — closing the ticket is the operator's own move on the tracker.                                                                                |
-| `ask`      | The same hold. The harness posts nothing to the reporter; the operator asks, and the rewrite that answers it re-arms the rule.                                                                                        |
-| _clear_    | The row is gone. With the label still on, the rule investigates again — the way to ask for a second look.                                                                                                             |
+| Resolution | What happens                                                                                                                           |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan`     | The holds lift and the planner runs, with the findings **appended** to its prompt by `investigationNote`.                              |
+| `close`    | The issue stays held while the label is on. The harness closes nothing — closing the ticket is the operator's own move on the tracker. |
+| `ask`      | The same hold. The harness posts nothing to the reporter; the operator asks, and the rewrite that answers it re-arms the rule.         |
+| _clear_    | The row is gone. With the label still on, the rule investigates again — the way to ask for a second look.                              |
 
 The note is appended, never interpolated, for the reason every addition to a prompt is
-([05](05-dispatcher.md#prompt-templates)): the planner's and the pickup's templates are
+([05](05-dispatcher.md#prompt-templates)): the planner's template is
 operator-overridable, and an override that never learned a `{findings}` token would drop the findings
 on exactly the deployments that customised most. It tells the agent the findings are one agent's
 reading, accepted by an operator, to be checked against the repository.
 
-The route and the note read the record **and** the label (`investigationSkipsPlanning`,
-`investigationNote` both take the `InvestigationStanding`): taking the label off after resolving
-_pickup_ puts the planner back on the issue, and neither resolved arm carries the note any more. The
-label is the one lever, and an issue without it is worked as though nothing had been investigated.
+The note reads the record **and** the label (`investigationNote` takes the `InvestigationStanding`):
+taking the label off after resolving _plan_ drops the note from the planner's prompt. The label is the
+one lever, and an issue without it is worked as though nothing had been investigated.
+
+### No fix without a plan
+
+There is no answer that sends a fix **straight to pickup**. There was — `pickup`, "one contained change
+an agent can make directly", which set `skipPlanning` on `resolvePlanRoute` so rule `issue-pickup`
+worked the issue whole with no plan row — and it was withdrawn, because every gate after the fix reads
+the plan. The assessor reads delivery against the plan's parts, and with no plan there is no part left
+open and nothing it can say was delivered, so it reports a shortfall on work that is done; the
+shortfall's routing, validation authoring (`covers` names part slugs) and the close-out all lean on a
+plan row in the same way, and each fails in its own odd manner without one. A small fix is a one-part
+plan ([08](08-planning.md)), which costs one planner and gives every one of those gates the thing it
+reads. An investigator that thinks the fix is one contained change says so in its findings, and the
+planner reads them.
+
+`pickup` is not an error where it still turns up. A row written before the withdrawal, recommendation or
+resolution, **reads as `plan`** (`withdrawnPickup` in `src/intake/investigationResolutions.ts`, applied
+by the store's row reader), so an issue an operator had sent to pickup gets a planner on the next pulse
+instead. An operator override of the `issue-investigate` template written while `pickup` was an answer
+still tells its agent to send it; `report_investigation` folds it to `plan` on the way in rather than
+refusing the report, so the override keeps working. Only the route refuses it, with 400 — the cockpit
+no longer offers it, so the one caller that sends it is out of date.
 
 ## Fail open
 
@@ -245,18 +263,19 @@ when it is cast and not kept, which is also what keeps a sweep from having anyth
   the watch tag is;
 - a labelled issue is investigated read-only before it is planned; an unlabelled one is not, and one
   still being appraised is not;
-- a running investigator and unresolved findings each hold plan and pickup; removing the label lifts
+- a running investigator and unresolved findings each hold the planner; removing the label lifts
   both;
 - an edit re-arms the rule;
-- _plan_ runs the planner with the findings appended; _pickup_ skips planning and carries them;
-  _close_ and _ask_ dispatch nothing;
+- _plan_ runs the planner with the findings appended; _close_ and _ask_ dispatch nothing;
+- a `pickup` row from before the withdrawal reads as `plan`, an investigator sending `pickup` is
+  recorded as `plan`, and the route refuses `pickup` with 400;
 - a spent attempt cap fails open to the planner with no escalation;
 - `report_investigation` is named, placed only on the investigator's row, fenced to its origin, and
   fingerprints the text the agent was handed;
 - an appraisal that asks labels the issue once, one that does not ask leaves it, and an `unclear`
   appraisal never labels; the label is in the world before the verdict is recorded; a second
   appraisal never labels again; a failed write still records the verdict and is not the once;
-- with the label off, a _pickup_ resolution skips nothing and the note is empty;
+- with the label off, a _plan_ resolution's note is empty;
 - the route resolves, clears, and refuses an unknown resolution with 400, a missing record with 404
   and a record about an earlier text, with the label off, or on an issue missing from the world snapshot, with 409.
 

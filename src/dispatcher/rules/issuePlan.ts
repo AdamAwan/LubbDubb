@@ -41,9 +41,27 @@ function planTemplate(s: StageContext, issue: Issue, branch: string, replanOf: P
   return s.templates.render('issue-replan', { ...vars, current: currentPlanSummary(replanOf, parts, s.prRefStyle) });
 }
 
+function escalatePlanner(s: StageContext, issue: Issue, attempts: number): void {
+  const origin = planOrigin(issue.number);
+  if (planHold(s, issue, '', 'dispatch').held !== undefined) return;
+  s.raw.push({
+    type: 'escalate_to_human',
+    escalationType: 'resolve_ambiguity',
+    prompt: s.templates.render('issue-plan-escalation', { number: issue.number, title: issue.title, attempts }),
+    context: { originRef: origin, taskTitle: `Plan issue #${issue.number}` },
+    rule: 'issue-plan',
+    admission: 'cooldown-escalate',
+    reason: `Origin ${origin} hit the ${s.cooldown.maxAttempts}-attempt cap without producing a plan — escalating, because nothing is implemented without one.`,
+  } satisfies RawAction);
+}
+
 export function issuePlan(s: StageContext): void {
   for (const { issue } of s.eligibleIssues) {
     const route = s.routes.get(issue.number);
+    if (route?.route === 'escalated') {
+      if (route.raise !== null) escalatePlanner(s, issue, route.raise.attempts);
+      continue;
+    }
     if (route?.route !== 'planning') continue;
     const origin = planOrigin(issue.number);
     if (s.activeOrigins.has(origin)) continue;

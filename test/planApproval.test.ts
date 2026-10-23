@@ -66,11 +66,11 @@ test('the funnel names the awaiting arm, so the chip and the rules read one verd
   assert.equal(route('active', 8), 'parts');
 });
 
-test('the only arm rule `issue-pickup` still works is the funnel failing open', () => {
+test('a capped planner with no plan escalates rather than failing open; a capped replan keeps its parts', () => {
   const route = (plan: Plan | null, verdict: DispatchVerdict['kind'], existingParts = 0): string =>
     resolvePlanRoute({ plan, verdict: { kind: verdict, attempts: 3 } as DispatchVerdict, existingParts }).route;
-  assert.equal(route(null, 'escalate'), 'unplanned');
-  assert.equal(route(null, 'hold'), 'unplanned');
+  assert.equal(route(null, 'escalate'), 'escalated');
+  assert.equal(route(null, 'hold'), 'escalated');
   assert.equal(route({ ...planRow(), status: 'planning' }, 'escalate', 2), 'parts');
 });
 

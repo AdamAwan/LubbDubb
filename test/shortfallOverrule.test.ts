@@ -1,3 +1,4 @@
+import { deliveredPlanRows } from './support/plans.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
@@ -197,11 +198,12 @@ test('the delivery an overrule writes is what stops the assessor re-deriving the
   const assessments = (actions: { rule?: unknown }[]): number =>
     actions.filter((a) => a.rule === 'issue-assess').length;
 
-  const asked = await dispatcher().decide(ctx());
+  const asked = await dispatcher().decide(ctx(deliveredPlanRows(1)));
   assert.equal(assessments(asked.actions), 1, 'without a verdict the assessor goes again — the loop being fixed');
 
   const overruled = await dispatcher().decide(
     ctx({
+      ...deliveredPlanRows(1),
       deliveries: [
         {
           originRef: 'issue:1',

@@ -9,7 +9,7 @@ import { buildSystem } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Task } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 test('buildClaudeStreamArgs injects the protocol system prompt and permission mode', () => {
   const args = buildClaudeStreamArgs({ permissionMode: 'acceptEdits', extraArgs: ['--model', 'x'] });
@@ -151,7 +151,7 @@ test('the terminal runtime still detects the protocol sentinels from real output
   const backend = new FakePtyBackend();
   const system = buildSystem(terminalModeConfig(), { worktrees: new FakeWorktreeManager(), backend });
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'X' });
-  failPlanningOpen(system.store, 902);
+  workedAsOnePart(system.store, 902);
   await system.harness.runCycle('manual');
 
   const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;

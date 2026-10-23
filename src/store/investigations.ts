@@ -1,3 +1,4 @@
+import { withdrawnPickup } from '../intake/investigationResolutions.js';
 import type { InvestigationConfidence, InvestigationResolution, IssueInvestigation } from '../types.js';
 import type { StoreContext } from './context.js';
 
@@ -81,9 +82,9 @@ function fromRow(r: Row): IssueInvestigation {
     confidence: r.confidence as InvestigationConfidence,
     locations: r.locations,
     blastRadius: r.blast_radius,
-    recommendation: r.recommendation as InvestigationResolution,
+    recommendation: withdrawnPickup(r.recommendation) as InvestigationResolution,
     decidedAt: r.decided_at,
-    resolution: (r.resolution as InvestigationResolution | null) ?? null,
+    resolution: r.resolution === null ? null : (withdrawnPickup(r.resolution) as InvestigationResolution),
     resolvedAt: r.resolved_at ?? null,
   };
 }

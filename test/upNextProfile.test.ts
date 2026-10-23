@@ -4,7 +4,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { WorldSnapshot } from '../src/types.js';
 import { Store } from '../src/store/store.js';
-import { pastTheFunnel } from './support/plans.js';
+import { onePartPlanRows, spentAppraisalAttempts } from './support/plans.js';
 
 const PROFILES = {
   fast: { model: 'haiku', rank: 1, description: 'mechanical work' },
@@ -12,18 +12,20 @@ const PROFILES = {
   deep: { model: 'opus', effort: 'medium', rank: 3, description: 'work whose shape is unclear' },
 } as const;
 
-const MODELS = { profiles: PROFILES, default: 'standard', byRule: { 'issue-pickup': 'fast' } };
+const MODELS = { profiles: PROFILES, default: 'standard', byRule: { 'plan-part': 'fast' } };
 const PINS = { labelPrefix: 'lubbdubb', models: MODELS };
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
+  const rows = (world.issues ?? []).map((i) => onePartPlanRows(i.number));
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
-    plans: [],
+    plans: rows.flatMap((r) => r.plans),
+    planParts: rows.flatMap((r) => r.planParts),
     tasks: [],
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
+    recentDecisions: (world.issues ?? []).flatMap((i) => spentAppraisalAttempts(i.number)),
     agentHeadroom: 3,
     modelPins: PINS,
     ...over,
@@ -47,8 +49,8 @@ test('every queued row names the profile it would run on, and which level answer
   assert.deepEqual(
     result.upcoming?.map((q) => [q.origin, q.status, q.profile, q.profileSource]),
     [
-      ['issue:101', 'dispatching', 'fast', 'rule'],
-      ['issue:102', 'waiting', 'fast', 'rule'],
+      ['issue:101:part:whole', 'dispatching', 'fast', 'rule'],
+      ['issue:102:part:whole', 'waiting', 'fast', 'rule'],
     ],
   );
   assert.equal(result.upcoming?.[0]?.override, undefined, 'nothing is overridden until somebody says so');
@@ -69,7 +71,9 @@ test("an override beats the goal's tag, and says which pin is the operator's", a
   assert.equal(pinned.upcoming?.[0]?.profile, 'deep', "the goal's tag stands on its own");
   assert.equal(pinned.upcoming?.[0]?.override, undefined);
 
-  const priced = await d.decide(ctx(world, { profileOverrides: [{ origin: 'issue:310', profile: 'fast' }] }));
+  const priced = await d.decide(
+    ctx(world, { profileOverrides: [{ origin: 'issue:310:part:whole', profile: 'fast' }] }),
+  );
   assert.equal(priced.upcoming?.[0]?.profile, 'fast', 'the narrower, later statement wins');
   assert.equal(priced.upcoming?.[0]?.profileSource, 'pin');
   assert.equal(priced.upcoming?.[0]?.override, 'fast', 'and the row says which pin is the one to clear');
@@ -91,7 +95,7 @@ test('the override reaches a pull-request row, which no goal tag can', async () 
 test('an overridden row dispatches on the profile the queue advertised', async () => {
   const d = new RuleDispatcher();
   const result = await d.decide(
-    ctx({ issues: [issue(88)] }, { profileOverrides: [{ origin: 'issue:88', profile: 'deep' }] }),
+    ctx({ issues: [issue(88)] }, { profileOverrides: [{ origin: 'issue:88:part:whole', profile: 'deep' }] }),
   );
   const dispatched = result.actions.find((a) => a.type === 'dispatch_code_agent');
   assert.ok(dispatched);
@@ -101,7 +105,10 @@ test('an overridden row dispatches on the profile the queue advertised', async (
 test('an override prices and never un-holds: a held row keeps its hold', async () => {
   const d = new RuleDispatcher();
   const result = await d.decide(
-    ctx({ issues: [issue(9)] }, { agentHeadroom: 0, profileOverrides: [{ origin: 'issue:9', profile: 'fast' }] }),
+    ctx(
+      { issues: [issue(9)] },
+      { agentHeadroom: 0, profileOverrides: [{ origin: 'issue:9:part:whole', profile: 'fast' }] },
+    ),
   );
   assert.equal(result.upcoming?.[0]?.status, 'waiting', 'zero headroom still holds it');
   assert.equal(result.upcoming?.[0]?.profile, 'fast');

@@ -12,7 +12,7 @@ import { atomNote } from '../src/plans/atoms.js';
 import { partDeclarationNote } from '../src/plans/parts.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DEFAULT_PLANNING } from '../src/plans/planning.js';
-import { pastTheFunnel } from './support/plans.js';
+import { spentAppraisalAttempts } from './support/plans.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { buildSystem, type System } from '../src/system/system.js';
 import { loadConfig } from '../src/config/config.js';
@@ -534,7 +534,7 @@ async function partPrompt(system: System, planId: string): Promise<string> {
     plans: system.store.plans.listPlans().filter((p) => p.id === planId),
     planParts: system.store.plans.listAllPlanParts(),
     planAtoms: system.store.plans.listAllPlanAtoms(),
-    recentDecisions: pastTheFunnel(390),
+    recentDecisions: spentAppraisalAttempts(390),
   });
   const action = result.actions.find((a) => a.type === 'dispatch_code_agent' && a.rule === 'plan-part');
   assert.ok(action && action.type === 'dispatch_code_agent', 'the ready part is dispatched');

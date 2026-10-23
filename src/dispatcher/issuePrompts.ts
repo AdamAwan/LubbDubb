@@ -299,13 +299,21 @@ export const ISSUE_PROMPTS = {
     placeholders: ['number', 'title', 'body', 'branch'],
     template:
       'GitHub issue #{number} ("{title}") needs resolving.\n\n{body}\n\nImplement the fix on branch {branch} and open a pull request that resolves it, using the open_pr tool — it resolves the branch and the base from your own origin and writes the issue reference itself. If that tool is unavailable, open the pull request yourself from {branch}. Whether the issue closes is yours to say in the body: reference the issue as "closes #{number}" only if this PR completes the whole thing; if work remains afterwards, reference it as "part of #{number}" so it stays open for the rest.',
-    doc: 'Sent to a code agent when an open work item / issue has no open PR and no agent is on it (rule `issue-pickup`). Placeholders: {number} {title} {body} {branch}.',
+    retired: true,
+    doc: '**Retired — no longer rendered.** Rule `issue-pickup` worked an issue whole with no plan once the planner had spent its attempt cap; nothing is implemented without a plan now, and a capped planner escalates instead (`issue-plan-escalation`). Kept so an operator override of it still loads. Placeholders: {number} {title} {body} {branch}.',
+  },
+  'issue-plan-escalation': {
+    placeholders: ['number', 'title', 'attempts'],
+    template:
+      'Planning issue #{number} ("{title}") keeps failing: {attempts} planner attempt(s) produced no plan. Nothing is implemented for an issue without a plan, so it waits on you. Look at why the planner could not decompose it: usually the ticket needs rewriting, or the work is already done.',
+    doc: 'Escalated to a human when the planner hits its attempt cap without submitting a plan (rule `issue-plan`). There is no fall-back to working the issue whole: every implementation reads a plan, so a planner that cannot write one stops the issue and asks. Placeholders: {number} {title} {attempts}.',
   },
   'issue-pickup-escalation': {
     placeholders: ['number', 'title', 'attempts'],
     template:
       'Auto-resolution of issue #{number} ("{title}") keeps failing: {attempts} agent attempt(s) produced no linked PR. Please take a look.',
-    doc: 'Escalated to a human when issue pickup keeps failing to produce a linked PR. Placeholders: {number} {title} {attempts}.',
+    retired: true,
+    doc: '**Retired — no longer rendered.** Raised when rule `issue-pickup` kept failing to produce a linked PR; that rule is retired. Kept so an operator override of it still loads. Placeholders: {number} {title} {attempts}.',
   },
   'issue-assess': {
     placeholders: ['number', 'title', 'body', 'branch'],
@@ -341,9 +349,9 @@ export const ISSUE_PROMPTS = {
       '3. **How sure you are** — high, medium or low, and say what would raise it.\n' +
       '4. **Where** — the files, functions and lines involved.\n' +
       '5. **The blast radius** — what else shares the cause or would be touched by fixing it.\n\n' +
-      'Then call report_investigation once with what you found and what should happen next: "plan" if the fix needs a planner to decompose it, "pickup" if it is one contained change an agent can make directly, "close" if it is not a bug or is already fixed, "ask" if only the reporter can say what is missing. An operator reads your findings and decides; nothing is planned or dispatched for this issue until they do.\n\n' +
+      'Then call report_investigation once with what you found and what should happen next: "plan" if there is a fix to make — every fix is planned, however small, so say so in your findings when it is one contained change — "close" if it is not a bug or is already fixed, "ask" if only the reporter can say what is missing. An operator reads your findings and decides; nothing is planned or dispatched for this issue until they do.\n\n' +
       'Do not implement anything, do not open a pull request, and do not edit the ticket.',
-    doc: "Sent to a read-only code agent for a watched open issue carrying the investigate label, before it is planned (rule `issue-investigate`). It reproduces the bug, finds the root cause, says how sure it is, where in the code it lives and what else it touches, and records all of it with report_investigation along with a recommendation — plan, pickup, close or ask. The findings wait on an operator; once they resolve them to plan or pickup, the findings are *appended* to the planner's or the pickup agent's prompt rather than interpolated, so an override of those templates cannot drop them. Related tracker items are appended after this text. {branch} is the name its read-only worktree is leased under, not a ref. Placeholders: {number} {title} {body} {branch}.",
+    doc: "Sent to a read-only code agent for a watched open issue carrying the investigate label, before it is planned (rule `issue-investigate`). It reproduces the bug, finds the root cause, says how sure it is, where in the code it lives and what else it touches, and records all of it with report_investigation along with a recommendation — plan, close or ask. There is no straight-to-pickup answer: every fix is planned, so the plan is what the assessor later reads delivery against. An override written when `pickup` was an answer still works — the tool reads it as `plan`. The findings wait on an operator; once they resolve them to plan, the findings are *appended* to the planner's prompt rather than interpolated, so an override of that template cannot drop them. Related tracker items are appended after this text. {branch} is the name its read-only worktree is leased under, not a ref. Placeholders: {number} {title} {body} {branch}.",
   },
   'criteria-alignment': {
     placeholders: ['number', 'title', 'ticket', 'criteria', 'version'],

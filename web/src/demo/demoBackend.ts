@@ -1031,7 +1031,7 @@ class DemoServer {
     if (issue?.investigation) {
       issue.investigation =
         resolution === null ? null : { ...issue.investigation, resolution, resolvedAt: new Date().toISOString() };
-      if (resolution === null || resolution === 'plan' || resolution === 'pickup') issue.investigationHold = null;
+      if (resolution === null || resolution === 'plan') issue.investigationHold = null;
       this.dirty();
     }
     return { ok: true };

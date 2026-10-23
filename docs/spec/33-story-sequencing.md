@@ -185,9 +185,8 @@ predecessor is still open holds, however far along that predecessor is and whate
 This is deliberately **not** `dependencySatisfied`'s rule (`src/plans/parts.ts`), which a part is
 held by and which counts a pushed branch as satisfied. The difference is that a part is _based on_
 the branch it waits for — `partBase` bases it there, so the work it depends on is in the checkout it
-is handed. A **story** has no such base: `issue-pickup` names a branch and no base, so
-`codeWorkingDirectory` cuts the worktree from `defaultBranch`
-(`src/executor/actionExecutor.ts`). A predecessor's unmerged branch is therefore not in the
+is handed. A **story** has no such base: `partBase` follows only the dependencies inside the story's
+own plan, so a story's first part is cut from `defaultBranch`. A predecessor's unmerged branch is therefore not in the
 successor's checkout, and releasing on the push would dispatch the successor against a tree missing
 exactly the thing it waits for — the failure the
 [appraiser's hold](#the-appraiser-is-held-as-well) exists to prevent, one stage later.
@@ -235,7 +234,7 @@ cover an unwatched story: every predecessor workable, `unworkable` empty.
 The verdict rides on `StageContext.sequenceWaits` for later stages to read, and it is computed
 **once**, in the
 dispatcher's context assembly, beside `routes` and `eligibleIssues`. It is not a second opinion
-formed inside a rule: `issue-appraisal`, `issue-plan` and `issue-pickup` all consult it and must
+formed inside a rule: `issue-appraisal` and `issue-plan` both consult it and must
 never disagree about whether a story is ready, exactly as they must never disagree about which plan
 arm it is on ([05](05-dispatcher.md#the-rule-book)).
 
@@ -267,7 +266,7 @@ the two do not disagree.
 
 ### A held story is queued, not skipped
 
-`issue-appraisal`, `issue-pickup` and `issue-plan` push their candidate with `held: 'sequenced'` and a reason naming
+`issue-appraisal` and `issue-plan` push their candidate with `held: 'sequenced'` and a reason naming
 what it waits behind — `Held: waits on #593, which has not landed yet.`, appended to the
 rule's own reason so the row still says what the work _is_ before it says why it is not going out
 (`sequenceHoldReason`). It is a new
@@ -277,9 +276,9 @@ Queued rather than skipped, for `capped`'s reason: a dispatch that silently neve
 invisible, and an operator looking at an idle fleet and a full board has nothing to read. A held
 candidate stays in Up next with its reason attached.
 
-**It is not routed through `consider`.** The cooldown has no bearing on a pickup that is not going
+**It is not routed through `consider`.** The cooldown has no bearing on a dispatch that is not going
 out this cycle for a different reason entirely, and spending an attempt cap on a suppressed dispatch
-would blame the pickup for the sequence's hold — the same argument `issue-pickup` already makes for
+would blame the planner for the sequence's hold — the same argument every rule makes for
 `superseded`.
 
 ## What the appraiser is told
@@ -331,9 +330,11 @@ Every one of these leaves **every story eligible, in exactly the order it has to
 The one arm that does **not** fail open is a predecessor nothing will work, which holds and says so
 — stated, argued and paid for [above](#an-unwatched-predecessor-holds).
 
-This is `resolvePlanRoute`'s discipline ([08](08-planning.md#the-four-arms)): a planner that fails
-falls through to `single` rather than parking the issue. A mechanism that adds ordering must never be
-able to park a Feature, because the failure it would cause — a feature nobody works, with nothing
+This was `resolvePlanRoute`'s discipline too, until the planner's fail-open was withdrawn: a planner
+that writes no plan now escalates to a person
+([08](08-planning.md#a-planner-that-writes-no-plan-escalates)), because work done without a plan
+fails every gate after it — and that park is raised, not silent. Sequencing keeps the discipline. A
+mechanism that adds ordering must never be able to park a Feature, because the failure it would cause — a feature nobody works, with nothing
 red — is worse than the disorder it exists to fix.
 
 The appraiser inherits every arm of that unchanged: with no edges `sequenceWaits` is empty, so the

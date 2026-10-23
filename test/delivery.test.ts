@@ -5,7 +5,8 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { issuePickupStatus } from '../src/dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import type { Issue, IssueDelivery, WorldEvent } from '../src/types.js';
-import { pastTheFunnel } from './support/plans.js';
+import { spentAppraisalAttempts } from './support/plans.js';
+import { planOrigin } from '../src/plans/planning.js';
 
 function delivery(over: Partial<IssueDelivery> = {}): IssueDelivery {
   const decidedAt = over.decidedAt ?? '2026-07-28T10:00:00.000Z';
@@ -122,7 +123,7 @@ test('an off-vocabulary origin is never expired by a signal it cannot be matched
   );
 });
 
-test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup through', async () => {
+test('a standing verdict stops the planner, and lifting it lets planning through', async () => {
   const world = {
     takenAt: '2026-07-28T12:00:00.000Z',
     pullRequests: [],
@@ -138,12 +139,12 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: pastTheFunnel(12),
+    recentDecisions: spentAppraisalAttempts(12),
     agentHeadroom: 3,
     plans: [],
     deliveries: [delivery()],
   });
-  assert.deepEqual(codeDispatches(parked.actions), [], 'the issue is parked, so no pickup agent');
+  assert.deepEqual(codeDispatches(parked.actions), [], 'the issue is parked, so no planner');
 
   const released = await d.decide({
     world,
@@ -151,15 +152,15 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: pastTheFunnel(12),
+    recentDecisions: spentAppraisalAttempts(12),
     agentHeadroom: 3,
     plans: [],
     deliveries: [delivery()],
     deliverySignals: [event()],
   });
-  const pickup = released.actions.find((a) => a.type === 'dispatch_code_agent');
-  assert.ok(pickup, 'the park is over, so pickup runs');
-  assert.equal((pickup as { originRef: string }).originRef, 'issue:12');
+  const planner = released.actions.find((a) => a.type === 'dispatch_code_agent');
+  assert.ok(planner, 'the park is over, so planning runs');
+  assert.equal((planner as { originRef: string }).originRef, planOrigin(12));
 });
 
 test('the chip and the rule answer the same question', () => {
@@ -168,7 +169,7 @@ test('the chip and the rule answer the same question', () => {
     cooldown: DEFAULT_COOLDOWN,
     now: '2026-07-28T12:00:00.000Z',
     tasks: [],
-    recentDecisions: pastTheFunnel(12),
+    recentDecisions: spentAppraisalAttempts(12),
     openPrs: [],
     headroom: 3,
     paused: false,
@@ -181,7 +182,11 @@ test('the chip and the rule answer the same question', () => {
   assert.match(parked.reasons[0] ?? '', /the assessor marked it delivered/);
 
   const released = issuePickupStatus(issue(), { ...base, deliveries: [delivery()], deliverySignals: [event()] });
-  assert.equal(released.eligible, true, 'the same signal that un-holds the rule un-holds the chip');
+  assert.deepEqual(
+    released,
+    { eligible: false, status: 'planning', reasons: ['awaiting a planning agent'] },
+    'the same signal that un-holds the rule un-holds the chip',
+  );
 });
 
 test('an open PR or a live agent outranks the park — the honest reason wins', () => {

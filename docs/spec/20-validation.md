@@ -1384,7 +1384,7 @@ Five conditions, and each is somebody's decision rather than the harness's:
 are keyed on, so a shared one would let a check that can never be run spend the attempts of the four
 beside it — `pr-ci-gate`'s split against `pr-ci`, argument for argument.
 
-**It is last of every rule that produces work**, below one-shot pickup — only `validation-failed`,
+**It is last of every rule that produces work**, below the plan parts — only `validation-failed`,
 which is a second opinion on work somebody has already done, and the two Feature desks
 (`feature-summary`, `feature-sequence`), which produce no work at all, sit below it. That is
 load-bearing rather than tidy. Validation's standing promise is that it blocks nothing; a rule that

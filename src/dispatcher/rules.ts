@@ -1,6 +1,6 @@
 // → docs/spec/05-dispatcher.md
 
-type RuleKind = 'rule' | 'admission' | 'terminal';
+type RuleKind = 'rule' | 'admission' | 'terminal' | 'retired';
 
 export interface RuleConditions {
   workItemStates: boolean;
@@ -143,7 +143,7 @@ const RULES = [
     kind: 'rule',
     name: 'Advance to in-progress state',
     description:
-      'A work item in a pickup state that an agent is actually working — a live task on the goal itself or on one of its plan parts — is moved to the configured in-progress state, so the board shows work in flight where it is rather than sitting in "Ready". It fires off the observed task rather than off the dispatch that started it: a candidate can be cut by headroom or held on cooldown, and parking an item in "Doing" that nobody is working is the failure the rule exists to avoid. Observational and idempotent, so a provider write that was refused is simply attempted again next cycle. It never fires for an item with an open PR or a decomposed one — those belong to the review state, and the two rules are mutually exclusive by construction.',
+      'A work item in a pickup state that an agent is actually working — a live task on the goal itself or on one of its plan parts — is moved to the configured in-progress state, so the board shows work in flight where it is rather than sitting in "Ready". It fires off the observed task rather than off the dispatch that started it: a candidate can be cut by headroom or held on cooldown, and parking an item in "Doing" that nobody is working is the failure the rule exists to avoid. Observational and idempotent, so a provider write that was refused is simply attempted again next cycle. A plan does not stop it — every worked item has one. It never fires for an item with an open PR, and the review rule never fires while a work agent is live with nothing open, so the two are mutually exclusive by construction.',
     enabled: (c) => c.workItemInProgress,
   },
   {
@@ -151,7 +151,7 @@ const RULES = [
     kind: 'rule',
     name: 'Back off to review state',
     description:
-      'A work item still in a pickup state whose PR is already open is moved to the configured review state, so it waits on review/CI instead of being re-picked every cycle.',
+      'A work item still in a pickup state is moved to the configured review state once its PR is open, or once its plan is underway with no agent working it, so the board shows it waiting on review rather than on the fleet.',
     enabled: (c) => c.workItemStates,
   },
   {
@@ -168,14 +168,14 @@ const RULES = [
     kind: 'rule',
     name: 'Issue goal needs checking',
     description:
-      'A watched open issue nothing has been started for yet gets a code agent to read the ticket against the repository and say whether there is a goal here an agent could start from. It is the only gate in front of an issue that asks about *content*: every other one — the watch tag, the workflow state, the cooldown, the attempt cap, headroom — asks whether the harness is allowed to act, never whether there is anything to act on. A verdict of `unclear` stops the funnel for that issue and posts, on the ticket, the list of what the author has to add and how to get help adding it; it ends by itself the moment the ticket is rewritten, or when an operator confirms the goal. Ranked ahead of the planner, because appraising a goal the planner is about to decompose is the whole point. It is held behind a story\u2019s declared predecessors like the planner and the pickup are: it reads the repository as it stands, so a story whose predecessor has not landed would be judged against a checkout missing what that predecessor was going to build \u2014 and unlike the hold, which is recomputed every pulse, the `unclear` that would come back is a record keyed to the ticket\u2019s text and outlives the reason for it. An appraiser that writes no verdict \u2014 crashed, killed or capped \u2014 leaves the issue to ordinary pickup, so a failure can never park one.',
+      'A watched open issue nothing has been started for yet gets a code agent to read the ticket against the repository and say whether there is a goal here an agent could start from. It is the only gate in front of an issue that asks about *content*: every other one — the watch tag, the workflow state, the cooldown, the attempt cap, headroom — asks whether the harness is allowed to act, never whether there is anything to act on. A verdict of `unclear` stops the funnel for that issue and posts, on the ticket, the list of what the author has to add and how to get help adding it; it ends by itself the moment the ticket is rewritten, or when an operator confirms the goal. Ranked ahead of the planner, because appraising a goal the planner is about to decompose is the whole point. It is held behind a story\u2019s declared predecessors like the planner is: it reads the repository as it stands, so a story whose predecessor has not landed would be judged against a checkout missing what that predecessor was going to build \u2014 and unlike the hold, which is recomputed every pulse, the `unclear` that would come back is a record keyed to the ticket\u2019s text and outlives the reason for it. An appraiser that writes no verdict \u2014 crashed, killed or capped \u2014 leaves the issue to the planner, so a failure can never park one.',
   },
   {
     id: 'issue-investigate',
     kind: 'rule',
     name: 'Bug needs investigating',
     description:
-      'A watched open issue carrying the investigate label, with nothing started for it, gets one read-only code agent to find the cause before anything is planned: a reproduction, the root cause and how sure it is, where in the code it lives, what else it touches, and whether the issue should be planned, picked up whole, closed or sent back to its reporter. The label is the only switch — an operator sets it, or the goal appraisal sets it once when it reads a bug whose cause is not known yet — and removing it lifts every hold this rule places. While the investigator is out, and while its findings wait on an operator, the planner and the pickup stand aside; an operator who resolves the findings to *plan* has them appended to the planner\u2019s prompt, *pickup* skips planning, and *close* or *ask* keep the issue held until the label comes off or the ticket is rewritten. The findings are keyed to the ticket\u2019s text, so an edit re-arms it. An investigator that writes nothing \u2014 crashed, killed or capped \u2014 returns the issue to the funnel with no escalation, so a failure can never park one.',
+      'A watched open issue carrying the investigate label, with nothing started for it, gets one read-only code agent to find the cause before anything is planned: a reproduction, the root cause and how sure it is, where in the code it lives, what else it touches, and whether the issue should be planned, closed or sent back to its reporter. The label is the only switch — an operator sets it, or the goal appraisal sets it once when it reads a bug whose cause is not known yet — and removing it lifts every hold this rule places. While the investigator is out, and while its findings wait on an operator, the planner stands aside; an operator who resolves the findings to *plan* has them appended to the planner\u2019s prompt — every fix is planned, so no answer skips the planner — and *close* or *ask* keep the issue held until the label comes off or the ticket is rewritten. The findings are keyed to the ticket\u2019s text, so an edit re-arms it. An investigator that writes nothing \u2014 crashed, killed or capped \u2014 returns the issue to the funnel with no escalation, so a failure can never park one.',
   },
   {
     id: 'criteria-alignment',
@@ -196,7 +196,7 @@ const RULES = [
     kind: 'rule',
     name: 'Issue may be finished',
     description:
-      'A watched open issue that has already had agents on it, has nothing in flight and no open PR, gets a code agent to read what was actually delivered and say whether the issue is finished. It writes `delivered` — weaker than the tracker’s `closed`, reversible, and its only effect is to stop pickup — or sends the issue back round with an outstanding-work note. It is what stops `issue-pickup` re-picking work whose PR has merged and left the open list, which on GitHub nothing else prevents, and it ranks ahead of pickup for exactly the issues both would otherwise claim. An assessor that spends its attempt cap fails the issue open to ordinary pickup, so a failure can never park an issue.',
+      'A watched open issue that has already had agents on it, has nothing in flight and no open PR, gets a code agent to read what was actually delivered and say whether the issue is finished. It writes `delivered` — weaker than the tracker’s `closed`, reversible, and its only effect is to stop pickup — or sends the issue back round with an outstanding-work note. It fires only for a goal with a plan: nothing is delivered without one, and the plan’s parts are what it reads delivery against. An assessor that spends its attempt cap leaves the goal where it is, so a failure can never park an issue.',
   },
   {
     id: 'issue-shortfall',
@@ -218,7 +218,7 @@ const RULES = [
     kind: 'rule',
     name: 'Plan needs your approval',
     description:
-      '**Every** planner verdict is a proposal rather than work: the plan lands as `awaiting_approval`, this rule puts it to you once, and nothing is scheduled until you accept — `plan-part` holds a decomposition\'s parts, `issue-pickup` holds a single verdict\'s issue. Accepting releases the plan, to `active` for a decomposition or to `single` for one pull request. Rejecting a decomposition retires the parts nothing has started for and falls the issue back to a single pull request; rejecting a single verdict sends the plan back to a planner with your reason, since the single-PR route is what a rejected decomposition already falls back to. Either way a "no" leaves the issue a route instead of parking it. A replan asks again — the amended verdict is a new proposal, and the old one cannot release it. There is no deployment in which a verdict commits the moment the planner writes it. A `single` verdict the harness *overruled* — parts are already in flight — is never asked about: the collapse was refused, so there is no decision in it.',
+      '**Every** planner verdict is a proposal rather than work: the plan lands as `awaiting_approval`, this rule puts it to you once, and nothing is scheduled until you accept — `plan-part` holds the plan\'s parts. Accepting releases the plan, to `active` for a decomposition or to `single` for one pull request. Rejecting a decomposition retires the parts nothing has started for and falls the issue back to a single pull request; rejecting a single verdict sends the plan back to a planner with your reason, since the single-PR route is what a rejected decomposition already falls back to. Either way a "no" leaves the issue a route instead of parking it. A replan asks again — the amended verdict is a new proposal, and the old one cannot release it. There is no deployment in which a verdict commits the moment the planner writes it. A `single` verdict the harness *overruled* — parts are already in flight — is never asked about: the collapse was refused, so there is no decision in it.',
   },
   {
     id: 'prediction-judge',
@@ -253,15 +253,15 @@ const RULES = [
     kind: 'rule',
     name: 'Plan part ready',
     description:
-      "One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/<n>/<slug>` — based on that dependency's branch while it is still open, on the default branch once it merged. Parts rank after planners and ahead of one-shot pickups, bottom of a stack first, and `maxConcurrentPartsPerIssue` caps how many parts of one plan may have agents at once: a human stacks safely because they hold the decomposition in their head, and N concurrent agents do not. A part held by that cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened.",
+      "One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/<n>/<slug>` — based on that dependency's branch while it is still open, on the default branch once it merged. Parts rank after planners, bottom of a stack first, and `maxConcurrentPartsPerIssue` caps how many parts of one plan may have agents at once: a human stacks safely because they hold the decomposition in their head, and N concurrent agents do not. A part held by that cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened.",
   },
 
   {
     id: 'issue-pickup',
-    kind: 'rule',
-    name: 'Open issue without a PR',
+    kind: 'retired',
+    name: 'Open issue without a plan',
     description:
-      'An open, pickup-eligible issue with no *open* PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority. Gating on an open PR (rather than on any PR ever having been linked) is what lets an issue take more than one PR. It fires only for an issue whose plan says `single`; its behaviour for such an issue is otherwise unchanged.',
+      'Retired. It worked an issue whole, with no plan, once the planner had spent its attempt cap without writing one. Nothing is implemented without a plan now: every gate after the work — the assessor, the shortfall routing, validation authoring — reads the plan, and an issue worked with none failed each of them in its own odd way. A capped planner escalates to a human instead (rule `issue-plan`). The id stays so decisions and spend recorded under it still read, and so a deployment whose `agentModels.byRule` names it still boots.',
   },
 
   {
@@ -371,6 +371,10 @@ type PipelineEntry =
 
 export const DISPATCH_PIPELINE: readonly PipelineEntry[] = RULES.filter(
   (r): r is Extract<(typeof RULES)[number], { kind: 'rule' }> => r.kind === 'rule',
+);
+
+export const RETIRED_RULE_IDS: ReadonlySet<string> = new Set(
+  RULES.filter((r) => r.kind === 'retired').map((r) => r.id),
 );
 
 export const DISPATCH_RULES = Object.fromEntries(RULES.map(({ id, ...rule }) => [id, rule])) as Record<

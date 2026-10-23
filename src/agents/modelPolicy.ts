@@ -1,4 +1,4 @@
-import { DISPATCH_PIPELINE } from '../dispatcher/rules.js';
+import { DISPATCH_PIPELINE, RETIRED_RULE_IDS } from '../dispatcher/rules.js';
 
 // → docs/spec/10-agent-runtimes.md
 
@@ -112,6 +112,7 @@ function validateProfileReferences(models: AgentModels, profiles: Record<string,
       `Refusing to start: agentModels.default names profile "${models.default}", which is not in agentModels.profiles.`,
     );
   for (const [rule, profile] of Object.entries(models.byRule ?? {})) {
+    if (RETIRED_RULE_IDS.has(rule)) continue;
     if (!STAGE_RULE_IDS.has(rule))
       throw new Error(
         `Refusing to start: agentModels.byRule."${rule}" is not a dispatch rule id — it would never match. ` +

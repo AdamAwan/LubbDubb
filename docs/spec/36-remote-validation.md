@@ -2123,9 +2123,10 @@ Two notes are appended to prompts that already exist, both rendered strings rath
   and not the invitation, and the one correction a person at their keyboard cannot make is the one
   that declares the coverage a goal turned out to need
   ([08](08-planning.md#discussing-a-plan));
-- the **`state_declare` instruction** on the two prompts that dispatch work — **built**, as
+- the **`state_declare` instruction** on the prompt that dispatches work — **built**, as
   `stateDeclareNote` in `src/plans/planning.ts`, computed in `src/system/system.ts`, threaded through
-  `RuleContext` and appended to the `issue-pickup` and `plan-part` renderings, so nothing under
+  `RuleContext` and appended to the `plan-part` rendering (it was also appended to `issue-pickup`'s,
+  until that rule was retired), so nothing under
   `src/dispatcher/` imports `src/validation/remote/`. `watchDeclareNote`'s
   arrangement exactly ([29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)) — but
   **appended only where some environment declares a `validate.state` executor**, which is where that

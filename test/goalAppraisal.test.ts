@@ -116,7 +116,7 @@ function spentCap(origin: string, branch: string): Decision[] {
 test('a fresh issue is appraised before anything is dispatched against it', async () => {
   const { actions } = await appraiser().decide(ctx());
 
-  assert.deepEqual(origins(actions), ['issue:12:appraisal'], 'the appraisal replaces the pickup for this cycle');
+  assert.deepEqual(origins(actions), ['issue:12:appraisal'], 'the appraisal replaces the funnel for this cycle');
   const dispatch = actions.find((a) => a.type === 'dispatch_code_agent') as {
     branch: string;
     base?: string;
@@ -140,11 +140,12 @@ test('there is no flag to turn it off — a fresh issue is appraised before the 
   assert.deepEqual(origins(actions), ['issue:12:appraisal'], 'unconditional, and it runs in front of the funnel');
 });
 
-test('appraisal and pickup never both fire for one issue', async () => {
+test('the appraisal never shares an issue with work or a planner escalation', async () => {
   const { actions } = await appraiser().decide(ctx());
   const dispatched = origins(actions).filter((o) => o.startsWith('issue:12'));
   assert.equal(dispatched.length, 1, 'one agent on the issue, not two');
   assert.ok(!dispatched.includes('issue:12'), 'answering the question by ignoring it is the failure');
+  assert.ok(!actions.some((a) => a.type === 'escalate_to_human'), 'a spent planner is not raised past the appraisal');
 });
 
 test('the planner is suppressed too — decomposing an unanswerable question is the point of this rule', async () => {
@@ -191,7 +192,7 @@ test('anything live under the issue stands the appraisal down', async () => {
   }
 });
 
-test('a running appraiser keeps standing the planner and pickup down, cycle after cycle', async () => {
+test('a running appraiser keeps standing the planner down, cycle after cycle', async () => {
   const { actions } = await new RuleDispatcher().decide(
     ctx({
       recentDecisions: [],
@@ -239,7 +240,7 @@ test('an appraiser that writes no verdict holds nothing — silence is not a ref
   assert.equal(appraisalHold(null, issue()), null);
 });
 
-test('a cooling appraiser still suppresses pickup for that cycle, and stays visible', async () => {
+test('a cooling appraiser still suppresses the funnel for that cycle, and stays visible', async () => {
   const recent: Decision[] = [
     {
       id: 'd1',
@@ -268,10 +269,11 @@ test('a cooling appraiser still suppresses pickup for that cycle, and stays visi
   );
 });
 
-test('an unclear verdict holds the issue out of pickup and planning alike', async () => {
+test('an unclear verdict holds the issue out of planning and its escalation alike', async () => {
   const d = new RuleDispatcher();
   const { actions } = await d.decide(ctx({ appraisals: [appraisal()] }));
-  assert.deepEqual(origins(actions), [], 'no pickup, no planner, and not re-asked either');
+  assert.deepEqual(origins(actions), [], 'no work, no planner, and not re-asked either');
+  assert.ok(!actions.some((a) => a.type === 'escalate_to_human'), 'the held goal is not escalated as unplannable');
 });
 
 test('a workable verdict releases the issue into the funnel and holds nothing', async () => {
@@ -353,14 +355,18 @@ test('the chip reports the pending case too, so a waiting issue is not an idle f
   assert.equal(running.reasons[0], 'a goal appraisal is running');
 });
 
-test('the chip says eligible exactly when the rule would dispatch — cap spent, and off', () => {
-  const capped = issuePickupStatus(
+test('the chip follows the funnel once the appraisal cap is spent — planning, then escalated', () => {
+  const appraisalSpent = spentCap('issue:12:appraisal', 'appraisal/issue/12');
+  const planning = issuePickupStatus(issue(), pickupCtx({ recentDecisions: appraisalSpent }));
+  assert.equal(planning.status, 'planning', 'the spent appraisal hands the issue to the planner');
+  assert.equal(planning.reasons[0], 'awaiting a planning agent');
+
+  const escalated = issuePickupStatus(
     issue(),
-    pickupCtx({
-      recentDecisions: [...spentPlannerAttempts(12), ...spentCap('issue:12:appraisal', 'appraisal/issue/12')],
-    }),
+    pickupCtx({ recentDecisions: [...spentPlannerAttempts(12), ...appraisalSpent] }),
   );
-  assert.equal(capped.status, 'eligible', 'the fail-open is reported as the pickup it actually becomes');
+  assert.equal(escalated.status, 'escalated', 'a planner that wrote no plan is reported as raised, never as work');
+  assert.equal(escalated.eligible, false);
 });
 
 test('an unwatched issue is reported as unwatched, never as awaiting an appraisal it will never get', () => {

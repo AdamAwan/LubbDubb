@@ -6,14 +6,15 @@ implements it.
 
 Every watched open issue passes a planning agent before any implementation work. The funnel was a
 switch while it was new; keeping one meant every gate that read it was a branch to reason about and
-test, and the off arm — `issue-pickup` un-narrowed, no plan row anywhere — is not a configuration
+test, and the off arm — every issue worked whole by the since-retired rule `issue-pickup`, no plan
+row anywhere — is not a configuration
 anything else in the harness is written for any more. A config file still setting `planning.enabled`
 is warned about and ignored ([02](02-configuration.md#retired-keys)).
 
 **A plan is not a sequence.** A plan decomposes _one_ issue into parts and cuts a branch per part;
 an order over the stories under a Feature creates nothing and cuts no branch, and lives in
-[33](33-story-sequencing.md). The two meet in one place only: an accepted order holds `issue-plan`
-as well as `issue-pickup`, because a decomposition written before the story it depends on has a
+[33](33-story-sequencing.md). The two meet in one place only: an accepted order holds `issue-plan`,
+because a decomposition written before the story it depends on has a
 branch is a decomposition of a schema that does not exist yet.
 
 ## A plan is a list of parts
@@ -184,43 +185,50 @@ count is refused, and no part or merge is blocked for one.
 ## The four arms
 
 `resolvePlanRoute(input)` in `src/plans/planning.ts` is **the one place** an issue's arm is decided.
-Pure over the plan row plus the plan origin's cooldown verdict, and one flag a resolved bug investigation sets. Both the dispatcher (rules `issue-plan` and `issue-pickup`)
+Pure over the plan row plus the plan origin's cooldown verdict. Both the dispatcher (rules `issue-plan` and `plan-part`)
 and `issuePickupStatus` read it, so the cockpit's chip can never disagree with what fires.
 
-| Verdict                                              | Meaning                                                                                                                                                           |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `{route:'parts'}`                                    | Planned; the part scheduler owns it and pickup stays off. One part or eight — the route does not count them.                                                      |
-| `{route:'awaiting_approval'}`                        | Planned, and the plan is a proposal a human has not answered. Pickup stays off exactly as for `parts`; rule `plan-part` queues the parts without dispatching any. |
-| `{route:'planning', planner:'dispatch'\|'cooldown'}` | A planner is owed, now or after the gap.                                                                                                                          |
-| `{route:'unplanned'}`                                | **The fail-open arm, and the only one rule `issue-pickup` works.** No plan, and none coming.                                                                      |
+| Verdict                                              | Meaning                                                                                                                                                              |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{route:'parts'}`                                    | Planned; the part scheduler owns it and no planner is owed. One part or eight — the route does not count them.                                                       |
+| `{route:'awaiting_approval'}`                        | Planned, and the plan is a proposal a human has not answered. No planner is owed, exactly as for `parts`; rule `plan-part` queues the parts without dispatching any. |
+| `{route:'planning', planner:'dispatch'\|'cooldown'}` | A planner is owed, now or after the gap.                                                                                                                             |
+| `{route:'escalated', raise}`                         | No plan, and the planner spent its attempt cap without writing one. `raise` carries the attempts while no human has been asked yet; null once one has.               |
 
 Resolution order:
 
 1. A plan row with status `awaiting_approval` → `awaiting_approval`.
 2. A plan row with any status other than `planning` (`active`, `complete`, `abandoned`) → `parts`.
-3. No plan row, and `skipPlanning` set → `unplanned`. The one caller that sets it is a bug
-   investigation an operator resolved to _pickup_, while the investigate label is still on: they have
-   read the cause and said one agent can fix it whole, so no planner is owed ([38](38-bug-investigation.md#resolving-the-findings)).
-4. Otherwise (no plan, or a plan back in `planning` — a replan in flight), the plan origin's cooldown
-   verdict decides: `escalate`/`hold` → **fail open**; anything else → `planning`.
+3. Otherwise (no plan, or a plan back in `planning` — a replan in flight), the plan origin's cooldown
+   verdict decides: `escalate`/`hold` → `escalated` (or `parts`, below); anything else → `planning`.
 
 The part count is not asked about. It used to be the _first_ question — "an `active` plan with no
 live parts → `single`" — and that one line is what made a one-part plan a different kind of thing
 from a two-part one all the way down.
 
-**Fail-open is load-bearing.** Narrowing pickup to nothing would turn any planner that crashes or
-writes no plan into a permanently parked issue. Once the attempt cap is spent the issue falls open to
-`unplanned` and gets worked whole. Nothing escalates: the cap is the signal, and an issue that quietly
-keeps moving beats one that quietly stops.
+### A planner that writes no plan escalates
 
-`unplanned` is named after the failure because that is now all it is. The `single` route it replaced
-meant two unrelated things reached by the same arm — "a planner decided one PR is right" and "no
-planner ever answered" — told apart by a `failedOpen` flag every reader had to remember to check. The
-first is an ordinary one-part plan now, so only the failure is left.
+**Nothing is implemented without a plan.** Once the planner's attempt cap is spent with no plan
+written, the issue goes to `escalated`: rule `issue-plan` raises `escalate_to_human` once, from the
+`issue-plan-escalation` template, carrying `issue-plan` as its rule and `cooldown-escalate` as its
+admission, and dispatches nothing else for the issue. The pickup verdict reads `escalated` with the
+planner's attempt count. It is not raised while the issue is held for another reason — an appraisal,
+an investigation, the intake sitting or a sequence wait — because the planner was not the thing that
+stopped it.
 
-A **replan** fails back differently — to `parts`, not `unplanned` — when `existingParts > 0`. An issue
-that already has parts has a plan to fall back on, and `unplanned` would point rule `issue-pickup` at the flat
-`issue/<n>` branch git cannot create beside the existing part refs.
+It used to **fail open** instead: the arm was `unplanned`, and rule `issue-pickup` worked the issue
+whole with no plan, on the argument that an issue that quietly keeps moving beats one that quietly
+stops. It was withdrawn because the issue did not keep moving — it moved into every later gate with
+nothing to read. The assessor judges delivery against the plan's parts, and with none it finds nothing
+delivered and reports a shortfall on finished work; shortfall routing, validation authoring (`covers`
+names part slugs) and the close-out each lean on the plan row the same way. Parking with a question is
+the honest outcome of a planner that cannot decompose a goal — usually the ticket needs rewriting, or
+the work is already done, which the planner says with `plan_not_needed`
+([below](#when-there-is-nothing-to-plan)). Rule `issue-pickup` is retired, not deleted
+([05](05-dispatcher.md#the-rule-book)).
+
+A **replan** fails back differently — to `parts`, not `escalated` — when `existingParts > 0`. An issue
+that already has parts has a plan to fall back on, and the existing plan keeps scheduling.
 
 ## Origins and branches
 
@@ -258,7 +266,7 @@ The planner branch namespace also has to stay clear of the part branches, which 
 the other side: `plan/issue/<n>` cannot live under `issue/<n>/…` without colliding with the very parts
 the planner is writing.
 
-`planOriginIssue` is also the fence on plan ingestion via the file path: an ordinary pickup agent that
+`planOriginIssue` is also the fence on plan ingestion via the file path: any other agent — a part agent, say — that
 writes a `plan.json` is ignored, because flipping its own issue to `parts` would strand it while
 nothing schedules parts.
 
@@ -319,20 +327,20 @@ part, and work that is one pull request is a one-part plan — so a planner hold
 build" has to encode it as _something_, and each way of doing that spends an agent to rediscover what
 this planner already knows:
 
-| What it does instead         | What it costs                                                                                                                                                       |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Invents a part               | An agent, a branch and a worktree, to arrive at `conclude_part` with kind `determination`.                                                                          |
-| Writes a part that redoes it | The same, plus a pull request nobody wanted, against code that already does the thing.                                                                              |
-| Submits nothing              | Its attempts, and then the fail-open arm: `unplanned` puts rule `issue-pickup` on the issue, which is the first row again — with the planner's finding thrown away. |
+| What it does instead         | What it costs                                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Invents a part               | An agent, a branch and a worktree, to arrive at `conclude_part` with kind `determination`.                                      |
+| Writes a part that redoes it | The same, plus a pull request nobody wanted, against code that already does the thing.                                          |
+| Submits nothing              | Its attempts, and then an escalation asking a human why the planner could not plan it — with the planner's finding thrown away. |
 
 All three end with a human being asked to approve, or review, work that did not need to happen. The
 verdict is cast where it is known instead.
 
 **Why a delivery row rather than a fifth thing.** `issue_deliveries` already means exactly this —
 "what the issue asked for is present, schedule nothing further" — and `deliveryHold` already filters
-`eligibleIssues`, which is the list both rule `issue-plan` and rule `issue-pickup` draw from. So one
-row stops the planner being re-dispatched _and_ stops pickup taking the issue instead, with no new
-gate anywhere. It is reversible by the operator and expires on world signal, which is the right
+`eligibleIssues`, which is the list rule `issue-plan` draws from. So one row stops the planner being
+re-dispatched, with no new gate anywhere — and, while the since-retired rule `issue-pickup` drew from
+the same list, stopped it taking the issue instead. It is reversible by the operator and expires on world signal, which is the right
 lifetime for a claim about a goal nobody has worked: the moment the ticket moves or something links to
 it, the question is open again.
 
@@ -1013,8 +1021,8 @@ the first writes (`src/store/store.ts`):
 
 - `absorbSinglePlanStatus` — the retired `single` **status** becomes `active`.
 - `backfillWholePlanParts` — every plan with **no part rows** gets the one part it always was, slug
-  `whole`. Without it those rows are scheduled by nothing at all: rule `issue-pickup` no longer looks
-  at a planned issue and rule `plan-part` finds no part, so a live goal parks itself silently on the
+  `whole`. Without it those rows are scheduled by nothing at all: rule `issue-pickup` (since retired)
+  did not look at a planned issue and rule `plan-part` finds no part, so a live goal parks itself silently on the
   deploy that ships this. The part carries `branch = issue/<n>` when the plan was already being
   delivered (`active`/`complete`), so the flat branch's open PR, pushed commits and running agent land
   on it through the ordinary `part.branch ?? partBranch(…)` resolution and `foldPr` picks the PR up on
@@ -1464,7 +1472,7 @@ is exactly what a stray push or a PR opened on its branch would otherwise achiev
 ### The ref-collision guard
 
 `refs/heads/issue/12` and `refs/heads/issue/12/<slug>` cannot coexist. An issue picked up **unplanned**
-first — the funnel's fail-open arm — and planned afterwards has exactly that branch, and every part
+first — the funnel's old fail-open arm, retired, though its branches outlive it — and planned afterwards has exactly that branch, and every part
 branch would fail to create with a git error nobody can act on. The reconciler checks
 `git presence(issue/<n>)`; if the flat branch exists locally or remotely, every uncut **code** part is
 parked `blocked` and **one** clear error is recorded naming the branch to delete or rename.
@@ -1516,11 +1524,11 @@ no reason anywhere.
 
 ### When the collision arrives after approval
 
-An issue picked up unplanned first, then planned and **approved** onto its own taken branch is the bad
+An issue picked up unplanned first — under the retired fail-open arm — then planned and **approved**
+onto its own taken branch is the bad
 case: the parts block instantly. `refusePlan` compare-and-sets against `awaiting_approval` —
 correctly, since refusing is a verdict on a question you have not yet answered — so it is gone the
-moment the plan is released; and `resolvePlanRoute` fails a spent replan back to `parts`, never open
-to unplanned pickup. The plan sits there, nothing is dispatched, and nothing says so. Two things close
+moment the plan is released; and `resolvePlanRoute` fails a spent replan back to `parts`. The plan sits there, nothing is dispatched, and nothing says so. Two things close
 it, kept separate because they are two different jobs (`src/plans/planWedge.ts`), and the way _out_ is
 Replan — which is the way out of every plan that is wrong for any other reason too:
 
@@ -1533,7 +1541,7 @@ Replan — which is the way out of every plan that is wrong for any other reason
   merged part is not a blocked one and `every` then said no. `[merged, blocked, pending]` is the
   ordinary shape of that, and it stalled the goal permanently with nothing in "Needs you": `plan-part`
   finds no `ready` part, `rollUpPlanStatus` keeps the plan `active` so `issue-assess` skips it, and the
-  route stays `parts` so `issue-pickup` skips it too. A `ready` part counts as moving even when it is a
+  route stays `parts` so no planner is owed either. A `ready` part counts as moving even when it is a
   **human** part, since the bench is where that one is visible
   ([05](05-dispatcher.md)). And a plan blocked **only** by declines asks nothing, matching the
   paragraph above: what makes it a question is an **unfinished** part nobody refused waiting behind one
@@ -1640,7 +1648,7 @@ fails or is never picked up leaves the issue exactly where it was, not parked.
 Three things make replan work rather than merely fire:
 
 1. `plannerVerdict` narrows the cooldown window to decisions since `plan.updatedAt`.
-2. `resolvePlanRoute` fails a spent replan back to `parts`, not open to unplanned pickup.
+2. `resolvePlanRoute` fails a spent replan back to `parts`, not to `escalated`.
 3. Ingestion does the amendment, and asks again — an amended plan is a new proposal: `partsToRetire` respects started work, so an amendment cannot withdraw a part that has
    a branch or a PR behind it.
 

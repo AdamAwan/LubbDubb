@@ -8,7 +8,7 @@ import { loadConfig, type Config } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system/system.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 // → docs/spec/18-observability.md#the-burn-watch
 
@@ -61,7 +61,7 @@ async function onFast(spendBurn: Partial<Config['spendBurn']>): Promise<{ system
     errorMirror: () => {},
   });
   system.connector.inject({ kind: 'new_issue', number: 7, title: 'Add login' });
-  failPlanningOpen(system.store, 7);
+  workedAsOnePart(system.store, 7);
   await system.harness.runCycle('manual');
   return { system, child };
 }

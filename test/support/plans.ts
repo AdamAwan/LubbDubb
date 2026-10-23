@@ -1,4 +1,4 @@
-import type { Decision, Plan } from '../../src/types.js';
+import type { Decision, Plan, PlanPart } from '../../src/types.js';
 import type { Store } from '../../src/store/store.js';
 import { DEFAULT_COOLDOWN } from '../../src/dispatcher/dispatchCooldown.js';
 import { planOrigin } from '../../src/plans/planning.js';
@@ -48,14 +48,6 @@ export function spentAppraisalAttempts(issueNumber: number, at = '2026-07-25T00:
   }));
 }
 
-export function pastTheFunnel(issueNumber: number, at = '2026-07-25T00:00:00.000Z'): Decision[] {
-  return [...spentAppraisalAttempts(issueNumber, at), ...spentPlannerAttempts(issueNumber, at)];
-}
-
-export function failPlanningOpen(store: Store, issueNumber: number): void {
-  record(store, pastTheFunnel(issueNumber));
-}
-
 export function failAppraisalOpen(store: Store, issueNumber: number): void {
   record(store, spentAppraisalAttempts(issueNumber));
 }
@@ -94,4 +86,76 @@ export function planWithOnePart(store: Store, issueNumber: number, title = `Issu
     },
   ]);
   return plan;
+}
+
+/**
+ * The way a test puts an implementation agent on an issue: the appraisal stood aside and a planner
+ * wrote one part, `whole`, so rule `plan-part` dispatches it at `issue:<n>:part:whole` on
+ * `issue/<n>/whole`. Nothing is implemented without a plan. → docs/spec/08-planning.md#the-four-arms
+ */
+export function workedAsOnePart(store: Store, issueNumber: number, title = `Issue #${issueNumber}`): Plan {
+  failAppraisalOpen(store, issueNumber);
+  return planWithOnePart(store, issueNumber, title);
+}
+
+/** `workedAsOnePart` for a test that builds a `DispatchContext` by hand rather than a store. */
+export function onePartPlanRows(
+  issueNumber: number,
+  at = '2026-07-25T00:00:00.000Z',
+): { plans: Plan[]; planParts: PlanPart[] } {
+  const plan: Plan = {
+    id: `plan_${issueNumber}`,
+    originRef: `issue:${issueNumber}`,
+    title: `Issue #${issueNumber}`,
+    status: 'active',
+    diagnosis: null,
+    approach: null,
+    reason: 'One pull request of work.',
+    risks: null,
+    outOfScope: null,
+    alternatives: null,
+    openQuestions: null,
+    verification: null,
+    evidence: [],
+    document: null,
+    statusCommentRef: null,
+    createdAt: at,
+    updatedAt: at,
+  };
+  const part: PlanPart = {
+    id: `part_${issueNumber}_whole`,
+    planId: plan.id,
+    slug: 'whole',
+    seq: 1,
+    title: `Issue #${issueNumber}`,
+    scope: 'the whole issue',
+    touches: [],
+    rationale: null,
+    acceptance: null,
+    acceptanceMet: [],
+    size: null,
+    expectedKind: null,
+    outcomeKind: null,
+    outcomeRef: null,
+    outcomeSummary: null,
+    dependsOn: [],
+    branch: null,
+    prNumber: null,
+    status: 'ready',
+    blockedReason: null,
+    blockedBy: null,
+    taskId: null,
+    createdAt: at,
+    updatedAt: at,
+  };
+  return { plans: [plan], planParts: [part] };
+}
+
+/** `onePartPlanRows` for a goal whose one part has merged: the plan the assessor reads delivery against. */
+export function deliveredPlanRows(issueNumber: number, at?: string): { plans: Plan[]; planParts: PlanPart[] } {
+  const { plans, planParts } = onePartPlanRows(issueNumber, at);
+  return {
+    plans: plans.map((p) => ({ ...p, status: 'complete' })),
+    planParts: planParts.map((p) => ({ ...p, status: 'merged', branch: `issue/${issueNumber}/whole` })),
+  };
 }

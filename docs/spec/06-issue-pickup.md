@@ -336,7 +336,7 @@ the missing-parent question, leaving a warning about filing with only "not appli
 ### What the agents are told
 
 `relatedWorkNote(issue, containerTypes, candidates, parentedTypes)` is **appended** to the rendered prompt of rules
-`issue-appraisal`, `issue-plan` (and its replan arm) and `issue-pickup` — never interpolated.
+`issue-appraisal` and `issue-plan` (and its replan arm) — never interpolated.
 Appending is the rule every added instruction follows (see
 [05](05-dispatcher.md#prompt-templates)): templates are operator-overridable and `loadPromptTemplates`
 rejects only _unknown_ placeholders, so a `{related}` token would be dropped silently by exactly the
@@ -360,8 +360,8 @@ path is byte-for-byte what it was.
 ## Priority
 
 `issuePriority(labels, policy)` is pure: the **highest** weight among labels that match the scheme, or
-`defaultPriority` when none match. Rule `issue-pickup` sorts eligible issues by weight descending, tie-breaking on
-issue number for determinism.
+`defaultPriority` when none match. `eligibleIssues` — the list rule `issue-plan` draws from — is sorted by weight
+descending, tie-breaking on issue number for determinism.
 
 ## `openPrForIssue`
 
@@ -382,7 +382,7 @@ is invisible here and reads as gone.
 ## The per-issue verdict
 
 `issuePickupStatus(issue, ctx)` folds **every** gate — intrinsic and contextual — into one verdict,
-checked in the same order rule `issue-pickup` applies them, so it predicts what happens next cycle rather than
+checked in the same order the dispatcher applies them, so it predicts what happens next cycle rather than
 guessing. `buildStateSnapshot` attaches it to each issue as `pickup`, and the cockpit renders it as a
 chip.
 
@@ -397,7 +397,7 @@ chip.
 | `container`     | A Feature/Epic — its children are the work, never it.                                |
 | `unwatched`     | Not opted in, or parked by the state gate.                                           |
 | `cooldown`      | Attempted recently; waiting out the re-dispatch gap.                                 |
-| `escalated`     | Attempt cap spent; parked on a human.                                                |
+| `escalated`     | The planner spent its attempt cap without writing a plan; parked on a human.         |
 | `delivered`     | Assessed as delivered — parked until the world or the operator says otherwise.       |
 | `appraisal`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
 | `investigation` | Held for a bug investigation: one is owed or running, or its findings wait on you.   |
@@ -420,7 +420,7 @@ The `parts` arm is answered **before** the open-PR gate, and it has to be: a par
 decomposed issue the reason is `"<merged>/<total> parts merged"`, or — for a `complete` plan, which
 never moves again on its own — `"plan complete — all N parts merged; close the issue or replan"`.
 
-`IssuePickupContext` carries the same inputs rule `issue-pickup` consults: the policy, `DEFAULT_COOLDOWN`, the
+`IssuePickupContext` carries the same inputs the dispatcher's issue rules consult: the policy, `DEFAULT_COOLDOWN`, the
 world's `takenAt` as "now", tasks, the last 200 decisions, the **unfiltered** open PR list, the plan
 graph, the planning policy, the standing delivery verdicts with the world transitions that may have
 ended one, the standing goal appraisals with the same, the appraisal policy, the harness's runs at each goal
@@ -440,7 +440,7 @@ nobody has to remember the goal, and `owned` still holds it, because being fixed
 The `appraisal` arm is asked **after** the intrinsic gates and **before** the plan funnel, which is
 exactly where rule `issue-appraisal` sits: an unwatched or state-parked issue is never appraised, so reporting an
 appraisal for one would promise something that cannot happen, while an appraisal that refused the goal is
-the reason no planner and no pickup agent is coming. It covers the standing hold (the
+the reason no planner is coming. It covers the standing hold (the
 appraiser's own words, quoted), the pending case — `awaiting a goal appraisal`, `a goal appraisal is
 running`, `goal appraisal on cooldown` — because an issue silently waiting a cycle for a verdict looks
 exactly like an idle fleet.
@@ -458,23 +458,33 @@ funnel, which is what it holds. Unlike every other hold on this page it is a per
 reported for the reason the appraisal's pending case is: a goal silently waiting looks exactly like an
 idle fleet.
 
-## Rule `issue-pickup` in full
+## Implementation always goes through a plan
 
-An issue is picked up when:
+"Picked up" means **taken into the plan funnel**, and nothing else. No rule dispatches an
+implementation agent at an issue as a whole: every code agent that implements a watched issue is a
+part agent on `issue/<n>/<slug>`, scheduled by rule `plan-part` off a plan row
+([08](08-planning.md)). An issue enters the funnel when:
 
 1. `issue.state === 'open'`, and
 2. `openPrForIssue(issue, allOpenPrs) === null`, and
 3. `isIssuePickupEligible(issue, policy).eligible`, and no standing `unclear` goal appraisal holds it
    (see below), and no obstacle block does
    ([27](27-obstacles.md#blocked-is-an-answer) — an agent concluded `blocked` naming something that is
-   not this goal, and the goal returns on its own when that obstacle stops reaching agents), and
-4. its plan route resolves to `unplanned` — the funnel failed open on it, which is the only arm this rule works — and
-5. no active task holds `issue:<n>`, and
-6. `dispatchVerdict` says `dispatch`.
+   not this goal, and the goal returns on its own when that obstacle stops reaching agents).
 
-It dispatches a **code** agent on branch `issue/<n>` with origin `issue:<n>`, prompted from the
-`issue-pickup` template. On an `escalate` verdict it emits `escalate_to_human` from the
-`issue-pickup-escalation` template instead.
+Those are the filters on `eligibleIssues`, the one list rule `issue-plan` draws from, sorted by
+[priority](#priority). From there rule `issue-plan` owes the issue a planner; a planner that spends its
+attempt cap without writing a plan **escalates** — `escalate_to_human` from the
+`issue-plan-escalation` template, and the verdict reads `escalated`
+([08](08-planning.md#a-planner-that-writes-no-plan-escalates)).
+
+Rule `issue-pickup` used to stand at the end of this list: it worked an issue whole on the flat
+`issue/<n>` branch when the plan route resolved to `unplanned`, the funnel's fail-open arm. Both are
+withdrawn. Every gate after the work — the assessor, shortfall routing, validation authoring, the
+close-out — reads the plan, and an issue worked with none failed each of them in its own way. The
+rule is `kind: 'retired'` ([05](05-dispatcher.md#the-rule-book)) and its prompts `issue-pickup` and
+`issue-pickup-escalation` are retired rather than deleted, so decisions recorded under it still read and
+a deployment that overrode either still boots.
 
 ## Concluding an issue
 
@@ -492,20 +502,20 @@ harness keeps its own record of whether an issue is finished.
 4. **The agent's declaration**, via the `conclude_work` tool.
 5. **A `complete` plan** → `done`.
 6. Otherwise `undeclared`. An `abandoned` plan derives nothing — an abandoned plan
-   describes the delivery's _shape_, not whether it has happened, so the issue waits on its agent to
-   declare exactly as an unplanned one does.
+   describes the delivery's _shape_, not whether it has happened, so the issue waits on an agent's
+   declaration, the arm above.
 
 Arm 3 is read off the status alone, and the part count has no say in it. It had to consult the parts
-while a plan delivering one pull request carried none and was scheduled by rule `issue-pickup`:
+while a plan delivering one pull request carried none and was scheduled by the since-retired rule `issue-pickup`:
 `active` did not then mean the plan was working the issue, so an unguarded read made every issue
-worked whole say `more_work` for ever ([08](08-planning.md#the-status-is-the-plans-life-and-only-that)).
+it worked whole say `more_work` for ever ([08](08-planning.md#the-status-is-the-plans-life-and-only-that)).
 
 **Arm 3 sits above the declaration because ownership does.** The rule this module states — _the
 verdict is asked of whoever owns the whole issue_ — used to be enforced by making the two arms
 unreachable together: `conclusionOrigin` refuses the part agent, the planner and the assessor, so a
 decomposed issue had no declaration to rank. A **replan is the one path that breaks that**. An issue
-worked through unplanned pickup has one agent, that agent declares `done`, and an accepted shortfall then flips its
-plan to `planning` ([rule `issue-shortfall`](05-dispatcher.md#issue-shortfall--routing-a-failed-assessment)) — and with the
+worked whole by one agent — the since-retired rule `issue-pickup`'s shape, and its stored declarations
+outlive it — had that agent declare `done`, and an accepted shortfall then flipped its plan to `planning` ([rule `issue-shortfall`](05-dispatcher.md#issue-shortfall--routing-a-failed-assessment)) — and with the
 declaration ranked first, a spent verdict outranked the plan that had just taken the issue back. A
 `complete` plan stays _below_ the declaration: an agent saying work remains on an issue whose parts
 all merged is telling the roll-up something it cannot see, and `more_work` is the safe direction.
@@ -609,7 +619,7 @@ goal the fleet never worked.
 ### What ends it
 
 `deliveryHold(delivery, issue, ctx)` (`src/delivery/delivery.ts`, pure) is asked in **two places off
-the one predicate** — rule `issue-pickup`'s eligibility filter and `issuePickupStatus` — so the chip can never
+the one predicate** — the dispatcher's `eligibleIssues` filter and `issuePickupStatus` — so the chip can never
 promise what the next cycle refuses. Two arms, plus a third clearer that is deliberately not an arm:
 
 1. **The issue is observed in a pickup state again.** The operator moved the ticket, and CLAUDE.md
@@ -730,11 +740,11 @@ assessment — never the origins where the harness is merely deliberating (`:pla
 distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 [`05-dispatcher.md`](05-dispatcher.md) for what counting a planner's own task as work cost.
 
-| Verdict    | Effect                                                                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `workable` | None on scheduling, unless its **profile proposal** diverges — see below. Stored so the appraisal is not asked again for this text.        |
-| `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands, and posts the author's checklist on the ticket. |
-| _no row_   | Holds nothing. This is what a crashed, killed or capped appraiser leaves behind.                                                           |
+| Verdict    | Effect                                                                                                                                         |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workable` | None on scheduling, unless its **profile proposal** diverges — see below. Stored so the appraisal is not asked again for this text.            |
+| `unclear`  | Holds the issue out of rule `issue-plan` — and so out of all implementation — while it stands, and posts the author's checklist on the ticket. |
+| _no row_   | Holds nothing. This is what a crashed, killed or capped appraiser leaves behind.                                                               |
 
 ### A bug whose cause is not known
 
@@ -748,10 +758,10 @@ re-applies it — not a sweep, not a re-appraisal of a rewritten ticket — so a
 has the last word. With `unclear` it is dropped: a goal nobody can start from has its questions
 answered first. → [38](38-bug-investigation.md)
 
-The investigation it asks for holds rule `issue-plan` and rule `issue-pickup` while it runs and while
+The investigation it asks for holds rule `issue-plan` while it runs and while
 its findings wait on an operator — the hold is the investigation's, owned there, and lifted by removing
-the label. Removing it lifts a _pickup_ resolution's skipped planning too: `investigationSkipsPlanning`
-reads the standing's `inForce`, which is null with the label off.
+the label. No resolution of the findings skips the planner: every fix is planned
+([38](38-bug-investigation.md#no-fix-without-a-plan)).
 
 `issuePickupStatus` reports it as its own status, `investigation`, asked after the active and
 standing-hold arms and before the plan route, so the chip says why no planner is coming rather than
@@ -788,7 +798,7 @@ schema, interface or migration the ticket names is genuinely absent, which is `u
 wording: _names things that do not exist_.
 
 So `issue-appraisal` reads `StageContext.sequenceWaits` and is held with `held: 'sequenced'` like
-`issue-plan` and `issue-pickup`, queued in Up next with the reason naming what it waits behind
+`issue-plan`, queued in Up next with the reason naming what it waits behind
 ([33](33-story-sequencing.md#the-appraiser-is-held-as-well)). It is held **in front of** the verdict
 rather than informed after it, because an appraisal is a record and this hold is not: `appraisalHold`
 keys on the ticket's text, so an `unclear` cast for a missing predecessor survives that predecessor
@@ -834,12 +844,14 @@ dispatch this exists to prevent happening anyway. Three things stop that becomin
 way to stop the harness working:
 
 - **Silence holds nothing.** Only an explicit `unclear` gates. An appraiser that crashes or spends its
-  attempt cap writes no row and the issue falls through to ordinary pickup, with **no escalation** —
-  the planner's fail-open and the assessor's, for their reason. This is also
+  attempt cap writes no row and the issue goes on to the planner, with **no escalation** —
+  the assessor's fail-open, for its reason. (The planner's own fail-open is gone: a planner that
+  writes no plan escalates, [08](08-planning.md#a-planner-that-writes-no-plan-escalates), because
+  nothing is implemented without one. The appraiser's fail-open only ever reaches the planner.) This is also
   `undeclared`-vs-`more_work` again: the harness acts on what was said, never on silence. Holding on
   a spent cap was considered and rejected: a cap is spent by an appraiser that could not _run_ —
   a crash, a kill, a bad launch — which is an operations failure and says nothing about the ticket,
-  and every test downstream of the funnel reaches pickup by spending exactly this cap.
+  and every test downstream of the funnel reaches the planner by spending exactly this cap.
 - **The hold expires on its own** when the ticket is rewritten (below).
 - **The operator can clear or override it** (`POST /api/issues/:number/appraisal`), from either cockpit:
   a refused goal is raised **on the queue rail** as an `intake` row, which quotes the appraiser's sentence
@@ -852,8 +864,8 @@ way to stop the harness working:
 
 ### What ends a hold
 
-`appraisalHold(appraisal, issue)` (pure) is asked in **two places off the one predicate** — rule `issue-pickup`'s
-eligibility filter and `issuePickupStatus` — so the chip can never promise what the next cycle
+`appraisalHold(appraisal, issue)` (pure) is asked in **two places off the one predicate** — the dispatcher's
+`eligibleIssues` filter and `issuePickupStatus` — so the chip can never promise what the next cycle
 refuses. One arm, plus two operator acts that are deliberately not arms:
 
 1. **The goal text changed.** The row stores `goal_ref`, a NUL-joined fingerprint of the title and

@@ -10,7 +10,7 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import type { NeedRow } from '../web/src/view/needsYou.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 class RefusingWorktrees extends FakeWorktreeManager {
   private refusing = true;
@@ -92,22 +92,22 @@ async function refusalRow(system: System, origin: string): Promise<NeedRow | und
 test('a dispatch refused on every pulse reaches the operator, and one bad pulse does not', async () => {
   const system = refusingSystem(new RefusingWorktrees());
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
-  failPlanningOpen(system.store, 901);
+  workedAsOnePart(system.store, 901);
 
-  await pulseTo(system, 'issue:901:assess', 1);
+  await pulseTo(system, 'issue:901:part:whole', 1);
   assert.equal(
     system.store.agents.listAgentsByStatus('starting', 'running').length,
     0,
     'nothing started on that branch',
   );
   assert.equal(system.store.errors.listErrors().length, 0, 'the refusal is not recorded as a failure, and never was');
-  assert.equal(await refusalRow(system, 'issue:901:assess'), undefined, 'one refusal raises nothing');
+  assert.equal(await refusalRow(system, 'issue:901:part:whole'), undefined, 'one refusal raises nothing');
 
-  await pulseTo(system, 'issue:901:assess', 2);
-  assert.equal(await refusalRow(system, 'issue:901:assess'), undefined, 'two refusals still raise nothing');
+  await pulseTo(system, 'issue:901:part:whole', 2);
+  assert.equal(await refusalRow(system, 'issue:901:part:whole'), undefined, 'two refusals still raise nothing');
 
-  await pulseTo(system, 'issue:901:assess', 3);
-  const row = await refusalRow(system, 'issue:901:assess');
+  await pulseTo(system, 'issue:901:part:whole', 3);
+  const row = await refusalRow(system, 'issue:901:part:whole');
   assert.ok(row, 'a dispatch refused on three pulses running is something that needs you');
   assert.equal(row.kind, 'dispatch');
   assert.equal(row.group, 'yours', 'nothing is leased, and the fix is outside the harness');
@@ -124,16 +124,17 @@ test('the refusal row clears itself the moment a dispatch for that origin gets t
   const worktrees = new RefusingWorktrees();
   const system = refusingSystem(worktrees);
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
-  failPlanningOpen(system.store, 902);
+  workedAsOnePart(system.store, 902);
 
-  await pulseTo(system, 'issue:902:assess', 3);
-  assert.ok(await refusalRow(system, 'issue:902:assess'), 'the refusal is up');
+  await pulseTo(system, 'issue:902:part:whole', 3);
+  assert.ok(await refusalRow(system, 'issue:902:part:whole'), 'the refusal is up');
 
   worktrees.relent();
-  for (let i = 0; i < 30 && !dispatched(system, 'issue:902:assess'); i += 1) await system.harness.runCycle('manual');
-  assert.ok(dispatched(system, 'issue:902:assess'), 'the dispatch for that origin went through');
+  for (let i = 0; i < 30 && !dispatched(system, 'issue:902:part:whole'); i += 1)
+    await system.harness.runCycle('manual');
+  assert.ok(dispatched(system, 'issue:902:part:whole'), 'the dispatch for that origin went through');
   assert.equal(
-    await refusalRow(system, 'issue:902:assess'),
+    await refusalRow(system, 'issue:902:part:whole'),
     undefined,
     'a refusal that has cleared stops being an ask on the very next snapshot',
   );

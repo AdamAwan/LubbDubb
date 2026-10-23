@@ -409,12 +409,16 @@ test('an attempt stamped in the same millisecond as the replan request is the *p
   assert.equal(plannerVerdict(12, requested, at, [attempt], DEFAULT_COOLDOWN).kind, 'dispatch');
 });
 
-test('a replan that spends its attempts falls back to the existing parts, never to unplanned', () => {
+test('a replan that spends its attempts falls back to the existing parts; with none it escalates', () => {
   const spent = { kind: 'hold' } as const;
   assert.deepEqual(resolvePlanRoute({ plan: plan({ status: 'planning' }), verdict: spent, existingParts: 2 }), {
     route: 'parts',
   });
-  assert.deepEqual(resolvePlanRoute({ plan: null, verdict: spent }), { route: 'unplanned' });
+  assert.deepEqual(resolvePlanRoute({ plan: null, verdict: spent }), { route: 'escalated', raise: null });
+  assert.deepEqual(resolvePlanRoute({ plan: null, verdict: { kind: 'escalate', attempts: 3 } }), {
+    route: 'escalated',
+    raise: { attempts: 3 },
+  });
 });
 
 test('a complete plan says how to get out of it, rather than reading as still in flight', () => {

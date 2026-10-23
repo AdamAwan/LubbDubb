@@ -19,7 +19,6 @@ import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { appraisalHold, appraisalOrigin, hasWorkStarted, isAppraised } from '../intake/appraisal.js';
 import {
   investigateOrigin,
-  investigationSkipsPlanning,
   investigationStanding,
   type InvestigationStanding,
   type InvestigationStandings,
@@ -260,17 +259,31 @@ function planningRouteStatus(
   ctx: IssuePickupContext,
   route: PlanRouteVerdict,
   plan: Plan | null,
-): HeldStatus {
+): IssuePickupStatus {
   if (route.route === 'parts') {
     return { eligible: false, status: 'planning', reasons: ['plan split this into parts'] };
   }
-  if (route.route !== 'planning') return null;
+  if (route.route === 'escalated') {
+    const attempts = countAttempts(planOrigin(issue.number), ctx.recentDecisions);
+    return {
+      eligible: false,
+      status: 'escalated',
+      reasons: [`${attempts} planner attempt${attempts === 1 ? '' : 's'} wrote no plan — escalated to a human`],
+    };
+  }
+  if (route.route === 'awaiting_approval') {
+    return { eligible: false, status: 'planning', reasons: ['awaiting your approval of the plan'] };
+  }
   const planner = ctx.tasks.find((t) => t.originRef === planOrigin(issue.number) && isActiveTask(t));
   if (!planner && sittingHolds(ctx.closedSittings, issue.number, plan)) {
     const aligning = ctx.tasks.some(
       (t) => t.originRef === issueOriginRef('criteriaAlignment', issue.number) && isActiveTask(t),
     );
     return { eligible: false, status: 'sitting', reasons: [aligning ? ALIGNING_REASON : SITTING_REASON] };
+  }
+  if (!planner && route.planner === 'dispatch') {
+    if (ctx.paused) return { eligible: false, status: 'blocked', reasons: ['dispatch paused'] };
+    if (ctx.headroom <= 0) return { eligible: false, status: 'blocked', reasons: ['no agent capacity'] };
   }
   const reason = planner
     ? `planning agent ${planner.status === 'waiting' ? 'waiting on you' : planner.status}`
@@ -295,27 +308,6 @@ function investigationStatus(issue: Issue, ctx: IssuePickupContext, standing: In
   return reason === null ? null : { eligible: false, status: 'investigation', reasons: [reason] };
 }
 
-function attemptStatus(origin: string, ctx: IssuePickupContext): HeldStatus {
-  const verdict = dispatchVerdict(origin, ctx.now, ctx.recentDecisions, ctx.cooldown);
-  if (verdict.kind === 'cooldown') {
-    const attempts = countAttempts(origin, ctx.recentDecisions);
-    return {
-      eligible: false,
-      status: 'cooldown',
-      reasons: [`on cooldown after ${attempts} attempt${attempts === 1 ? '' : 's'}`],
-    };
-  }
-  if (verdict.kind === 'escalate' || verdict.kind === 'hold') {
-    const attempts = verdict.kind === 'escalate' ? verdict.attempts : countAttempts(origin, ctx.recentDecisions);
-    return {
-      eligible: false,
-      status: 'escalated',
-      reasons: [`${attempts} failed attempt${attempts === 1 ? '' : 's'} — escalated to a human`],
-    };
-  }
-  return null;
-}
-
 export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssuePickupStatus {
   const ended = endedStatus(issue, ctx);
   if (ended) return ended;
@@ -327,7 +319,6 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     plan,
     verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
     existingParts: liveParts(parts).length,
-    skipPlanning: investigationSkipsPlanning(investigation),
   });
   const gated = planGateStatus(planVerdict, plan, parts);
   if (gated) return gated;
@@ -339,15 +330,8 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   const held =
     activeStatus(origin, ctx) ??
     standingHoldStatus(issue, origin, ctx) ??
-    investigationStatus(issue, ctx, investigation) ??
-    planningRouteStatus(issue, ctx, planVerdict, plan) ??
-    attemptStatus(origin, ctx);
-  if (held) return held;
-
-  if (ctx.paused) return { eligible: false, status: 'blocked', reasons: ['dispatch paused'] };
-  if (ctx.headroom <= 0) return { eligible: false, status: 'blocked', reasons: ['no agent capacity'] };
-
-  return { eligible: true, status: 'eligible', reasons: [] };
+    investigationStatus(issue, ctx, investigation);
+  return held ?? planningRouteStatus(issue, ctx, planVerdict, plan);
 }
 
 function appraisalFor(issue: Issue, ctx: IssuePickupContext): string | null {

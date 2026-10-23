@@ -51,13 +51,9 @@ export function investigationStanding(
   return standings?.get(issueNumber) ?? NO_INVESTIGATION;
 }
 
-export function investigationSkipsPlanning({ inForce }: InvestigationStanding): boolean {
-  return inForce?.resolution === 'pickup';
-}
-
 export function investigationNote({ inForce: investigation }: InvestigationStanding): string {
   if (investigation === null) return '';
-  if (investigation.resolution !== 'plan' && investigation.resolution !== 'pickup') return '';
+  if (investigation.resolution !== 'plan') return '';
   return (
     '\n\n## What the investigation found\n\n' +
     'A read-only agent investigated this issue before you were dispatched, and an operator accepted its ' +

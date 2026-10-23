@@ -126,7 +126,7 @@ deliberately left unchecked, and why, is in
 | [35](spec/35-ejection.md)            | Ejection                   | Taking a running agent's work into your own Claude Code: the claim, the held slot, the handoff, the three ways back                       |
 | [36](spec/36-remote-validation.md)   | Remote validation          | The sheet a goal's arrival assembles: its three row kinds, the gate, the runner contract, and what a `spec` reading is                    |
 | [37](spec/37-bot-prs.md)             | Bot pull requests          | The separate read of a dependency bot's pull requests, how an update's size is read, and the tab that draws them                          |
-| [38](spec/38-bug-investigation.md)   | Bug investigation          | The investigate label, the read-only investigator, the hold on plan and pickup, and the four ways its findings are resolved               |
+| [38](spec/38-bug-investigation.md)   | Bug investigation          | The investigate label, the read-only investigator, the hold on the planner, and the three ways its findings are resolved                  |
 | [39](spec/39-app-errors.md)          | App errors                 | The errors nobody declared: the `errors` command, its contract, states, the key, linking, the tracker lock, the Errors tab — partly built |
 
 ## Conventions used throughout

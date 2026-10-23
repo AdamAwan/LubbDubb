@@ -5,17 +5,19 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { WorldSnapshot } from '../src/types.js';
-import { pastTheFunnel } from './support/plans.js';
+import { onePartPlanRows, spentAppraisalAttempts } from './support/plans.js';
 
 function ctx(world: Partial<WorldSnapshot>): DispatchContext {
+  const rows = (world.issues ?? []).map((i) => onePartPlanRows(i.number));
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
-    plans: [],
+    plans: rows.flatMap((r) => r.plans),
+    planParts: rows.flatMap((r) => r.planParts),
     tasks: [],
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
+    recentDecisions: (world.issues ?? []).flatMap((i) => spentAppraisalAttempts(i.number)),
     agentHeadroom: 3,
   };
 }
@@ -46,7 +48,7 @@ test('every rule-dispatcher action carries a rule id from the registry', async (
   }
   const byOrigin = (o: string) => actions.find((a) => (a as { originRef?: string }).originRef === o);
   assert.equal(byOrigin('pr:42:ci')?.rule, 'pr-ci-failing');
-  assert.equal(byOrigin('issue:9')?.rule, 'issue-pickup');
+  assert.equal(byOrigin('issue:9:part:whole')?.rule, 'plan-part');
   assert.equal(actions.find((a) => a.type === 'merge_pr')?.rule, 'pr-merge-ready');
 });
 

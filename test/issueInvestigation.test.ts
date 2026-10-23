@@ -6,12 +6,9 @@ import { join } from 'node:path';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext, DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { goalFingerprint } from '../src/intake/appraisal.js';
-import {
-  investigationNote,
-  investigationSkipsPlanning,
-  investigationStanding,
-  investigationStandings,
-} from '../src/intake/investigation.js';
+import Database from 'better-sqlite3';
+import { investigationNote, investigationStanding, investigationStandings } from '../src/intake/investigation.js';
+import { Store } from '../src/store/store.js';
 import { investigateLabelFor, pickupLabels } from '../src/watchLabels.js';
 import { loadConfig } from '../src/config/config.js';
 import { buildSystem, type System } from '../src/system/system.js';
@@ -214,10 +211,19 @@ test('resolved to plan, the planner runs with the findings appended', async () =
   assert.ok(prompt.indexOf('What the investigation found') > prompt.indexOf('Export crashes'), 'appended');
 });
 
-test('resolved to pickup, planning is skipped and the pickup carries the findings', async () => {
-  const result = await new RuleDispatcher().decide(ctx({ investigations: [investigation({ resolution: 'pickup' })] }));
-  assert.deepEqual(origins(result), ['issue:12']);
-  assert.match(dispatched(result, 'issue:12').prompt, /src\/export\/csv\.ts:42/);
+test('a pickup answer from before it was withdrawn reads as plan', () => {
+  const dbPath = join(mkdtempSync(join(tmpdir(), 'lubbdubb-investigation-')), 'store.db');
+  const first = new Store(dbPath);
+  first.investigations.record({ ...FINDINGS_ROW, goalRef: 'g' });
+  first.close();
+  const raw = new Database(dbPath);
+  raw.prepare("UPDATE issue_investigations SET recommendation = 'pickup', resolution = 'pickup'").run();
+  raw.close();
+  const second = new Store(dbPath);
+  const row = second.investigations.get('issue:12');
+  assert.equal(row?.recommendation, 'plan');
+  assert.equal(row?.resolution, 'plan');
+  second.close();
 });
 
 test('resolved to close or ask, the issue stays held while the label is on', async () => {
@@ -287,7 +293,7 @@ const FINDINGS = {
   confidence: 'high',
   locations: 'src/export/csv.ts:42',
   blast_radius: 'Only the CSV export.',
-  recommendation: 'pickup',
+  recommendation: 'plan',
 };
 
 test('the investigator records its findings against the text it was handed', async () => {
@@ -298,8 +304,19 @@ test('the investigator records its findings against the text it was handed', asy
   const row = system.store.investigations.get('issue:12');
   assert.equal(row?.by, agent.id);
   assert.equal(row?.goalRef, goalFingerprint(issue().title, issue().body));
-  assert.equal(row?.recommendation, 'pickup');
+  assert.equal(row?.recommendation, 'plan');
   assert.equal(row?.resolution, null);
+  system.store.close?.();
+});
+
+test('an investigator told to recommend pickup by an old override is recorded as plan', async () => {
+  const system = build();
+  const res = await callTool(system, spawnAgent(system, 'issue:12:investigate'), 'report_investigation', {
+    ...FINDINGS,
+    recommendation: 'pickup',
+  });
+  assert.equal(res.isError, false, res.text);
+  assert.equal(system.store.investigations.get('issue:12')?.recommendation, 'plan');
   system.store.close?.();
 });
 
@@ -415,15 +432,13 @@ test('a failed label write is recorded, still records the verdict, and does not 
   system.store.close?.();
 });
 
-test('with the label off, a resolved investigation skips nothing and appends nothing', () => {
-  const current = investigation({ resolution: 'pickup', resolvedAt: NOW });
+test('with the label off, a resolved investigation appends nothing', () => {
+  const current = investigation({ resolution: 'plan', resolvedAt: NOW });
   const standing = (labels: string[]) =>
     investigationStanding(
       investigationStandings([issue({ labels })], [current], { investigateLabel: 'investigate' }),
       12,
     );
-  assert.equal(investigationSkipsPlanning(standing(['investigate'])), true);
-  assert.equal(investigationSkipsPlanning(standing([])), false);
   assert.match(investigationNote(standing(['investigate'])), /What the investigation found/);
   assert.equal(investigationNote(standing([])), '');
   assert.equal(standing([]).current, current, 'the findings still read as current with the label off');
@@ -442,7 +457,7 @@ test('the route refuses to resolve findings about an earlier text of the ticket'
   const res = await app.inject({
     method: 'POST',
     url: '/api/issues/12/investigation',
-    payload: { resolution: 'pickup' },
+    payload: { resolution: 'plan' },
   });
   assert.equal(res.statusCode, 409, res.body);
   assert.equal(system.store.investigations.get('issue:12')?.resolution, null);
@@ -457,7 +472,7 @@ test('the route refuses to resolve findings for an issue missing from the world 
   const res = await app.inject({
     method: 'POST',
     url: '/api/issues/12/investigation',
-    payload: { resolution: 'pickup' },
+    payload: { resolution: 'plan' },
   });
   assert.equal(res.statusCode, 409, res.body);
   assert.match(res.body, /world snapshot/);
@@ -474,7 +489,7 @@ test('the route refuses to resolve current findings once the label is off', asyn
   const res = await app.inject({
     method: 'POST',
     url: '/api/issues/12/investigation',
-    payload: { resolution: 'pickup' },
+    payload: { resolution: 'plan' },
   });
   assert.equal(res.statusCode, 409, res.body);
   assert.match(res.body, /label/);
@@ -490,6 +505,12 @@ test('the operator resolves or clears the findings over the route', async () => 
   const { app } = await buildApp(system);
   const bad = await app.inject({ method: 'POST', url: '/api/issues/12/investigation', payload: { resolution: 'x' } });
   assert.equal(bad.statusCode, 400);
+  const pickup = await app.inject({
+    method: 'POST',
+    url: '/api/issues/12/investigation',
+    payload: { resolution: 'pickup' },
+  });
+  assert.equal(pickup.statusCode, 400, 'a fix is never sent straight to pickup');
   const resolved = await app.inject({
     method: 'POST',
     url: '/api/issues/12/investigation',

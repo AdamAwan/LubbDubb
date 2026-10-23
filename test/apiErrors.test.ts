@@ -10,7 +10,7 @@ import { buildApp } from '../src/server/app.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ApiErrorsPayload } from '../src/wire.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 777;
@@ -56,7 +56,7 @@ test('a refused turn on the stream is recorded and counted by /api/api-errors', 
     { worktrees: new FakeWorktreeManager(), streamSpawner: spawner, errorMirror: () => {} },
   );
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add logout' });
-  failPlanningOpen(system.store, 902);
+  workedAsOnePart(system.store, 902);
   await system.harness.runCycle('manual');
   const child = children[0]!;
   const agentId = system.store.agents.listAgentsByStatus('starting', 'running')[0]!.id;
@@ -71,7 +71,7 @@ test('a refused turn on the stream is recorded and counted by /api/api-errors', 
   assert.equal(rows[0]!.agentId, agentId);
   assert.equal(rows[0]!.kind, 'safeguards');
   assert.equal(rows[0]!.code, 'reasoning_extraction');
-  assert.equal(rows[0]!.originRef, 'issue:902');
+  assert.equal(rows[0]!.originRef, 'issue:902:part:whole');
 
   const { app } = await buildApp(system);
   const res = await app.inject({ method: 'GET', url: '/api/api-errors?window=all' });

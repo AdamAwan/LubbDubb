@@ -16,7 +16,7 @@ import { loadConfig } from '../src/config/config.js';
 import type { Issue, IssueAppraisal, IssueDelivery, Plan, Task, ValidationCheck } from '../src/types.js';
 import { goalFingerprint } from '../src/intake/appraisal.js';
 import { gitRepo } from './support/gitRepo.js';
-import { pastTheFunnel } from './support/plans.js';
+import { onePartPlanRows } from './support/plans.js';
 
 const NOW = '2026-08-19T12:00:00.000Z';
 
@@ -50,10 +50,10 @@ function priorWork(): Task {
   return {
     id: 't1',
     kind: 'code',
-    title: 'Resolve issue #12',
+    title: 'Issue #12 part: Issue #12',
     prompt: 'do it',
-    branch: 'issue/12',
-    originRef: 'issue:12',
+    branch: 'issue/12/whole',
+    originRef: 'issue:12:part:whole',
     originTitle: null,
     originSummary: null,
     dispatchReason: null,
@@ -168,8 +168,13 @@ function dispatchFor(
 
 test('every read-only rule asks for the same shape, and none keeps a private arrangement', async () => {
   const appraisal = await new RuleDispatcher().decide(ctx());
+  const worked = onePartPlanRows(12, NOW);
   const assess = await new RuleDispatcher().decide(
-    ctx({ tasks: [priorWork()], plans: [], recentDecisions: pastTheFunnel(12) }),
+    ctx({
+      tasks: [priorWork()],
+      plans: worked.plans.map((p) => ({ ...p, status: 'complete' as const })),
+      planParts: worked.planParts.map((p) => ({ ...p, status: 'merged' as const })),
+    }),
   );
   const planner = await new RuleDispatcher().decide(ctx({ appraisals: [workableAppraisal()] }));
   const validate = await new RuleDispatcher().decide(

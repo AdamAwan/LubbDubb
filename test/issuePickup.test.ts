@@ -10,7 +10,8 @@ import {
 } from '../src/dispatcher/issuePickup.js';
 import type { IssuePickupPolicy, IssuePickupContext } from '../src/dispatcher/issuePickup.js';
 import type { Decision, Issue, IssueRun, PullRequest, Task } from '../src/types.js';
-import { pastTheFunnel } from './support/plans.js';
+import { planOrigin } from '../src/plans/planning.js';
+import { spentAppraisalAttempts } from './support/plans.js';
 
 const SCHEME: IssuePickupPolicy = {
   priorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
@@ -184,7 +185,7 @@ test('openPrForIssue: an unwatched PR still parks its issue', () => {
   assert.equal(openPrForIssue(issue({ linkedPrNumber: 41 }), [hidden])?.number, 41);
 });
 
-test('issueBranch is the branch rule `issue-pickup` dispatches onto', () => {
+test("issueBranch is an issue's flat, unplanned branch", () => {
   assert.equal(issueBranch(12), 'issue/12');
 });
 
@@ -247,7 +248,7 @@ function ctx(over: Partial<IssuePickupContext> = {}): IssuePickupContext {
     cooldown: { maxAttempts: 3, cooldownMs: 60_000 },
     now: NOW,
     tasks: [],
-    recentDecisions: pastTheFunnel(1),
+    recentDecisions: spentAppraisalAttempts(1),
     openPrs: [],
     plans: [],
     headroom: 2,
@@ -297,7 +298,7 @@ test('issuePickupStatus: an issue with a live PR reports it', () => {
 
 test('issuePickupStatus: "has open PR" is never claimed for a PR that merged', () => {
   const v = issuePickupStatus(issue({ linkedPrNumber: 41 }), ctx({ openPrs: [pr({ number: 41, merged: true })] }));
-  assert.deepEqual(v, { eligible: true, status: 'eligible', reasons: [] });
+  assert.deepEqual(v, { eligible: false, status: 'planning', reasons: ['awaiting a planning agent'] });
 });
 
 test('issuePickupStatus: an active task on the origin reports the agent state', () => {
@@ -314,7 +315,7 @@ test('issuePickupStatus: an active task on the origin reports the agent state', 
 
 test('issuePickupStatus: a finished task on the origin does not count as active', () => {
   const v = issuePickupStatus(issue(), ctx({ tasks: [task({ status: 'done' })] }));
-  assert.equal(v.status, 'eligible');
+  assert.equal(v.status, 'planning');
 });
 
 test('issuePickupStatus: an un-watched issue surfaces as unwatched with the intrinsic reasons', () => {
@@ -330,45 +331,49 @@ test('issuePickupStatus: an un-watched issue surfaces as unwatched with the intr
 test('issuePickupStatus: the watch tag is the whole gate — no other label overrides it', () => {
   const policy = { watchLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0, investigateLabel: 'investigate' };
   const both = issuePickupStatus(issue({ labels: ['agent-ready', 'agent-ignore'] }), ctx({ policy }));
-  assert.deepEqual(both, { eligible: true, status: 'eligible', reasons: [] });
+  assert.deepEqual(both, { eligible: false, status: 'planning', reasons: ['awaiting a planning agent'] });
   const neither = issuePickupStatus(issue({ labels: ['agent-ignore'] }), ctx({ policy }));
   assert.deepEqual(neither, { eligible: false, status: 'unwatched', reasons: ['no watch label "agent-ready"'] });
 });
 
-test('issuePickupStatus: a recent attempt puts the issue on cooldown', () => {
+test('issuePickupStatus: a recent planner attempt puts planning on cooldown', () => {
   const v = issuePickupStatus(
     issue(),
-    ctx({ recentDecisions: [...pastTheFunnel(1), dispatched('issue:1', '2026-07-21T00:59:30Z')] }),
+    ctx({ recentDecisions: [...spentAppraisalAttempts(1), dispatched(planOrigin(1), '2026-07-21T00:59:30Z')] }),
   );
-  assert.equal(v.status, 'cooldown');
-  assert.equal(v.eligible, false);
-  assert.deepEqual(v.reasons, ['on cooldown after 1 attempt']);
+  assert.deepEqual(v, { eligible: false, status: 'planning', reasons: ['planning on cooldown'] });
 });
 
-test('issuePickupStatus: the spent attempt cap surfaces as escalated', () => {
+test('issuePickupStatus: a planner that spent its attempt cap with no plan surfaces as escalated', () => {
   const attempts = [
-    dispatched('issue:1', '2026-07-21T00:00:00Z'),
-    dispatched('issue:1', '2026-07-21T00:20:00Z'),
-    dispatched('issue:1', '2026-07-21T00:40:00Z'),
+    dispatched(planOrigin(1), '2026-07-21T00:00:00Z'),
+    dispatched(planOrigin(1), '2026-07-21T00:20:00Z'),
+    dispatched(planOrigin(1), '2026-07-21T00:40:00Z'),
   ];
-  const v = issuePickupStatus(issue(), ctx({ recentDecisions: [...pastTheFunnel(1), ...attempts] }));
-  assert.equal(v.status, 'escalated');
-  assert.deepEqual(v.reasons, ['3 failed attempts — escalated to a human']);
+  const v = issuePickupStatus(issue(), ctx({ recentDecisions: [...spentAppraisalAttempts(1), ...attempts] }));
+  assert.deepEqual(v, {
+    eligible: false,
+    status: 'escalated',
+    reasons: ['3 planner attempts wrote no plan — escalated to a human'],
+  });
 });
 
-test('issuePickupStatus: paused dispatch blocks pickup', () => {
-  const v = issuePickupStatus(issue(), ctx({ paused: true, headroom: 0 }));
-  assert.deepEqual(v, { eligible: false, status: 'blocked', reasons: ['dispatch paused'] });
-});
-
-test('issuePickupStatus: no headroom blocks pickup', () => {
-  const v = issuePickupStatus(issue(), ctx({ headroom: 0 }));
-  assert.deepEqual(v, { eligible: false, status: 'blocked', reasons: ['no agent capacity'] });
-});
-
-test('issuePickupStatus: an unimpeded open issue is eligible', () => {
+test('issuePickupStatus: an unimpeded open issue awaits a planning agent', () => {
   const v = issuePickupStatus(issue(), ctx());
-  assert.deepEqual(v, { eligible: true, status: 'eligible', reasons: [] });
+  assert.deepEqual(v, { eligible: false, status: 'planning', reasons: ['awaiting a planning agent'] });
+});
+
+test('issuePickupStatus: a planner owed while dispatch is paused, or with no capacity, is blocked', () => {
+  assert.deepEqual(issuePickupStatus(issue(), ctx({ paused: true })), {
+    eligible: false,
+    status: 'blocked',
+    reasons: ['dispatch paused'],
+  });
+  assert.deepEqual(issuePickupStatus(issue(), ctx({ headroom: 0 })), {
+    eligible: false,
+    status: 'blocked',
+    reasons: ['no agent capacity'],
+  });
 });
 
 test('effectivePickupStates folds the in-progress state into the operator list', () => {

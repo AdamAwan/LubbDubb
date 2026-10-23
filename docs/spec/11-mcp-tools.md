@@ -115,10 +115,11 @@ delivering the issue, `conclude_part` for a part agent, `assess_issue` for an as
   schema cannot express is _no work at all_. Without this tool a planner that reads the repository and
   finds the goal already met has three moves, and each of them spends an agent to rediscover what it
   already knows — an invented part, a part that redoes the work, or silence until the attempt cap
-  fails the issue open to `issue-pickup`. → [08](08-planning.md#when-there-is-nothing-to-plan)
+  escalates the issue to a person, who is handed a question the planner could have answered
+  ([08](08-planning.md#a-planner-that-writes-no-plan-escalates)). → [08](08-planning.md#when-there-is-nothing-to-plan)
 - **It records a delivery, not a plan.** `issue_deliveries` already means "what the issue asked for is
-  present; schedule nothing further", and `deliveryHold` already gates `eligibleIssues` — which is
-  both rules the planner would otherwise be re-dispatched by. `by` is `planner`, a third author beside
+  present; schedule nothing further", and `deliveryHold` already gates `eligibleIssues` — the list
+  the planner would otherwise be re-dispatched from. `by` is `planner`, a third author beside
   the assessor and the operator ([06](06-issue-pickup.md#the-delivery-verdict)), so the cockpit and the
   close-out card can say who decided it. Nothing is written to the plan graph, and a goal parked this
   way shows no decomposition at all.
@@ -613,7 +614,8 @@ verdict rather than on the next pulse.
 ### `report_investigation`
 
 Arguments `{reproduction, root_cause, confidence: 'high'|'medium'|'low', locations, blast_radius,
-recommendation: 'plan'|'pickup'|'close'|'ask'}`. Rule `issue-investigate`'s one extra tool, placed on
+recommendation: 'plan'|'close'|'ask'}` — a `pickup` from an out-of-date template override is recorded
+as `plan` ([38](38-bug-investigation.md#no-fix-without-a-plan)). Rule `issue-investigate`'s one extra tool, placed on
 that rule's `RULE_TOOLS` row alone and named at its point of use. Fenced to `issue:<n>:investigate`
 origins: any other run is refused and nothing is recorded. The four text fields are required and
 non-blank, each at most 4 000 characters — an empty one is refused with a request to say what was

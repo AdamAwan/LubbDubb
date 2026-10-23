@@ -25,10 +25,10 @@ fires, and which placeholders it supports:
 
 ```md
 <!--
-  Sent to a code agent when an open issue has no linked PR. Placeholders: {number} {title} {body} {branch}.
+  Sent to a code agent when a PR has failing CI and no agent is on its branch. Placeholders: {number} {title} {branch}.
 -->
 
-GitHub issue #{number} ("{title}") needs resolving.
+CI is failing on PR #{number} ("{title}", branch {branch}). Investigate the failure and push a fix.
 ...
 ```
 
@@ -46,8 +46,8 @@ placeholder is fine.
 
 | id                        | when it fires                                                            |
 | ------------------------- | ------------------------------------------------------------------------ |
-| `issue-pickup`            | an open work item has no linked PR and no agent is on it                 |
-| `issue-pickup-escalation` | issue pickup keeps failing to produce a linked PR (→ human)              |
+| `issue-pickup`            | retired — nothing is implemented without a plan; never rendered          |
+| `issue-pickup-escalation` | retired — nothing is implemented without a plan; never rendered          |
 | `issue-appraisal`         | a watched issue nothing has started on: is there a goal to work from?    |
 | `issue-investigate`       | a watched issue carrying the investigate label: why does the bug happen? |
 | `pr-ci-fix`               | a PR has failing CI and no agent is on its branch                        |

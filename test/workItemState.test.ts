@@ -10,7 +10,7 @@ import type { ActionSink, SendResult, WorkItemStateInput } from '../src/sink/act
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
-import { failAppraisalOpen, failPlanningOpen, planWithOnePart } from './support/plans.js';
+import { failAppraisalOpen, planWithOnePart, workedAsOnePart } from './support/plans.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -257,12 +257,12 @@ test('in-progress: an item with a live work agent and no PR moves to the in-prog
     issueInReviewState: 'In Review',
   });
   await trackedIssue(system, 20, 'Ready');
-  failPlanningOpen(system.store, 20);
+  workedAsOnePart(system.store, 20);
 
   await system.harness.runCycle('manual');
   assert.deepEqual(transitions(system), [], 'nothing moves on the cycle that dispatches');
   assert.ok(
-    system.store.tasks.listTasks().some((t) => t.originRef === 'issue:20'),
+    system.store.tasks.listTasks().some((t) => t.originRef === 'issue:20:part:whole'),
     'a work agent was dispatched for the issue',
   );
 
@@ -293,7 +293,7 @@ test('in-progress: a deliberation agent — a planner or an appraiser — moves 
   system.store.close();
 });
 
-test('in-progress: a decomposed item belongs to the review state, not the in-progress one', async () => {
+test('in-progress: a planned item whose part is being worked is in progress, not in review', async () => {
   const system = walkSystem({
     issuePickupStates: ['Ready'],
     issueInProgressState: 'Doing',
@@ -305,13 +305,10 @@ test('in-progress: a decomposed item belongs to the review state, not the in-pro
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
   const moves = transitions(system);
-  assert.ok(
-    !moves.some((m) => m.rule === 'work-item-in-progress'),
-    `a decomposed item is the review state's business, got ${JSON.stringify(moves)}`,
-  );
-  assert.ok(
-    moves.some((m) => m.rule === 'work-item-in-review' && m.state === 'In Review'),
-    'the decomposed item is parked in the review state',
+  assert.deepEqual(
+    moves.map((m) => `${m.rule}:${m.state}`),
+    ['work-item-in-progress:Doing'],
+    'a part agent at work with no PR open is work in flight, which the plan alone does not override',
   );
   system.store.close();
 });
@@ -323,11 +320,11 @@ test('in-progress and in-review never both fire for one item in one cycle', asyn
     issueInReviewState: 'In Review',
   });
   await trackedIssue(system, 24, 'Ready');
-  failPlanningOpen(system.store, 24);
+  workedAsOnePart(system.store, 24);
 
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
-  system.connector.inject({ kind: 'new_pr', number: 80, title: 'wip', branch: 'issue/24', baseBranch: 'main' });
+  system.connector.inject({ kind: 'new_pr', number: 80, title: 'wip', branch: 'issue/24/whole', baseBranch: 'main' });
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
@@ -351,23 +348,46 @@ test('in-progress and in-review never both fire for one item in one cycle', asyn
 test('in-progress: nothing is emitted at all when the key is unset', async () => {
   const system = walkSystem({ issuePickupStates: ['Ready'], issueInReviewState: 'In Review' });
   await trackedIssue(system, 25, 'Ready');
-  failPlanningOpen(system.store, 25);
+  workedAsOnePart(system.store, 25);
 
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
-  assert.deepEqual(transitions(system), [], 'the rule is off without an in-progress state');
+  assert.deepEqual(
+    transitions(system).filter((m) => m.rule === 'work-item-in-progress'),
+    [],
+    'the rule is off without an in-progress state',
+  );
   system.store.close();
 });
 
-test('a decomposed item parked in the review state stays there for the life of its plan', async () => {
+test('in-review: a plan whose work has started, with nobody on it, parks the item in review', async () => {
+  const system = walkSystem({
+    issuePickupStates: ['Ready'],
+    issueInProgressState: 'Doing',
+    issueInReviewState: 'In Review',
+  });
+  await trackedIssue(system, 28, 'Ready');
+  const plan = planWithOnePart(system.store, 28);
+  const [part] = system.store.plans.listPlanParts(plan.id);
+  system.store.plans.updatePlanPart(part!.id, { status: 'merged', branch: 'issue/28/whole' });
+
+  await system.harness.runCycle('manual');
+  assert.deepEqual(
+    transitions(system).map((m) => `${m.rule}:${m.state}`),
+    ['work-item-in-review:In Review'],
+  );
+  system.store.close();
+});
+
+test('a planned item parked in the review state stays there for the life of its plan', async () => {
   const system = walkSystem({ issuePickupStates: ['Ready'], issueInReviewState: 'In Review' });
-  await trackedIssue(system, 26, 'Ready');
+  await trackedIssue(system, 26, 'In Review');
   planWithOnePart(system.store, 26);
 
   for (let i = 0; i < 5; i++) await system.harness.runCycle('manual');
   assert.deepEqual(
     transitions(system).map((m) => `${m.rule}:${m.state}`),
-    ['work-item-in-review:In Review'],
+    [],
     'an in-flight plan reads as more_work, which must not send a decomposed item back to pickup',
   );
   system.store.close();

@@ -19,7 +19,7 @@ import { proposalHold } from '../src/proposals/proposals.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { parsePlanDocument } from '../src/plans/planDocument.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
-import { pastTheFunnel } from './support/plans.js';
+import { onePartPlanRows, spentAppraisalAttempts } from './support/plans.js';
 import type {
   Agent,
   Issue,
@@ -63,7 +63,7 @@ test('a shortfall never holds pickup, and the positive verdict still does', () =
   assert.match(deliveryHold(deliveryRow(), issue()) ?? '', /marked it delivered/, 'the delivery gate is untouched');
 });
 
-test('an issue carrying a shortfall is pickup-eligible, and the chip says so', () => {
+test('an issue carrying a shortfall is not parked — its plan goes on scheduling, and the chip says so', () => {
   const store = new Map<string, IssueShortfall>([['issue:12', shortfallRow()]]);
   assert.ok(store.get('issue:12'));
   const verdict = issuePickupStatus(issue(), {
@@ -77,16 +77,19 @@ test('an issue carrying a shortfall is pickup-eligible, and the chip says so', (
     cooldown: DEFAULT_COOLDOWN,
     now: NOW,
     tasks: [],
-    recentDecisions: pastTheFunnel(12),
+    recentDecisions: spentAppraisalAttempts(12),
     openPrs: [],
     deliveries: [],
     deliverySignals: [],
-    plans: [],
+    ...onePartPlanRows(12),
     headroom: 3,
     paused: false,
   });
-  assert.equal(verdict.eligible, true, 'releasing work is the entire point of the verdict');
-  assert.equal(verdict.status, 'eligible');
+  assert.deepEqual(
+    verdict,
+    { eligible: false, status: 'planning', reasons: ['0/1 parts done'] },
+    'releasing work to the plan is the entire point of the verdict',
+  );
 });
 
 test('a shortfall outranks the working agent’s own declaration without erasing it', () => {

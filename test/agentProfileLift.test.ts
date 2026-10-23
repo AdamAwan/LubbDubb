@@ -9,7 +9,7 @@ import { buildSystem, type System } from '../src/system/system.js';
 import { buildApp } from '../src/server/app.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 const PROFILES = {
   fast: { model: 'haiku', rank: 1, description: 'mechanical work' },
@@ -64,7 +64,7 @@ async function onFast(n = 7): Promise<Bench> {
     errorMirror: () => {},
   });
   system.connector.inject({ kind: 'new_issue', number: n, title: 'Add login' });
-  failPlanningOpen(system.store, n);
+  workedAsOnePart(system.store, n);
   await system.harness.runCycle('manual');
   return { system, worktrees, launches };
 }
@@ -171,7 +171,7 @@ test('a lift keeps the worktree slot, which the kill would otherwise release', a
 });
 
 test('a lift is audited as the operator’s own act', async () => {
-  const { system } = await onFast(10);
+  const { system } = await onFast(9010);
   const before = liveAgent(system);
 
   system.agents.lift(before.id, {
@@ -188,7 +188,7 @@ test('a lift is audited as the operator’s own act', async () => {
 });
 
 test('the route refuses an unknown profile, the standing one, and an agent that is not live', async () => {
-  const { system } = await onFast(11);
+  const { system } = await onFast(9011);
   const before = liveAgent(system);
   const { app } = await buildApp(system);
 

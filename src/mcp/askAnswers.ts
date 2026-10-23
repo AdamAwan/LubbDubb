@@ -355,7 +355,7 @@ const ANSWER_WITH: Record<AskKind, Answerer> = {
   ),
   findings: cockpit(
     'An investigation’s findings, settled on the goal in the cockpit where the reproduction, root cause and ' +
-      'recommendation are drawn beside the four answers.',
+      'recommendation are drawn beside the three answers.',
   ),
   sitting: cockpit(
     'The operator’s own prediction and criteria, asked before the planner. A prediction typed through an ' +

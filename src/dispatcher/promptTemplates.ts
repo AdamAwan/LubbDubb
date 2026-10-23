@@ -10,6 +10,7 @@ import { TICKET_PROMPTS } from './ticketPrompts.js';
 type PromptId =
   | 'issue-plan'
   | 'issue-replan'
+  | 'issue-plan-escalation'
   | 'discuss-plan'
   | 'plan-part'
   | 'plan-approval'

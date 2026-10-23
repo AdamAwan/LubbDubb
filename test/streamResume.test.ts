@@ -12,7 +12,7 @@ import { Store } from '../src/store/store.js';
 import { AgentManager } from '../src/agents/agentManager.js';
 import type { AgentSession, AgentSessionStatus } from '../src/agents/session.js';
 import { FileEventsSpool } from '../src/agents/fileEvents.js';
-import { failPlanningOpen } from './support/plans.js';
+import { workedAsOnePart } from './support/plans.js';
 
 class FakeChild extends EventEmitter implements StreamChild {
   pid = 555;
@@ -95,7 +95,7 @@ async function spawnAgent(dir: string, issue = 901, extra: Partial<Config> = {})
     errorMirror: () => {},
   });
   system.connector.inject({ kind: 'new_issue', number: issue, title: 'Add login' });
-  failPlanningOpen(system.store, issue);
+  workedAsOnePart(system.store, issue);
   await system.harness.runCycle('manual');
   const agent = system.store.agents.listAgentsByStatus('starting', 'running')[0]!;
   return { launches, system, agent };

@@ -140,14 +140,19 @@ rotted exactly as a second copy of an ordering always does: by the time they wer
 and three claimed positions that were not positions (`1–2b`, `1–4`). Order lives in one array, and
 `concernUrgency` reads that array rather than restating a slice of it.
 
-`kind` splits the registry into two vocabularies:
+`kind` splits the registry into four vocabularies:
 
 - **`rule`** — proposes work from the world. These are the pipeline, in the order below.
 - **`admission`** — decides what becomes of something a rule proposed (see
   [Admission](#admission)). Not ordered per-feature and not a stage.
 - **`terminal`** — a property of the finished cycle rather than of any rule.
+- **`retired`** — a rule that no longer runs. It has no stage, so it is not in the pipeline, and it is
+  kept for the same reason the other non-rules are: rows name it. `RETIRED_RULE_IDS` is also what lets
+  `agentModels.byRule` still name one at boot, ignored, rather than refuse to start a deployment that
+  configured it — the same reason a `PromptId` is retired rather than deleted. `issue-pickup` is the one
+  retired rule ([08](08-planning.md#a-planner-that-writes-no-plan-escalates)).
 
-The registry keeps all three because `decisions.rule` is **persisted**: a row naming
+The registry keeps all four because `decisions.rule` is **persisted**: a row naming
 `cooldown-escalate` must still resolve years later. So the registry is the display vocabulary and the
 pipeline is the ordered subset that runs.
 
@@ -191,7 +196,7 @@ unconditional.
 | `work-item-in-review`      | Back off to review state                 | `workItemStates`     | A work item in a pickup state has an open PR (or is decomposed).                                                                                                                                                                                                                                                                                                                                                                |
 | `work-item-back-to-pickup` | Stranded in review state                 | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion — not the in-flight verdict of its own parts plan. Asks a human once; moves nothing.                                                                                                                                                                                                                                    |
 | `issue-appraisal`          | Issue goal needs checking                | —                    | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                                                                                                                                                                                                                                                              |
-| `issue-investigate`        | Bug needs investigating                  | —                    | A watched open issue carrying the investigate label, with nothing started and no findings against its current text. One read-only code agent on `issue:<n>:investigate` finds the cause; plan and pickup stand aside until an operator resolves the findings or the label comes off. → [38](38-bug-investigation.md)                                                                                                            |
+| `issue-investigate`        | Bug needs investigating                  | —                    | A watched open issue carrying the investigate label, with nothing started and no findings against its current text. One read-only code agent on `issue:<n>:investigate` finds the cause; the planner stands aside until an operator resolves the findings or the label comes off. → [38](38-bug-investigation.md)                                                                                                               |
 | `criteria-alignment`       | Your criteria against the ticket         | —                    | While a goal's intake sitting is open, the operator's criteria and the ticket's own are compared by one desk agent on `issue:<n>:criteria-alignment`. Holds nothing. → [08](08-planning.md#the-alignment-check)                                                                                                                                                                                                                 |
 | `issue-plan`               | Issue needs a plan                       | —                    | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                                                                                                                                                                                                                                                                       |
 | `issue-assess`             | Issue may be finished                    | —                    | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR. On `delivered` it writes the goal's validation check set too.                                                                                                                                                                                                                                                               |
@@ -203,7 +208,6 @@ unconditional.
 | `plan-blocked`             | Approved plan is going nowhere           | —                    | A released plan has something blocked and nothing moving, so nothing will be dispatched for it — and a live part nobody refused is stuck behind it. Asks a human once; dispatches nobody.                                                                                                                                                                                                                                       |
 | `local-validation-fix`     | Fix what a local validation found        | —                    | A local validation was reported `failed` with findings: one writable code agent on the branch that was validated. Once per reading, latched on the row. Never a shortfall. → [32](32-local-validation.md#when-it-fails)                                                                                                                                                                                                         |
 | `plan-part`                | Plan part ready                          | —                    | A part of an active plan is `ready` and unstaffed.                                                                                                                                                                                                                                                                                                                                                                              |
-| `issue-pickup`             | Open issue without a PR                  | —                    | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                                                                                                                                                                                                                                                                                   |
 | `validation-plan-approval` | A check set needs your acceptance        | `checkSets`          | A delivered goal's validation check set has been authored and not yet accepted. Raises a proposal and dispatches nobody; until it is answered no sheet assembles off the set and `validate-check` dispatches nothing for it. Below `validation-plan`, which writes its input; above `validate-check`, which reads what it releases. → [20](20-validation.md#the-check-set-is-proposed-before-it-is-work)                        |
 | `validate-check`           | Handed-over validation check             | —                    | A validation check on a delivered goal that the operator handed to the fleet has no reading against it. One code agent on a throwaway branch cut from the default branch. Ranked below every rule that produces work, because validation blocks nothing. → [20](20-validation.md)                                                                                                                                               |
 | `remote-validation`        | Validation sheet pressed                 | `remoteValidation`   | An operator pressed go on a goal's validation sheet against a deployed environment, which opened a run row. One code agent, read-only and pinned to the **deployed commit**, invokes the project's own runner command and says where the report landed — it states no outcome. Below `validate-check`, above `validation-failed`, whose input it produces. → [36](36-remote-validation.md#the-dispatch--rule-remote-validation) |
@@ -395,15 +399,17 @@ tracker unioned with the runs it has forgotten (#234 — see
 `StageContext.retained` names which are which. Only `issue-assess` and `issue-retro` act on one: they
 are the two steps that come _after_ a merge, which is exactly when a PR carrying `closes #N` has
 already taken the ticket out of the world. Every other rule excludes them **in its own body** —
-`eligibleIssues` for `issue-plan`/`issue-pickup`, a direct `retained` test in the two work-item rules,
+`eligibleIssues` for `issue-plan`, a direct `retained` test in the two work-item rules,
 and `StageContext.liveIssue` for the plan- and shortfall-driven rules, which returns null for a
 retained issue. None of them leans on the stub's `closed` state: it would refuse them by coincidence,
 and coincidence is what a later change removes with nothing failing.
 
-**Three fields are written by one stage and read by later ones, and that ordering is load-bearing.**
-`appraising`, `investigating` and `assessing` are outputs of `issue-appraisal`, `issue-investigate` and
-`issue-assess` and inputs to the stages after them (`issue-plan` reads the first two; `issue-pickup`
-reads all three) — the whole mechanism behind `superseded`. It works because `DISPATCH_PIPELINE` runs the writers first; moving either rule below
+**Two fields are written by one stage and read by later ones, and that ordering is load-bearing.**
+`appraising` and `investigating` are outputs of `issue-appraisal` and `issue-investigate` and inputs to
+the stages after them (`issue-investigate` reads the first, `issue-plan` both) — the whole mechanism
+behind `superseded`. A third, `assessing`, was removed with rule `issue-pickup`, its one reader: the
+assessor now fires only for a goal with a plan, which the planner never does, so there is nothing for it
+to stand in front of. It works because `DISPATCH_PIPELINE` runs the writers first; moving either rule below
 its readers would not fail to compile, it would silently stop suppressing and put two agents on one
 issue.
 
@@ -438,7 +444,7 @@ proposal in the same way whichever rule made it.
 
 These were four representations of one idea, none of which knew about the others: `branch-notify` and
 `cooldown-escalate` were rule ids (so a throttled pickup audited as `cooldown-escalate` and lost that
-it was `issue-pickup` that got throttled — closed by the `admission` column below);
+it was the since-retired `issue-pickup` that got throttled — closed by the `admission` column below);
 `cooldown`/`capped`/`unapproved` were a `held` string on
 the candidate; `waiting` was decided inline by the headroom cut; and **suppression was not
 represented at all** — a rule superseded by an earlier one `continue`d, so its candidate vanished with
@@ -471,7 +477,7 @@ second, so a rule id structurally cannot land there.
 | An ordinary dispatch, merge, escalation | the rule that proposed it | null                |
 | The PR-concern attempt cap              | the top concern's rule    | `cooldown-escalate` |
 | `plan-part`'s attempt cap               | `plan-part`               | `cooldown-escalate` |
-| `issue-pickup`'s attempt cap            | `issue-pickup`            | `cooldown-escalate` |
+| `issue-plan`'s attempt cap              | `issue-plan`              | `cooldown-escalate` |
 | The branch note                         | **null**                  | `branch-notify`     |
 
 **Only these two admissions ever reach the column.** The rest (`cooldown`, `capped`, `unapproved`,
@@ -552,8 +558,8 @@ is no second list to keep in step with it. What each stage contributes:
    check, which is not the top concern on a PR that also has an open review, and reading it from the
    winner would make the operator's escalation conditional on nobody having commented.
 3. **Goal appraisals** (`issue-appraisal`) — asking whether a goal can be worked from comes before deciding
-   _how_ to work it, so an appraisal ranks ahead of the planner and **supersedes both** the planner and
-   the pickup for that issue, from the pulse it is proposed on until the appraiser has answered.
+   _how_ to work it, so an appraisal ranks ahead of the planner and **supersedes** the planner for
+   that issue, from the pulse it is proposed on until the appraiser has answered.
 
    The two are the same kind of agent doing the same read, which reads like an argument for one rule
    answering both — and the saving would be real, a whole dispatch per goal. What refuses it is the
@@ -570,13 +576,14 @@ is no second list to keep in step with it. What each stage contributes:
 
    **Investigations** (`issue-investigate`) follow directly, for the same reason one step on: finding
    why a bug happens comes before deciding how to fix it, so an investigator ranks ahead of the planner
-   and supersedes both it and the pickup while it is pending or running. → [38](38-bug-investigation.md#the-holds)
+   and supersedes it while it is pending or running. → [38](38-bug-investigation.md#the-holds)
 
 4. **Planners** (`issue-plan`) — a planner unblocks work, so it wins a slot before the work it
    unblocks.
 5. **Assessors** (`issue-assess`) — an assessment decides whether an issue needs work at all, so it
-   is asked before the work is scheduled. An issue being assessed is **superseded** from `issue-pickup`
-   for as long as the assessor is on it. `issue-shortfall`, which routes what an assessment found, claims no headroom and so
+   is asked before the work is scheduled. It used to supersede the whole-issue pickup while it was on an
+   issue; that rule is retired, and a part is scheduled off a plan the assessor does not fire beside
+   (`planInFlight`). `issue-shortfall`, which routes what an assessment found, claims no headroom and so
    appears nowhere in this ranking: it only proposes and escalates.
 6. **Retrospectives** (`issue-retro`), a desk agent per delivered goal with no write-up.
 7. **Plan parts** (`plan-part`), ranked by dependency depth, then issue number, then part sequence, so
@@ -587,33 +594,32 @@ is no second list to keep in step with it. What each stage contributes:
    and `unapproved` are, because those two say _the fleet will get to this_ and this one never will —
    it is waiting on a person, and the cockpit's bench is where it is visible.
    → [13](13-jobs-and-tickets.md#human-tasks)
-8. **Issue pickups** (`issue-pickup`), ordered by label-encoded priority then issue number.
-9. **Handed-over validation checks** (`validate-check`), below every rule that produces work.
+8. **Handed-over validation checks** (`validate-check`), below every rule that produces work.
    Validation's standing promise is that it blocks nothing, so a check must never take the final slot
    from a blocked part or a red build — that would make the one feature that gates nothing the reason
    something else did not run. Below the cut it queues as `waiting` like anything else, which is how a
    hand-over that the fleet has no room for stays visible instead of looking like a button that did
    nothing.
-10. **Pressed validation sheets** (`remote-validation`), below the handed-over check because that is
-    an obligation an operator explicitly assigned to the fleet and the older one, and above the
-    diagnosis because this rule **produces that rule's input** — the other way round reads as
-    backwards and delays every diagnosis by a pulse. Not beside `local-validation`, which ranks second
-    for a reason that does not hold here: that is a person at a screen with an environment burning on
-    their own machine, and this is a press somebody walks away from.
-    → [36](36-remote-validation.md#the-dispatch--rule-remote-validation)
-11. **Failed validation checks** (`validation-failed`), directly below the run and for its reason. A
+9. **Pressed validation sheets** (`remote-validation`), below the handed-over check because that is
+   an obligation an operator explicitly assigned to the fleet and the older one, and above the
+   diagnosis because this rule **produces that rule's input** — the other way round reads as
+   backwards and delays every diagnosis by a pulse. Not beside `local-validation`, which ranks second
+   for a reason that does not hold here: that is a person at a screen with an environment burning on
+   their own machine, and this is a press somebody walks away from.
+   → [36](36-remote-validation.md#the-dispatch--rule-remote-validation)
+10. **Failed validation checks** (`validation-failed`), directly below the run and for its reason. A
     check waiting to be run is work nobody has done; this is a second opinion on work somebody has,
     so it goes below — and below every rule that produces work for `validate-check`'s reason, which is
     the same promise.
-12. **Bot PR risk** (`bot-pr-risk`), one desk agent over a batch of dependency-bot pull requests —
+11. **Bot PR risk** (`bot-pr-risk`), one desk agent over a batch of dependency-bot pull requests —
     below every rule that produces work, because what it writes is advice beside a pull request
     nobody is obliged to act on, and above the Feature desks only because somebody may have pressed
     for it and be watching the tab. → [37](37-bot-prs.md#the-risk-summary)
-13. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
+12. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
     below even a handed-over validation check, because it is the only kind of rule in the book that
     produces no work at all: a check is a reading somebody asked for, and this is a paragraph about
     readings already taken. Nothing may wait behind it.
-14. **Feature sequences** (`feature-sequence`), a desk agent per Feature whose stories nobody has put
+13. **Feature sequences** (`feature-sequence`), a desk agent per Feature whose stories nobody has put
     in an order — **last**, beside `feature-summary` and for its reason: it proposes an ordering and
     holds nothing, so it produces no work either. → [33](33-story-sequencing.md)
 
@@ -687,7 +693,7 @@ as the `ProfilePicker` on each Up next row ([17](17-cockpit.md)).
 
 The override above arranges **one pulse's queue, origin by origin**, and that is the wrong grain for
 the thing an operator most often wants to say: _get this goal over the line first_. A goal's work
-changes origin as it progresses — `issue:<n>` while pickup owns it, three `issue:<n>:part:<slug>`
+changes origin as it progresses — `issue:<n>:plan` while a planner owns it, three `issue:<n>:part:<slug>`
 once a plan is approved, `pr:<m>:comments` and `pr:<m>:ci` once the pull requests are open — so a
 drag on the row that was queued when the operator dragged it moves exactly that one candidate and
 silently stops applying the moment the goal takes its next step. The flag survives all of it.
@@ -798,13 +804,14 @@ its `rule` and `cooldown-escalate` as its `admission`, and claims no headroom.
 `StageContext.consider(candidate, opts?)` is the one place a rule turns a verdict into a queue entry:
 `dispatch` pushes the candidate, `cooldown` pushes it `held: 'cooldown'`, `escalate` raises
 `opts.escalate` if the rule has one, and `hold` does nothing. It returns whether the candidate was
-proposed, which is what `issue-appraisal` and `issue-assess` gate their `appraising` / `assessing`
-writes on — the two sets a later stage reads to know an agent is already on the issue.
+proposed, which is what `issue-appraisal` gates its `appraising` write on — the set a later stage
+reads to know an agent is already on the issue.
 
-Thirteen rules call it, and it is the only place any of them reads `dispatchVerdict`. `opts.escalate`
+Most proposing rules call it, and it is the only place any of them reads `dispatchVerdict`. `opts.escalate`
 is optional because most have nowhere to escalate _to_: a summary or a sequence that has spent
-its attempts falls silent rather than putting a question to an operator, and only `issue-pickup`,
-`plan-part`, `obstacle-repair` and the PR concerns raise one. `opts.decisions` narrows the attempt
+its attempts falls silent rather than putting a question to an operator, and only `obstacle-repair`,
+`pr-description-check` and the PR concerns raise one through it. `issue-plan` and `plan-part` escalate a
+spent cap too, but read their verdict through the plan route rather than `consider`. `opts.decisions` narrows the attempt
 window — `validation-failed` counts only the decisions since the reading it is answering, so a check
 that fails again gets a fresh budget rather than inheriting the last failure's.
 
@@ -909,9 +916,9 @@ Opt-in: it fires only when the operator set **both** `issueInProgressState` and 
 `issuePickupStates`, and only for items carrying a native `workItemState`. It never fires on a closed
 item or on a retained run.
 
-- Item in an effective pickup state, **not already in** `issueInProgressState`, with **no open PR**,
-  **no plan** (`partsPlanFor` is null) and a **live work task** on it → move it to
-  `issueInProgressState`.
+- Item in an effective pickup state, **not already in** `issueInProgressState`, with **no open PR**
+  and a **live work task** on it (`liveWorkTask`) → move it to `issueInProgressState`. A plan does not
+  stop it: every worked item has one now, so a rule that refused planned items would never fire.
 
 "Live work task" is `issueOriginRole(number, task.originRef) === 'work'` over the active tasks — the
 pickup root `issue:<n>` and a plan part, and nothing else. An appraisal, a planner, an assessor or a retro
@@ -925,12 +932,17 @@ retried, and a candidate cut for want of headroom would park an item in "Doing" 
 Observing costs one pulse of lag and is idempotent and self-healing instead.
 
 It is **mutually exclusive with `work-item-in-review` by construction**: that rule owns an item with
-an open PR _or_ a decomposed one, and this one refuses both. If the two ever overlapped the item would
+an open PR, or a plan that is underway with **no** live work task on it, and this one needs a live
+work task and no open PR. The two conditions cannot both hold. If they ever overlapped the item would
 ping-pong, one provider write per pulse, forever — so the exclusivity is a test rather than a comment.
 
-A decomposed item is the review state's business for the whole life of its plan, even though agents
-plainly are working: `work-item-in-review` parks it there deliberately, and since the in-progress
-state is folded into the pickup set, a rule that disagreed would flip the item back every cycle.
+A planned item used to be the review state's business for the whole life of its plan, even while
+agents plainly worked it, and `work-item-in-progress` refused anything with a plan. That held while
+rule `issue-pickup` still worked some issues whole, since those were what reached "Doing". With that
+rule retired every worked item has a plan, so the refusal made the in-progress state unreachable on
+every deployment that configured it, silently. The walk is now Ready → Doing while a part agent works
+with nothing open, then In Review when a PR opens or the plan is underway with nobody on it. It never
+goes backwards: the review state is outside the pickup set, so this rule cannot pull an item out of it.
 
 ## `work-item-in-review` / `work-item-back-to-pickup` — work-item state
 
@@ -938,10 +950,13 @@ Opt-in: it fires only when the operator set **both** `issueInReviewState` and a 
 `issuePickupStates`, and only for items carrying a native `workItemState` (Azure work items; GitHub
 issues have none, so it is a no-op for them). It never fires on a closed item.
 
-- Item in a pickup state **and** (an open PR exists for it, or it has a plan) → move it to
-  `issueInReviewState`. Having a plan is `partsPlanFor`, an `active`/`complete` status and nothing
-  else. It had to ask the plan's **parts** as well while a plan delivering one pull request carried
-  none and was scheduled by rule `issue-pickup`: `active` did not then mean the plan was working the
+- Item in a pickup state **and** (an open PR exists for it, or its plan is **underway**) → move it to
+  `issueInReviewState`. Underway is `partsPlanFor` (an `active`/`complete` status) with at least one
+  part started — `dispatched`, `in_review`, `merged` or `concluded` — and **no live work task** on the
+  item, which is `work-item-in-progress`'s case. A plan just approved, with nothing started, leaves the
+  item where it is, so the agent about to start moves it to "Doing" rather than past it. That costs
+  nothing now that no rule re-picks an item from the pickup state. It had to ask the plan's **parts** as well while a plan delivering one pull request carried
+  none and was scheduled by the since-retired rule `issue-pickup`: `active` did not then mean the plan was working the
   issue, and reading it as one parked the work item in the review state for the life of a plan with
   no parts to finish.
 - Item in `issueInReviewState` with no open PR **and an explicit `more_work` conclusion** → **ask a
@@ -968,8 +983,8 @@ would be stranded there: outside the pickup list, so never picked up again and n
 The inverse arm's gate is the conclusion, **not** the absence of a PR, and that is load-bearing.
 `openPrForIssue` reads only the open list, so "this PR merged" and "there was never a PR" are one
 observation; asking on absence would raise a card for every merged ticket waiting on test (and, when
-this arm still moved items, bounced a merged ticket back to "Ready" and had rule `issue-pickup` put a
-fresh agent on work already sitting on the default branch). `done` and `undeclared` both leave
+this arm still moved items, bounced a merged ticket back to "Ready" and had the since-retired rule
+`issue-pickup` put a fresh agent on work already sitting on the default branch). `done` and `undeclared` both leave
 the item where it is — see [the conclusion verdict](06-issue-pickup.md#concluding-an-issue) for why
 silence stops the harness rather than releasing it.
 
@@ -1018,12 +1033,13 @@ hold are in [06](06-issue-pickup.md); the dispatcher's half is:
   own tasks filtered out, or a crashed appraiser would retire its own retry, and `issueOriginRole` now
   makes that exclusion for every deliberation origin), no plan row, and nothing live on `issue:N` or
   any `issue:N:*`.
-- **Suppresses rule `issue-plan` and rule `issue-pickup` for as long as the appraisal is pending or
-  running**, from a set built once, so the three rules cannot hold different opinions about which
-  issues are in it. → [the two load-bearing fields](#where-a-rules-body-lives)
-- **Fails open**: a spent attempt cap returns the issue to the funnel with no escalation, exactly as
-  the planner and the assessor do, because narrowing pickup without that would make the appraisal the
-  most effective way to stop the harness working.
+- **Suppresses rules `issue-plan` and `issue-investigate` for as long as the appraisal is pending or
+  running**, from a set built once, so the rules cannot hold different opinions about which issues are
+  in it. → [the two load-bearing fields](#where-a-rules-body-lives)
+- **Fails open**: a spent attempt cap returns the issue to the funnel — the planner — with no
+  escalation, as the assessor does, because holding the issue on a spent cap would make the appraisal
+  the most effective way to stop the harness working. The planner itself does not fail open: one that
+  writes no plan escalates ([08](08-planning.md#a-planner-that-writes-no-plan-escalates)).
 
 `dispatchReason` and the prompt carry the issue's title and body, and the dispatch's `originTitle` /
 `originSummary` are what the verdict is later fingerprinted against — dropping them would stamp every
@@ -1049,26 +1065,25 @@ is:
   one with findings against its current text, a plan row, work started, or anything live under
   `issue:<n>`.
 - **Writes `investigating`** — before the active-origin guard when its own origin is the active one, as
-  `appraising` does — and `issue-plan` and `issue-pickup` read it through `investigationSupersedes`,
+  `appraising` does — and `issue-plan` reads it through `investigationSupersedes`,
   which also holds while a current record waits on the operator or was resolved _close_ or _ask_.
   Every one of those holds reads the label first, so removing it lifts them all.
 - Held behind a story's predecessors like the appraiser, queued `sequenced`.
-- **Fails open**: a spent attempt cap returns the issue to the funnel with no escalation.
+- **Fails open**: a spent attempt cap returns the issue to the planner with no escalation.
 
 The prompt carries the title and body, and the dispatch's `originTitle` / `originSummary` are what the
 findings are fingerprinted against. `readOnlyNote` and `relatedWorkNote` are appended. A resolution of
-_plan_ or _pickup_ appends the findings to the planner's or the pickup's prompt (`investigationNote`),
-and _pickup_ makes `resolvePlanRoute` answer `unplanned` ([08](08-planning.md#the-four-arms)) — both
-only while the label is on.
+_plan_ appends the findings to the planner's prompt (`investigationNote`), only while the label is on.
+No resolution skips the planner ([38](38-bug-investigation.md#no-fix-without-a-plan)).
 
 ## `issue-assess` — the assessor
 
 Rule `issue-assess` is **unconditional** and puts an assessing agent in front of re-pickup. It exists
 because rule `work-item-in-review`'s park is a **tracker state**, so it only protects providers that have one: on
 GitHub there is no review state, `openPrForIssue` reads only the open list, and the moment a
-delivering PR merges the issue is again "open, watched, no open PR" — rule `issue-pickup`'s entire precondition.
-A fresh agent is then put on work already sitting on the default branch, bounded only by the attempt
-cap. `delivered` is the same park, generalised off the tracker onto a row the harness owns.
+delivering PR merges the issue is again "open, watched, no open PR" — `eligibleIssues`' entire filter.
+While the since-retired rule `issue-pickup` worked issues whole, a fresh agent was then put on work
+already sitting on the default branch, bounded only by the attempt cap. `delivered` is the same park, generalised off the tracker onto a row the harness owns.
 
 The window it fires in used to be the gap between a merge and the ticket closing, and a PR carrying
 `closes #N` makes that gap **zero**: the assessor never ran, no `issue_deliveries` row was written,
@@ -1090,6 +1105,10 @@ It fires for issue N when all of:
   driven off `eligibleIssues`, for rule `plan-part`'s reason — that list applies the workflow-state
   gate, and the Azure case this must cover is precisely an item rule `work-item-in-review` parked in
   the review state.
+- N **has a plan**. Nothing is delivered without one, and the assessor judges delivery against its
+  parts: with none it finds nothing delivered and reports a shortfall on finished work, which every
+  later gate then trips over ([08](08-planning.md#a-planner-that-writes-no-plan-escalates)). A goal
+  worked whole before rule `issue-pickup` was retired, with no plan row, gets a planner instead.
 - No `delivered` verdict stands, no open PR, and no plan still scheduling something — `planInFlight`
   (`src/plans/parts.ts`), which is `planning`, `awaiting_approval` or `active`. The status is the whole
   reading, and the part count has no say in it
@@ -1101,10 +1120,12 @@ It fires for issue N when all of:
 
 The prior-work condition does two jobs. It stops the assessor being noise — without it a brand-new
 issue satisfies every other precondition trivially, since nothing is in flight because nothing ever
-started. It is also the **discriminator that lets assess and pickup coexist** on an issue both would
-otherwise claim: no prior tasks means the work has not started, so rule `issue-pickup` picks it up; prior tasks
-with nothing in flight means it may be finished, so the assessor asks. An issue the assessor claims
-this cycle is **suppressed** from rule `issue-pickup`, or two agents land on it — one judging, one redoing.
+started. It is also the **discriminator between assessing and planning**: no prior tasks means the
+work has not started, so the funnel owes it a planner; prior tasks with nothing in flight means it may
+be finished, so the assessor asks. Work is only started off a plan row, and the assessor needs one, so the two never fire
+on one issue: with a plan the planner is not owed, and without one the assessor does not fire. While
+rule `issue-pickup` worked issues whole with no plan row, that was enforced differently: it read
+`assessing` and stood aside, or two agents landed on the issue — one judging, one redoing.
 
 **Which origins count is decided in one place**, `issueOriginRole` — and it answers off the same
 declaration that mints them, so a family cannot reach the dispatcher unclassified
@@ -1118,10 +1139,11 @@ origin strings, which is why it reads like a graph query; it is the same questio
 the dispatcher already holds. Nothing in `src/dispatcher/` reads the graph — see
 [`14-persistence.md`](14-persistence.md).
 
-**It fails open**, exactly as the planner does: a spent attempt cap returns the issue to ordinary
-pickup with **no escalation**, because narrowing rule `issue-pickup` without that turns any assessor crash into a
-permanently parked issue. A cooling assessor suppresses pickup for that cycle only and stays visible
-in the queue as `cooldown`.
+**It fails open**: a spent attempt cap writes no verdict and raises **no escalation**, and the issue
+is left as though it had never been assessed, because holding it on a spent cap turns any assessor
+crash into a permanently parked issue. A cooling assessor stays visible in the queue as `cooldown`.
+This is the appraisal's discipline and no longer the planner's: a planner that writes no plan
+escalates ([08](08-planning.md#a-planner-that-writes-no-plan-escalates)).
 
 **It is told where the goal's merges are.** What was done is already `world_read`'s to serve — the
 plan graph and the work subtree, provenance and all. What that subtree cannot carry is the **merge
@@ -1151,8 +1173,8 @@ The other end of the loop the assessor opens. Plan → Work → is the goal achi
 the check was rule `issue-assess`, the replan was `POST /api/plans/:id/replan`, and **nothing joined them**. A
 negative verdict was written into `issue_conclusions`, whose only consumer is rule `work-item-back-to-pickup`
 — which then emitted a _tracker_ move, so it fired only where `issueInReviewState` is configured. On GitHub
-it changed no dispatch at all; and on either provider, for an issue with a plan, rule `issue-pickup` is gated on
-the unplanned route and rule `plan-part` finds every part settled. The assessor said "not delivered" and the
+it changed no dispatch at all; and on either provider, for an issue with a plan, the plan route reads
+`parts` and rule `plan-part` finds every part settled. The assessor said "not delivered" and the
 harness scheduled nothing, anywhere.
 
 **The operator's door into the same two dead ends is the instruction route**, not this rule. Pressing
@@ -1680,11 +1702,12 @@ spread into it in that order, which is the order `describe` returns them in.
 
 Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-approval`, `plan-amendment`,
 `issue-shortfall`,
-`plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-appraisal`, `issue-investigate`,
+`plan-part-escalation`, `issue-plan-escalation`, `issue-assess`, `issue-appraisal`, `issue-investigate`,
 `issue-retro`, `validation-check`, `local-validation`, `local-validation-fix`, `remote-validation`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-triage`, `pr-split`, `pr-describe`, `pr-description-check`, `pr-review`, `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
 `work-item-ticket-body`, `brief-ticket-body`, `app-error-ticket-body`, and the retired `work-item-ticket`,
-`blueprint-ticket`, `blueprint-ticket-body`, `issue-assay`, `review-pack-author` and `review-pack-check`. The filing ids are route-driven rather than dispatcher-driven — they are here
+`blueprint-ticket`, `blueprint-ticket-body`, `issue-assay`, `issue-pickup`, `issue-pickup-escalation`,
+`review-pack-author` and `review-pack-check`. The filing ids are route-driven rather than dispatcher-driven — they are here
 because _how a ticket should be worded_ is the operator's opinion, which is what the book exists to
 make overridable. `local-run` is here for the same reason and reaches nothing the dispatcher does:
 _how this project starts on a developer's machine_ is the operator's opinion too, and the tool that
@@ -1812,7 +1835,7 @@ the plan's diagnosis and approach, and rule `pr-ci-blocked` does with its list o
 — all of them used to splice them into the sentence, and an assessment is up to two thousand
 characters. Templated, an operator override could bury it mid-paragraph again;
 carried beside the prompt, no override can reach it. The three templates that are an escalation's
-_whole_ prompt — `issue-pickup-escalation`, `plan-part-escalation`, `pr-concern-escalation` — render
+_whole_ prompt — `issue-plan-escalation`, `plan-part-escalation`, `pr-concern-escalation` — render
 to a single line, asserted in `test/promptTemplates.test.ts`.
 
 `plan-approval` and `issue-shortfall` are deliberately multi-paragraph: what accepting and rejecting
