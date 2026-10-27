@@ -51,8 +51,8 @@ function fromDotGit(dotGit: string): string | null | undefined {
   let common: string;
   try {
     common = readFileSync(join(gitDir, 'commondir'), 'utf8').trim();
-  } catch {
-    return gitDir;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'ENOENT' ? gitDir : null;
   }
   return isAbsolute(common) ? resolve(common) : resolve(gitDir, common);
 }
