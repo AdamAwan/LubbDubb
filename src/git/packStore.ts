@@ -27,27 +27,34 @@ const TMP_FILE = /^tmp_(pack|idx|rev)_/;
 export function commonGitDir(cwd: string): string | null {
   let at = resolve(cwd);
   for (;;) {
-    const dotGit = join(at, '.git');
-    if (existsSync(dotGit)) return fromDotGit(dotGit);
+    const found = fromDotGit(join(at, '.git'));
+    if (found !== undefined) return found;
     const parent = dirname(at);
     if (parent === at) return null;
     at = parent;
   }
 }
 
-function fromDotGit(dotGit: string): string | null {
+/** The common git dir a `.git` names; `undefined` when there is no `.git` there at all. */
+function fromDotGit(dotGit: string): string | null | undefined {
+  let said: string;
   try {
-    if (statSync(dotGit).isDirectory()) return dotGit;
-    const pointer = /^gitdir:\s*(.+)$/m.exec(readFileSync(dotGit, 'utf8'));
-    if (pointer === null) return null;
-    const gitDir = resolve(dirname(dotGit), pointer[1]!.trim());
-    const commondir = join(gitDir, 'commondir');
-    if (!existsSync(commondir)) return gitDir;
-    const common = readFileSync(commondir, 'utf8').trim();
-    return isAbsolute(common) ? resolve(common) : resolve(gitDir, common);
-  } catch {
-    return null;
+    said = readFileSync(dotGit, 'utf8');
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EISDIR') return dotGit;
+    return code === 'ENOENT' || code === 'ENOTDIR' ? undefined : null;
   }
+  const pointer = /^gitdir:\s*(.+)$/m.exec(said);
+  if (pointer === null) return null;
+  const gitDir = resolve(dirname(dotGit), pointer[1]!.trim());
+  let common: string;
+  try {
+    common = readFileSync(join(gitDir, 'commondir'), 'utf8').trim();
+  } catch {
+    return gitDir;
+  }
+  return isAbsolute(common) ? resolve(common) : resolve(gitDir, common);
 }
 
 function packDir(gitDir: string): string {
