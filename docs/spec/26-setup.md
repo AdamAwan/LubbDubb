@@ -131,7 +131,9 @@ has an arm and applies now; everything else lands in the file and is reported as
 `buildSetupReading` (`src/setup/reading.ts`) answers six, plus one whenever a deployment has selected
 the cross-fleet pool ([below](#a-fleet-with-no-name)), plus one about the prompt overrides
 whenever a deployment has any ([below](#an-override-that-names-a-retired-tool)) and one whenever
-the file has moved ahead of the process ([below](#a-fault-the-file-has-already-answered)), and they
+the file has moved ahead of the process ([below](#a-fault-the-file-has-already-answered)), plus the
+`clone` check wherever the pulse reads the project's object store
+([09](09-execution.md#the-clones-object-store)), and they
 outlive the first three minutes on purpose. That is the argument for their being checks rather than wizard steps: `credential` is how an
 operator finds out on a Tuesday that a token expired, and `eligibility` is how they find out that a
 filter of their own is hiding every tagged item on the tracker.
@@ -148,6 +150,23 @@ filter of their own is hiding every tagged item on the tracker.
 | `billing`      | `ANTHROPIC_API_KEY` is in the environment               | agents inherit it and the CLI prefers a key with no prompt, so the whole fleet bills the API ([02](02-configuration.md#secrets))                                |
 | `prompt-tools` | a prompt override names a tool `raise` replaced         | the tool still works, so nothing is broken — the deployment is one withdrawal away from a call refused with nothing in the logs                                 |
 | `restart`      | the file holds changes this process is not running      | `warn`, not `bad` — the harness works, it is just not working on what the operator last wrote                                                                   |
+| `clone`        | the project is a partial clone, or over its pack limit  | `warn` — every git that touches an object it lacks fetches it on demand, and the clone grows a pack per fetch with nothing failing                              |
+
+### The clone check reads the pulse, not a probe
+
+`clone` is the one check with no probe behind it. The pack store is read by the pulse's `cloneUpkeep`
+pass, and the reading is handed `CloneUpkeepDesk.standing()`, so `GET /api/setup` costs no git; before
+the first pass it is `unknown` and draws no row. It is `ok` with the pack count and size in its detail,
+and `warn` for two things: a **partial clone** (`.promisor` packs, with the filter named) — whose
+`shell` fix is the conversion — unset `remote.origin.partialclonefilter`, set
+`remote.origin.promisor false`, unset `extensions.partialclone`, then `fetch --refetch origin` and
+`gc --prune=now`, so the refetched packs carry no `.promisor` marker and the check clears — copied and
+never run, because it downloads the whole
+history once and should be run with the fleet paused — and a clone **above the repack limit with no repack running** — the
+harness owns that store's housekeeping, so a store over its own limit is a discrepancy between what it
+does and what it should have done, naming whether the repack is waiting for an idle fleet, left it
+over the limit, or failed and why. A clone that is merely large is not a fault, and gets no row
+([below](#a-check-earns-a-row-for-a-discrepancy-never-a-quantity)).
 
 ### The credential check asks both routes
 

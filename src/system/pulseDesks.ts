@@ -32,6 +32,7 @@ import type { RemoteValidationDesk } from '../validation/remote/desk.js';
 import type { RemoteIntentDesk } from '../validation/remote/intent.js';
 import type { ObstacleDesk } from '../obstacles/desk.js';
 import type { PoolDesk } from '../pool/poolDesk.js';
+import type { CloneUpkeepDesk } from '../git/cloneUpkeep.js';
 
 // → docs/spec/04-harness-cycle.md
 
@@ -69,6 +70,7 @@ export interface PulseDeps {
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   ejections?: { sweepExpiries(): unknown[] };
   burn?: SpendBurnDesk;
+  cloneUpkeep?: CloneUpkeepDesk;
   escalations?: { tidyDeadAgents(): unknown[]; tidySettledMerges(): unknown[] };
   appraisals?: AppraisalDesk;
   areaPaths?: AreaPathDirectory;
@@ -157,6 +159,7 @@ const ENTRIES = [
     { id: 'burn', readWorld: false, run: (d, at) => d.burn?.run({ agents: at.agents, tasks: at.tasks }) },
     { id: 'deadAgents', readWorld: false, run: (d) => d.escalations?.tidyDeadAgents() },
     { id: 'settledMerges', readWorld: false, run: (d) => d.escalations?.tidySettledMerges() },
+    { id: 'cloneUpkeep', readWorld: false, run: (d, at) => d.cloneUpkeep?.run({ agents: at.agents }) },
   ]),
   ...phase('afterVerdicts', [
     { id: 'appraisals', readWorld: true, run: (d, at) => d.appraisals?.announce(at.world) },

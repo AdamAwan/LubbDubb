@@ -1050,8 +1050,10 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
   the merge, reported the goal not reached, and the shortfall it wrote raised rule
   `work-item-back-to-pickup`'s "move it back" card on a ticket whose work had just landed. A failed
   fetch **fails open** — the checkout is cut from what the clone holds, and the failure is recorded
-  once per distinct message. Wired only with the real worktree manager; a test injects
-  `remoteFetch` to observe it.
+  once per distinct message. So does a **slow** one: the executor waits for it at most
+  `CYCLE_FETCH_WAIT_MS` and then cuts the checkout from what the clone holds
+  ([below](#a-fetch-the-cycle-does-not-wait-for)). Wired only with the real worktree manager; a test
+  injects `remoteFetch` to observe it.
 - **The lease is untouched, which is the point.** Several read-only agents pinned to one directory is
   precisely the case the lease was written to refuse, and "none of them writes" is a property of a
   _prompt_, not of the runtime. So a read-only checkout takes a whole slot, leased under its key,
@@ -1624,8 +1626,11 @@ along with the task row it settles.
   overlapping fetches therefore make the second fail the whole fetch with `cannot lock ref … is at X
 but expected Y` — on a ref the first has already moved to the right place. The queue chains
   callers rather than sharing one in-flight fetch, so every caller still gets a fetch that started
-  after it asked; a failing fetch rejects its own caller only and the next in line still runs.
-- **`resolveCommit(repoRoot, ref)`** — resolves to a **SHA**, trying `refs/remotes/origin/<ref>`, then
+  after it asked; a failing fetch rejects its own caller only and the next in line still runs. A caller
+  arriving while a fetch is **queued and not yet started** joins that one rather than queueing a
+  second: it still starts after both asked, and a slow remote then costs one fetch running and one
+  waiting, never a chain of them.
+- **`resolveCommit(repoRoot, ref, opts?)`** — resolves to a **SHA**, trying `refs/remotes/origin/<ref>`, then
   `refs/heads/<ref>`, then `<ref>^{commit}`. **`origin/` wins over the local ref**: the harness's clone
   never checks the integration branch out, so its `refs/heads/main` is frozen at clone time while the
   remote-tracking ref moves. It returns a SHA rather than a ref name on purpose — handing
@@ -1714,3 +1719,106 @@ merely _the harness did not ask it to_.
 A probe that genuinely could not answer is routed through `errors.record` rather than swallowed, so
 a deployment reading `unknown` everywhere has something red to read
 ([18](18-observability.md)).
+
+#### A missing base is refused, never fetched for
+
+`WorktreeManager.startPoint` resolves a dispatch's base with `noLazyFetch` too. A worktree write may
+talk to a remote — checking a tree out on a `blob:none` clone fetches the blobs it needs — but asking
+_which commit to start from_ must not. On a partial clone a lazy fetch is
+`git -c fetch.negotiationAlgorithm=noop fetch origin --filter=blob:none --stdin`: noop negotiation
+tells the server nothing about what the clone has, so asking for one commit returns **its whole
+history** as a new pack. A SHA the clone does not hold is therefore a refusal naming it — a branch
+arrives with the next `fetchRemote`, and a bare commit id has to be reachable from a ref that has been
+fetched. `branchExists`, the setup probe's `commitFor` and the Build reading's
+`cat-file`/`rev-list`/`log` over an upstream SHA (`src/selfUpdate/buildStanding.ts`) carry the same
+flag for the same reason; the last was a lazy fetch of the upstream's entire history on every pulse
+that found the project behind, ahead of the real `git fetch` that follows it.
+
+### A fetch the cycle does not wait for
+
+A `fetchRemote` against a slow remote — or a large clone resolving a thin pack — can take minutes, and
+the two callers inside the cycle await it: the plan reconciler ([08](08-planning.md#git-fetch)) and
+the executor ahead of a read-only checkout. With the cycle sitting behind it,
+[the watchdog](04-harness-cycle.md#when-a-cycle-does-not-come-back) reports it and nothing dispatches.
+
+So both are wrapped in `boundedFetch` (`src/git/boundedFetch.ts`): the caller waits **at most
+`CYCLE_FETCH_WAIT_MS` (30 s)**, then carries on against what the clone already holds while the fetch
+finishes behind it. A failure inside the wait is the caller's, exactly as it was; one after it is
+recorded by the wrapper, once per distinct message, since the caller has moved on. The reading may be
+one fetch stale. That is the same posture as a fetch that failed — every caller already fails open on
+one — and a stale `origin/<default>` is a better reading than a fleet that dispatches nothing. While a
+fetch is running **past** its wait, a further call through the same wrapper returns at once rather
+than waiting another 30 s on a remote already known to be slow, so a cycle with several read-only
+dispatches pays the wait once, not once each.
+
+### A git killed mid-fetch
+
+`runGit`'s deadline, an abort, or an output overflow reaps the subtree
+([above](#the-deadline-reaps-the-subtree-and-settles-its-own-promise)). When the git it reaped was
+fetching — `fetchRemote`, a lazy fetch underneath a plumbing read, a worktree checkout pulling blobs —
+its `index-pack` dies too, and leaves its work in `objects/pack`: a `tmp_pack_*` the size of whatever
+it had received, and the `.keep` it writes while the refs are not yet updated
+(`fetch-pack <pid> on <host>`). Nothing in git ever removes either, and a stale `.keep` is worse than
+the disk it costs: **a kept pack is never repacked**.
+
+So the reap clears up behind itself — unless the reaped git ran with `noLazyFetch`, which cannot have
+fetched anything and so has nothing to clear. `afterReap` finds the clone's common git directory from the
+`cwd` by reading `.git` / `commondir` (`commonGitDir`, `src/git/packStore.ts` — no git, so a wedged
+repository cannot wedge the cleanup), waits five seconds for the killed processes to go, and then
+`clearOrphans` removes:
+
+- a **`.keep` naming a process on this host that is no longer alive.** A `.keep` whose content is not
+  git's `<who> <pid> on <host>` is somebody's deliberate decision and is left alone; so is one naming a
+  live pid, or another host.
+- a **`tmp_pack_*` / `tmp_idx_*` / `tmp_rev_*` written since the reaped git started and not growing**
+  across those five seconds — the killed fetch's own — and any nothing has written to for an hour, which is a
+  git that died without the harness seeing it. A file still growing is a live fetch in another process
+  (an agent's own git shares the object store) and is never touched.
+
+Each reap is kept in a short in-process list per git directory (`takeReaps`, the last 50 each, so
+reaps in another repository cannot push this clone's out), and the clone upkeep pass
+([below](#the-clones-object-store)) records it through `errors.record` on its next pulse, naming the
+command, why it was killed and what was removed. `runGit` itself holds no `ErrorRecorder`; the list is
+how a reap anywhere in the process reaches the error log of the system whose clone it was.
+
+### The clone's object store
+
+**The harness owns the project clone's housekeeping, and does not trust `git maintenance --auto` with
+it.** `git fetch` runs `maintenance run --auto` behind itself, and on the deployment this was written
+for it exited in a tenth of a second without repacking a store of ~7,200 packs and 234 GB for a
+history of 1.4 GB. Part of it is that `gc --auto` does not count a pack with a `.keep` against
+`gc.autoPackLimit`, so the orphaned `.keep` files [above](#a-git-killed-mid-fetch) hide packs from it;
+the rest is not understood, and the harness does not depend on finding out.
+
+`CloneUpkeepDesk` (`src/git/cloneUpkeep.ts`) is the pulse pass `cloneUpkeep`, in the `afterAgents`
+phase because what it needs to know is whether the fleet is idle. Its git is behind `CloneKeeper`
+(`GitCloneKeeper` for real), and each pass:
+
+1. **Records the reaps** that landed against this clone since the last pass ([above](#a-git-killed-mid-fetch)).
+2. **At most once a minute, reads the pack store** — off the filesystem (`readPackStore`), not
+   `git count-objects`, so a reading costs a directory listing: pack count, bytes (packs and tmp files),
+   and how many packs carry a `.promisor` marker. Before reading it sweeps orphans the same way a reap
+   does, without the `since` window — a dead fetch's `.keep` and an hour-stale tmp file — and records
+   what it removed.
+3. **Detects a partial clone** from the `.promisor` packs, and only then asks git for the
+   `remote.*.partialclonefilter`. It is recorded once per boot and drawn as the setup `clone` check
+   ([26](26-setup.md#the-checks)).
+4. **Repacks when the fleet is idle above the limit**: more than `CloneKeeper.packLimit` packs (100 —
+   twice git's own `gc.autoPackLimit`), no agent `starting` or `running`, and an hour since the last
+   attempt. `git repack -A -d -q` — `-A` rather than `-a`, so an object only an old pack held is
+   loosened for `gc`'s expiry to judge instead of deleted on the spot — with a two-hour deadline, started **without awaiting it** so the
+   cycle never waits on a repack; the next one is not started while it runs. A failure is recorded and
+   retried an hour later. The result — when, packs before and after, and why it failed — rides on the
+   standing.
+
+`standing()` is what the setup reading reads; it is `null` until the first read, which draws no row.
+The desk is wired only when none of `worktrees`, `gitObserver`, `backend` or `streamSpawner` is
+injected — a test that fakes git or the agent transport gets no housekeeping against the checkout it
+happens to run in — and a test injects `cloneKeeper` to
+drive it against a throwaway repository (`test/cloneUpkeep.test.ts`).
+
+**A partial clone is supported, and warned about.** Every path the harness controls is safe on one —
+read-only probes and base resolution carry `noLazyFetch`, and a reaped fetch is cleaned up — but an
+agent's own git in its worktree is not the harness's to flag, and a blob fetched lazily for a
+checkout is a new pack every time. So the setup check says what it costs and offers the conversion to
+a full clone, rather than refusing to run on one.

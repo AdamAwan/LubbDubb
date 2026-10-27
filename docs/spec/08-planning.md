@@ -1430,7 +1430,9 @@ It returns immediately when planning is disabled (including for a stale database
 fetch-free by design, so refreshing the remote is the caller's half of the split. Tests injecting
 `FakeGitObserver` via `buildSystem`'s `gitObserver` option get no fetch at all. A fetch failure is
 recorded **once per distinct message**, so a repo with no `origin` does not fill the Errors panel with
-the same line every pulse.
+the same line every pulse. The pass waits for it **at most `CYCLE_FETCH_WAIT_MS`** and then reconciles
+against what the clone already holds, leaving the fetch to finish behind the cycle
+([09](09-execution.md#a-fetch-the-cycle-does-not-wait-for)).
 
 ### The folds
 

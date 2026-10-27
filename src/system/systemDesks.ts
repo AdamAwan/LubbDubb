@@ -6,6 +6,7 @@ import { harnessBuild, harnessVersion } from '../pool/harnessVersion.js';
 import { ticketFiler } from '../tickets/filing.js';
 import { ghCliUpstreamIssues } from '../tickets/upstream.js';
 import { fetchRemote } from '../git/gitCli.js';
+import { boundedFetch, CYCLE_FETCH_WAIT_MS } from '../git/boundedFetch.js';
 import { PlanReconciler } from '../plans/planReconciler.js';
 import { AppraisalDesk } from '../intake/appraisalDesk.js';
 import { TicketSweep } from '../tickets/sweep.js';
@@ -66,7 +67,11 @@ export function buildIntakeDesks(config: Config, opts: BuildOptions, base: Found
     planning: config.planning,
     defaultBranch: config.defaultBranch,
     prRefStyle: prRefStyle(config.integrations.sourceControl),
-    fetch: opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot),
+    fetch: boundedFetch(opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot), {
+      waitMs: CYCLE_FETCH_WAIT_MS,
+      errors,
+      what: 'Plan reconciliation',
+    }),
     errors,
   });
 

@@ -21,6 +21,7 @@ export function register(app: FastifyInstance, { system, hub, setup }: RouteCont
       configFile: system.configFile,
       pending: system.liveConfig.pending(),
       prompts: system.prompts,
+      clone: system.cloneUpkeep?.standing(),
     })) satisfies SetupPayload;
     const changed = JSON.stringify(reading.checks) !== JSON.stringify(setup.latest?.checks ?? null);
     setup.latest = reading;

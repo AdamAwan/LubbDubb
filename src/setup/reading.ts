@@ -4,6 +4,7 @@ import type { Config } from '../config/config.js';
 import { configField, suggestedValue } from '../config/configFields.js';
 import type { ConfigChange } from '../config/configApply.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
+import type { CloneStanding } from '../git/cloneUpkeep.js';
 import { RETIRED_TOOL_NAMES } from '../mcp/names.js';
 import type { Store } from '../store/store.js';
 import { isWatched, watchLabelFor } from '../watchLabels.js';
@@ -58,6 +59,8 @@ export async function buildSetupReading(deps: {
   configFile: string;
   pending: readonly ConfigChange[];
   prompts: PromptTemplates;
+  /** The pulse's last reading of the project clone; absent where nothing reads it. */
+  clone?: CloneStanding | null;
 }): Promise<SetupReading> {
   const { config, store, probes, configFile, pending, prompts } = deps;
   const configFileExists = existsSync(configFile);
@@ -75,6 +78,7 @@ export async function buildSetupReading(deps: {
     await agentCheck(config, probes),
     billingCheck(probes),
     ...retiredToolChecks(prompts),
+    ...(deps.clone === undefined ? [] : [cloneCheck(config, deps.clone)]),
   ]) {
     const waiting = awaitingRestart(check, pending);
     checks.push(waiting ?? check);
@@ -134,6 +138,51 @@ function describeChanges(changes: readonly ConfigChange[]): string {
   const shown = changes.slice(0, 3).map((change) => `${change.path} = ${JSON.stringify(change.to)}`);
   const rest = changes.length - shown.length;
   return rest > 0 ? `${shown.join(', ')} and ${rest} more` : shown.join(', ');
+}
+
+function cloneCheck(config: Config, clone: CloneStanding | null): SetupCheck {
+  const base = { id: 'clone', label: 'Project clone' } as const;
+  if (clone === null) return { ...base, verdict: 'unknown', detail: 'the pack store has not been read yet' };
+  const size = `${clone.packs} pack${clone.packs === 1 ? '' : 's'}, ${gigabytes(clone.bytes)}`;
+  if (clone.partial !== null) {
+    const root = JSON.stringify(config.repoRoot);
+    return {
+      ...base,
+      verdict: 'warn',
+      detail:
+        `${config.repoRoot} is a partial clone (${clone.partial.filter ?? 'promisor remote'}) — ${size}. ` +
+        'Any git that touches an object it lacks fetches it on demand, and asking for a commit that way downloads its whole history as a new pack.',
+      remedy: 'Convert it to a full clone: drop the filter and refetch everything once, then repack.',
+      fix: {
+        kind: 'shell',
+        label: 'Copy',
+        command:
+          `git -C ${root} config --unset-all remote.origin.partialclonefilter && ` +
+          `git -C ${root} config remote.origin.promisor false && ` +
+          `git -C ${root} config --unset extensions.partialclone && ` +
+          `git -C ${root} fetch --refetch origin && git -C ${root} gc --prune=now`,
+        why: 'It downloads the full history once, and runs as long as a fresh clone; run it with the fleet paused.',
+      },
+    };
+  }
+  if (clone.packs > clone.packLimit && !clone.repacking)
+    return {
+      ...base,
+      verdict: 'warn',
+      detail:
+        clone.repack === null
+          ? `${size}, above the ${clone.packLimit}-pack limit; the repack waits for a moment with no agent running.`
+          : clone.repack.ok
+            ? `${size}, still above the ${clone.packLimit}-pack limit after the last repack — packs with a .keep are not repacked.`
+            : `${size}, and the last repack failed: ${clone.repack.detail ?? 'no reason given'}.`,
+      remedy:
+        'The harness repacks hourly while no agent is running. A stale .keep or a full disk is the usual cause of a store that stays large.',
+    };
+  return { ...base, verdict: 'ok', detail: size };
+}
+
+function gigabytes(bytes: number): string {
+  return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`;
 }
 
 function pointedCheck(config: Config, onMock: boolean, fileExists: boolean, install: string | null): SetupCheck {

@@ -89,7 +89,7 @@ export async function readBuildStanding(opts: {
   const current = { head, upstream, behind: 0, ahead: 0, commits: [], dirty, branch, checkedAt: at, unavailable: null };
   if (upstream === head) return current;
 
-  const held = await gitOrNull(root, ['cat-file', '-e', `${upstream}^{commit}`]);
+  const held = await gitOrNull(root, ['cat-file', '-e', `${upstream}^{commit}`], READ_ONLY);
   if (held === null) {
     try {
       await runGit(root, ['fetch', '--quiet', opts.remote, opts.branch]);
@@ -98,17 +98,16 @@ export async function readBuildStanding(opts: {
     }
   }
 
-  const counts = await gitOrNull(root, ['rev-list', '--left-right', '--count', `${head}...${upstream}`]);
+  const counts = await gitOrNull(root, ['rev-list', '--left-right', '--count', `${head}...${upstream}`], READ_ONLY);
   const [ahead, behind] = (counts ?? '').trim().split(/\s+/).map(Number);
   if (!Number.isFinite(ahead) || !Number.isFinite(behind))
     return { ...current, unavailable: 'could not count the commits between this build and upstream' };
 
-  const log = await gitOrNull(root, [
-    'log',
-    `--max-count=${MAX_COMMITS}`,
-    '--format=%h%x1f%aN%x1f%aI%x1f%s',
-    `${head}..${upstream}`,
-  ]);
+  const log = await gitOrNull(
+    root,
+    ['log', `--max-count=${MAX_COMMITS}`, '--format=%h%x1f%aN%x1f%aI%x1f%s', `${head}..${upstream}`],
+    READ_ONLY,
+  );
   const commits = (log ?? '')
     .split('\n')
     .filter((line) => line.length > 0)
@@ -133,9 +132,13 @@ export async function pullFastForward(opts: {
   }
 }
 
-async function gitOrNull(root: string, args: string[]): Promise<string | null> {
+// An upstream SHA this checkout lacks is asked about, never fetched: on a partial clone a lazy fetch
+// of one commit is its whole history. The fetch below is the one that may bring it.
+const READ_ONLY = { noLazyFetch: true } as const;
+
+async function gitOrNull(root: string, args: string[], opts: { noLazyFetch?: boolean } = {}): Promise<string | null> {
   try {
-    const { stdout } = await runGit(root, args);
+    const { stdout } = await runGit(root, args, opts);
     return stdout.trim();
   } catch {
     return null;
