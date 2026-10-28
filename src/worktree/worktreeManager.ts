@@ -497,10 +497,13 @@ export class WorktreeManager implements Worktrees {
       const { stdout } = await this.git(['rev-parse', 'HEAD']);
       return stdout.trim();
     }
-    const startPoint = await resolveCommit(this.repoRoot, base);
+    // A base the clone does not hold is refused, never fetched for: on a partial clone the lazy
+    // fetch of one commit is its whole history. → docs/spec/09-execution.md#a-missing-base-is-refused
+    const startPoint = await resolveCommit(this.repoRoot, base, { noLazyFetch: true });
     if (!startPoint)
       throw new Error(
-        `Cannot prepare a worktree for ${name}: base '${base}' resolves to no commit in ${this.repoRoot}.`,
+        `Cannot prepare a worktree for ${name}: base '${base}' resolves to no commit this clone holds in ${this.repoRoot}. ` +
+          'A branch arrives with the next fetch; a bare commit id must be reachable from a fetched ref.',
       );
     return startPoint;
   }
@@ -566,7 +569,7 @@ export class WorktreeManager implements Worktrees {
 
   private async branchExists(branch: string): Promise<boolean> {
     try {
-      await this.git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]);
+      await runGit(this.repoRoot, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { noLazyFetch: true });
       return true;
     } catch {
       return false;

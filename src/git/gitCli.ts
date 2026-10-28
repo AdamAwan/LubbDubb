@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { killProcessTree } from '../agents/processTree.js';
+import { clearOrphans, commonGitDir, type OrphanSweep } from './packStore.js';
 import { runSerial } from './serialQueue.js';
 
 // → docs/spec/09-execution.md
@@ -18,6 +19,7 @@ const SLOW_SUBCOMMANDS = new Set([
   'gc',
   'pull',
   'push',
+  'repack',
   'reset',
   'stash',
   'submodule',
@@ -44,6 +46,7 @@ export async function runGit(
 ): Promise<{ stdout: string; stderr: string }> {
   const timeout = opts.timeoutMs ?? timeoutFor(args);
   const env = opts.noLazyFetch === true ? { ...process.env, GIT_NO_LAZY_FETCH: '1' } : process.env;
+  const startedAt = Date.now();
   return await new Promise((resolve, reject) => {
     let settled = false;
     const child = spawn('git', args, {
@@ -71,6 +74,7 @@ export async function runGit(
       if (reap && child.pid !== undefined) {
         killProcessTree(child.pid);
         child.kill('SIGKILL');
+        if (opts.noLazyFetch !== true) afterReap(repoRoot, args, startedAt, fail?.message ?? 'reaped');
       }
       if (fail === null) {
         resolve({ stdout: text(out), stderr: text(errOut) });
@@ -133,10 +137,48 @@ function firstLines(said: string): string {
   return said.split('\n').slice(0, 3).join('\n');
 }
 
+export interface GitReap {
+  gitDir: string;
+  command: string;
+  reason: string;
+  at: string;
+  swept: OrphanSweep;
+}
+
+const REAP_SETTLE_MS = 5_000;
+const REAPS_KEPT = 50;
+const reaps = new Map<string, GitReap[]>();
+
+// A reaped git's own `index-pack` dies with it, leaving its `.keep` and `tmp_pack_*` behind, and a
+// stale `.keep` stops that pack ever being repacked. → docs/spec/09-execution.md#a-git-killed-mid-fetch
+function afterReap(cwd: string, args: string[], since: number, reason: string): void {
+  const gitDir = commonGitDir(cwd);
+  if (gitDir === null) return;
+  void clearOrphans(gitDir, { since, settleMs: REAP_SETTLE_MS }).then((swept) => {
+    const mine = reaps.get(gitDir) ?? [];
+    mine.push({ gitDir, command: `git ${args.join(' ')}`, reason, at: new Date().toISOString(), swept });
+    reaps.set(gitDir, mine.slice(-REAPS_KEPT));
+  });
+}
+
+/** The reaps recorded against `gitDir` since the last call, oldest first; each is handed out once. */
+export function takeReaps(gitDir: string): GitReap[] {
+  const mine = reaps.get(gitDir) ?? [];
+  reaps.delete(gitDir);
+  return mine;
+}
+
+const queuedFetches = new Map<string, Promise<void>>();
+
 export function fetchRemote(repoRoot: string): Promise<void> {
-  return runSerial(`fetch:${repoRoot}`, async () => {
+  const queued = queuedFetches.get(repoRoot);
+  if (queued !== undefined) return queued;
+  const next = runSerial(`fetch:${repoRoot}`, async () => {
+    if (queuedFetches.get(repoRoot) === next) queuedFetches.delete(repoRoot);
     await runGit(repoRoot, ['fetch', '--prune', 'origin']);
   });
+  queuedFetches.set(repoRoot, next);
+  return next;
 }
 
 export async function resolveCommit(repoRoot: string, ref: string, opts: GitRunOptions = {}): Promise<string | null> {

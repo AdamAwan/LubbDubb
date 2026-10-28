@@ -14,6 +14,7 @@ import { EjectionDesk } from '../ejection/desk.js';
 import { ActionExecutor } from '../executor/actionExecutor.js';
 import { readOnlyFetch } from '../executor/readOnlyFetch.js';
 import { fetchRemote } from '../git/gitCli.js';
+import { boundedFetch, CYCLE_FETCH_WAIT_MS } from '../git/boundedFetch.js';
 import { ReadyingBoard } from '../executor/readying.js';
 import { RuleDispatcher } from '../dispatcher/ruleDispatcher.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
@@ -152,7 +153,14 @@ export function buildFleet(
     agentPermissionMode: config.agentPermissionMode,
     deskRoot: config.deskRoot,
     defaultBranch: config.defaultBranch,
-    fetch: readOnlyFetch(opts.remoteFetch ?? (opts.worktrees ? undefined : () => fetchRemote(config.repoRoot)), errors),
+    fetch: readOnlyFetch(
+      boundedFetch(opts.remoteFetch ?? (opts.worktrees ? undefined : () => fetchRemote(config.repoRoot)), {
+        waitMs: CYCLE_FETCH_WAIT_MS,
+        errors,
+        what: 'Read-only checkout',
+      }),
+      errors,
+    ),
     runtime: runtimeControl,
     errors,
     autoSendReplies: () => config.sendPrRepliesWithoutApproval,

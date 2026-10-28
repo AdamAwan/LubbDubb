@@ -13,6 +13,7 @@ import type { CiEvidenceReader } from '../ci/ciEvidence.js';
 import { NodePtyBackend, type PtyBackend } from '../pty/backend.js';
 import { defaultPoolSize, WorktreeManager, type Worktrees } from '../worktree/worktreeManager.js';
 import { GitCliObserver, type GitObserver } from '../git/gitObserver.js';
+import { CloneUpkeepDesk, GitCloneKeeper, type CloneKeeper } from '../git/cloneUpkeep.js';
 import { AreaPathDirectory } from '../intake/areaPaths.js';
 import { AgentManager } from '../agents/agentManager.js';
 import { buildClaudeStreamArgs, buildInitialMessage, buildResumeMessage } from '../agents/agentProtocol.js';
@@ -71,6 +72,8 @@ export interface BuildOptions {
   portLister?: PortLister;
   worktrees?: Worktrees;
   remoteFetch?: () => Promise<void>;
+  /** The project clone's housekeeping; real only when no git or agent-transport fake is injected. */
+  cloneKeeper?: CloneKeeper;
   environmentProber?: EnvironmentProber;
   environmentHealthProber?: EnvironmentHealthProber;
   appErrorReader?: AppErrorReader;
@@ -181,6 +184,11 @@ export function buildPluginDesk(config: Config, opts: BuildOptions, errors: Erro
 
 export type Foundation = ReturnType<typeof buildFoundation>;
 
+// A test faking any of git or the agent transport gets no housekeeping on the checkout it runs in.
+function realClone(opts: BuildOptions): boolean {
+  return [opts.worktrees, opts.gitObserver, opts.backend, opts.streamSpawner].every((o) => o === undefined);
+}
+
 export function buildFoundation(config: Config, opts: BuildOptions) {
   const store = new Store(config.dbPath);
   store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
@@ -216,6 +224,8 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
       errors,
     );
   const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot, errors);
+  const keeper = opts.cloneKeeper ?? (realClone(opts) ? new GitCloneKeeper(config.repoRoot) : undefined);
+  const cloneUpkeep = keeper === undefined ? undefined : new CloneUpkeepDesk({ keeper, errors });
   return {
     store,
     now,
@@ -228,6 +238,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     runtimeControl,
     worktrees,
     gitObserver,
+    cloneUpkeep,
     watchLabel: watchLabelFor(config.labelPrefix),
   };
 }

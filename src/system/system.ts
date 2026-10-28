@@ -128,6 +128,8 @@ export interface System {
   filing: TicketFiler;
   upstream: UpstreamIssues;
   updates: UpdateDesk;
+  /** The project clone's pack store, read and repacked by the pulse; absent when a test fakes git. */
+  cloneUpkeep?: Foundation['cloneUpkeep'];
   runtimeControl: RuntimeControl;
   pets: PetKeeper;
   /**
@@ -225,13 +227,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp: channels.mcp,
     desktop: channels.desktop,
     plugin: buildPluginDesk(config, opts, base.errors),
-    worktrees: base.worktrees,
+    ...cloneParts(base),
     errors: base.errors,
   };
   late.bind(
     lateParts({ fleet, envs, bench, harness, local, prAssign: intake.prAssign, asks: () => askSnapshot(system) }),
   );
   return system;
+}
+
+function cloneParts({ worktrees, cloneUpkeep }: Foundation): Pick<System, 'worktrees' | 'cloneUpkeep'> {
+  return { worktrees, cloneUpkeep };
 }
 
 interface HarnessPhases {
@@ -332,6 +338,7 @@ function buildHarness(
     validationAsks: bench.validationAsks,
     validationReady: bench.validationReady,
     burn: bench.burn,
+    cloneUpkeep: base.cloneUpkeep,
     runway: bench.runway,
     issuePickup: fleet.issuePickup,
     branchReaps: intake.branchReaps,

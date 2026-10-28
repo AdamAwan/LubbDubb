@@ -74,7 +74,9 @@ export class RealSetupProbes implements SetupProbes {
   async commitFor(repoRoot: string, ref: string): Promise<string | null> {
     for (const candidate of [`refs/remotes/origin/${ref}`, `refs/heads/${ref}`]) {
       try {
-        const { stdout } = await runGit(repoRoot, ['rev-parse', '--verify', '--quiet', candidate]);
+        const { stdout } = await runGit(repoRoot, ['rev-parse', '--verify', '--quiet', candidate], {
+          noLazyFetch: true,
+        });
         if (stdout.trim()) return stdout.trim();
       } catch {
         /* names nothing — try the next */
