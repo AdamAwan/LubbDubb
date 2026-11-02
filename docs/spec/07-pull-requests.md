@@ -743,6 +743,7 @@ Two things follow, and both are load-bearing:
   failure this exists to remove, one surface along — the cockpit would show a described part and the
   reviewer would meet a body with nothing above the footer. The stamp (`pr_descriptions.pushed_at`)
   is written **after** the send, so a push that throws is retried on the next pulse rather than lost.
+- **A closed pull request is owed nothing.** See [below](#a-closed-pull-request-is-owed-nothing).
 - **The body is recomposed, never patched.** `open_pr` records the footer it wrote in
   `pr_description_bodies`, and a description is put in front of _that_, not in front of whatever the
   body currently says. The body _is_ read back, but only for the description above the footer
@@ -754,6 +755,31 @@ Two things follow, and both are load-bearing:
   prose above it — and that takes back the only thing the description was for, that a person and not
   the thing that made the change is answering for it. The mark goes with the half it labels: an empty
   description carries no mark, because a mark over nothing labels an author who wrote nothing.
+
+#### A closed pull request is owed nothing
+
+A version (or a handed-over draft) still unpushed when its pull request merges or is abandoned is
+owed to a review that is over — the same reasoning that drops the [ask](#the-rail-asks-for-it-and-nothing-waits-on-the-answer)
+with the pull request. Pushed anyway, the provider refuses it (Azure DevOps: `TF401181`), and since a
+failed push leaves `pushed_at` null, it was retried and logged as an error on every pulse, for ever.
+
+So `PrDescriptionDesk` reads the world, and where the world reports the pull request **not open** —
+listed in `closedPullRequests`, or listed with `merged` or a `state` other than `open` — it does not
+send, and **settles the row for good**: `pr_descriptions.pr_closed_at` /
+`pr_description_drafts.pr_closed_at`. It is settled rather than skipped because `closedPullRequests`
+only reaches back `closedPrWindowMs`: a skip would start the retries again once the pull request aged
+out of the list. It is never `pushed_at`, which means _the text reached the pull request_ and is what
+the [adoption](#a-description-written-on-the-provider-is-adopted) compares against.
+
+- **A pull request the world does not report either way is pushed**, and retried on failure, as
+  before. A stale or missing read never settles anything; only a positive _closed_ does. An open
+  listing outranks a closed one.
+- **A new version or draft is owed again.** The stamp is per row: a version written after a reopen is
+  a new row, and a rewritten draft clears its stamp, so either is pushed if the pull request is open
+  and settled again if it is not.
+- **A row stranded before this existed** on a pull request already past the window is not settled by
+  it — nothing reports that pull request closed — and keeps retrying until it is written over or the
+  row is cleared by hand.
 
 #### A description written on the provider is adopted
 

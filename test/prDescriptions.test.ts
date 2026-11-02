@@ -10,6 +10,7 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
 import { AUTOMATION_NOTE, HUMAN_NOTE, renderPrFooter } from '../src/pr/prFooter.js';
 import {
   composeDescribedBody,
@@ -620,6 +621,55 @@ test('the ask goes with the pull request, because a merged change is one nobody 
     await system.harness.runCycle('manual');
 
     assert.deepEqual(buildStateSnapshot(system).undescribedParts, [], 'the review it was owed to is over');
+  } finally {
+    system.store.close();
+  }
+});
+
+// → docs/spec/07-pull-requests.md#a-closed-pull-request-is-owed-nothing
+test('a description owed to a closed pull request is settled, never pushed, and stays settled past the closed window', async () => {
+  const system = systemWith();
+  try {
+    const sent: number[] = [];
+    const send = system.connector.setPullBody.bind(system.connector);
+    system.connector.setPullBody = (input) => {
+      sent.push(input.prNumber);
+      return send(input);
+    };
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', { summary: 'read the cursor back' });
+    assert.equal(opened.isError, false, opened.text);
+    await system.harness.runCycle('manual');
+
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:182:part:cursor',
+      text: 'A restart replays the whole feed.',
+      author: 'operator',
+    });
+    await system.harness.runCycle('manual');
+    assert.deepEqual(sent, [1], 'written while open, it reaches the pull request');
+
+    system.connector.inject({ kind: 'pr_closed', prNumber: 1, merged: true });
+    await system.harness.runCycle('manual');
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:182:part:cursor',
+      text: 'Written after the merge, for a review that is over.',
+      author: 'operator',
+    });
+    const errorsBefore = system.store.errors.listErrors().length;
+    await system.harness.runCycle('manual');
+
+    assert.deepEqual(sent, [1], 'nothing is sent onto a closed pull request');
+    assert.deepEqual(system.store.prDescriptions.unpushedDescriptions(), [], 'the row is settled');
+
+    new FakeWorldStore(system.store).mutate((world) => (world.closedPullRequests = []));
+    await system.harness.runCycle('manual');
+    await system.harness.runCycle('manual');
+
+    assert.deepEqual(sent, [1], 'aged out of the closed list, it is still owed nothing');
+    assert.equal(system.store.errors.listErrors().length, errorsBefore, 'and nothing is recorded as failing');
   } finally {
     system.store.close();
   }

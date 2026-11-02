@@ -27,6 +27,10 @@ export const PR_DESCRIPTION_COLUMNS: ColumnMigrations = {
     pushed_at: 'TEXT',
     dismissed_at: 'TEXT',
     written_via: "TEXT NOT NULL DEFAULT 'cockpit'",
+    pr_closed_at: 'TEXT',
+  },
+  pr_description_drafts: {
+    pr_closed_at: 'TEXT',
   },
 };
 
@@ -369,7 +373,7 @@ export class PrDescriptionStore {
         `SELECT d.id AS id, b.pr_number AS pr_number, d.text AS text, b.tail AS tail
            FROM pr_descriptions d
            JOIN pr_description_bodies b ON b.origin_ref = d.origin_ref
-          WHERE d.pushed_at IS NULL
+          WHERE d.pushed_at IS NULL AND d.pr_closed_at IS NULL
             AND d.version = (SELECT MAX(version) FROM pr_descriptions x WHERE x.origin_ref = d.origin_ref)
           ORDER BY d.authored_at ASC`,
       )
@@ -417,7 +421,7 @@ export class PrDescriptionStore {
         `INSERT INTO pr_description_drafts (origin_ref, pr_number, text, written_at)
          VALUES (@originRef, @prNumber, @text, @writtenAt)
          ON CONFLICT(origin_ref) DO UPDATE SET pr_number=excluded.pr_number, text=excluded.text,
-           written_at=excluded.written_at, pushed_at=NULL`,
+           written_at=excluded.written_at, pushed_at=NULL, pr_closed_at=NULL`,
       )
       .run({ ...input, writtenAt: this.ctx.now() });
   }
@@ -483,7 +487,7 @@ export class PrDescriptionStore {
         `SELECT h.origin_ref AS origin_ref, b.pr_number AS pr_number, h.text AS text, b.tail AS tail
            FROM pr_description_drafts h
            JOIN pr_description_bodies b ON b.origin_ref = h.origin_ref
-          WHERE h.handed_at IS NOT NULL AND h.text IS NOT NULL AND h.pushed_at IS NULL
+          WHERE h.handed_at IS NOT NULL AND h.text IS NOT NULL AND h.pushed_at IS NULL AND h.pr_closed_at IS NULL
             AND NOT EXISTS (SELECT 1 FROM pr_descriptions d WHERE d.origin_ref = h.origin_ref)
           ORDER BY h.handed_at ASC`,
       )
@@ -499,6 +503,21 @@ export class PrDescriptionStore {
     this.ctx
       .prep(`UPDATE pr_description_drafts SET pushed_at=@pushedAt WHERE origin_ref=@originRef`)
       .run({ originRef, pushedAt: this.ctx.now() });
+  }
+
+  /**
+   * Settles a version owed to a pull request that closed before it got there. Not
+   * `pushed_at`: that means the text reached the pull request, and it never did.
+   * → docs/spec/07-pull-requests.md#a-closed-pull-request-is-owed-nothing
+   */
+  markPrClosed(id: string): void {
+    this.ctx.prep(`UPDATE pr_descriptions SET pr_closed_at=@at WHERE id=@id`).run({ id, at: this.ctx.now() });
+  }
+
+  markDraftPrClosed(originRef: string): void {
+    this.ctx
+      .prep(`UPDATE pr_description_drafts SET pr_closed_at=@at WHERE origin_ref=@originRef`)
+      .run({ originRef, at: this.ctx.now() });
   }
 
   /** Records that a version reached its pull request. */
