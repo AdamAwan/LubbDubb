@@ -1,6 +1,8 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
+import type { WorldSnapshot } from '../types.js';
+import { prState } from './prHealth.js';
 
 // → docs/spec/07-pull-requests.md#the-operator-writes-the-description
 
@@ -25,9 +27,14 @@ interface PrDescriptionDeskDeps {
 export class PrDescriptionDesk {
   constructor(private readonly deps: PrDescriptionDeskDeps) {}
 
-  async run(): Promise<void> {
+  async run(world: WorldSnapshot): Promise<void> {
     const { sink, store, errors } = this.deps;
+    const closed = closedPullRequests(world);
     for (const pending of store.prDescriptions.unpushedDescriptions()) {
+      if (closed.has(pending.prNumber)) {
+        store.prDescriptions.markPrClosed(pending.id);
+        continue;
+      }
       try {
         await sink.setPullBody({ prNumber: pending.prNumber, body: pending.body });
         store.prDescriptions.markPushed(pending.id);
@@ -39,6 +46,10 @@ export class PrDescriptionDesk {
       }
     }
     for (const pending of store.prDescriptions.unpushedDrafts()) {
+      if (closed.has(pending.prNumber)) {
+        store.prDescriptions.markDraftPrClosed(pending.originRef);
+        continue;
+      }
       try {
         await sink.setPullBody({ prNumber: pending.prNumber, body: pending.body });
         store.prDescriptions.markDraftPushed(pending.originRef);
@@ -50,4 +61,13 @@ export class PrDescriptionDesk {
       }
     }
   }
+}
+
+function closedPullRequests(world: WorldSnapshot): Set<number> {
+  const closed = new Set((world.closedPullRequests ?? []).map((pr) => pr.number));
+  for (const pr of world.pullRequests) {
+    if (prState(pr) !== 'open') closed.add(pr.number);
+    else closed.delete(pr.number);
+  }
+  return closed;
 }
