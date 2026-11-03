@@ -172,6 +172,8 @@ export interface CockpitActions {
   openGoalSection(section: string, open: boolean): void;
   /** Which pane of the goal page is open — a place, never a useState. Null hands it back to the lifecycle rule. */
   openGoalTab(tab: GoalTab | null): void;
+  /** Which kind and state of entry the Discussion tab draws — a place, never a useState. */
+  filterDiscussion(next: Partial<Pick<Place, 'discussionKind' | 'discussionState'>>): void;
   /** Which environment's validation sheet the goal page is showing — a place, never a useState. */
   openRemoteSheet(environment: string | null): void;
   ruleRemoteQuery(issueNumber: number, environment: string, rowId: string, accept: boolean): Promise<void>;

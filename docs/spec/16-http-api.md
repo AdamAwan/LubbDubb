@@ -1221,6 +1221,18 @@ link — which is the whole of what makes it a different instrument from `POST /
 `world:changed` and does **not** run a cycle: a pause only ever takes work away, so there is nothing
 for a cycle to pick up that the next pulse will not see.
 
+### `GET /api/discussions/:number`
+
+The Discussion tab's one read: a story's or feature's discussion file, parsed, with the related entries
+gathered. Returns a `DiscussionReading` — `{ enabled, number, kind, title, path, obsidianUrl, entries,
+related }`. **Mounted whatever `discussionsDir` says**: with it unset the answer is `enabled: false` and
+nothing else, which is how the tab knows to say how to turn the feature on, and an issue with no file
+yet is `enabled: true` with `path: null` and no entries — never a 404, because "nothing written yet" is
+an ordinary answer. `related` is the feature's standing decisions and open questions for a story, and
+each story's for a feature, leaving out a file with neither. It reads through `System.discussions`
+alone, so it writes nothing and a file it cannot read is recorded and answered as absent. A number that
+is not a positive integer is a 400. → [40](40-discussions.md#in-the-cockpit)
+
 ### `GET /api/retrospectives/:ref`
 
 One goal's write-up in full, by `issue:<n>` ref. Fetched when a reader opens it rather than shipped

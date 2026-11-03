@@ -41,6 +41,7 @@ import type { LocalValidationDesk } from '../../validation/local/desk.js';
 import type { LocalRunner } from '../../localRun/runner.js';
 import type { LocalRunWatch } from '../../localRun/watch.js';
 import type { StepCapabilities } from '../../validation/steps.js';
+import type { DiscussionFiles, DiscussionSubject } from '../../discussions/discussionFile.js';
 import { issueSubtreeNumber } from '../../issueOrigins.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
@@ -192,6 +193,11 @@ export interface McpToolDeps {
    * verdict can release the planner. → docs/spec/38-bug-investigation.md#the-label
    */
   investigateLabel?: (issueNumber: number) => Promise<void>;
+  /** Where `discussion_add` writes, and what a first write heads the file with. Absent is off. → docs/spec/40-discussions.md */
+  discussions?: {
+    files: Pick<DiscussionFiles, 'enabled' | 'add'>;
+    subject: (issueNumber: number) => DiscussionSubject;
+  };
   errors?: ErrorRecorder;
 }
 

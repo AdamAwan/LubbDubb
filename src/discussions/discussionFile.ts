@@ -133,6 +133,18 @@ export class DiscussionFiles {
     return ordered[0]!;
   }
 
+  /** The issue numbers that have a file. Throws on an unreadable folder; the caller records it. */
+  numbers(): number[] {
+    if (this.folder === null || !existsSync(this.folder)) return [];
+    const found = new Set(
+      readdirSync(this.folder, { withFileTypes: true })
+        .filter((d) => d.isFile() && d.name.endsWith('.md'))
+        .map((d) => Number(LEADING_NUMBER.exec(d.name)?.[1]))
+        .filter((n) => Number.isInteger(n) && n > 0),
+    );
+    return [...found].sort((a, b) => a - b);
+  }
+
   read(number: number): DiscussionDocument | null {
     if (this.folder === null) return null;
     try {
@@ -174,6 +186,17 @@ export class DiscussionFiles {
       const next = restateEntry(text, id, restated.state, restated.appended);
       if (next === null) return { ok: false, error: `^${id} could not be rewritten.` };
       return this.commit(path, next, id);
+    });
+  }
+
+  identify(number: number): { ok: true; path: string | null } | Refusal {
+    return this.write(number, 'name the entries of', () => {
+      const path = this.locate(number);
+      if (path === null) return { ok: true, path: null };
+      const text = readFileSync(path, 'utf8');
+      const named = this.withIds(text);
+      if (named !== text) this.replace(path, named);
+      return { ok: true, path };
     });
   }
 

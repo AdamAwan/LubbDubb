@@ -33,6 +33,7 @@ import { prDescribe } from './tools/prDescribe.js';
 import { descriptionReview } from './tools/descriptionReview.js';
 import { scratchAppend } from './tools/scratchAppend.js';
 import { scratchRead } from './tools/scratchRead.js';
+import { discussionAdd } from './tools/discussionAdd.js';
 import { validationAmend } from './tools/validationAmend.js';
 import { validationPlan } from './tools/validationPlan.js';
 import { validationReport } from './tools/validationReport.js';
@@ -64,6 +65,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   report_investigation: reportInvestigation,
   scratch_append: scratchAppend,
   scratch_read: scratchRead,
+  discussion_add: discussionAdd,
   retro_submit: retroSubmit,
   feature_summary: featureSummary,
   bot_pr_risk: botPrRisk,

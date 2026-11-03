@@ -8,6 +8,7 @@ import { Panel } from './panel.js';
 import { BareButton } from './button.js';
 import { DesktopLink } from './DesktopLink.js';
 import { featurePrompt } from '../cockpit/desktopLink.js';
+import { DiscussionPane } from './DiscussionPane.js';
 import { relAge } from './util.js';
 import { FeatureAccount, FeatureMarks } from './featureAccount.js';
 import { Bar, Brief, Reach, Standing, wantsYou } from './featureBrief.js';
@@ -150,12 +151,7 @@ export function FeatureCard({
   // an absent thing is absent, never an empty heading.
   const told = feature.sequence !== null || feature.briefing.delivered.length > 0;
   return (
-    <Panel
-      density="flush"
-      className={`cn-fb-card${holds.you.length > 0 && !rested ? ' cn-fb-wants' : ''}${page ? ' cn-fb-open' : ''}${
-        rested ? ' cn-fb-rested' : ''
-      }`}
-    >
+    <Panel density="flush" className={cardClass(holds.you.length > 0 && !rested, page, rested)}>
       <Brief
         hue={<i className={`cn-fb-hue f${feature.slot}`} aria-hidden="true" />}
         title={feature.title}
@@ -208,8 +204,15 @@ export function FeatureCard({
           </div>
         </div>
       )}
+      {page && <DiscussionPane number={feature.number} view={view} actions={actions} />}
     </Panel>
   );
+}
+
+function cardClass(wants: boolean, page: boolean, rested: boolean): string {
+  return ['cn-fb-card', wants && 'cn-fb-wants', page && 'cn-fb-open', rested && 'cn-fb-rested']
+    .filter(Boolean)
+    .join(' ');
 }
 
 function TalkAbout({ feature, folder }: { feature: number; folder: string }): JSX.Element | null {

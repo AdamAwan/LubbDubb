@@ -295,6 +295,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
       recorded.relations.push({ id, relatedId });
       if (script.relateThrows) throw new Error(script.relateThrows);
     },
+    async listWorkItemComments() {
+      return [];
+    },
     async createWorkItemComment(id, text) {
       recorded.comments.push({ id, commentId: null, text });
       return { id: 5000 + id };

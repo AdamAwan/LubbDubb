@@ -129,7 +129,15 @@ providers share one `FakeWorldStore` so their world stays coherent.
 `PrBaseCapable`, `PrAssignCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
 `WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `IssueCreateCapable`,
 `IssueCloseCapable`, `IssueImageCapable`, `IssueKeySearchCapable`, `IssueReopenCapable`,
-`CiEvidenceCapable`, `RefResolvable`, `TicketHistoryCapable`, and the fake-only `Injectable`.
+`CiEvidenceCapable`, `RefResolvable`, `TicketHistoryCapable`, `IssueCommentReadable`, and the fake-only `Injectable`.
+
+`IssueCommentReadable` is the one read among them: `listIssueComments(number, since)` answers an issue's
+comments created strictly after `since`, oldest first, for pulling them into a discussion file. It is
+`GitHubApi.listIssueComments` (REST, every page, `since` passed through as the lower bound) and
+`AzureDevOpsApi.listWorkItemComments` (every page, deleted comments dropped, `since` applied client-side;
+`src/integrations/azure/restWorkItemComments.ts` holds the three work-item comment calls). It reaches callers as
+`CompositeConnector.listIssueComments`, beside `canListIssueComments`.
+→ [40](40-discussions.md#pulling-tracker-comments-in)
 
 `PrAssignCapable` puts a person on a pull request: `addPullAssignee` on GitHub, `addPullReviewer`
 (by identity id, as an optional reviewer) on Azure. It reaches callers as `PrAssignSink`, a

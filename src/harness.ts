@@ -356,6 +356,7 @@ export class Harness extends EventEmitter {
         closedSittings: r.intake.closedSittings,
         goalCriteria: r.intake.criteria,
         judgeOwed: r.intake.judgeOwed,
+        discussion: r.intake.discussion,
       }),
     );
 

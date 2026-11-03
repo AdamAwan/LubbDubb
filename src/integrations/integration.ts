@@ -32,7 +32,7 @@ import type {
 import type { BodyFormat } from '../sink/signOff.js';
 import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
-import type { BotPrDetail, BotPullRequest, TrackerItem, WorldSnapshot } from '../types.js';
+import type { BotPrDetail, BotPullRequest, TrackerComment, TrackerItem, WorldSnapshot } from '../types.js';
 import type { ReadPlan } from '../world/readPlan.js';
 
 // → docs/spec/15-integrations.md
@@ -321,6 +321,15 @@ export interface IssueCommentCapable {
 
 export function isIssueCommentCapable(x: Integration): x is Integration & IssueCommentCapable {
   return typeof (x as Partial<IssueCommentCapable>).upsertIssueComment === 'function';
+}
+
+/** → docs/spec/40-discussions.md#pulling-tracker-comments-in */
+export interface IssueCommentReadable {
+  listIssueComments(number: number, since: string | null): Promise<TrackerComment[]>;
+}
+
+export function isIssueCommentReadable(x: Integration): x is Integration & IssueCommentReadable {
+  return typeof (x as Partial<IssueCommentReadable>).listIssueComments === 'function';
 }
 
 export interface Injectable {

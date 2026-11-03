@@ -24,6 +24,7 @@ import {
 } from './routes/artifacts.js';
 import { register as registerControl } from './routes/control.js';
 import { register as registerEjections } from './routes/ejections.js';
+import { register as registerDiscussions } from './routes/discussions.js';
 import { register as registerEscalations } from './routes/escalations.js';
 import { register as registerFeatures } from './routes/features.js';
 import { register as registerGoalCriteria } from './routes/goalCriteria.js';
@@ -73,6 +74,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerArtifacts,
   registerBotPrs,
   registerControl,
+  registerDiscussions,
   registerEjections,
   registerEscalations,
   registerFeatures,

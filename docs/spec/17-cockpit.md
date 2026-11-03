@@ -556,8 +556,9 @@ once.
 | `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                                                                            |
 | `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `pane`                               | which of the goal page's five panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                                                                                 |
+| `pane`                               | which of the goal page's panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                                                                                      |
 | `open`                               | the goal page's reference sections held open, as `record,sequence`                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `dkind` / `dstate`                   | the Discussion tab's filters — `note` / `idea` / `question` / `decision`, and `open` / `answered` / `accepted` / `parked` / `dropped`; every kind and every state are the absent values → [40](40-discussions.md#in-the-cockpit)                                                                                                                                                                                                                                                                        |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                                                                                                                                                                                                                                                                                                          |
@@ -1429,16 +1430,16 @@ goal nobody has planned and one held at a gate.
 So the cards are grouped behind **tabs**, declared once in `GOAL_TABS` (`web/src/view/goalPage.ts`)
 with `GOAL_TAB_OF` mapping each foldable section to the pane that holds it:
 
-| Pane         | id         | What is behind it                                                                                                                   | Carried by                                      |
-| ------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| **Ask**      | `ask`      | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind                                   | —                                               |
-| **Plan**     | `plan`     | the plan's waves, each part wearing the standing of the pull request that carries it                                                | —                                               |
-| **Validate** | `validate` | the check set, the local check plan, and the sheet an environment's own run answers rows of it from                                 | whichever declares `arrival.opens: 'validate'`  |
-| **Close**    | `close`    | the environments and the gate, the part/environment matrix, and the record — spend, the tail, this goal's subtree of the work graph | whichever declares `arrival.opens: 'close_out'` |
-| **Watch**    | `watch`    | the declared signals, and what the window this goal's arrival opened has read back                                                  | whichever declares a `watch` block              |
+| Pane           | id           | What is behind it                                                                                                                                                                   | Carried by                                      |
+| -------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| **Ask**        | `ask`        | the ask as it stood at pickup, what you have asked for since, the sequence this goal waits behind                                                                                   | —                                               |
+| **Discussion** | `discussion` | the story's discussion file read back, with its feature's standing decisions and open questions — drawn only where `discussionsDir` is set → [40](40-discussions.md#in-the-cockpit) | —                                               |
+| **Plan**       | `plan`       | the plan's waves, each part wearing the standing of the pull request that carries it                                                                                                | —                                               |
+| **Validate**   | `validate`   | the check set, the local check plan, and the sheet an environment's own run answers rows of it from                                                                                 | whichever declares `arrival.opens: 'validate'`  |
+| **Close**      | `close`      | the environments and the gate, the part/environment matrix, and the record — spend, the tail, this goal's subtree of the work graph                                                 | whichever declares `arrival.opens: 'close_out'` |
+| **Watch**      | `watch`      | the declared signals, and what the window this goal's arrival opened has read back                                                                                                  | whichever declares a `watch` block              |
 
-**The first two are the work, and the last three are obligations rather than places.** That is the
-whole of why the row is shaped this way, and it is the second shape it has had. The tabs were once
+**Ask and Plan are the work, and the last three are obligations rather than places.** That is the whole of why the row is shaped this way, and it is the second shape it has had. The tabs were once
 `Ask · Plan · Merged · Shipped · Done`, and three of those five described neither what was in them nor
 when they could be used:
 
@@ -1453,6 +1454,11 @@ when they could be used:
 - **`Done` could not be last.** A post-deploy watch opens on an arrival in production, which for most
   deployments happens _after_ the work is closed ([29](29-post-deploy-watch.md)). A tab called Done
   with a live tab after it is a contradiction; a tab called Done holding the signals is a lie.
+
+**Discussion is a place beside the work, not a stage.** It is never the pane the landing rule opens,
+qualified by no environment, and drawn only where `discussionsDir` is set — `goalPanes` leaves it out
+otherwise, as it leaves out `watch`, because a tab that could only ever say "off" is a stage the goal
+cannot reach.
 
 **An obligation tab names the environment that carries it, and the naming is derived from config.**
 An environment already declares what arriving there _means_, per environment and opt-in:
@@ -6208,6 +6214,11 @@ and the goal page stands.
 `web/src/cockpit/desktopLink.ts`), drawn by `FeatureCard` on its page. Like the goal's `ask`, it fills the composer and waits, because it starts a
 conversation rather than a job ([11](11-mcp-tools.md#talking-about-a-feature)).
 
+Under the detail, the page carries the Feature's **Discussion** — its own file, with the standing
+decisions and open questions of the stories under it — and, where `discussionsDir` is unset, a short note
+saying to set it. It carries a second deep link, `/lubbdubb:discuss <n> ` (`discussionPrompt`), beside the
+file's. → [40](40-discussions.md#in-the-cockpit)
+
 The detail is three columns from 1200px and one below: **its order, and what landed** (the story
 order when there is one, and what was delivered, in its authors' words — an accepted order is listed
 wave by wave with each story's title, what has already been delivered or settled dimmed rather than
@@ -8431,7 +8442,8 @@ and pins that no other `.tsx` builds one of these links.
 
 **`ready` is why the clause is a prop and not a constant.** Most commands are complete and send as
 they land; the two that start a **conversation** deliberately are not — the goal's fills the composer
-with `/lubbdubb:ask 284 ` so the cursor sits after the number, and the bar's with `/lubbdubb:fleet `. A title
+with `/lubbdubb:ask 284 ` so the cursor sits after the number, the bar's with `/lubbdubb:fleet `, and
+the Discussion tab's with `/lubbdubb:discuss 284 ` ([40](40-discussions.md#in-the-cockpit)). A title
 promising a send that never comes is worse than none. It is also the only thing left distinguishing
 those two from the rest, now that the label does not.
 

@@ -13,6 +13,7 @@ import type {
   AzTimelineRecord,
   AzWorkItem,
   AzAttachmentRef,
+  AzWorkItemComment,
   AzWorkItemCommentRef,
   AzWorkItemUpdate,
   AzureDevOpsApi,
@@ -38,6 +39,7 @@ import {
 } from './restShapes.js';
 import { chunkIds, headsRef, readFileAtCommit, readPullChanges, sameTag, tagWriteOp } from './restHelpers.js';
 import { isRelationAlreadyExists, pullReviewerUrl } from './restHelpers.js';
+import { RestWorkItemComments } from './restWorkItemComments.js';
 import { mergeStrategyFor } from './sourceControl.js';
 import { parseTags } from './workItems.js';
 import { workItemBodyField } from './workItemBody.js';
@@ -51,14 +53,13 @@ const POLICY_API_VERSION = '7.1-preview.1';
 
 const ZERO_OBJECT_ID = '0000000000000000000000000000000000000000';
 
-const WORK_ITEM_COMMENTS_API_VERSION = '7.1-preview.4';
-
 const AREA_DEPTH = 6;
 
 export class RestAzureDevOpsApi implements AzureDevOpsApi {
   private viewer: string | null = null;
   private viewerIdentity: string | null = null;
   private readonly http: AzureTransport;
+  private readonly comments: RestWorkItemComments;
   private projectId: string | null = null;
   private repositoryId: string | null = null;
 
@@ -72,6 +73,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     sleep: (ms: number) => Promise<void> = defaultSleep,
   ) {
     this.http = new AzureTransport(auth, fetchImpl, log, sleep);
+    this.comments = new RestWorkItemComments(this.http, this.projectUrl);
   }
 
   static create(
@@ -369,24 +371,16 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     await this.addRelation(id, { rel: 'AttachedFile', url, attributes: { comment } });
   }
 
-  async createWorkItemComment(id: number, text: string): Promise<AzWorkItemCommentRef> {
-    const data = await this.http.request<{ id?: number }>(
-      withApiVersion(`${this.projectUrl}/_apis/wit/workItems/${id}/comments`, {}, WORK_ITEM_COMMENTS_API_VERSION),
-      { method: 'POST', body: JSON.stringify({ text }) },
-    );
-    return { id: data.id ?? 0 };
+  listWorkItemComments(id: number): Promise<AzWorkItemComment[]> {
+    return this.comments.list(id);
   }
 
-  async updateWorkItemComment(id: number, commentId: number, text: string): Promise<AzWorkItemCommentRef> {
-    const data = await this.http.request<{ id?: number }>(
-      withApiVersion(
-        `${this.projectUrl}/_apis/wit/workItems/${id}/comments/${commentId}`,
-        {},
-        WORK_ITEM_COMMENTS_API_VERSION,
-      ),
-      { method: 'PATCH', body: JSON.stringify({ text }) },
-    );
-    return { id: data.id ?? commentId };
+  createWorkItemComment(id: number, text: string): Promise<AzWorkItemCommentRef> {
+    return this.comments.create(id, text);
+  }
+
+  updateWorkItemComment(id: number, commentId: number, text: string): Promise<AzWorkItemCommentRef> {
+    return this.comments.update(id, commentId, text);
   }
 
   async linkWorkItemToPull(id: number, pullRequestId: number): Promise<void> {

@@ -16,6 +16,7 @@ import {
 } from '../../plans/parts.js';
 import { budgetNote } from '../../pr/prSplit.js';
 import { goalCriteriaNote } from '../../criteria/note.js';
+import { questionHoldReason, type QuestionHold } from '../../discussions/questionHold.js';
 import type { Candidate, RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `plan-part`)
@@ -59,6 +60,7 @@ function planCandidates(
   const index = bySlug(parts);
   const inFlight = parts.filter((p) => s.activeOrigins.has(partOrigin(issueNumber, p.slug))).length;
   let room = s.planning.maxConcurrentPartsPerIssue - inFlight;
+  const questions = unapproved ? null : s.questionHold(issueNumber);
   const ready = parts
     .filter((p) => !partIsHuman(p))
     .filter((p) => p.status === 'ready' && !s.activeOrigins.has(partOrigin(issueNumber, p.slug)))
@@ -96,12 +98,12 @@ function planCandidates(
     const cooling = verdict.kind === 'cooldown';
     const capped = !cooling && room <= 0;
     if (!cooling && !capped) room -= 1;
-    const held = cooling ? 'cooldown' : capped ? 'capped' : undefined;
+    const held = cooling ? 'cooldown' : capped ? 'capped' : questions !== null ? 'questions' : undefined;
     candidates.push({
       depth,
       issueNumber,
       seq: part.seq,
-      candidate: partCandidate(s, plan, issue, part, parts, atoms, index, issueNumber, held),
+      candidate: partCandidate(s, plan, issue, part, parts, atoms, index, issueNumber, held, questions),
     });
   }
   return candidates;
@@ -116,7 +118,8 @@ function partCandidate(
   atoms: PlanAtom[],
   index: Map<string, PlanPart>,
   issueNumber: number,
-  held: 'cooldown' | 'capped' | 'unapproved' | undefined,
+  held: 'cooldown' | 'capped' | 'unapproved' | 'questions' | undefined,
+  questions: QuestionHold | null = null,
 ): Candidate {
   const origin = partOrigin(issueNumber, part.slug);
   const branch = part.branch ?? partBranch(issueNumber, part.slug);
@@ -132,7 +135,9 @@ function partCandidate(
       ? `${stacks} Held: issue #${issueNumber} is already at its ${s.planning.maxConcurrentPartsPerIssue}-part concurrency cap.`
       : held === 'unapproved'
         ? `${stacks} Held: the plan for issue #${issueNumber} is awaiting your approval — nothing is scheduled until you accept it.`
-        : stacks;
+        : held === 'questions' && questions !== null
+          ? `${stacks} ${questionHoldReason(questions)}`
+          : stacks;
   return {
     origin,
     rule: 'plan-part',
@@ -161,6 +166,7 @@ function partCandidate(
         }) +
         partDeclarationNote(part, atoms) +
         goalCriteriaNote(s.criteriaFor(issueNumber)) +
+        s.discussionNote(issueNumber) +
         budgetNote(s.planning.fileBudget) +
         partOutcomeNote(part) +
         s.watchDeclareNote +

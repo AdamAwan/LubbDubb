@@ -219,6 +219,7 @@ function harnessSection(
       canPlaceWorkItem: connector.canPlaceWorkItem(),
       featureBoard: featureBoardOn(connector),
       featureSummaries: featureSummariesOn(config, connector),
+      discussions: system.discussions.enabled,
       botPrs: config.botPrs.authors.length > 0,
       appErrors: config.environments.some((env) => env.errors !== undefined),
       areaPaths: placementCtx.areaTree === null ? [] : truncateAreaPaths(placementCtx.areaTree).paths,

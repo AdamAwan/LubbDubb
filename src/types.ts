@@ -2753,3 +2753,11 @@ export interface DiscussionDocument {
   frontMatter: DiscussionFrontMatter;
   entries: DiscussionEntry[];
 }
+
+/** One comment on a tracker item, as a provider lists it. `id` is the provider's own, as `upsertIssueComment` answers it. */
+export interface TrackerComment {
+  id: string;
+  author: string;
+  body: string;
+  createdAt: string;
+}

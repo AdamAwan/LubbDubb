@@ -33,6 +33,7 @@ import type { RemoteIntentDesk } from '../validation/remote/intent.js';
 import type { ObstacleDesk } from '../obstacles/desk.js';
 import type { PoolDesk } from '../pool/poolDesk.js';
 import type { CloneUpkeepDesk } from '../git/cloneUpkeep.js';
+import type { DiscussionPullDesk } from '../discussions/pullDesk.js';
 
 // → docs/spec/04-harness-cycle.md
 
@@ -67,6 +68,7 @@ export interface PulseDeps {
   clusters?: { run(): void };
   obstacles?: ObstacleDesk;
   pool?: PoolDesk;
+  discussionPulls?: DiscussionPullDesk;
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   ejections?: { sweepExpiries(): unknown[] };
   burn?: SpendBurnDesk;
@@ -148,6 +150,7 @@ const ENTRIES = [
       run: (d, at) => d.obstacles?.run({ previousWorld: at.previousWorld, world: at.world, readWorld: at.readWorld }),
     },
     { id: 'pool', readWorld: true, run: (d) => d.pool?.run() },
+    { id: 'discussionPulls', readWorld: true, run: (d, at) => d.discussionPulls?.run(at.world) },
   ]),
   ...phase('open', [
     { id: 'parks', readWorld: false, run: (d) => resumeExpiredParks(d) },

@@ -13,6 +13,7 @@ import {
   type PrReviewReading,
 } from '../../../review/prReview.js';
 import { readOnlyDispatch } from '../readOnlyDispatch.js';
+import { issueForPr } from '../../../pr/prIssue.js';
 import type { StageContext } from '../context.js';
 import type { PrConcern } from './concern.js';
 
@@ -46,7 +47,8 @@ export function reviewConcern(
           base: pr.baseBranch ?? s.defaultBranch,
         }) +
         publishNote(s.review.publish) +
-        charterNote(mode === null ? null : (s.reviewCharters.modes[mode] ?? null), modeCharterHeading(mode)),
+        charterNote(mode === null ? null : (s.reviewCharters.modes[mode] ?? null), modeCharterHeading(mode)) +
+        reviewDiscussion(s, pr),
       dispatchReason:
         `PR #${pr.number} has not been reviewed by the fleet and no agent is on it` +
         (mode === null ? '.' : ` (${mode}${route === null ? ', by default' : ''}).`),
@@ -55,6 +57,11 @@ export function reviewConcern(
       originSummary: `PR #${pr.number} on branch ${pr.branch} · awaiting the fleet's review`,
     },
   };
+}
+
+function reviewDiscussion(s: StageContext, pr: PullRequest): string {
+  const issue = issueForPr(pr, s.ctx.world.issues);
+  return issue === null ? '' : s.discussionNote(issue.number);
 }
 
 function modeProfile(s: StageContext, mode: string | null): string | undefined {

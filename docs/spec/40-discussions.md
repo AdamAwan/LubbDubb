@@ -2,10 +2,11 @@
 
 > **Partly built.** Built: `discussionsDir`, [the file](#the-file) — its format, the parser in
 > `src/discussions/parse.ts` and the one object every read and write goes through,
-> `src/discussions/discussionFile.ts`, reached as `System.discussions`. **Not yet built:** what agents
-> read, the fleet agent's tool, the hold, pulling tracker comments, the desktop tools and skill,
-> publishing and the cockpit tab — every path for those is still italic. Remove this marker as each
-> piece lands.
+> `src/discussions/discussionFile.ts`, reached as `System.discussions`; [what agents read](#what-agents-read),
+> [the fleet agent's tool](#what-fleet-agents-write) and [the hold](#an-open-question-holds-the-story);
+> [pulling tracker comments](#pulling-tracker-comments-in); [the desktop tools and the skill](#talking-it-through-in-claude)
+> and [publishing](#publishing); [the cockpit tab](#in-the-cockpit). **Not yet built:** `/lubbdubb:next` carrying a
+> held story's open questions as an ask ([below](#where-else-it-is-reached-from)). Remove this marker when it lands.
 
 A running record of the talk around a story or a feature — notes, ideas, decisions and open
 questions — kept as **Markdown files in a folder the operator chooses**. The operator works on it mainly by
@@ -146,6 +147,7 @@ write is a refusal — nothing touches the disk.
 | `read(n)`          | The parsed file, or **null** for off, no file, or a failure — which is recorded. Null is what every reader fails open on.                                          |
 | `add(subject, …)`  | Appends a note, idea, question or decision, creating the folder and the file (with `ref`, `kind`, `title` and, for a story, `parent`) on the first write.          |
 | `settle(n, id, …)` | Answers an open question; accepts, parks or drops an idea, with an optional line under it; supersedes a decision by appending a new one saying `Supersedes ^<id>`. |
+| `identify(n)`      | Adds a `^id` to every readable entry that lacks one and writes the file only if that changed it. Nothing else moves.                                               |
 | `setFrontMatter`   | Writes `published` and `pulled`.                                                                                                                                   |
 
 A write answers `{ok: true, entry, path}` or a refusal `{ok: false, error}` — a wrong kind, an unknown
@@ -178,16 +180,31 @@ _appended_ (never interpolated — see [05](05-dispatcher.md#prompt-templates)):
 Parked and dropped ideas are left out: they are history, and handing them over invites the agent to
 build them.
 
+`discussionSection` (`src/discussions/promptSection.ts`) renders it, as `StageContext.discussionNote(n)`, onto rules
+`issue-plan`, `plan-part` and `pr-review` (the story behind the pull request, by `issueForPr`). The feature is the
+world's `issue.parent`, else the file's own `parent` link. Each entry carries its date, author and `^id`; an
+unreadable heading is handed over as a note with the heading it could not read. The budget leaves room for the
+cut line itself, so the section stays under 6,000 characters. Nothing at all is appended with discussions off, no
+file, or nothing in it to hand over — open questions alone are not handed over, they [hold](#an-open-question-holds-the-story).
+
+**The file reaches the dispatcher as a reader, read at most once a pulse.** `GoalIntake.discussion` is a memo of
+`DiscussionFiles.read` built fresh on each pulse (`memoReader`) and carried into `DispatchContext.discussion`; the
+hold and the section read the same memo. Absent where discussions are off.
+
 ## What fleet agents write
 
-One new MCP tool, _`discussion_add`_, in _src/mcp/tools/discussionAdd.ts_:
+One new MCP tool, `discussion_add`, in `src/mcp/tools/discussionAdd.ts`:
 
 ```
 discussion_add({ kind: 'note' | 'idea' | 'question', body: string })
 ```
 
 - The ref is the agent's own origin, never an argument — an agent writes to the story it is working
-  on and nowhere else.
+  on and nowhere else. That is the `issue:<n>` subtree, the story behind a `pr:<n>` origin (`issueForPr`
+  over the stored world, so a reviewer can ask too), or the work a `job:<id>` requeue stands in for. Any other
+  origin is refused.
+- A first write creates the file, headed from the world's issue (`discussionSubject`,
+  `src/discussions/subject.ts`): a container type is a `feature`, anything else a `story` with its parent.
 - `kind: 'decision'` is refused. Decisions are the operator's.
 - It shares its name with the desktop tool of the same name, as `validation_report` does; the two
   are separate builds on separate channels, and a change to one is checked against the other. →
@@ -213,6 +230,13 @@ with a link to the file, so the hold is never silent.
   `sequenced`. The operator saying "go" outranks the question.
 - **A question an agent raised counts.** That is the point: the planner that cannot tell whether
   empty columns are dropped asks, and nothing is built on a guess.
+- **Where it is applied.** `questionHold` (`src/discussions/questionHold.ts`) is read as `StageContext.questionHold`
+  by rules `issue-appraisal`, `issue-investigate`, `issue-plan` and `plan-part` — every pre-plan and planned dispatch
+  for the story, after the sequence hold. "Has a plan" is any plan row for the story. A part still counts against
+  `maxConcurrentPartsPerIssue` while held, and `capped` wins over `questions`, so lifting the hold never takes a
+  story over its cap.
+- **What Up next shows.** The row's status is `questions`, labelled _open questions_; its reason reads _Held:
+  waiting on N open questions — answer them in `<path>`_, naming every file they are in, the story's first.
 
 ## Pulling tracker comments in
 
@@ -226,8 +250,33 @@ Comments other people leave on the ticket are pulled into the file on the harnes
   [07](07-pull-requests.md#attribution-is-a-record-never-an-identity)
 - An operator turns a pulled note into an idea, question or decision by editing its heading.
 
-Reading issue comments is new to both providers: a _listIssueComments_ method on each `*Api` interface
-and its scripted fake, in the same change. → [15](15-integrations.md)
+`DiscussionPullDesk` (`src/discussions/pullDesk.ts`) is built in the foundation and runs as pulse pass
+`discussionPulls`, last in `reconcile` and `readWorld: true` — so a local cycle pulls nothing.
+
+- **Only an issue that already has a file is pulled**, and only one the world snapshot lists. A pull never
+  creates a file. The pass is off where `discussionsDir` is unset or no issues provider can list comments.
+- **Each issue is pulled at most every five minutes** on the cycle, held in memory, so a busy fleet's 30s
+  pulse is not a comment listing per file per pulse. `discussion_pull` is not held to it. Two pulls of one
+  issue at once share one run.
+- **`pulled` is the newest comment's own `createdAt`**, the harness's own comments included, and is handed
+  back to the provider as the lower bound; only comments created strictly after it are taken. Compared as
+  dates, never as strings — providers differ in precision. A comment that fails to write stops the pull there,
+  so `pulled` never passes a comment that is not in the file.
+- **The record of the harness's own comments is `issue_comments_sent`** (`src/store/issueComments.ts`), one row
+  per comment by the provider's id. It is written by `recordIssueComments` (`src/sink/issueCommentsSent.ts`), a
+  wrapper the foundation puts round the sink, so every `upsertIssueComment` the harness sends — the appraisal's,
+  a plan's, an environment's — is recorded wherever it is called from, with no call site to forget. The desktop's
+  `discussion_publish` goes through the connector and records its own. A comment sent before the table has no
+  row and is pulled as anyone else's; there is no backfill, because the only evidence on those is the author.
+- **A failure to read the tracker is recorded** through `errors.record` and leaves `pulled` where it was.
+- An Azure DevOps comment's text is HTML and lands as it is; a Markdown file carries HTML.
+
+Reading issue comments is new to both providers: `GitHubApi.listIssueComments` and
+`AzureDevOpsApi.listWorkItemComments` (named as the Azure interface names its other work-item comment calls),
+surfaced as the integration capability `IssueCommentReadable` and `CompositeConnector.listIssueComments`. The
+fake issues provider lists what it has posted and takes an injected `issue_comment` event; its own comments are
+authored `operator`, the operator's login, so a test of the by-record rule fails if the rule becomes an author
+test. → [15](15-integrations.md)
 
 ## Talking it through in Claude
 
@@ -236,7 +285,7 @@ the desktop channel ([11](11-mcp-tools.md#the-desktop-channel)), not the cockpit
 and the place the operator already talks is Claude. The files and the cockpit are for reading it back.
 
 `/lubbdubb:discuss <n> [what's on your mind]` opens a conversation about story or feature `<n>`. The
-skill lives at _plugin/skills/discuss/SKILL.md_ and ships with the plugin like every other skill.
+skill lives at `plugin/skills/discuss/SKILL.md` and ships with the plugin like every other skill.
 
 1. **It reads first.** `discussion_read` returns the file's entries, plus — for a story — its
    feature's standing decisions and open questions, and for a feature its stories' open questions.
@@ -249,15 +298,15 @@ skill lives at _plugin/skills/discuss/SKILL.md_ and ships with the plugin like e
 
 ### The desktop tools
 
-Named in `DESKTOP_TOOL_NAMES`, built in _src/mcp/desktopDiscussion.ts_, never in `buildTools`:
+Named in `DESKTOP_TOOL_NAMES`, built in `src/mcp/desktopDiscussion.ts`, never in `buildTools`:
 
 | Tool                 | Does                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------ |
-| _discussion_read_    | The entries for one story or feature, with the related ones described above.               |
-| _discussion_add_     | Adds a note, idea, question or **decision**. Author is written as `operator (via Claude)`. |
-| _discussion_settle_  | Answers a question; accepts, parks or drops an idea; supersedes a decision.                |
-| _discussion_publish_ | Posts the summary the operator approved. → [publishing](#publishing)                       |
-| _discussion_pull_    | Pulls new tracker comments in now, rather than waiting for the cycle.                      |
+| `discussion_read`    | The entries for one story or feature, with the related ones described above.               |
+| `discussion_add`     | Adds a note, idea, question or **decision**. Author is written as `operator (via Claude)`. |
+| `discussion_settle`  | Answers a question; accepts, parks or drops an idea; supersedes a decision.                |
+| `discussion_publish` | Posts the summary the operator approved. → [publishing](#publishing)                       |
+| `discussion_pull`    | Pulls new tracker comments in now, rather than waiting for the cycle.                      |
 
 - **Decisions can be written here and nowhere else in the fleet**, because the operator is in the
   conversation. Claude proposes the wording; the operator's yes is what makes it a decision.
@@ -268,11 +317,28 @@ Named in `DESKTOP_TOOL_NAMES`, built in _src/mcp/desktopDiscussion.ts_, never in
 - **Each write tells the cockpit** through `DesktopToolDeps.changed`, so a page that is open shows it.
 - **Answering an open question lifts its hold** on the next cycle, so a `/lubbdubb:discuss` that
   clears the last question is what lets the story start.
+- **`discussion_read` is the cockpit's reading**, `readDiscussion` (`src/discussions/related.ts`), with the
+  file's `published` and `pulled` and the open questions pulled to the front as `open`. A first
+  `discussion_add` heads the file the way the fleet tool does (`fleetDiscussions`,
+  `src/discussions/subject.ts`), and refuses an issue the world does not list and that has no file —
+  a mistyped number never becomes a file.
+- **`discussion_read` names what was written by hand.** A question typed into the file in Obsidian has no
+  `^id` until something writes to the file, and an entry with no id cannot be settled — so the read
+  first calls `DiscussionFiles.identify` on the subject and on every related file, adding the missing
+  ids and nothing else. Without it, a question the operator wrote themselves holds the story and can
+  never be answered from Claude.
+- **`suggested: true`** is how an idea is written as `Claude (suggested)`; it is refused on any other kind.
+  `discussion_settle` takes the entry's id with or without its `^`; `answer` and `supersede` need `text`,
+  and a supersession is authored `operator (via Claude)`.
+- **The broadcast is `dirty` for `goals` and `queue`** — the Discussion tab and the hold in Up next.
+- Everything is a refusal with discussions off, saying `discussionsDir` is what turns them on.
 
 ### Where else it is reached from
 
 - `/lubbdubb:next` offers a held story's open questions as one ask, and hands off to
-  `/lubbdubb:discuss <n>` to answer them.
+  `/lubbdubb:discuss <n>` to answer them. **Not yet built:** a held story is not a row in "Needs you", so
+  `ask_next` cannot hand it out; for now the skill says a story waiting on questions is not an ask there,
+  and hands off to `/lubbdubb:discuss <n>` when the operator raises one.
 - `/lubbdubb:feature` and `/lubbdubb:plan` read the discussion and hand off to `/lubbdubb:discuss`
   when the talk turns to something worth writing down; they write nothing themselves.
 - The cockpit's Discussion tab carries a deep link that opens `/lubbdubb:discuss <n>`.
@@ -287,6 +353,12 @@ In the conversation — _"publish this"_ or `/lubbdubb:discuss <n> publish`:
 3. `discussion_publish` posts the approved text through `upsertIssueComment` as **one** comment, and
    writes its id to `published`. Publishing again edits that comment rather than adding one.
 
+It refuses where the issue has no file — there is nothing to publish from and nowhere to keep the id. The
+id is also written to `issue_comments_sent`, so the comment is never [pulled back in](#pulling-tracker-comments-in)
+even if `published` is edited away. A tracker that refuses is a refusal and leaves `published` as it was; a
+comment posted whose id cannot be written to the file is a refusal that says so, because publishing again
+would then add a second comment.
+
 Nothing reaches the tracker without step 2. The tool takes only the final text; it composes nothing.
 
 ## Turning an idea into a story
@@ -299,10 +371,38 @@ through `ticketFiler`, not in a prompt. → [13](13-jobs-and-tickets.md#filing-a
 
 ## In the cockpit
 
-A read-mostly **Discussion** tab on the story and feature views: the entries, filters by kind and
-state, a link that opens the file (`obsidian://` when the folder is inside a vault), and a button
-that opens `/lubbdubb:discuss <n>` in Claude. Open questions holding a story are shown on it and in
-Up next. Every ref drawn with `<Ref>`.
+A read-mostly **Discussion** tab on the story and feature views (`DiscussionPane`,
+`web/src/components/DiscussionPane.tsx`): the entries with a kind chip and a state chip, filters by kind
+and state, a link that opens the file, and a button that opens `/lubbdubb:discuss <n>` in Claude. Open
+questions are drawn on an amber ground (`--cn-question-fill`, `--cn-question-rule` — mixes of
+`--cn-amber`) because they are the entries that hold work. Every ref drawn with `<Ref>`. It writes
+nothing: every change is made in Claude or in the file.
+
+- **On the goal page it is a pane**, `discussion`, between Ask and Plan — and **only where
+  `discussionsDir` is set** (`CockpitConfig.discussions`, read by `goalPanes`), the same way `watch` is
+  drawn only where an environment declares one. A tab that can only say "off" on every goal is a stage the
+  goal can never reach. It is a place, not an obligation: never chosen by the landing rule, and qualified
+  by no environment. → [17](17-cockpit.md#the-panes)
+- **On the feature page it is a section under the detail**, drawn whatever the setting: with
+  `discussionsDir` unset it is a short note saying to set it, which is the one place the cockpit offers
+  the feature to a deployment that has not turned it on. → [17](17-cockpit.md#the-feature-page)
+- **The filters are a place** — `?dkind=` and `?dstate=` on `Place`, never a `useState` — so a link
+  to "the open questions on #142" is a link. → [17](17-cockpit.md#the-address-bar)
+- **What it reads** is `GET /api/discussions/:number` (`src/server/routes/discussions.ts`, assembled by
+  `readDiscussion` in `src/discussions/related.ts`): `enabled`, the file's `path` (null where none has
+  been written), its entries, and the related ones — for a **story** its feature's standing decisions
+  and open questions; for a **feature** the standing decisions and open questions of each story under it
+  that has any. Story or feature is decided the way `feature_read` decides it — the world's
+  `parent` link first, then the stories whose parent is this number — and the file's own front matter
+  only where the world cannot say. → [16](16-http-api.md#get-apidiscussionsnumber)
+- **The file link is `obsidian://open?path=…` when the file sits inside a vault** — a folder above it
+  holding `.obsidian/` — and otherwise the path itself, drawn as text: a browser will not follow a
+  `file://` link out of an `http://` page, so a link there would be a control that does nothing.
+- **It re-reads on every snapshot refresh**, so a write from Claude — which broadcasts through
+  `DesktopToolDeps.changed` — or from an agent shows while the tab is open. A read is one directory
+  listing and one small file.
+- The open questions **holding a story** are drawn in Up next as well, by the hold. →
+  [the hold](#an-open-question-holds-the-story)
 
 ## Where it will live
 
@@ -311,13 +411,13 @@ Up next. Every ref drawn with `<Ref>`.
 | File reading and writing | `src/discussions/discussionFile.ts` |
 | Parsing the Markdown     | `src/discussions/parse.ts`          |
 | Selecting entries        | `src/discussions/entries.ts`        |
-| The hold                 | _src/discussions/questionHold.ts_   |
-| Pulling tracker comments | _src/discussions/pullDesk.ts_       |
-| Prompt section           | _src/discussions/promptSection.ts_  |
-| The fleet agent's tool   | _src/mcp/tools/discussionAdd.ts_    |
-| The desktop tools        | _src/mcp/desktopDiscussion.ts_      |
-| The skill                | _plugin/skills/discuss/SKILL.md_    |
-| Read route for the tab   | _src/server/routes/discussions.ts_  |
+| The hold                 | `src/discussions/questionHold.ts`   |
+| Pulling tracker comments | `src/discussions/pullDesk.ts`       |
+| Prompt section           | `src/discussions/promptSection.ts`  |
+| The fleet agent's tool   | `src/mcp/tools/discussionAdd.ts`    |
+| The desktop tools        | `src/mcp/desktopDiscussion.ts`      |
+| The skill                | `plugin/skills/discuss/SKILL.md`    |
+| Read route for the tab   | `src/server/routes/discussions.ts`  |
 
 ## Decided
 

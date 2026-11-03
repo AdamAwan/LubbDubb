@@ -48,6 +48,7 @@ import type { ParseResult } from './actions.js';
 import type { QueueStatus } from './admission.js';
 import type { ClosedSittings } from '../intake/sitting.js';
 import type { DispatchRuleId } from './rules.js';
+import type { DiscussionReader } from '../discussions/questionHold.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -95,6 +96,8 @@ export interface DispatchContext {
   investigations?: IssueInvestigation[];
   closedSittings?: ClosedSittings;
   goalCriteria?: GoalCriteriaVersion[];
+  /** Each issue's discussion file, read at most once a cycle. → docs/spec/40-discussions.md */
+  discussion?: DiscussionReader;
   criteriaAlignments?: GoalCriteriaAlignment[];
   /** Goals owed a judge's second reading, as root origin refs. → 14-persistence.md#the-prediction-judge */
   judgeOwed?: readonly string[];

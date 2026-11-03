@@ -6,6 +6,7 @@ export const SKILL_NAMES = [
   'check',
   'clarify',
   'describe',
+  'discuss',
   'eject',
   'feature',
   'file',
@@ -29,6 +30,11 @@ export function desktopDeepLink(folder: string, prompt: string): string {
 
 export function discussPrompt(issueNumber: number): string {
   return skillPrompt('plan', String(issueNumber));
+}
+
+/** → docs/spec/40-discussions.md#talking-it-through-in-claude */
+export function discussionPrompt(issueNumber: number): string {
+  return skillPrompt('discuss', `${issueNumber} `);
 }
 
 export function ejectPrompt(issueNumber: number): string {

@@ -1,6 +1,8 @@
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsScope, InsightsView } from './actions.js';
 import { GOAL_SECTIONS, GOAL_TABS, type GoalTab } from '../view/goalPage.js';
 import type {
+  DiscussionEntryState,
+  DiscussionKind,
   InsightsWindow,
   TicketOrder,
   TicketStateFacet,
@@ -33,6 +35,10 @@ export interface Place {
    */
   goalOpen: string[];
   goalShut: string[];
+  /** Which kind of entry the Discussion tab draws, or null for every kind. → 40-discussions.md#in-the-cockpit */
+  discussionKind: DiscussionKind | null;
+  /** Which state of entry the Discussion tab draws, or null for every state. */
+  discussionState: DiscussionEntryState | null;
   configTab: ConfigTab;
   configGroup: string | null;
   insightsView: InsightsView;
@@ -194,6 +200,8 @@ export const NOWHERE: Place = {
   goalTab: null,
   goalOpen: [],
   goalShut: [],
+  discussionKind: null,
+  discussionState: null,
   obstacle: null,
   obstacleEnded: false,
   configTab: 'values',
@@ -244,6 +252,8 @@ const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = {
   lessons: 'obstacles',
 };
 const SECTIONS: readonly string[] = GOAL_SECTIONS;
+export const DISCUSSION_KINDS: readonly DiscussionKind[] = ['note', 'idea', 'question', 'decision'];
+export const DISCUSSION_STATES: readonly DiscussionEntryState[] = ['open', 'answered', 'accepted', 'parked', 'dropped'];
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
@@ -299,11 +309,24 @@ function readWhere(
 
 function readPagePicks(
   query: URLSearchParams,
-): Pick<Place, 'goalTab' | 'goalOpen' | 'goalShut' | 'obstacle' | 'obstacleEnded' | 'configTab' | 'configGroup'> {
+): Pick<
+  Place,
+  | 'goalTab'
+  | 'goalOpen'
+  | 'goalShut'
+  | 'discussionKind'
+  | 'discussionState'
+  | 'obstacle'
+  | 'obstacleEnded'
+  | 'configTab'
+  | 'configGroup'
+> {
   return {
     goalTab: GOAL_TABS.find((t) => t === param(query, 'pane')) ?? null,
     goalOpen: readStrings(param(query, 'open')).filter((name) => SECTIONS.includes(name)),
     goalShut: readStrings(param(query, 'shut')).filter((name) => SECTIONS.includes(name)),
+    discussionKind: DISCUSSION_KINDS.find((k) => k === param(query, 'dkind')) ?? null,
+    discussionState: DISCUSSION_STATES.find((s) => s === param(query, 'dstate')) ?? null,
     obstacle: param(query, 'obs'),
     obstacleEnded: query.has('ended'),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
@@ -506,6 +529,8 @@ function writePagePicks(query: URLSearchParams, place: Place): void {
   if (place.goalTab !== null) query.set('pane', place.goalTab);
   if (place.goalOpen.length > 0) query.set('open', place.goalOpen.join(','));
   if (place.goalShut.length > 0) query.set('shut', place.goalShut.join(','));
+  if (place.discussionKind !== null) query.set('dkind', place.discussionKind);
+  if (place.discussionState !== null) query.set('dstate', place.discussionState);
   if (place.obstacle !== null) query.set('obs', place.obstacle);
   if (place.obstacleEnded) query.set('ended', '1');
   if (place.configTab !== 'values') query.set('section', place.configTab);

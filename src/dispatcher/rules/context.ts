@@ -12,6 +12,7 @@ import type { PlanningPolicy } from '../../plans/planning.js';
 import type { LocalValidationPolicy } from '../../validation/local/policy.js';
 import type { SequenceableFeature } from '../../sequence/sequence.js';
 import type { SequenceWait } from '../../sequence/readiness.js';
+import type { QuestionHold } from '../../discussions/questionHold.js';
 import type {
   Decision,
   FeatureSequence,
@@ -64,6 +65,10 @@ export interface StageContext {
   /** → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner */
   sittingHolds: (issueNumber: number) => boolean;
   criteriaFor: (issueNumber: number) => GoalCriteriaVersion | null;
+  /** → docs/spec/40-discussions.md#an-open-question-holds-the-story */
+  questionHold: (issueNumber: number) => QuestionHold | null;
+  /** The appended Discussion section, or ''. → docs/spec/40-discussions.md#what-agents-read */
+  discussionNote: (issueNumber: number) => string;
   pinFor: (originRef: string | null) => string | null;
   profileOverrides: ReadonlyMap<string, string>;
   eligibleIssues: { issue: Issue; weight: number }[];

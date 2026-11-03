@@ -17,7 +17,9 @@ import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { TicketFiler } from '../tickets/filing.js';
 import type { IssueWatchContext } from '../issueWatch.js';
-import type { SendResult, WorkItemAreaPathInput, WorkItemParentInput } from '../sink/actionSink.js';
+import type { IssueCommentInput, SendResult, WorkItemAreaPathInput, WorkItemParentInput } from '../sink/actionSink.js';
+import type { DiscussionFiles } from '../discussions/discussionFile.js';
+import type { DiscussionPullDesk } from '../discussions/pullDesk.js';
 import type { Store } from '../store/store.js';
 import type { AskSnapshot } from '../asks/queue.js';
 import type { RemoteSheetView, StateSection, UpcomingPlan } from '../wire.js';
@@ -80,7 +82,11 @@ export interface DesktopToolDeps {
     canPlaceWorkItem(): boolean;
     setWorkItemParent(input: WorkItemParentInput): Promise<SendResult>;
     setWorkItemAreaPath(input: WorkItemAreaPathInput): Promise<SendResult>;
+    upsertIssueComment(input: IssueCommentInput): Promise<SendResult>;
   };
+  /** The one object every discussion read and write goes through. → docs/spec/40-discussions.md#the-desktop-tools */
+  discussions: DiscussionFiles;
+  discussionPulls: Pick<DiscussionPullDesk, 'pull'>;
   errors?: ErrorRecorder;
   labelPrefix: string;
   issueContainerTypes: string[];

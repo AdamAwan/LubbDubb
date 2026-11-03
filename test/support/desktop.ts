@@ -31,6 +31,8 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     profileNames: () => orderedProfiles(system.config.agentModels).map((p) => p.name),
     agentModels: system.config.agentModels,
     connector: system.connector,
+    discussions: system.discussions,
+    discussionPulls: system.discussionPulls,
     errors: system.errors,
     labelPrefix: system.config.labelPrefix,
     issueContainerTypes: system.config.issueContainerTypes,

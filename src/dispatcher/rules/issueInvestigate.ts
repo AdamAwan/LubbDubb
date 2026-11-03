@@ -4,6 +4,7 @@ import { issueOrigin } from '../../plans/planning.js';
 import { issueSubtreeNumber } from '../../issueOrigins.js';
 import { relatedWorkNote } from '../../issueRelations.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
+import { questionHoldReason } from '../../discussions/questionHold.js';
 import { readOnlyDispatch, readOnlyNote } from './readOnlyDispatch.js';
 import { supersededReason } from '../admission.js';
 import type { Issue } from '../../types.js';
@@ -59,6 +60,12 @@ export function issueInvestigate(s: StageContext): void {
     const waits = s.sequenceWaits.get(issue.number);
     if (waits) {
       s.candidates.push({ ...candidate, held: 'sequenced', reason: `${reason} ${sequenceHoldReason(waits)}` });
+      s.investigating.add(issue.number);
+      continue;
+    }
+    const questions = s.questionHold(issue.number);
+    if (questions) {
+      s.candidates.push({ ...candidate, held: 'questions', reason: `${reason} ${questionHoldReason(questions)}` });
       s.investigating.add(issue.number);
       continue;
     }

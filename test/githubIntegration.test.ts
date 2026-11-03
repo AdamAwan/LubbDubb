@@ -232,6 +232,9 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
       recorded.reviewReplies.push({ number, inReplyTo, body });
       return { url: `https://github.com/o/r/pull/${number}#discussion_r${inReplyTo}`, id: inReplyTo };
     },
+    async listIssueComments() {
+      return [];
+    },
     async createIssueComment(number, body): Promise<GhCommentRef> {
       recorded.issueComments.push({ number, body });
       return { url: `https://github.com/o/r/issues/${number}#issuecomment-1`, id: 900 + number };

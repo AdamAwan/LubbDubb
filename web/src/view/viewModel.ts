@@ -33,6 +33,7 @@ import type {
   FeaturePrFilter,
   FeatureSort,
   OverviewShape,
+  Place,
 } from '../cockpit/place.js';
 
 // → docs/spec/17-cockpit.md
@@ -66,6 +67,8 @@ export interface CockpitView {
   goalTab: GoalTab | null;
   goalOpen: ReadonlySet<string>;
   goalShut: ReadonlySet<string>;
+  discussionKind: Place['discussionKind'];
+  discussionState: Place['discussionState'];
   configTab: ConfigTab;
   configGroup: string | null;
   ticketWatch: TicketWatchFilter;
@@ -183,6 +186,8 @@ interface ViewInputs {
   goalTab?: GoalTab | null;
   goalOpen?: readonly string[];
   goalShut?: readonly string[];
+  discussionKind?: Place['discussionKind'];
+  discussionState?: Place['discussionState'];
   configTab?: ConfigTab;
   configGroup?: string | null;
   ticketWatch?: TicketWatchFilter;
@@ -312,6 +317,8 @@ function placeView(input: ViewInputs) {
     goalTab: input.goalTab ?? null,
     goalOpen: new Set(input.goalOpen ?? []),
     goalShut: new Set(input.goalShut ?? []),
+    discussionKind: input.discussionKind ?? null,
+    discussionState: input.discussionState ?? null,
     configTab: input.configTab ?? 'values',
     configGroup: input.configGroup ?? null,
   } satisfies Partial<CockpitView>;

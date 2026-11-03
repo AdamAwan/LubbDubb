@@ -9,12 +9,13 @@ import type {
   SendResult,
 } from '../../sink/actionSink.js';
 import { bodyCarriesKey, issueBodyWithRefs } from '../../tickets/searchKey.js';
-import type { Issue, IssueState, TrackerItem } from '../../types.js';
+import type { Issue, IssueState, TrackerComment, TrackerItem } from '../../types.js';
 import type {
   WorldCapability,
   Integration,
   IssueCloseCapable,
   IssueCommentCapable,
+  IssueCommentReadable,
   IssueCreateCapable,
   IssueKeySearchCapable,
   IssueLabelCapable,
@@ -53,6 +54,7 @@ export class GitHubIssuesIntegration
     IssueCloseCapable,
     IssueCreateCapable,
     IssueCommentCapable,
+    IssueCommentReadable,
     IssueKeySearchCapable,
     IssueReopenCapable,
     TicketHistoryCapable
@@ -139,6 +141,13 @@ export class GitHubIssuesIntegration
         ? await this.opts.api.updateIssueComment(existing, input.body)
         : await this.opts.api.createIssueComment(input.number, input.body);
     return { ok: true, ref: String(ref.id) };
+  }
+
+  async listIssueComments(number: number, since: string | null): Promise<TrackerComment[]> {
+    const comments = await this.opts.api.listIssueComments(number, since ?? undefined);
+    return comments
+      .filter((c) => since === null || Date.parse(c.createdAt) > Date.parse(since))
+      .map((c) => ({ id: String(c.id), author: c.authorLogin, body: c.body, createdAt: c.createdAt }));
   }
 
   async snapshot(plan?: ReadPlan): Promise<WorldSlice> {

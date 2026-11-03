@@ -243,6 +243,7 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'prediction.undo': { label: 'Unmarked a prediction', blurb: 'A mark on a prediction was taken off' },
   'sequence.accept': { label: 'Accepted a story order', blurb: 'The proposed story sequence was accepted' },
   'sequence.reject': { label: 'Ran stories unordered', blurb: 'The proposed story sequence was declined' },
+  'discussion.filter': { label: 'Re-cut a discussion', blurb: 'A kind or state filter on the Discussion tab changed' },
   'watch.expand': { label: 'Opened a watch form', blurb: 'A signal or measure form was opened' },
   'watch.create': { label: 'Added a watch', blurb: 'A new signal or measure was saved and run' },
   'watch.edit': { label: 'Edited a watch', blurb: 'A check’s query or threshold was changed' },
@@ -334,6 +335,10 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'sequence.open': {
     label: 'Argued with a story order',
     blurb: 'The order was taken into the operator’s own Claude Code',
+  },
+  'discussion.open': {
+    label: 'Opened a discussion',
+    blurb: 'A story or feature’s discussion was opened in Claude Code, or its file in an editor',
   },
   'ejection.open': {
     label: 'Opened ejected work',

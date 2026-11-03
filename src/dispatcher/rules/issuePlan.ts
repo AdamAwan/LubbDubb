@@ -7,6 +7,7 @@ import { currentPlanSummary } from '../../plans/parts.js';
 import { relatedWorkNote } from '../../issueRelations.js';
 import { readOnlyDispatch, readOnlyNote } from './readOnlyDispatch.js';
 import { sequenceHoldReason } from '../../sequence/readiness.js';
+import { questionHoldReason } from '../../discussions/questionHold.js';
 import { SITTING_REASON } from '../../intake/sitting.js';
 import { goalCriteriaNote } from '../../criteria/note.js';
 import { investigationNote, investigationStanding } from '../../intake/investigation.js';
@@ -31,6 +32,8 @@ function planHold(
     return { reason: `${reason} Held: ${SITTING_REASON}, on the goal in the cockpit.`, held: 'sitting' };
   const waits = s.sequenceWaits.get(issueNumber);
   if (waits) return { reason: `${reason} ${sequenceHoldReason(waits)}`, held: 'sequenced' };
+  const questions = s.questionHold(issueNumber);
+  if (questions) return { reason: `${reason} ${questionHoldReason(questions)}`, held: 'questions' };
   return { reason, held: planner === 'cooldown' ? 'cooldown' : undefined };
 }
 
@@ -92,6 +95,7 @@ export function issuePlan(s: StageContext): void {
               'you write it.',
           ) +
           goalCriteriaNote(s.criteriaFor(issue.number)) +
+          s.discussionNote(issue.number) +
           budgetNote(s.planning.fileBudget) +
           atomNote() +
           relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +

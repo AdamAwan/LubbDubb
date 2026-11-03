@@ -102,6 +102,7 @@ function fakeApi(script: Script): { api: GitHubApi; tape: Tape } {
     getJobLog: unused,
     listIssuesChangedSince: unused,
     createPullReviewReply: unused,
+    listIssueComments: unused,
     createIssueComment: unused,
     updateIssueComment: unused,
     mergePull: unused,

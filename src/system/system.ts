@@ -8,6 +8,7 @@ import type { TicketFiler } from '../tickets/filing.js';
 import type { UpstreamIssues } from '../tickets/upstream.js';
 import type { Worktrees } from '../worktree/worktreeManager.js';
 import { PrewarmDesk } from '../worktree/prewarmDesk.js';
+import { discussionIntake, fleetDiscussions } from '../discussions/subject.js';
 import { AreaPathDirectory } from '../intake/areaPaths.js';
 import type { AreaPathTree } from '../intake/placement.js';
 import { TicketSweep } from '../tickets/sweep.js';
@@ -152,6 +153,8 @@ export interface System {
   worktrees: Worktrees;
   /** The one object every discussion read and write goes through. → docs/spec/40-discussions.md */
   discussions: Foundation['discussions'];
+  /** Pulls a discussion file's new tracker comments in. → docs/spec/40-discussions.md#pulling-tracker-comments-in */
+  discussionPulls: Foundation['discussionPulls'];
   errors: ErrorLog;
   configFile: string;
   projectConfigFile: string;
@@ -242,8 +245,9 @@ function foundationParts({
   worktrees,
   cloneUpkeep,
   discussions,
-}: Foundation): Pick<System, 'worktrees' | 'cloneUpkeep' | 'discussions'> {
-  return { worktrees, cloneUpkeep, discussions };
+  discussionPulls,
+}: Foundation): Pick<System, 'worktrees' | 'cloneUpkeep' | 'discussions' | 'discussionPulls'> {
+  return { worktrees, cloneUpkeep, discussions, discussionPulls };
 }
 
 interface HarnessPhases {
@@ -303,6 +307,7 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
         'after the goal appraisal asked for an investigation',
       ),
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
+    discussions: fleetDiscussions(base.discussions, store, config.issueContainerTypes),
     errors,
   });
 
@@ -371,7 +376,7 @@ function buildHarness(
         late.get().localValidations.sweep();
       },
     },
-    goalIntake: reads.goalIntake,
+    goalIntake: () => ({ ...reads.goalIntake(), ...discussionIntake(base.discussions) }),
     remoteRuns: reads.remoteRuns,
     landings: fleet.landings,
     recovery: fleet.recovery,
@@ -380,6 +385,7 @@ function buildHarness(
     fleet: fleet.agents,
     obstacles: bench.obstacles,
     pool: bench.pool,
+    discussionPulls: base.discussionPulls,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,
     stuckCycleAfterMs: opts.stuckCycleAfterMs,

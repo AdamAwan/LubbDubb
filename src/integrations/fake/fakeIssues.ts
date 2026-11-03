@@ -18,6 +18,7 @@ import type {
   Injectable,
   Integration,
   IssueCommentCapable,
+  IssueCommentReadable,
   IssueImageCapable,
   IssueCreateCapable,
   IssueCloseCapable,
@@ -29,13 +30,21 @@ import type {
   WorkItemStateCapable,
   WorldSlice,
 } from '../integration.js';
-import type { TrackerItem } from '../../types.js';
+import type { TrackerComment, TrackerItem } from '../../types.js';
 import type { FakeWorldStore } from './fakeWorld.js';
 import { bodyCarriesKey, issueBodyWithRefs } from '../../tickets/searchKey.js';
 
 // → docs/spec/15-integrations.md
 
-const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_issue', 'issue_state', 'issue_linked_pr']);
+const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set([
+  'new_issue',
+  'issue_state',
+  'issue_linked_pr',
+  'issue_comment',
+]);
+
+/** Who the fake says posted the harness's own comments — the operator's login, as on a single-operator deployment. */
+const FAKE_VIEWER = 'operator';
 
 export class FakeIssuesIntegration
   implements
@@ -47,6 +56,7 @@ export class FakeIssuesIntegration
     IssueCloseCapable,
     IssueCreateCapable,
     IssueCommentCapable,
+    IssueCommentReadable,
     IssueImageCapable,
     IssueKeySearchCapable,
     IssueReopenCapable,
@@ -55,8 +65,9 @@ export class FakeIssuesIntegration
   readonly id = 'issues:fake';
   readonly capability: WorldCapability = 'issues';
 
-  private readonly comments = new Map<string, { number: number; body: string }>();
+  private readonly comments = new Map<string, { number: number } & TrackerComment>();
   private nextCommentId = 1;
+  private lastCommentAt = 0;
 
   /** @public read by tests asserting a screen actually reached a ticket, and with what bytes */
   readonly attachments = new Map<string, { number: number; fileName: string; bytes: Buffer }>();
@@ -103,6 +114,10 @@ export class FakeIssuesIntegration
   }
 
   inject(event: InjectableEvent): void {
+    if (event.kind === 'issue_comment') {
+      this.postComment(event.number, event.body, event.author, null);
+      return;
+    }
     this.world.mutate((world) => {
       switch (event.kind) {
         case 'new_issue':
@@ -206,9 +221,25 @@ export class FakeIssuesIntegration
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
-    const ref = input.commentRef ?? `comment_${this.nextCommentId++}`;
-    this.comments.set(ref, { number: input.number, body: input.body });
-    return { ok: true, ref };
+    return { ok: true, ref: this.postComment(input.number, input.body, FAKE_VIEWER, input.commentRef) };
+  }
+
+  async listIssueComments(number: number, since: string | null): Promise<TrackerComment[]> {
+    return [...this.comments.values()]
+      .filter((c) => c.number === number && (since === null || Date.parse(c.createdAt) > Date.parse(since)))
+      .map(({ id, author, body, createdAt }) => ({ id, author, body, createdAt }));
+  }
+
+  private postComment(number: number, body: string, author: string, ref: string | null): string {
+    const existing = ref === null ? undefined : this.comments.get(ref);
+    if (existing !== undefined) {
+      existing.body = body;
+      return existing.id;
+    }
+    const id = ref ?? `comment_${this.nextCommentId++}`;
+    this.lastCommentAt = Math.max(this.lastCommentAt + 1, Date.parse(this.now()));
+    this.comments.set(id, { number, id, author, body, createdAt: new Date(this.lastCommentAt).toISOString() });
+    return id;
   }
 
   async createIssue(input: IssueCreateInput): Promise<SendResult> {

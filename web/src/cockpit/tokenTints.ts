@@ -135,6 +135,20 @@ export const DERIVED_TOKENS: readonly ThemeToken[] = [
     why: 'A pinned or overdue edge',
   },
   {
+    name: '--cn-question-fill',
+    label: 'Open question ground',
+    group: 'tints',
+    kind: 'colour',
+    why: 'The ground of an open question on a Discussion tab',
+  },
+  {
+    name: '--cn-question-rule',
+    label: 'Open question rule',
+    group: 'tints',
+    kind: 'colour',
+    why: 'The bar down the side of an open question on a Discussion tab',
+  },
+  {
     name: '--cn-green-bg',
     label: 'Console green ground',
     group: 'tints',

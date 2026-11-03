@@ -24,6 +24,7 @@ import type {
   CockpitDecision,
   Decision,
   FeatureBlockRow,
+  DiscussionReading,
   FeatureBoardPayload,
   FeatureBriefing,
   FeatureChildRow,
@@ -3844,6 +3845,7 @@ const DEMO_SUBJECT_LABEL: Record<UsageSubject, string> = {
   criteria: 'Goal criteria',
   prediction: 'Predictions',
   sequence: 'Story order',
+  discussion: 'Discussions',
   watch: 'Watches',
   schedule: 'Schedules',
   'review-thread': 'Review threads',
@@ -4834,6 +4836,17 @@ export const demoApi = {
     Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[], refUrls: {} }),
   getWorkSubtree: (ref: string) => demoWorkSubtree(ref),
   getFeatures: () => Promise.resolve(buildDemoFeatureBoard()),
+  getDiscussion: (number: number): Promise<DiscussionReading> =>
+    Promise.resolve({
+      enabled: false,
+      number,
+      kind: null,
+      title: null,
+      path: null,
+      obsidianUrl: null,
+      entries: [],
+      related: [],
+    }),
   answerFeatureSequence: (): Promise<never> =>
     Promise.reject(new Error('the demo has no feature order, so there is nothing to answer')),
   /* The gate and the record commit, like every other demo interaction: the reveal

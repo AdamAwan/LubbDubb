@@ -151,6 +151,8 @@ import type {
   AssessedBotPr,
   BotPrRiskStanding,
   IssueInvestigation,
+  DiscussionEntry,
+  DiscussionSubjectKind,
 } from './types.js';
 
 export interface PullRequest extends WorldPullRequest {
@@ -423,6 +425,8 @@ interface CockpitConfig {
   canPlaceWorkItem: boolean;
   featureBoard: boolean;
   featureSummaries: boolean;
+  /** `discussionsDir` is set, so the goal page draws its Discussion tab. → docs/spec/40-discussions.md#in-the-cockpit */
+  discussions: boolean;
   botPrs: boolean;
   /** Some environment declares an `errors` block, so the Errors tab has something to read. */
   appErrors: boolean;
@@ -879,6 +883,32 @@ export interface FeatureLandingRow {
   at: string;
 }
 
+/** A story's feature, or a feature's story, as its own Discussion tab gathers it. → docs/spec/40-discussions.md#in-the-cockpit */
+export interface DiscussionNeighbour {
+  number: number;
+  title: string | null;
+  kind: DiscussionSubjectKind;
+  path: string;
+  obsidianUrl: string | null;
+  standingDecisions: DiscussionEntry[];
+  openQuestions: DiscussionEntry[];
+}
+
+/** `GET /api/discussions/:number`. → docs/spec/40-discussions.md#in-the-cockpit */
+export interface DiscussionReading {
+  /** False where `discussionsDir` is unset — the tab says how to turn it on. */
+  enabled: boolean;
+  number: number;
+  kind: DiscussionSubjectKind | null;
+  title: string | null;
+  /** The file, or null where none has been written yet. */
+  path: string | null;
+  /** `obsidian://open?path=…` where the file sits inside a vault, else null. */
+  obsidianUrl: string | null;
+  entries: DiscussionEntry[];
+  related: DiscussionNeighbour[];
+}
+
 export interface FeatureBoardPayload {
   features: FeatureRollup[];
   orphans: Omit<
@@ -1152,6 +1182,7 @@ export type { OperatorRow } from './insights/operatorInsights.js';
 export type { SurfaceRow, SurfaceVerdict } from './insights/surfaceReachInsights.js';
 export type { ControlUsage, PlaceKey, UiUsageEvent, UsageArrival, UsageSubject } from './usage/events.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
+export type { DiscussionEntry, DiscussionEntryState, DiscussionKind } from './types.js';
 export type { BuildReading, SnoozeTarget, UpgradeAction } from './selfUpdate/upgradePlan.js';
 export type { AskGroup, AskKind, AskRow, AskUrgency } from './asks/askRow.js';
 export { buildAskQueue } from './asks/queue.js';
