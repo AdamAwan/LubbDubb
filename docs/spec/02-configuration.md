@@ -410,7 +410,7 @@ layer picks up whatever `lubbdubb.project.json` that checkout happens to carry.
 resolve them against the wrong directory:
 
 - `repoRoot` is resolved against `process.cwd()`.
-- `worktreeRoot`, `deskRoot`, `attachmentRoot`, `validationRoot`, `localRunRoot` and `promptTemplatesDir` are resolved against **`repoRoot`** (not the
+- `worktreeRoot`, `deskRoot`, `attachmentRoot`, `validationRoot`, `localRunRoot`, `discussionsDir` (when set) and `promptTemplatesDir` are resolved against **`repoRoot`** (not the
   launch directory), so running LubbDubb from its own folder against a repo elsewhere does not
   scatter that repo's worktree slots into the app's directory. An absolute override is honoured as-is.
 - Each entry of `claudeArgs` that is relative **and names an existing file** is made absolute.
@@ -488,6 +488,7 @@ There is no per-pulse **request budget** key, and no budget mechanism behind one
 | `attachmentRoot`   | `string`  | `.lubbdubb/attachments` | Root for images attached to a brief (issue #249) — deliberately outside every worktree, so a screenshot cannot be committed onto a branch. Every agent launch is granted read access to this whole root via `permissions.additionalDirectories`, which is a real widening: an agent working one goal can read another goal's attachments. See [09](09-execution.md) and [10](10-agent-runtimes.md).                                                                       |
 | `localRunRoot`     | `string`  | `.lubbdubb/local-run`   | The local run's one checkout, kept warm between goals. **Must not be under `worktreeRoot`**, and is **refused at load** if it is: the pool counts every registered worktree under its root whatever the directory is called, so a preview checkout in there would count toward the bound and be handed to an agent. → [23](23-local-runs.md#the-checkout)                                                                                                                 |
 | `validationRoot`   | `string`  | `.lubbdubb/validation`  | Root for a goal's validation resources — fixtures, reference material, sample data — one directory per goal (`<root>/issue-284/`). `attachmentRoot`'s storage rule, argument for argument: outside every worktree, canonical rather than copied per dispatch, and granted to every agent launch through `permissions.additionalDirectories`. Granted on every launch, so an agent's readable set does not depend on a policy flag it cannot see. → [20](20-validation.md) |
+| `discussionsDir`   | `string`  | unset                   | The folder [discussion files](40-discussions.md#where-the-files-live) are kept in, as `<discussionsDir>/<repo>/<number> <title>.md` — may be inside an Obsidian vault. **Unset, or empty, is off**: nothing is read or written. A path on this machine, so it belongs in `lubbdubb.config.json` rather than the project file. Created on first write, never at boot. Needs a restart.                                                                                     |
 
 There is no key for how many worktree slots the pool holds. It is the **live** agent cap plus a slack
 of two, read on every acquire — so `maxConcurrentAgents`, raised in the cockpit or in this file,

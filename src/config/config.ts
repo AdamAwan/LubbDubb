@@ -131,6 +131,7 @@ export interface Config {
   attachmentRoot: string;
   validationRoot: string;
   localRunRoot: string;
+  discussionsDir?: string;
   repoRoot: string;
   defaultBranch: string;
   dbPath: string;
@@ -356,6 +357,9 @@ function resolveRootPaths(merged: Config): void {
   merged.attachmentRoot = resolve(merged.repoRoot, merged.attachmentRoot);
   merged.validationRoot = resolve(merged.repoRoot, merged.validationRoot);
   merged.localRunRoot = resolve(merged.repoRoot, merged.localRunRoot);
+  if (merged.discussionsDir !== undefined && merged.discussionsDir.trim() !== '') {
+    merged.discussionsDir = resolve(merged.repoRoot, merged.discussionsDir);
+  } else delete merged.discussionsDir;
 
   merged.promptTemplatesDir = resolve(merged.repoRoot, merged.promptTemplatesDir);
 }

@@ -150,6 +150,8 @@ export interface System {
   desktop: McpDesktopServer;
   plugin: ReturnType<typeof buildPluginDesk>;
   worktrees: Worktrees;
+  /** The one object every discussion read and write goes through. → docs/spec/40-discussions.md */
+  discussions: Foundation['discussions'];
   errors: ErrorLog;
   configFile: string;
   projectConfigFile: string;
@@ -227,7 +229,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp: channels.mcp,
     desktop: channels.desktop,
     plugin: buildPluginDesk(config, opts, base.errors),
-    ...cloneParts(base),
+    ...foundationParts(base),
     errors: base.errors,
   };
   late.bind(
@@ -236,8 +238,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   return system;
 }
 
-function cloneParts({ worktrees, cloneUpkeep }: Foundation): Pick<System, 'worktrees' | 'cloneUpkeep'> {
-  return { worktrees, cloneUpkeep };
+function foundationParts({
+  worktrees,
+  cloneUpkeep,
+  discussions,
+}: Foundation): Pick<System, 'worktrees' | 'cloneUpkeep' | 'discussions'> {
+  return { worktrees, cloneUpkeep, discussions };
 }
 
 interface HarnessPhases {

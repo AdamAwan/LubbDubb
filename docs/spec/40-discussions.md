@@ -1,7 +1,11 @@
 # 40 — Discussions
 
-> **Not yet built.** Everything in this document is design. No code exists for it; every path below
-> is italic for that reason. Remove this marker section by section as each piece lands.
+> **Partly built.** Built: `discussionsDir`, [the file](#the-file) — its format, the parser in
+> `src/discussions/parse.ts` and the one object every read and write goes through,
+> `src/discussions/discussionFile.ts`, reached as `System.discussions`. **Not yet built:** what agents
+> read, the fleet agent's tool, the hold, pulling tracker comments, the desktop tools and skill,
+> publishing and the cockpit tab — every path for those is still italic. Remove this marker as each
+> piece lands.
 
 A running record of the talk around a story or a feature — notes, ideas, decisions and open
 questions — kept as **Markdown files in a folder the operator chooses**. The operator works on it mainly by
@@ -32,6 +36,8 @@ anywhere, including inside an Obsidian vault.
 
 - **Unset means the feature is off.** No file is read or written, no prompt carries a section, no
   story is held. Every behaviour below is what turning it on does.
+- **A relative path is resolved against `repoRoot`**, like every other path key. An empty string is
+  unset.
 - **The folder is created on first write**, never at boot.
 - **An unreadable folder fails open** — see [the hold](#an-open-question-holds-the-story) — and is
   recorded through `errors.record`, so it is red in the cockpit rather than silent.
@@ -44,10 +50,16 @@ One file per story or feature:
 <discussionsDir>/<repo>/<number> <title slug>.md
 ```
 
+`<repo>` is the tracker repository's name — `github.repo`, else `azureDevOps.repository` — and the
+checkout's folder name when neither is set, with the characters a file name cannot carry replaced by a
+space (`discussionRepoFolder`). So one folder can hold the discussions of several repositories side by
+side. The title slug is the issue title with the same characters replaced, cut at 80 characters.
+
 The issue number leads the name and is what the harness keys on; the slug is for the person browsing
 the folder. A ticket renamed later keeps its file — the harness finds it by number, so a renamed or
 hand-renamed file is still found as long as the number leads the name. Two files for one number is
-an error recorded and the older one used.
+an error recorded and the older one used — recorded once per pair, not on every read. A number is
+the whole leading run of digits, so `1420 …` is never #142's file.
 
 ### Front matter
 
@@ -92,9 +104,14 @@ The heading reads `<Kind> · [<state> ·] <date> · <author> ^<id>`:
 | Question | `open`, `answered`                      | operator, agent, tracker                 |
 | Decision | —                                       | **operator only** (in Claude or by hand) |
 
+- **A missing state reads as `open`** on an idea or a question, so a hand-written
+  `## Question · 2026-11-03 · me` is an open question. A state on a note or a decision, or a state the
+  kind does not have, makes the heading unreadable.
+- **A `## ` line inside a fenced code block is body**, never a heading.
 - **The `^id` is an Obsidian block id**, so an entry can be linked to from elsewhere in a vault
-  (`[[142 Export to CSV#^d-7f3a]]`). The harness mints it and reads it; a person adding an entry by hand
-  may leave it off and the harness adds one on its next write.
+  (`[[142 Export to CSV#^d-7f3a]]`). The harness mints it — the kind's initial and four hex digits, `n-`, `i-`, `q-`, `d-`, unique in
+  the file — and reads it; a person adding an entry by hand may leave it off and the harness adds one
+  to every readable heading without one on its next write to that file.
 - **An answer goes under its question**, as the body below an `Answer:` line, and flips the state to
   `answered`. Editing the heading by hand does the same.
 - **A decision is never edited to change it.** A new decision that replaces one says
@@ -102,13 +119,44 @@ The heading reads `<Kind> · [<state> ·] <date> · <author> ^<id>`:
   supersedes.
 - **What does not parse is kept as a note.** A heading the harness cannot read is never dropped or
   rewritten — it is handed to agents as a note and shown in the cockpit with a "couldn't read" mark.
-  The operator's file is never lost to a parser.
+  The operator's file is never lost to a parser. An unreadable heading never gains an id either.
+- **A body the harness writes cannot break the file.** A `## ` line in it is escaped as `\## `, so it
+  reads back as body rather than a new entry, and a code fence it leaves open is closed — an open fence
+  would swallow every entry after it.
 
 ### Writing without clobbering
 
 The operator may have the file open in Obsidian while an agent adds to it. So every harness write is
 **re-read, append, write to a temp file, rename** — never a rewrite from a copy held in memory. The
-only in-place changes the harness makes are to its own front-matter keys and to a missing `^id`.
+temp file is a dotfile beside the target (so a vault does not index it) and is removed if the rename
+fails. The only in-place changes the harness makes are to its own front-matter keys, to a missing
+`^id`, and — when an entry is **settled** — to that entry's state word and the lines appended at the
+end of its body (`Answer: …`, `Became [[…]]`). Setting a front-matter key replaces that key's line
+(and any indented block under it) and leaves every other key, comment and line as it was.
+
+### The object every write goes through
+
+`DiscussionFiles` (`src/discussions/discussionFile.ts`) is built once, in the foundation, and reached
+as `System.discussions`. With `discussionsDir` unset, `enabled` is false, `read` answers null and every
+write is a refusal — nothing touches the disk.
+
+| Member             | Does                                                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `locate(n)`        | The file for issue `n`, or null.                                                                                                                                   |
+| `read(n)`          | The parsed file, or **null** for off, no file, or a failure — which is recorded. Null is what every reader fails open on.                                          |
+| `add(subject, …)`  | Appends a note, idea, question or decision, creating the folder and the file (with `ref`, `kind`, `title` and, for a story, `parent`) on the first write.          |
+| `settle(n, id, …)` | Answers an open question; accepts, parks or drops an idea, with an optional line under it; supersedes a decision by appending a new one saying `Supersedes ^<id>`. |
+| `setFrontMatter`   | Writes `published` and `pulled`.                                                                                                                                   |
+
+A write answers `{ok: true, entry, path}` or a refusal `{ok: false, error}` — a wrong kind, an unknown
+id, an answered question answered again. A failure of the disk is recorded through `errors.record` and
+answered as a refusal, never thrown. **Who may write a decision is the caller's rule**, not the
+object's: the fleet tool refuses `kind: 'decision'` before it gets here.
+
+The author strings are `DISCUSSION_AUTHORS`: `operator`, `operator (via Claude)`,
+`Claude (suggested)`, `agent <rule>#<task id>` and `@<login> (tracker)`. The date is the machine's
+local date. The pure selectors over a file's entries — `standingDecisions`, `openQuestions`,
+`answeredQuestions`, `acceptedIdeas`, `notesNewestFirst` — are in `src/discussions/entries.ts`.
 
 ### A feature's file
 
@@ -124,7 +172,7 @@ _appended_ (never interpolated — see [05](05-dispatcher.md#prompt-templates)):
 1. Standing decisions — the story's, then its feature's.
 2. Accepted ideas.
 3. Answered questions, with their answers.
-4. Open notes, newest first, until a size budget is reached; the rest is cut with a line saying how
+4. Open notes, newest first, until the section reaches about 6,000 characters; the rest is cut with a line saying how
    many were left out and where the file is.
 
 Parked and dropped ideas are left out: they are history, and handing them over invites the agent to
@@ -150,8 +198,9 @@ discussion_add({ kind: 'note' | 'idea' | 'question', body: string })
 
 ## An open question holds the story
 
-**An open question on a story, or on its feature, holds new dispatches for that story** — the
-planner and every part — as `held: 'questions'`. It shows in Up next as _waiting on N open questions_
+**An open question on a story holds every new dispatch for that story** — the planner and every
+part — as `held: 'questions'`. **An open question on its feature holds the story only while it has
+no plan yet**: a story already planned or under way carries on. → [decided](#decided) It shows in Up next as _waiting on N open questions_
 with a link to the file, so the hold is never silent.
 
 - **It holds new work only.** A running agent that adds a question carries on; the question holds the
@@ -214,7 +263,7 @@ Named in `DESKTOP_TOOL_NAMES`, built in _src/mcp/desktopDiscussion.ts_, never in
   conversation. Claude proposes the wording; the operator's yes is what makes it a decision.
 - **Claude's own view is labelled as Claude's.** An idea Claude suggests and the operator wants kept
   is written as an idea authored `Claude (suggested)`, not as the operator's.
-- **Every write goes through the same object the cockpit's would** — _src/discussions/discussionFile.ts_ —
+- **Every write goes through the same object the cockpit's would** — `src/discussions/discussionFile.ts` —
   never a second implementation. → [11](11-mcp-tools.md#every-write-goes-through-the-object-the-cockpits-click-goes-through)
 - **Each write tells the cockpit** through `DesktopToolDeps.changed`, so a page that is open shows it.
 - **Answering an open question lifts its hold** on the next cycle, so a `/lubbdubb:discuss` that
@@ -259,8 +308,9 @@ Up next. Every ref drawn with `<Ref>`.
 
 | Piece                    | Path                                |
 | ------------------------ | ----------------------------------- |
-| File reading and writing | _src/discussions/discussionFile.ts_ |
-| Parsing the Markdown     | _src/discussions/parse.ts_          |
+| File reading and writing | `src/discussions/discussionFile.ts` |
+| Parsing the Markdown     | `src/discussions/parse.ts`          |
+| Selecting entries        | `src/discussions/entries.ts`        |
 | The hold                 | _src/discussions/questionHold.ts_   |
 | Pulling tracker comments | _src/discussions/pullDesk.ts_       |
 | Prompt section           | _src/discussions/promptSection.ts_  |
@@ -269,8 +319,11 @@ Up next. Every ref drawn with `<Ref>`.
 | The skill                | _plugin/skills/discuss/SKILL.md_    |
 | Read route for the tab   | _src/server/routes/discussions.ts_  |
 
-## Still to decide
+## Decided
 
-- The size budget for the prompt section.
-- Whether a feature-level open question should hold every story under it, or only stories not yet
-  started.
+- **The prompt section's budget is about 6,000 characters.** Decisions, accepted ideas and answered
+  questions come first and are never cut; notes fill what is left, newest first.
+- **An open question on a feature holds only the stories under it that have no plan yet** — work not
+  started. A story already planned or under way carries on; the feature's question is for what has
+  not been shaped. **An open question on the story itself holds every new dispatch for it**, planner
+  and parts alike.

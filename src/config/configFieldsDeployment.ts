@@ -30,6 +30,12 @@ export const DEPLOYMENT_FIELDS: readonly ConfigField[] = [
     access: 'advanced',
     why: 'The local run’s own checkout. Must not be under worktreeRoot — the pool would claim it as a slot.',
   },
+  {
+    path: 'discussionsDir',
+    type: 'string',
+    access: 'advanced',
+    why: 'The folder discussion files are kept in, one per story or feature — may be inside an Obsidian vault. Unset turns discussions off.',
+  },
   { path: 'promptTemplatesDir', type: 'string', access: 'advanced', why: 'Where prompt-book overrides are read from.' },
   {
     path: 'docsFolderPrefix',

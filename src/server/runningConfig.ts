@@ -143,6 +143,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'attachmentRoot',
       'validationRoot',
       'localRunRoot',
+      'discussionsDir',
       'promptTemplatesDir',
       'docsFolderPrefix',
       'dbPath',

@@ -2,6 +2,7 @@ import { tmpdir } from 'node:os';
 import type { AskSnapshot } from '../asks/queue.js';
 import { dirname, join } from 'node:path';
 import type { Config } from '../config/config.js';
+import { DiscussionFiles, discussionRepoFolder } from '../discussions/discussionFile.js';
 import { Store } from '../store/store.js';
 import { CompositeConnector } from '../integrations/compositeConnector.js';
 import { buildIntegrations } from '../integrations/registry.js';
@@ -240,6 +241,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     gitObserver,
     cloneUpkeep,
     watchLabel: watchLabelFor(config.labelPrefix),
+    discussions: new DiscussionFiles({ dir: config.discussionsDir, repo: discussionRepoFolder(config), errors }),
   };
 }
 
