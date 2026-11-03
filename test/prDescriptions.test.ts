@@ -675,6 +675,45 @@ test('a description owed to a closed pull request is settled, never pushed, and 
   }
 });
 
+// → docs/spec/07-pull-requests.md#a-closed-pull-request-is-owed-nothing
+test('a description written after its pull request aged out of the closed window is owed nothing, by the archive', async () => {
+  const system = systemWith();
+  try {
+    const sent: number[] = [];
+    const send = system.connector.setPullBody.bind(system.connector);
+    system.connector.setPullBody = (input) => {
+      sent.push(input.prNumber);
+      return send(input);
+    };
+    system.connector.inject({ kind: 'new_issue', number: 182, title: 'Ticket sync rewrite', body: '' });
+    await system.harness.runCycle('manual');
+    seedParts(system);
+    const opened = await callOpenPr(system, 'issue:182:part:cursor', { summary: 'read the cursor back' });
+    assert.equal(opened.isError, false, opened.text);
+    await system.harness.runCycle('manual');
+
+    system.connector.inject({ kind: 'pr_closed', prNumber: 1, merged: true });
+    await system.harness.runCycle('manual');
+    new FakeWorldStore(system.store).mutate((world) => (world.closedPullRequests = []));
+    await system.harness.runCycle('manual');
+
+    system.store.prDescriptions.appendDescription({
+      originRef: 'issue:182:part:cursor',
+      text: 'Written long after the merge.',
+      author: 'operator',
+    });
+    const errorsBefore = system.store.errors.listErrors().length;
+    await system.harness.runCycle('manual');
+    await system.harness.runCycle('manual');
+
+    assert.deepEqual(sent, [], 'nothing is sent onto an archived pull request');
+    assert.deepEqual(system.store.prDescriptions.unpushedDescriptions(), [], 'the row is settled');
+    assert.equal(system.store.errors.listErrors().length, errorsBefore, 'and nothing is recorded as failing');
+  } finally {
+    system.store.close();
+  }
+});
+
 test('the two authors of a described body are separated, so a reviewer knows who wrote what', () => {
   const footer = renderPrFooter({ issueNumber: 12, issueTitle: 'Resume the sync', position: 1, total: 1 });
   const body = composeDescribedBody('  The cursor is read back at startup.  ', footer);

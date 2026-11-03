@@ -764,12 +764,16 @@ with the pull request. Pushed anyway, the provider refuses it (Azure DevOps: `TF
 failed push leaves `pushed_at` null, it was retried and logged as an error on every pulse, for ever.
 
 So `PrDescriptionDesk` reads the world, and where the world reports the pull request **not open** —
-listed in `closedPullRequests`, or listed with `merged` or a `state` other than `open` — it does not
-send, and **settles the row for good**: `pr_descriptions.pr_closed_at` /
+listed in `closedPullRequests`, or listed with `merged` or a `state` other than `open`, or absent from
+`pullRequests` and present in `pr_archive` — it does not send, and **settles the row for good**: `pr_descriptions.pr_closed_at` /
 `pr_description_drafts.pr_closed_at`. It is settled rather than skipped because `closedPullRequests`
 only reaches back `closedPrWindowMs`: a skip would start the retries again once the pull request aged
 out of the list. It is never `pushed_at`, which means _the text reached the pull request_ and is what
 the [adoption](#a-description-written-on-the-provider-is-adopted) compares against.
+
+The archive is what covers a row that only _became_ owed after the pull request aged out of
+`closedPullRequests` — a version written onto a long-merged pull request, or one owed since before the
+settling existed. Without it that row is reported neither way and pushed, refused, on every pulse.
 
 - **A pull request the world does not report either way is pushed**, and retried on failure, as
   before. A stale or missing read never settles anything; only a positive _closed_ does. An open

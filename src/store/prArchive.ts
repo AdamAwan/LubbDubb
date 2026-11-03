@@ -26,6 +26,10 @@ export class PrArchiveStore implements ClosedPrSweep {
     writeAll(prs);
   }
 
+  isArchived(number: number): boolean {
+    return this.ctx.prep(`SELECT 1 FROM pr_archive WHERE number = ?`).get(number) !== undefined;
+  }
+
   readClosedSweep(): string | null {
     const row = this.ctx.prep(`SELECT swept_to FROM closed_pr_sweep WHERE id = 1`).get() as
       { swept_to: string } | undefined;
