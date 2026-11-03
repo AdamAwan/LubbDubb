@@ -128,6 +128,7 @@ deliberately left unchecked, and why, is in
 | [37](spec/37-bot-prs.md)             | Bot pull requests          | The separate read of a dependency bot's pull requests, how an update's size is read, and the tab that draws them                          |
 | [38](spec/38-bug-investigation.md)   | Bug investigation          | The investigate label, the read-only investigator, the hold on the planner, and the three ways its findings are resolved                  |
 | [39](spec/39-app-errors.md)          | App errors                 | The errors nobody declared: the `errors` command, its contract, states, the key, linking, the tracker lock, the Errors tab — partly built |
+| [40](spec/40-discussions.md)         | Discussions                | Notes, ideas, decisions and open questions per story and feature, kept as Markdown in the operator's folder — not yet built               |
 
 ## Conventions used throughout
 
