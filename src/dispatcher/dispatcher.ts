@@ -48,7 +48,7 @@ import type { ParseResult } from './actions.js';
 import type { QueueStatus } from './admission.js';
 import type { ClosedSittings } from '../intake/sitting.js';
 import type { DispatchRuleId } from './rules.js';
-import type { DiscussionReader } from '../discussions/questionHold.js';
+import type { DiscussionReader } from '../discussions/reader.js';
 
 // → docs/spec/05-dispatcher.md
 

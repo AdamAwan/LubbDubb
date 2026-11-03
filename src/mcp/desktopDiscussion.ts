@@ -1,12 +1,15 @@
 import { z } from 'zod';
 import {
   DISCUSSION_AUTHORS,
+  DISCUSSIONS_OFF,
+  failure,
   type DiscussionSettlement,
   type DiscussionSubject,
 } from '../discussions/discussionFile.js';
 import { openQuestions } from '../discussions/entries.js';
+import { DISCUSSION_KINDS, isOneOf } from '../discussions/parse.js';
 import { readDiscussion } from '../discussions/related.js';
-import { fleetDiscussions } from '../discussions/subject.js';
+import { discussionSubject } from '../discussions/subject.js';
 import type { DiscussionEntry } from '../types.js';
 import { desktopIssueRef } from '../validation/desktop.js';
 import { toolSchema } from './schema.js';
@@ -15,18 +18,11 @@ import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 
 // → docs/spec/40-discussions.md#the-desktop-tools
 
-const OFF =
-  'Discussions are off on this harness: discussionsDir is not set in lubbdubb.config.json. Say so — there is ' +
-  'no file to read or write until the operator names a folder.';
+const OFF = `${DISCUSSIONS_OFF} Say so — there is no file to read or write until the operator names a folder.`;
 
 const issueArg = z.number().describe('The story or Feature number, e.g. 142.');
 
-const KINDS = ['note', 'idea', 'question', 'decision'] as const;
 const ACTIONS = ['answer', 'accept', 'park', 'drop', 'supersede'] as const;
-
-function oneOf<T extends string>(value: unknown, allowed: readonly T[]): value is T {
-  return typeof value === 'string' && (allowed as readonly string[]).includes(value);
-}
 
 function changed(deps: DesktopToolDeps): void {
   deps.changed({ type: 'dirty', sections: ['goals', 'queue'] });
@@ -50,8 +46,8 @@ function subjectFor(
   deps: DesktopToolDeps,
   number: number,
 ): { ok: true; subject: DiscussionSubject } | { ok: false; error: string } {
-  const held = deps.store.world.getWorldBaseline()?.issues.some((i) => i.number === number) ?? false;
-  if (!held && deps.discussions.locate(number) === null) {
+  const issues = deps.store.world.getWorldBaseline()?.issues ?? [];
+  if (!issues.some((i) => i.number === number) && deps.discussions.locate(number) === null) {
     return {
       ok: false,
       error:
@@ -59,10 +55,7 @@ function subjectFor(
         'discussion file. Check the number, or that the ticket carries the watch tag.',
     };
   }
-  return {
-    ok: true,
-    subject: fleetDiscussions(deps.discussions, deps.store, deps.issueContainerTypes).subject(number),
-  };
+  return { ok: true, subject: discussionSubject(issues, number, deps.issueContainerTypes) };
 }
 
 const discussionRead: DesktopToolFactory = (deps) => ({
@@ -78,17 +71,18 @@ const discussionRead: DesktopToolFactory = (deps) => ({
     if (!ref.ok) return toolError(ref.error);
     if (!deps.discussions.enabled) return toolError(OFF);
     const issues = deps.store.world.getWorldBaseline()?.issues ?? [];
-    const first = readDiscussion(deps.discussions, issues, ref.issue);
-    for (const n of [ref.issue, ...first.related.map((r) => r.number)]) deps.discussions.identify(n);
-    const reading = readDiscussion(deps.discussions, issues, ref.issue);
-    const doc = reading.path === null ? null : deps.discussions.read(ref.issue);
+    const read = (): ReturnType<typeof readDiscussion> =>
+      readDiscussion(deps.discussions, issues, ref.issue, deps.issueContainerTypes);
+    const first = read();
+    const named = [ref.issue, ...first.reading.related.map((r) => r.number)].map((n) => deps.discussions.identify(n));
+    const { reading, frontMatter } = named.some((r) => r.ok && r.changed) ? read() : first;
     return toolJson({
       issue: ref.issue,
       kind: reading.kind,
       title: reading.title,
       file: reading.path,
-      published: doc?.frontMatter.published ?? null,
-      pulled: doc?.frontMatter.pulled ?? null,
+      published: frontMatter?.published ?? null,
+      pulled: frontMatter?.pulled ?? null,
       open: openQuestions(reading.entries).map(entryLine),
       entries: reading.entries.map(entryLine),
       related: reading.related.map((n) => ({
@@ -117,7 +111,7 @@ const discussionAdd: DesktopToolFactory = (deps) => ({
   inputSchema: toolSchema(
     z.object({
       issue: issueArg,
-      kind: z.enum(KINDS).describe('What the entry is.'),
+      kind: z.enum(DISCUSSION_KINDS).describe('What the entry is.'),
       body: z.string().describe('The entry, in Markdown, as the operator agreed it.'),
       suggested: z
         .boolean()
@@ -130,7 +124,7 @@ const discussionAdd: DesktopToolFactory = (deps) => ({
     if (!ref.ok) return toolError(ref.error);
     if (!deps.discussions.enabled) return toolError(OFF);
     const kind = args.kind;
-    if (!oneOf(kind, KINDS)) return toolError(`kind must be one of ${KINDS.join(', ')}.`);
+    if (!isOneOf(kind, DISCUSSION_KINDS)) return toolError(`kind must be one of ${DISCUSSION_KINDS.join(', ')}.`);
     const body = String(args.body ?? '').trim();
     if (body === '') return toolError('body is empty — there is nothing to write down.');
     if (args.suggested === true && kind !== 'idea')
@@ -185,7 +179,7 @@ const discussionSettle: DesktopToolFactory = (deps) => ({
     if (id === '') return toolError('entry is empty — name the entry by its id from discussion_read.');
     const text = typeof args.text === 'string' ? args.text.trim() : '';
     const action = args.action;
-    if (!oneOf(action, ACTIONS)) return toolError(`action must be one of ${ACTIONS.join(', ')}.`);
+    if (!isOneOf(action, ACTIONS)) return toolError(`action must be one of ${ACTIONS.join(', ')}.`);
     let settlement: DiscussionSettlement;
     if (action === 'answer' || action === 'supersede') {
       if (text === '')
@@ -228,14 +222,13 @@ const discussionPublish: DesktopToolFactory = (deps) => ({
     const previous = doc.frontMatter.published;
     let sent: string | undefined;
     try {
-      sent = (await deps.connector.upsertIssueComment({ number: ref.issue, body, commentRef: previous })).ref;
+      sent = (await deps.comments.upsertIssueComment({ number: ref.issue, body, commentRef: previous })).ref;
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = failure(error);
       deps.errors?.record({ source: 'server', message: `Publishing the discussion on #${ref.issue} failed.`, detail });
       return toolError(`The tracker refused the comment on #${ref.issue}: ${detail}`);
     }
     if (!sent) return toolError(`The tracker took the comment on #${ref.issue} but named no id for it.`);
-    deps.store.issueComments.recordIssueCommentSent(ref.issue, sent);
     const marked = deps.discussions.setFrontMatter(ref.issue, { published: sent });
     changed(deps);
     if (!marked.ok)

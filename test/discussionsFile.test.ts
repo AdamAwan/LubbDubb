@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  appendFileSync,
   chmodSync,
   existsSync,
   mkdirSync,
@@ -19,7 +20,8 @@ import {
   discussionRepoFolder,
   type DiscussionFilesDeps,
 } from '../src/discussions/discussionFile.js';
-import type { ErrorLogInput } from '../src/types.js';
+import type { ErrorLogInput, Issue, IssueRelative } from '../src/types.js';
+import { discussionSubject, resolveSubject } from '../src/discussions/subject.js';
 import { buildSystem } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -156,6 +158,48 @@ test('front-matter keys are set in place', () => {
   assert.deepEqual([front.published, front.pulled, front.title], ['2318842', '2026-11-03T14:02:11Z', 'Export to CSV']);
 });
 
+test('addMany appends every entry and the front-matter keys in one write', () => {
+  const { discussions } = files();
+  discussions.add(story, { kind: 'note', body: 'first', author: 'operator' });
+  const written = discussions.addMany(
+    story,
+    [
+      { kind: 'note', body: 'second', author: DISCUSSION_AUTHORS.tracker('sam') },
+      { kind: 'note', body: 'third', author: DISCUSSION_AUTHORS.tracker('kim') },
+    ],
+    { pulled: '2026-11-03T14:02:11Z' },
+  );
+  assert.ok(written.ok);
+  const doc = discussions.read(142)!;
+  assert.deepEqual(
+    doc.entries.map((e) => e.body),
+    ['first', 'second', 'third'],
+  );
+  assert.equal(new Set(doc.entries.map((e) => e.id)).size, 3, 'every entry has its own id');
+  assert.equal(doc.frontMatter.pulled, '2026-11-03T14:02:11Z');
+});
+
+test('a file the operator changes or adds between reads is read afresh', () => {
+  const { discussions, folder } = files();
+  const write = discussions.add(story, { kind: 'note', body: 'x', author: 'operator' });
+  assert.ok(write.ok);
+  assert.equal(discussions.read(142)!.entries.length, 1);
+  appendFileSync(write.path, '\n## Note · 2026-11-03 · operator\n\nby hand\n');
+  assert.equal(discussions.read(142)!.entries.length, 2, 'an edit is seen');
+  writeFileSync(join(folder, '150 Later.md'), '## Note · 2026-11-03 · operator\n\nnew\n');
+  utimesSync(folder, new Date(2030, 0, 1), new Date(2030, 0, 1));
+  assert.deepEqual(discussions.numbers(), [142, 150], 'a new file is listed');
+  assert.equal(discussions.read(150)!.entries[0]!.body, 'new');
+});
+
+test('identify says whether it named anything', () => {
+  const { discussions, folder } = files();
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, '142 x.md'), '## Note · 2026-11-01 · operator\n\nHand-written.\n');
+  assert.deepEqual(discussions.identify(142), { ok: true, path: join(folder, '142 x.md'), changed: true });
+  assert.deepEqual(discussions.identify(142), { ok: true, path: join(folder, '142 x.md'), changed: false });
+});
+
 test('two files for one number is recorded once and the older one is used', () => {
   const { discussions, folder, recorded } = files();
   mkdirSync(folder, { recursive: true });
@@ -231,4 +275,40 @@ test('the system composes one discussions object writing under <discussionsDir>/
   assert.equal(write.path, join(root, 'vault', 'widgets', '3 Feature three.md'));
   assert.equal(write.entry.author, '@sam (tracker)');
   assert.equal(system.discussions.read(3)!.frontMatter.parent, null, 'a feature has no parent');
+});
+
+test('one resolver names a story or a feature for every reader and writer', () => {
+  const relative = (number: number): IssueRelative => ({
+    number,
+    title: `#${number}`,
+    state: 'open',
+    workItemState: 'Active',
+    issueType: '',
+  });
+  const issue = (number: number, parent: number | null, issueType?: string): Issue => ({
+    id: `i${number}`,
+    number,
+    title: `#${number}`,
+    body: '',
+    labels: [],
+    state: 'open',
+    linkedPrNumber: null,
+    parent: parent === null ? null : relative(parent),
+    ...(issueType === undefined ? {} : { issueType }),
+  });
+  const issues = [issue(1, null, 'Epic'), issue(87, 1, 'Feature'), issue(142, 87), issue(200, null), issue(201, 200)];
+  assert.equal(resolveSubject(issues, 87, undefined).kind, 'feature', 'a container type, even under an epic');
+  assert.deepEqual(
+    resolveSubject(issues, 87, undefined).stories.map((s) => s.number),
+    [142],
+  );
+  assert.deepEqual(discussionSubject(issues, 142, undefined), {
+    number: 142,
+    title: '#142',
+    kind: 'story',
+    parent: { number: 87, title: '#87' },
+  });
+  assert.equal(resolveSubject(issues, 200, undefined).kind, 'feature', 'a top-level parent with no type');
+  assert.deepEqual(discussionSubject(issues, 999, undefined), { number: 999, title: '', kind: 'story', parent: null });
+  assert.equal(resolveSubject(issues, 999, undefined).kind, null, 'nothing known');
 });

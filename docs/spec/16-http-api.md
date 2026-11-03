@@ -1231,7 +1231,7 @@ yet is `enabled: true` with `path: null` and no entries — never a 404, because
 an ordinary answer. `related` is the feature's standing decisions and open questions for a story, and
 each story's for a feature, leaving out a file with neither. It reads through `System.discussions`
 alone, so it writes nothing and a file it cannot read is recorded and answered as absent. A number that
-is not a positive integer is a 400. → [40](40-discussions.md#in-the-cockpit)
+is not an integer is a 400 (`IssueNumberParams`). → [40](40-discussions.md#in-the-cockpit)
 
 ### `GET /api/retrospectives/:ref`
 

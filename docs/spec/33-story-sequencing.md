@@ -234,7 +234,8 @@ cover an unwatched story: every predecessor workable, `unworkable` empty.
 The verdict rides on `StageContext.sequenceWaits` for later stages to read, and it is computed
 **once**, in the
 dispatcher's context assembly, beside `routes` and `eligibleIssues`. It is not a second opinion
-formed inside a rule: `issue-appraisal` and `issue-plan` both consult it and must
+formed inside a rule: `issue-appraisal`, `issue-investigate` and `issue-plan` all consult it, through the one
+`StageContext.issueHold` ([40](40-discussions.md#an-open-question-holds-the-story)), and must
 never disagree about whether a story is ready, exactly as they must never disagree about which plan
 arm it is on ([05](05-dispatcher.md#the-rule-book)).
 

@@ -6,8 +6,6 @@ import { issueOrigin, planBranch, planOrigin } from '../../plans/planning.js';
 import { currentPlanSummary } from '../../plans/parts.js';
 import { relatedWorkNote } from '../../issueRelations.js';
 import { readOnlyDispatch, readOnlyNote } from './readOnlyDispatch.js';
-import { sequenceHoldReason } from '../../sequence/readiness.js';
-import { questionHoldReason } from '../../discussions/questionHold.js';
 import { SITTING_REASON } from '../../intake/sitting.js';
 import { goalCriteriaNote } from '../../criteria/note.js';
 import { investigationNote, investigationStanding } from '../../intake/investigation.js';
@@ -30,10 +28,8 @@ function planHold(
   if (investigation !== null) return { reason: investigation, held: 'superseded' };
   if (s.sittingHolds(issueNumber))
     return { reason: `${reason} Held: ${SITTING_REASON}, on the goal in the cockpit.`, held: 'sitting' };
-  const waits = s.sequenceWaits.get(issueNumber);
-  if (waits) return { reason: `${reason} ${sequenceHoldReason(waits)}`, held: 'sequenced' };
-  const questions = s.questionHold(issueNumber);
-  if (questions) return { reason: `${reason} ${questionHoldReason(questions)}`, held: 'questions' };
+  const hold = s.issueHold(issueNumber);
+  if (hold) return { reason: `${reason} ${hold.reason}`, held: hold.held };
   return { reason, held: planner === 'cooldown' ? 'cooldown' : undefined };
 }
 

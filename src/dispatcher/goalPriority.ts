@@ -3,6 +3,7 @@ import { issueBranch } from './issuePickup.js';
 import { issueOriginRef, issueOriginRole, obstacleOriginId } from '../issueOrigins.js';
 import { markedNumbers } from '../goalPause.js';
 import { cascadeToChildren } from '../issueRelations.js';
+import { prOriginNumber } from '../primitives.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -56,7 +57,7 @@ export function expeditedOrigins(
     for (const n of numbers) if (issueOriginRole(n, originRef) !== null) return true;
     const obstacle = obstacleOriginId(originRef);
     if (obstacle !== null) return flaggedObstacles.has(obstacle);
-    const pr = /^pr:(\d+)(?::|$)/.exec(originRef);
-    return pr ? prNumbers.has(Number(pr[1])) : false;
+    const pr = prOriginNumber(originRef);
+    return pr !== null && prNumbers.has(pr);
   };
 }

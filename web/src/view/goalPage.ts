@@ -164,7 +164,7 @@ export function buildGoalPage(
     sequence: goalSequence(state, issue),
     obligations: goalObligations(state.config.environments),
     placesWorkItems: state.config.canPlaceWorkItem,
-    discussions: state.config.discussions === true,
+    discussions: state.config.discussions,
   };
 }
 

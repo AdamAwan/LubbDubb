@@ -193,7 +193,7 @@ export interface McpToolDeps {
    * verdict can release the planner. → docs/spec/38-bug-investigation.md#the-label
    */
   investigateLabel?: (issueNumber: number) => Promise<void>;
-  /** Where `discussion_add` writes, and what a first write heads the file with. Absent is off. → docs/spec/40-discussions.md */
+  /** → docs/spec/40-discussions.md#what-fleet-agents-write */
   discussions?: {
     files: Pick<DiscussionFiles, 'enabled' | 'add'>;
     subject: (issueNumber: number) => DiscussionSubject;

@@ -79,17 +79,14 @@ function deck(over: { discussionsDir?: string | null; refuseComment?: boolean } 
   });
   const changes: DesktopChange[] = [];
   const posted: IssueCommentInput[] = [];
+  system.connector.upsertIssueComment = async (input: IssueCommentInput): Promise<SendResult> => {
+    if (over.refuseComment) throw new Error('the tracker is down');
+    posted.push(input);
+    return { ok: true, ref: input.commentRef ?? `c${posted.length}` };
+  };
   const tools = buildDesktopTools(
     {
       ...desktopDeps(system),
-      connector: {
-        ...desktopDeps(system).connector,
-        upsertIssueComment: async (input: IssueCommentInput): Promise<SendResult> => {
-          if (over.refuseComment) throw new Error('the tracker is down');
-          posted.push(input);
-          return { ok: true, ref: input.commentRef ?? `c${posted.length}` };
-        },
-      } as never,
       changed: (c) => changes.push(c),
       now: () => NOW,
     },

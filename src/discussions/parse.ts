@@ -8,13 +8,6 @@ import type {
 
 // → docs/spec/40-discussions.md#the-file
 
-const KINDS: Record<string, DiscussionKind> = {
-  note: 'note',
-  idea: 'idea',
-  question: 'question',
-  decision: 'decision',
-};
-
 const STATES: Record<DiscussionKind, readonly DiscussionEntryState[]> = {
   note: [],
   idea: ['open', 'accepted', 'parked', 'dropped'],
@@ -22,7 +15,13 @@ const STATES: Record<DiscussionKind, readonly DiscussionEntryState[]> = {
   decision: [],
 };
 
-const ID_PREFIX: Record<DiscussionKind, string> = { note: 'n', idea: 'i', question: 'q', decision: 'd' };
+export const DISCUSSION_KINDS = ['note', 'idea', 'question', 'decision'] as const satisfies readonly DiscussionKind[];
+
+export const ID_PREFIX: Record<DiscussionKind, string> = { note: 'n', idea: 'i', question: 'q', decision: 'd' };
+
+export function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value is T {
+  return typeof value === 'string' && (allowed as readonly string[]).includes(value);
+}
 
 const HEADING = /^##(?:[ \t]+(.*))?$/;
 const TRAILING_ID = /\s+\^([A-Za-z0-9-]+)\s*$/;
@@ -31,10 +30,6 @@ const FENCE = /^\s*(`{3,}|~{3,})/;
 const ANSWER = /^Answer:\s*(.*)$/;
 const SUPERSEDES = /Supersedes\s+\^([A-Za-z0-9-]+)/g;
 const FRONT_KEY = /^([A-Za-z0-9_-]+):(.*)$/;
-
-export function idPrefix(kind: DiscussionKind): string {
-  return ID_PREFIX[kind];
-}
 
 interface HeadingParts {
   kind: DiscussionKind;
@@ -105,8 +100,8 @@ function parseHeading(text: string): HeadingParts | null {
     rest = ` ${rest}`.slice(0, idMatch.index).trim();
   }
   const parts = rest.split(/\s*·\s*/);
-  const kind = KINDS[(parts[0] ?? '').toLowerCase()];
-  if (kind === undefined || (parts.length !== 3 && parts.length !== 4)) return null;
+  const kind = (parts[0] ?? '').toLowerCase();
+  if (!isOneOf(kind, DISCUSSION_KINDS) || (parts.length !== 3 && parts.length !== 4)) return null;
   const written = parts.length === 4 ? parts[1]!.toLowerCase() : null;
   const allowed = STATES[kind];
   if (written !== null && !allowed.includes(written as DiscussionEntryState)) return null;
@@ -262,7 +257,7 @@ export function cleanBody(body: string): string {
   return out.join('\n');
 }
 
-export interface FormattedEntry extends HeadingParts {
+interface FormattedEntry extends HeadingParts {
   body: string;
 }
 

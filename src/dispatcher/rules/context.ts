@@ -4,7 +4,7 @@ import type { CooldownPolicy } from '../dispatchCooldown.js';
 import type { IssuePickupPolicy } from '../issuePickup.js';
 import type { InvestigationStandings } from '../../intake/investigation.js';
 import type { PromptTemplates } from '../promptTemplates.js';
-import type { RuleHeld } from '../admission.js';
+import type { LiftableHold, RuleHeld } from '../admission.js';
 import type { CiPolicy } from '../../ci/ciPolicy.js';
 import type { PrReviewPolicy } from '../../review/policy.js';
 import type { PrReviewCharters } from '../../review/prReview.js';
@@ -12,7 +12,6 @@ import type { PlanningPolicy } from '../../plans/planning.js';
 import type { LocalValidationPolicy } from '../../validation/local/policy.js';
 import type { SequenceableFeature } from '../../sequence/sequence.js';
 import type { SequenceWait } from '../../sequence/readiness.js';
-import type { QuestionHold } from '../../discussions/questionHold.js';
 import type {
   Decision,
   FeatureSequence,
@@ -43,6 +42,11 @@ import type { PrRefStyle } from '../../pr/prRef.js';
 
 // → docs/spec/05-dispatcher.md (the rule book)
 
+export interface IssueHold {
+  held: LiftableHold;
+  reason: string;
+}
+
 export interface StageContext {
   ctx: DispatchContext;
   now: string;
@@ -65,8 +69,11 @@ export interface StageContext {
   /** → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner */
   sittingHolds: (issueNumber: number) => boolean;
   criteriaFor: (issueNumber: number) => GoalCriteriaVersion | null;
-  /** → docs/spec/40-discussions.md#an-open-question-holds-the-story */
-  questionHold: (issueNumber: number) => QuestionHold | null;
+  /**
+   * The sequence hold, then the open-question hold; `sequence: false` for a planned part, which its own
+   * dependencies hold instead. → docs/spec/40-discussions.md#an-open-question-holds-the-story
+   */
+  issueHold: (issueNumber: number, opts?: { sequence: boolean }) => IssueHold | null;
   /** The appended Discussion section, or ''. → docs/spec/40-discussions.md#what-agents-read */
   discussionNote: (issueNumber: number) => string;
   pinFor: (originRef: string | null) => string | null;

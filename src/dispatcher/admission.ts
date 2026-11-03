@@ -8,6 +8,10 @@ type HeldReason =
 
 export type RuleHeld = Exclude<HeldReason, 'waiting'>;
 
+export type LiftableHold = Extract<RuleHeld, 'sequenced' | 'questions'>;
+
+export const LIFTABLE_HOLDS: ReadonlySet<RuleHeld> = new Set<LiftableHold>(['sequenced', 'questions']);
+
 export type QueueStatus = 'dispatching' | HeldReason;
 
 export function askedAlready(

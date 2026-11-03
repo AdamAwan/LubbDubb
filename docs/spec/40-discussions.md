@@ -141,21 +141,29 @@ end of its body (`Answer: …`, `Became [[…]]`). Setting a front-matter key re
 as `System.discussions`. With `discussionsDir` unset, `enabled` is false, `read` answers null and every
 write is a refusal — nothing touches the disk.
 
-| Member             | Does                                                                                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `locate(n)`        | The file for issue `n`, or null.                                                                                                                                   |
-| `read(n)`          | The parsed file, or **null** for off, no file, or a failure — which is recorded. Null is what every reader fails open on.                                          |
-| `add(subject, …)`  | Appends a note, idea, question or decision, creating the folder and the file (with `ref`, `kind`, `title` and, for a story, `parent`) on the first write.          |
-| `settle(n, id, …)` | Answers an open question; accepts, parks or drops an idea, with an optional line under it; supersedes a decision by appending a new one saying `Supersedes ^<id>`. |
-| `identify(n)`      | Adds a `^id` to every readable entry that lacks one and writes the file only if that changed it. Nothing else moves.                                               |
-| `setFrontMatter`   | Writes `published` and `pulled`.                                                                                                                                   |
+| Member                | Does                                                                                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `locate(n)`           | The file for issue `n`, or null.                                                                                                                                   |
+| `read(n)`             | The parsed file, or **null** for off, no file, or a failure — which is recorded. Null is what every reader fails open on.                                          |
+| `add(subject, …)`     | Appends a note, idea, question or decision, creating the folder and the file (with `ref`, `kind`, `title` and, for a story, `parent`) on the first write.          |
+| `settle(n, id, …)`    | Answers an open question; accepts, parks or drops an idea, with an optional line under it; supersedes a decision by appending a new one saying `Supersedes ^<id>`. |
+| `addMany(subject, …)` | Appends several entries and sets front-matter keys in **one** write — the pull's batch.                                                                            |
+| `identify(n)`         | Adds a `^id` to every readable entry that lacks one and writes the file only if that changed it, answering whether it did. Nothing else moves.                     |
+| `setFrontMatter`      | Writes `published` and `pulled`.                                                                                                                                   |
+| `obsidianUrl(path)`   | `obsidian://open?path=…` when the folder sits inside a vault, else null. The vault is looked for once per object.                                                  |
 
 A write answers `{ok: true, entry, path}` or a refusal `{ok: false, error}` — a wrong kind, an unknown
 id, an answered question answered again. A failure of the disk is recorded through `errors.record` and
 answered as a refusal, never thrown. **Who may write a decision is the caller's rule**, not the
 object's: the fleet tool refuses `kind: 'decision'` before it gets here.
 
-The author strings are `DISCUSSION_AUTHORS`: `operator`, `operator (via Claude)`,
+**Reading is cached, and the cache is checked against the disk on every read.** The folder's listing (issue
+number → file) is kept until the folder's mtime moves, and a parsed file until its own mtime or size does, so
+the dispatcher reading every held story's file every pulse costs a `stat`, not a parse. Every harness write
+drops both for what it touched. A duplicate number is resolved — and recorded, once — when the listing is
+built; a listing or a file that cannot be read is recorded and answered as absent, as before.
+
+The author strings are `DISCUSSION_AUTHORS`: `operator (via Claude)`,
 `Claude (suggested)`, `agent <rule>#<task id>` and `@<login> (tracker)`. The date is the machine's
 local date. The pure selectors over a file's entries — `standingDecisions`, `openQuestions`,
 `answeredQuestions`, `acceptedIdeas`, `notesNewestFirst` — are in `src/discussions/entries.ts`.
@@ -182,7 +190,8 @@ build them.
 
 `discussionSection` (`src/discussions/promptSection.ts`) renders it, as `StageContext.discussionNote(n)`, onto rules
 `issue-plan`, `plan-part` and `pr-review` (the story behind the pull request, by `issueForPr`). The feature is the
-world's `issue.parent`, else the file's own `parent` link. Each entry carries its date, author and `^id`; an
+world's `issue.parent`, else the file's own `parent` link, never the issue itself — `discussionPair`
+(`src/discussions/reader.ts`) reads the pair, for the hold, the section and the cockpit alike. Each entry carries its date, author and `^id`; an
 unreadable heading is handed over as a note with the heading it could not read. The budget leaves room for the
 cut line itself, so the section stays under 6,000 characters. Nothing at all is appended with discussions off, no
 file, or nothing in it to hand over — open questions alone are not handed over, they [hold](#an-open-question-holds-the-story).
@@ -230,11 +239,17 @@ with a link to the file, so the hold is never silent.
   `sequenced`. The operator saying "go" outranks the question.
 - **A question an agent raised counts.** That is the point: the planner that cannot tell whether
   empty columns are dropped asks, and nothing is built on a guess.
-- **Where it is applied.** `questionHold` (`src/discussions/questionHold.ts`) is read as `StageContext.questionHold`
-  by rules `issue-appraisal`, `issue-investigate`, `issue-plan` and `plan-part` — every pre-plan and planned dispatch
-  for the story, after the sequence hold. "Has a plan" is any plan row for the story. A part still counts against
+- **Where it is applied.** `questionHold` (`src/discussions/questionHold.ts`) is read through
+  `StageContext.issueHold(n)` (`discussionView`, built beside `sequencingView` in
+  `src/dispatcher/ruleDispatcherStage.ts`), which answers the sequence hold first and the question hold second,
+  as `{held, reason}` — so rules `issue-appraisal`, `issue-investigate`, `issue-plan` and `plan-part` each ask
+  once, and every pre-plan and planned dispatch for the story is held the same way. `plan-part` asks with
+  `sequence: false`: a part is held by its own plan's dependencies, never by the story order
+  ([33](33-story-sequencing.md#readiness-and-the-hold)). It is not an `issueGates` filter, which drops an issue
+  silently; a hold stays a queued row. "Has a plan" is any plan row for the story. A part still counts against
   `maxConcurrentPartsPerIssue` while held, and `capped` wins over `questions`, so lifting the hold never takes a
-  story over its cap.
+  story over its cap. Which holds an expedite or override lifts is `LIFTABLE_HOLDS`, beside `RuleHeld` in
+  `src/dispatcher/admission.ts`.
 - **What Up next shows.** The row's status is `questions`, labelled _open questions_; its reason reads _Held:
   waiting on N open questions — answer them in `<path>`_, naming every file they are in, the story's first.
 
@@ -257,16 +272,16 @@ Comments other people leave on the ticket are pulled into the file on the harnes
   creates a file. The pass is off where `discussionsDir` is unset or no issues provider can list comments.
 - **Each issue is pulled at most every five minutes** on the cycle, held in memory, so a busy fleet's 30s
   pulse is not a comment listing per file per pulse. `discussion_pull` is not held to it. Two pulls of one
-  issue at once share one run.
+  issue at once share one run, and the pass runs at most four issues' pulls at a time.
 - **`pulled` is the newest comment's own `createdAt`**, the harness's own comments included, and is handed
   back to the provider as the lower bound; only comments created strictly after it are taken. Compared as
-  dates, never as strings — providers differ in precision. A comment that fails to write stops the pull there,
-  so `pulled` never passes a comment that is not in the file.
+  dates, never as strings — providers differ in precision. **A pull is one write** (`addMany`): every new note
+  and the new `pulled` land together or not at all, so `pulled` never passes a comment that is not in the file.
 - **The record of the harness's own comments is `issue_comments_sent`** (`src/store/issueComments.ts`), one row
   per comment by the provider's id. It is written by `recordIssueComments` (`src/sink/issueCommentsSent.ts`), a
   wrapper the foundation puts round the sink, so every `upsertIssueComment` the harness sends — the appraisal's,
-  a plan's, an environment's — is recorded wherever it is called from, with no call site to forget. The desktop's
-  `discussion_publish` goes through the connector and records its own. A comment sent before the table has no
+  a plan's, an environment's, the desktop's `discussion_publish` (handed the foundation's sink as
+  `DesktopToolDeps.comments`) — is recorded wherever it is called from, with no call site to forget. A comment sent before the table has no
   row and is pulled as anyone else's; there is no backfill, because the only evidence on those is the author.
 - **A failure to read the tracker is recorded** through `errors.record` and leaves `pulled` where it was.
 - An Azure DevOps comment's text is HTML and lands as it is; a Markdown file carries HTML.
@@ -318,14 +333,14 @@ Named in `DESKTOP_TOOL_NAMES`, built in `src/mcp/desktopDiscussion.ts`, never in
 - **Answering an open question lifts its hold** on the next cycle, so a `/lubbdubb:discuss` that
   clears the last question is what lets the story start.
 - **`discussion_read` is the cockpit's reading**, `readDiscussion` (`src/discussions/related.ts`), with the
-  file's `published` and `pulled` and the open questions pulled to the front as `open`. A first
-  `discussion_add` heads the file the way the fleet tool does (`fleetDiscussions`,
-  `src/discussions/subject.ts`), and refuses an issue the world does not list and that has no file —
+  file's `published` and `pulled` (its front matter, carried beside the reading) and the open questions pulled
+  to the front as `open`. A first `discussion_add` heads the file the way the fleet tool does
+  (`discussionSubject`, `src/discussions/subject.ts`), and refuses an issue the world does not list and that has no file —
   a mistyped number never becomes a file.
 - **`discussion_read` names what was written by hand.** A question typed into the file in Obsidian has no
   `^id` until something writes to the file, and an entry with no id cannot be settled — so the read
   first calls `DiscussionFiles.identify` on the subject and on every related file, adding the missing
-  ids and nothing else. Without it, a question the operator wrote themselves holds the story and can
+  ids and nothing else, and reads again only if one of them changed a file. Without it, a question the operator wrote themselves holds the story and can
   never be answered from Claude.
 - **`suggested: true`** is how an idea is written as `Claude (suggested)`; it is refused on any other kind.
   `discussion_settle` takes the entry's id with or without its `^`; `answer` and `supersede` need `text`,
@@ -353,8 +368,9 @@ In the conversation — _"publish this"_ or `/lubbdubb:discuss <n> publish`:
 3. `discussion_publish` posts the approved text through `upsertIssueComment` as **one** comment, and
    writes its id to `published`. Publishing again edits that comment rather than adding one.
 
-It refuses where the issue has no file — there is nothing to publish from and nowhere to keep the id. The
-id is also written to `issue_comments_sent`, so the comment is never [pulled back in](#pulling-tracker-comments-in)
+It refuses where the issue has no file — there is nothing to publish from and nowhere to keep the id. It posts
+through the foundation's sink, so the id is also written to `issue_comments_sent` by the same wrapper as every
+other comment, so the comment is never [pulled back in](#pulling-tracker-comments-in)
 even if `published` is edited away. A tracker that refuses is a refusal and leaves `published` as it was; a
 comment posted whose id cannot be written to the file is a refusal that says so, because publishing again
 would then add a second comment.
@@ -392,32 +408,39 @@ nothing: every change is made in Claude or in the file.
   `readDiscussion` in `src/discussions/related.ts`): `enabled`, the file's `path` (null where none has
   been written), its entries, and the related ones — for a **story** its feature's standing decisions
   and open questions; for a **feature** the standing decisions and open questions of each story under it
-  that has any. Story or feature is decided the way `feature_read` decides it — the world's
-  `parent` link first, then the stories whose parent is this number — and the file's own front matter
-  only where the world cannot say. → [16](16-http-api.md#get-apidiscussionsnumber)
+  that has any. Story or feature is decided by `resolveSubject` (`src/discussions/subject.ts`), the one
+  resolver every reader and writer of a file uses: a container type (`isContainerIssue`) is a feature, and so
+  is an issue with no parent and stories under it (a tracker with no issue types); anything else the world
+  holds is a story; the file's own front matter decides only where the world cannot say. A feature's stories
+  are `storiesUnder` (`src/issueRelations.ts`), which `sequence_read` uses too. → [16](16-http-api.md#get-apidiscussionsnumber)
 - **The file link is `obsidian://open?path=…` when the file sits inside a vault** — a folder above it
   holding `.obsidian/` — and otherwise the path itself, drawn as text: a browser will not follow a
   `file://` link out of an `http://` page, so a link there would be a control that does nothing.
-- **It re-reads on every snapshot refresh**, so a write from Claude — which broadcasts through
-  `DesktopToolDeps.changed` — or from an agent shows while the tab is open. A read is one directory
-  listing and one small file.
+- **It re-reads whenever the snapshot's `world` is refreshed** — a `goals` section refresh, or a full one.
+  A write from Claude broadcasts `goals` and `queue` through `DesktopToolDeps.changed`, so it shows
+  straight away while the tab is open. An agent's note shows on the next full refresh (agent done, or the
+  end of the cycle). The `fleet`- and `activity`-only refreshes a running agent sends many times a minute
+  do not re-read it. A read is a `stat` of the folder and of each file it touches, and a parse only of a
+  file that changed.
 - The open questions **holding a story** are drawn in Up next as well, by the hold. →
   [the hold](#an-open-question-holds-the-story)
 
 ## Where it will live
 
-| Piece                    | Path                                |
-| ------------------------ | ----------------------------------- |
-| File reading and writing | `src/discussions/discussionFile.ts` |
-| Parsing the Markdown     | `src/discussions/parse.ts`          |
-| Selecting entries        | `src/discussions/entries.ts`        |
-| The hold                 | `src/discussions/questionHold.ts`   |
-| Pulling tracker comments | `src/discussions/pullDesk.ts`       |
-| Prompt section           | `src/discussions/promptSection.ts`  |
-| The fleet agent's tool   | `src/mcp/tools/discussionAdd.ts`    |
-| The desktop tools        | `src/mcp/desktopDiscussion.ts`      |
-| The skill                | `plugin/skills/discuss/SKILL.md`    |
-| Read route for the tab   | `src/server/routes/discussions.ts`  |
+| Piece                          | Path                                |
+| ------------------------------ | ----------------------------------- |
+| File reading and writing       | `src/discussions/discussionFile.ts` |
+| Parsing the Markdown           | `src/discussions/parse.ts`          |
+| Selecting entries              | `src/discussions/entries.ts`        |
+| The hold                       | `src/discussions/questionHold.ts`   |
+| Reader, story-and-feature pair | `src/discussions/reader.ts`         |
+| Story or feature               | `src/discussions/subject.ts`        |
+| Pulling tracker comments       | `src/discussions/pullDesk.ts`       |
+| Prompt section                 | `src/discussions/promptSection.ts`  |
+| The fleet agent's tool         | `src/mcp/tools/discussionAdd.ts`    |
+| The desktop tools              | `src/mcp/desktopDiscussion.ts`      |
+| The skill                      | `plugin/skills/discuss/SKILL.md`    |
+| Read route for the tab         | `src/server/routes/discussions.ts`  |
 
 ## Decided
 

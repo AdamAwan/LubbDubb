@@ -2,6 +2,8 @@ import { Octokit } from '@octokit/rest';
 import { retry } from '@octokit/plugin-retry';
 import { throttling } from '@octokit/plugin-throttling';
 import { EtagCache, installConditionalRequests } from './etagCache.js';
+import { listIssueComments } from './issueComments.js';
+import { resolvePullDetail } from './pullDetail.js';
 import type { MergeMethod } from '../../sink/actionSink.js';
 import { withinClosedWindow } from '../closedWindow.js';
 import type {
@@ -24,17 +26,55 @@ import type {
   GitHubApi,
 } from './githubApi.js';
 
-import {
-  RESOLVE_THREAD_MUTATION,
-  REVIEW_THREADS_QUERY,
-  threadsOnPage,
-  type GqlReviewThreadPage,
-  type GqlThread,
-} from './reviewThreadsGql.js';
-
 // → docs/spec/15-integrations.md
 
-const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const RESOLVE_THREAD_MUTATION = `
+  mutation ($threadId: ID!) {
+    resolveReviewThread(input: { threadId: $threadId }) {
+      thread { isResolved }
+    }
+  }
+`;
+
+const REVIEW_THREADS_QUERY = `
+  query ($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+        reviewThreads(first: 100, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            id
+            isResolved
+            comments(first: 1) { nodes { databaseId } }
+          }
+        }
+      }
+    }
+  }
+`;
+
+interface GqlThread {
+  nodeId: string;
+  rootCommentId: number;
+  isResolved: boolean;
+}
+
+interface GqlThreadNode {
+  id?: string | null;
+  isResolved?: boolean;
+  comments?: { nodes?: Array<{ databaseId?: number | null }> };
+}
+
+interface GqlReviewThreadPage {
+  repository?: {
+    pullRequest?: {
+      reviewThreads?: {
+        pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+        nodes?: Array<GqlThreadNode | null>;
+      };
+    };
+  };
+}
 
 const MAX_RETRIES = 3;
 
@@ -46,27 +86,6 @@ export function waitOutRateLimit(retryAfterS: number, retryCount: number): boole
 }
 
 const ResilientOctokit = Octokit.plugin(retry, throttling);
-
-interface ResolvePullOpts {
-  retries?: number;
-  delayMs?: number;
-  sleep?: (ms: number) => Promise<void>;
-}
-
-export async function resolvePullDetail(
-  fetchDetail: () => Promise<GhPullDetail>,
-  opts: ResolvePullOpts = {},
-): Promise<GhPullDetail> {
-  const retries = opts.retries ?? 3;
-  const delayMs = opts.delayMs ?? 1000;
-  const sleep = opts.sleep ?? realSleep;
-  let detail = await fetchDetail();
-  for (let i = 0; i < retries && detail.mergeable === null && !detail.merged; i++) {
-    await sleep(delayMs);
-    detail = await fetchDetail();
-  }
-  return detail;
-}
 
 export class OctokitGitHubApi implements GitHubApi {
   private viewer: string | null = null;
@@ -345,19 +364,8 @@ export class OctokitGitHubApi implements GitHubApi {
     return { url: data.html_url, id: data.id };
   }
 
-  async listIssueComments(number: number, since?: string): Promise<GhIssueComment[]> {
-    const comments = await this.octokit.paginate(this.octokit.issues.listComments, {
-      ...this.base,
-      issue_number: number,
-      per_page: 100,
-      ...(since === undefined ? {} : { since }),
-    });
-    return comments.map((c) => ({
-      id: c.id,
-      authorLogin: c.user?.login ?? 'ghost',
-      body: c.body ?? '',
-      createdAt: c.created_at,
-    }));
+  listIssueComments(number: number, since?: string): Promise<GhIssueComment[]> {
+    return listIssueComments(this.octokit, this.base, number, since);
   }
 
   async createIssueComment(number: number, body: string): Promise<GhCommentRef> {
@@ -497,6 +505,17 @@ export class OctokitGitHubApi implements GitHubApi {
       }
     }
   }
+}
+
+function threadsOnPage(nodes: Array<GqlThreadNode | null>): GqlThread[] {
+  const threads: GqlThread[] = [];
+  for (const node of nodes) {
+    if (!node) continue;
+    const rootCommentId = node.comments?.nodes?.[0]?.databaseId;
+    if (typeof rootCommentId !== 'number' || typeof node.id !== 'string') continue;
+    threads.push({ nodeId: node.id, rootCommentId, isResolved: node.isResolved === true });
+  }
+  return threads;
 }
 
 function mapIssue(i: {

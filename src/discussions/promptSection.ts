@@ -1,6 +1,6 @@
 import type { DiscussionDocument, DiscussionEntry } from '../types.js';
 import { acceptedIdeas, answeredQuestions, notesNewestFirst, standingDecisions } from './entries.js';
-import type { DiscussionReader } from './questionHold.js';
+import { discussionPair, type DiscussionReader } from './reader.js';
 
 // → docs/spec/40-discussions.md#what-agents-read
 
@@ -70,8 +70,6 @@ export function discussionNoteFor(
   parent: number | null,
 ): string {
   if (read === undefined) return '';
-  const story = read(issueNumber);
-  const parentNumber = parent ?? story?.frontMatter.parentNumber ?? null;
-  const feature = parentNumber === null || parentNumber === issueNumber ? null : read(parentNumber);
+  const { story, feature } = discussionPair(read, issueNumber, parent);
   return discussionSection(story, feature);
 }

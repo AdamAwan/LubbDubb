@@ -17,7 +17,9 @@ import { resolveModelTag } from '../modelLabels.js';
 import { pinnedProfileFor } from '../intake/profilePin.js';
 import { issueOrigin, plannerVerdict, resolvePlanRoute, type PlanRouteVerdict } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
-import { linkEdges, sequenceReadiness } from '../sequence/readiness.js';
+import { linkEdges, sequenceHoldReason, sequenceReadiness } from '../sequence/readiness.js';
+import { questionHold, questionHoldReason } from '../discussions/questionHold.js';
+import { discussionNoteFor } from '../discussions/promptSection.js';
 import { sequenceableFeatures as sequenceable, DEFAULT_SEQUENCE_MAX_CHILDREN } from '../sequence/sequence.js';
 import { isActive, type Candidate, type ConsiderOptions, type StageContext } from './rules/context.js';
 
@@ -121,6 +123,25 @@ export function sequencingView(
         )
       : [];
   return { sequences, sequenceWaits, sequenceableFeatures };
+}
+
+export function discussionView(
+  ctx: DispatchContext,
+  sequenceWaits: StageContext['sequenceWaits'],
+  plansByOrigin: ReadonlyMap<string, Plan>,
+  issueByNumber: ReadonlyMap<number, Issue>,
+): Pick<StageContext, 'issueHold' | 'discussionNote'> {
+  return {
+    issueHold: (issueNumber, opts = { sequence: true }) => {
+      const waits = opts.sequence ? sequenceWaits.get(issueNumber) : undefined;
+      if (waits) return { held: 'sequenced', reason: sequenceHoldReason(waits) };
+      const issue = issueByNumber.get(issueNumber) ?? { number: issueNumber, parent: null };
+      const questions = questionHold(ctx.discussion, issue, plansByOrigin.has(issueOrigin(issueNumber)));
+      return questions === null ? null : { held: 'questions', reason: questionHoldReason(questions) };
+    },
+    discussionNote: (issueNumber) =>
+      discussionNoteFor(ctx.discussion, issueNumber, issueByNumber.get(issueNumber)?.parent?.number ?? null),
+  };
 }
 
 export function checksByOrigin(checks: ValidationCheck[]): Map<string, ValidationCheck[]> {

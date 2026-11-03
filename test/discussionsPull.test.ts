@@ -8,7 +8,7 @@ import { loadConfig } from '../src/config/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
-import { DISCUSSION_AUTHORS, DiscussionFiles } from '../src/discussions/discussionFile.js';
+import { DiscussionFiles } from '../src/discussions/discussionFile.js';
 import { DiscussionPullDesk } from '../src/discussions/pullDesk.js';
 import type { ErrorLogInput, TrackerComment, WorldSnapshot } from '../src/types.js';
 
@@ -42,7 +42,7 @@ function harness(): System {
 function open(system: System, number: number): void {
   const write = system.discussions.add(
     { number, title: `Issue ${number}`, kind: 'story' },
-    { kind: 'note', body: 'opened', author: DISCUSSION_AUTHORS.operator },
+    { kind: 'note', body: 'opened', author: 'operator' },
   );
   assert.ok(write.ok);
 }

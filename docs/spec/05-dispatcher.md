@@ -651,7 +651,8 @@ candidates **once, immediately before the headroom cut**, into three tiers:
 
 It **only re-orders**. It never clears a `held` verdict: a cooldown, cap, pause, absent watch tag or
 unapproved plan holds an item wherever the override places it, because the cut walk reads `held`
-independently of position. The two exceptions are `sequenced` and `questions`: an override, or the goal's
+independently of position. The two exceptions are `sequenced` and `questions` — `LIFTABLE_HOLDS` in
+`src/dispatcher/admission.ts`, the same pair `StageContext.issueHold` answers: an override, or the goal's
 priority flag, clears either, because both hold work only until the operator says go — an order and an
 open question are the operator's to overrule ([40](40-discussions.md#an-open-question-holds-the-story)).
 
@@ -1071,7 +1072,8 @@ is:
   `appraising` does — and `issue-plan` reads it through `investigationSupersedes`,
   which also holds while a current record waits on the operator or was resolved _close_ or _ask_.
   Every one of those holds reads the label first, so removing it lifts them all.
-- Held behind a story's predecessors like the appraiser, queued `sequenced`.
+- Held behind a story's predecessors like the appraiser, queued `sequenced`, then by an open question, queued
+  `questions` — one `StageContext.issueHold` call.
 - **Fails open**: a spent attempt cap returns the issue to the planner with no escalation.
 
 The prompt carries the title and body, and the dispatch's `originTitle` / `originSummary` are what the

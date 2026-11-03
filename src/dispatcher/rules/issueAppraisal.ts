@@ -2,8 +2,6 @@ import { appraisalBranch, appraisalOrigin, hasWorkStarted, isAppraised } from '.
 import { issueOrigin } from '../../plans/planning.js';
 import { relatedWorkNote } from '../../issueRelations.js';
 import { predecessorNote } from '../../sequence/dossier.js';
-import { sequenceHoldReason } from '../../sequence/readiness.js';
-import { questionHoldReason } from '../../discussions/questionHold.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import type { RawAction, StageContext } from './context.js';
 
@@ -54,14 +52,9 @@ export function issueAppraisal(s: StageContext): void {
       } satisfies RawAction,
     };
 
-    const waits = s.sequenceWaits.get(issue.number);
-    if (waits) {
-      s.candidates.push({ ...candidate, held: 'sequenced', reason: `${reason} ${sequenceHoldReason(waits)}` });
-      continue;
-    }
-    const questions = s.questionHold(issue.number);
-    if (questions) {
-      s.candidates.push({ ...candidate, held: 'questions', reason: `${reason} ${questionHoldReason(questions)}` });
+    const hold = s.issueHold(issue.number);
+    if (hold) {
+      s.candidates.push({ ...candidate, held: hold.held, reason: `${reason} ${hold.reason}` });
       continue;
     }
     if (s.consider(candidate)) s.appraising.add(issue.number);

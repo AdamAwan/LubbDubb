@@ -65,7 +65,6 @@ async function deck(
       canPlaceWorkItem: () => system.connector.canPlaceWorkItem(),
       setWorkItemParent: (input) => system.connector.setWorkItemParent(input),
       setWorkItemAreaPath: (input) => system.connector.setWorkItemAreaPath(input),
-      upsertIssueComment: (input) => system.connector.upsertIssueComment(input),
       setIssueLabel: async (input) => {
         if (refuse) throw new Error('the provider is down');
         labelWrites.push({ number: input.number, label: input.label, present: input.present });

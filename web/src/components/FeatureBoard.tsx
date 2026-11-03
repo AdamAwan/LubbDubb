@@ -18,6 +18,7 @@ import { fmtUsd } from './util.js';
 import type { FeatureBoardPayload } from '../types.js';
 import { Crumb, type CrumbStep } from '../console/Crumb.js';
 import { BoardCard, buildCards, FeatureCard, orderCards } from './featureCards.js';
+import { DiscussionPane } from './DiscussionPane.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -232,7 +233,10 @@ function FeatureDetail({
         {card === undefined ? (
           <p className="muted">#{number} is not on the feature board — only Features are.</p>
         ) : (
-          <FeatureCard card={card} view={view} actions={actions} onAnswered={onAnswered} page />
+          <>
+            <FeatureCard card={card} view={view} actions={actions} onAnswered={onAnswered} page />
+            <DiscussionPane number={number} view={view} actions={actions} />
+          </>
         )}
       </div>
     </RefLinksExtended>

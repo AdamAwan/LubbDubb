@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { Config } from '../config/config.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type {
@@ -15,7 +15,7 @@ import {
   cleanAuthor,
   entryIds,
   formatEntry,
-  idPrefix,
+  ID_PREFIX,
   parseDiscussion,
   restateEntry,
   setFrontMatterKeys,
@@ -24,8 +24,9 @@ import {
 
 // → docs/spec/40-discussions.md
 
+export const DISCUSSIONS_OFF = 'Discussions are off: discussionsDir is not set in lubbdubb.config.json.';
+
 export const DISCUSSION_AUTHORS = {
-  operator: 'operator',
   operatorViaClaude: 'operator (via Claude)',
   claudeSuggested: 'Claude (suggested)',
   agent: (rule: string, taskId: string): string => `agent ${rule}#${taskId}`,
@@ -53,7 +54,9 @@ export type DiscussionSettlement =
 
 type Refusal = { ok: false; error: string };
 
-export type DiscussionWrite = { ok: true; entry: DiscussionEntry; path: string } | Refusal;
+type FrontMatterKeys = { published?: string; pulled?: string };
+
+type DiscussionWrite = { ok: true; entry: DiscussionEntry; path: string } | Refusal;
 
 export interface DiscussionFilesDeps {
   dir: string | undefined;
@@ -87,19 +90,48 @@ function discussionFileName(number: number, title: string): string {
   return slug === '' ? `${number}` : `${number} ${slug}`;
 }
 
+function definedKeys(keys: FrontMatterKeys): Record<string, string> {
+  return Object.fromEntries(Object.entries(keys).filter((pair): pair is [string, string] => !!pair[1]));
+}
+
 function localDate(now: Date): string {
   const pad = (n: number): string => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-function failure(error: unknown): string {
+export function failure(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+interface Listing {
+  mtimeMs: number;
+  paths: Map<number, string>;
+}
+
+interface Parsed {
+  mtimeMs: number;
+  size: number;
+  doc: DiscussionDocument;
+}
+
+function vaultRoot(folder: string): string | null {
+  let dir = folder;
+  for (;;) {
+    const marker = join(dir, '.obsidian');
+    if (existsSync(marker) && statSync(marker).isDirectory()) return dir;
+    const up = dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
 }
 
 export class DiscussionFiles {
   private readonly folder: string | null;
   private readonly now: () => Date;
   private readonly reportedDuplicates = new Set<string>();
+  private listed: Listing | null = null;
+  private readonly parsed = new Map<string, Parsed>();
+  private vault: string | null | undefined;
 
   constructor(private readonly deps: DiscussionFilesDeps) {
     this.folder = deps.dir === undefined || deps.dir.trim() === '' ? null : join(deps.dir, deps.repo);
@@ -111,38 +143,12 @@ export class DiscussionFiles {
   }
 
   locate(number: number): string | null {
-    if (this.folder === null || !existsSync(this.folder)) return null;
-    const matches = readdirSync(this.folder, { withFileTypes: true })
-      .filter((d) => d.isFile() && d.name.endsWith('.md') && Number(LEADING_NUMBER.exec(d.name)?.[1]) === number)
-      .map((d) => join(this.folder!, d.name));
-    if (matches.length <= 1) return matches[0] ?? null;
-    const born = (path: string): number => {
-      const stat = statSync(path);
-      return stat.birthtimeMs > 0 ? stat.birthtimeMs : stat.mtimeMs;
-    };
-    const ordered = matches.sort((a, b) => born(a) - born(b) || a.localeCompare(b));
-    const key = ordered.join('\n');
-    if (!this.reportedDuplicates.has(key)) {
-      this.reportedDuplicates.add(key);
-      this.deps.errors.record({
-        source: 'server',
-        message: `Two discussion files lead with #${number}; reading the older, ${basename(ordered[0]!)}.`,
-        detail: ordered.join('\n'),
-      });
-    }
-    return ordered[0]!;
+    return this.listing().get(number) ?? null;
   }
 
-  /** The issue numbers that have a file. Throws on an unreadable folder; the caller records it. */
+  /** Throws on an unreadable folder; the caller records it. */
   numbers(): number[] {
-    if (this.folder === null || !existsSync(this.folder)) return [];
-    const found = new Set(
-      readdirSync(this.folder, { withFileTypes: true })
-        .filter((d) => d.isFile() && d.name.endsWith('.md'))
-        .map((d) => Number(LEADING_NUMBER.exec(d.name)?.[1]))
-        .filter((n) => Number.isInteger(n) && n > 0),
-    );
-    return [...found].sort((a, b) => a - b);
+    return [...this.listing().keys()].sort((a, b) => a - b);
   }
 
   read(number: number): DiscussionDocument | null {
@@ -150,7 +156,12 @@ export class DiscussionFiles {
     try {
       const path = this.locate(number);
       if (path === null) return null;
-      return { path, ...parseDiscussion(readFileSync(path, 'utf8')) };
+      const stat = statSync(path);
+      const cached = this.parsed.get(path);
+      if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.doc;
+      const doc = { path, ...parseDiscussion(readFileSync(path, 'utf8')) };
+      this.parsed.set(path, { mtimeMs: stat.mtimeMs, size: stat.size, doc });
+      return doc;
     } catch (error) {
       this.deps.errors.record({
         source: 'server',
@@ -161,11 +172,32 @@ export class DiscussionFiles {
     }
   }
 
+  obsidianUrl(path: string): string | null {
+    if (this.folder === null) return null;
+    this.vault ??= vaultRoot(this.folder);
+    return this.vault === null ? null : `obsidian://open?path=${encodeURIComponent(path)}`;
+  }
+
   add(subject: DiscussionSubject, input: NewDiscussionEntry): DiscussionWrite {
     return this.write(subject.number, 'add to', () => {
       const path = this.locate(subject.number) ?? this.create(subject);
       const before = existsSync(path) ? readFileSync(path, 'utf8') : this.header(subject);
       return this.append(path, before, input);
+    });
+  }
+
+  addMany(
+    subject: DiscussionSubject,
+    inputs: readonly NewDiscussionEntry[],
+    keys: FrontMatterKeys = {},
+  ): { ok: true; path: string } | Refusal {
+    return this.write(subject.number, 'add to', () => {
+      const path = this.locate(subject.number) ?? this.create(subject);
+      let text = this.withIds(existsSync(path) ? readFileSync(path, 'utf8') : this.header(subject));
+      const taken = entryIds(text);
+      for (const input of inputs) text = appendBlock(text, this.block(input, taken).block);
+      this.replace(path, setFrontMatterKeys(text, definedKeys(keys)));
+      return { ok: true, path };
     });
   }
 
@@ -189,23 +221,22 @@ export class DiscussionFiles {
     });
   }
 
-  identify(number: number): { ok: true; path: string | null } | Refusal {
+  identify(number: number): { ok: true; path: string | null; changed: boolean } | Refusal {
     return this.write(number, 'name the entries of', () => {
       const path = this.locate(number);
-      if (path === null) return { ok: true, path: null };
+      if (path === null) return { ok: true, path: null, changed: false };
       const text = readFileSync(path, 'utf8');
       const named = this.withIds(text);
       if (named !== text) this.replace(path, named);
-      return { ok: true, path };
+      return { ok: true, path, changed: named !== text };
     });
   }
 
-  setFrontMatter(number: number, keys: { published?: string; pulled?: string }): { ok: true; path: string } | Refusal {
+  setFrontMatter(number: number, keys: FrontMatterKeys): { ok: true; path: string } | Refusal {
     return this.write(number, 'update', () => {
       const path = this.locate(number);
       if (path === null) return { ok: false, error: `There is no discussion file for #${number}.` };
-      const values = Object.fromEntries(Object.entries(keys).filter((pair): pair is [string, string] => !!pair[1]));
-      const next = setFrontMatterKeys(this.withIds(readFileSync(path, 'utf8')), values);
+      const next = setFrontMatterKeys(this.withIds(readFileSync(path, 'utf8')), definedKeys(keys));
       this.replace(path, next);
       return { ok: true, path };
     });
@@ -226,7 +257,7 @@ export class DiscussionFiles {
   }
 
   private write<T>(number: number, verb: string, run: () => T | Refusal): T | Refusal {
-    if (this.folder === null) return { ok: false, error: 'Discussions are off: discussionsDir is not set.' };
+    if (this.folder === null) return { ok: false, error: DISCUSSIONS_OFF };
     try {
       return run();
     } catch (error) {
@@ -258,7 +289,13 @@ export class DiscussionFiles {
 
   private append(path: string, before: string, input: NewDiscussionEntry): DiscussionWrite {
     const text = this.withIds(before);
-    const id = this.mint(input.kind, entryIds(text));
+    const { id, block } = this.block(input, entryIds(text));
+    return this.commit(path, appendBlock(text, block), id);
+  }
+
+  private block(input: NewDiscussionEntry, taken: Set<string>): { id: string; block: string } {
+    const id = this.mint(input.kind, taken);
+    taken.add(id);
     const stateful = input.kind === 'idea' || input.kind === 'question';
     const block = formatEntry({
       kind: input.kind,
@@ -268,7 +305,7 @@ export class DiscussionFiles {
       id,
       body: input.body,
     });
-    return this.commit(path, appendBlock(text, block), id);
+    return { id, block };
   }
 
   private commit(path: string, text: string, id: string): DiscussionWrite {
@@ -288,12 +325,48 @@ export class DiscussionFiles {
 
   private mint(kind: DiscussionKind, taken: ReadonlySet<string>): string {
     for (;;) {
-      const id = `${idPrefix(kind)}-${randomBytes(2).toString('hex')}`;
+      const id = `${ID_PREFIX[kind]}-${randomBytes(2).toString('hex')}`;
       if (!taken.has(id)) return id;
     }
   }
 
+  private listing(): Map<number, string> {
+    if (this.folder === null || !existsSync(this.folder)) return new Map();
+    const mtimeMs = statSync(this.folder).mtimeMs;
+    if (this.listed?.mtimeMs === mtimeMs) return this.listed.paths;
+    const found = new Map<number, string[]>();
+    for (const d of readdirSync(this.folder, { withFileTypes: true })) {
+      const number = Number(LEADING_NUMBER.exec(d.name)?.[1]);
+      if (!d.isFile() || !d.name.endsWith('.md') || !Number.isInteger(number) || number <= 0) continue;
+      found.set(number, [...(found.get(number) ?? []), join(this.folder, d.name)]);
+    }
+    const paths = new Map([...found].map(([number, matches]) => [number, this.oldest(number, matches)]));
+    this.listed = { mtimeMs, paths };
+    return paths;
+  }
+
+  private oldest(number: number, matches: string[]): string {
+    if (matches.length === 1) return matches[0]!;
+    const born = (path: string): number => {
+      const stat = statSync(path);
+      return stat.birthtimeMs > 0 ? stat.birthtimeMs : stat.mtimeMs;
+    };
+    const ordered = matches.sort((a, b) => born(a) - born(b) || a.localeCompare(b));
+    const key = ordered.join('\n');
+    if (!this.reportedDuplicates.has(key)) {
+      this.reportedDuplicates.add(key);
+      this.deps.errors.record({
+        source: 'server',
+        message: `Two discussion files lead with #${number}; reading the older, ${basename(ordered[0]!)}.`,
+        detail: ordered.join('\n'),
+      });
+    }
+    return ordered[0]!;
+  }
+
   private replace(path: string, text: string): void {
+    this.listed = null;
+    this.parsed.delete(path);
     const temp = join(this.folder!, `.${basename(path)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);
     writeFileSync(temp, text, 'utf8');
     try {

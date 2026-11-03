@@ -21,6 +21,10 @@ function includesType(types: readonly string[], type: string): boolean {
   return types.some((t) => t.trim().toLowerCase() === needle);
 }
 
+export function storiesUnder(issues: readonly Issue[], featureNumber: number): Issue[] {
+  return issues.filter((i) => i.parent?.number === featureNumber);
+}
+
 export function isContainerIssue(issue: Issue, containerTypes: readonly string[] | undefined): boolean {
   return isContainerType(issue.issueType ?? null, containerTypes);
 }

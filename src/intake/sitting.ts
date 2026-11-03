@@ -1,6 +1,6 @@
 import { issueOriginRef } from '../issueOrigins.js';
 import type { GoalCriteriaVersion, Plan } from '../types.js';
-import type { DiscussionReader } from '../discussions/questionHold.js';
+import type { DiscussionReader } from '../discussions/reader.js';
 
 // → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner
 

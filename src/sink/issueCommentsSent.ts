@@ -1,12 +1,7 @@
 import type { ActionSink, IssueCommentInput, SendResult } from './actionSink.js';
 
-// → docs/spec/40-discussions.md#pulling-tracker-comments-in
+// → docs/spec/14-persistence.md
 
-/**
- * The sink, with every issue comment it sends recorded by the id the provider answered. A
- * `Proxy` rather than a subclass because the sink is whatever was injected — the composite, or a
- * test's fake — and every other member must reach it unchanged.
- */
 export function recordIssueComments<T extends Pick<ActionSink, 'upsertIssueComment'>>(
   sink: T,
   record: (issueNumber: number, commentRef: string) => void,

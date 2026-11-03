@@ -17,7 +17,7 @@ import {
 } from '../src/integrations/github/issues.js';
 import { diffWorlds } from '../src/world/worldDiff.js';
 import type { Issue, WorldSnapshot } from '../src/types.js';
-import { resolvePullDetail } from '../src/integrations/github/octokitGitHubApi.js';
+import { resolvePullDetail } from '../src/integrations/github/pullDetail.js';
 import type {
   GhAnnotation,
   GhCheckRun,

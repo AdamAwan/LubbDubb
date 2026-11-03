@@ -1,29 +1,69 @@
-import { isContainerIssue } from '../issueRelations.js';
+import { isContainerIssue, storiesUnder } from '../issueRelations.js';
 import type { Store } from '../store/store.js';
-import type { Issue } from '../types.js';
+import type { DiscussionDocument, DiscussionSubjectKind, Issue } from '../types.js';
 import type { DiscussionFiles, DiscussionSubject } from './discussionFile.js';
-import { memoReader, type DiscussionReader } from './questionHold.js';
+import { discussionParent, memoReader, type DiscussionReader } from './reader.js';
 
-// → docs/spec/40-discussions.md#what-fleet-agents-write
+// → docs/spec/40-discussions.md#the-file
 
-/** What a first write to issue `n`'s file is headed with. An issue the world does not hold is a story with no title. */
-function discussionSubject(
+export interface ResolvedSubject {
+  kind: DiscussionSubjectKind | null;
+  title: string | null;
+  parent: { number: number; title: string } | null;
+  stories: Issue[];
+}
+
+export function resolveSubject(
+  issues: readonly Issue[],
+  issueNumber: number,
+  containerTypes: readonly string[] | undefined,
+  doc: DiscussionDocument | null = null,
+): ResolvedSubject {
+  const issue = issues.find((i) => i.number === issueNumber) ?? null;
+  const feature = isFeature(issues, issue, doc, containerTypes);
+  const parent = feature ? null : parentOf(issues, issueNumber, issue, doc);
+  const story = issue !== null || parent !== null;
+  return {
+    kind: feature ? 'feature' : story ? 'story' : (doc?.frontMatter.kind ?? null),
+    title: issue?.title ?? doc?.frontMatter.title ?? null,
+    parent,
+    stories: feature ? storiesUnder(issues, issueNumber) : [],
+  };
+}
+
+function isFeature(
+  issues: readonly Issue[],
+  issue: Issue | null,
+  doc: DiscussionDocument | null,
+  containerTypes: readonly string[] | undefined,
+): boolean {
+  if (issue === null) return doc?.frontMatter.kind === 'feature';
+  if (isContainerIssue(issue, containerTypes)) return true;
+  return !issue.parent && storiesUnder(issues, issue.number).length > 0;
+}
+
+function parentOf(
+  issues: readonly Issue[],
+  issueNumber: number,
+  issue: Issue | null,
+  doc: DiscussionDocument | null,
+): ResolvedSubject['parent'] {
+  const number = discussionParent(issueNumber, issue?.parent?.number ?? null, doc);
+  if (number === null) return null;
+  const title = issue?.parent?.number === number ? issue.parent.title : issues.find((i) => i.number === number)?.title;
+  return { number, title: title ?? '' };
+}
+
+/** An issue the world does not hold is a story with no title. */
+export function discussionSubject(
   issues: readonly Issue[],
   issueNumber: number,
   containerTypes: readonly string[] | undefined,
 ): DiscussionSubject {
-  const issue = issues.find((i) => i.number === issueNumber);
-  if (issue === undefined) return { number: issueNumber, title: '', kind: 'story' };
-  const feature = isContainerIssue(issue, containerTypes);
-  return {
-    number: issueNumber,
-    title: issue.title,
-    kind: feature ? 'feature' : 'story',
-    parent: feature || !issue.parent ? null : { number: issue.parent.number, title: issue.parent.title },
-  };
+  const subject = resolveSubject(issues, issueNumber, containerTypes);
+  return { number: issueNumber, title: subject.title ?? '', kind: subject.kind ?? 'story', parent: subject.parent };
 }
 
-/** `McpToolDeps.discussions`: the files, and a subject resolved against the stored world. */
 export function fleetDiscussions(
   files: DiscussionFiles,
   store: Store,
@@ -36,7 +76,7 @@ export function fleetDiscussions(
   };
 }
 
-/** The pulse's reader, fresh each pulse; nothing where discussions are off. → docs/spec/40-discussions.md#what-agents-read */
+/** Fresh each pulse. → docs/spec/40-discussions.md#what-agents-read */
 export function discussionIntake(files: DiscussionFiles): { discussion?: DiscussionReader } {
   return files.enabled ? { discussion: memoReader((n) => files.read(n)) } : {};
 }

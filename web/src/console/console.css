@@ -7769,9 +7769,7 @@ button.cn-grow {
   padding: 0 13px 0 10px;
 }
 
-/* The Discussion tab: the story or feature's file read back, entry by entry. An open
-   question wears the amber rule because it is the one entry that holds work.
-   → docs/spec/40-discussions.md#in-the-cockpit */
+/* → docs/spec/40-discussions.md#in-the-cockpit */
 .cn-disc > p,
 .cn-disc-filters,
 .cn-disc-related,

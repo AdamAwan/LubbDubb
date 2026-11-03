@@ -43,7 +43,6 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set([
   'issue_comment',
 ]);
 
-/** Who the fake says posted the harness's own comments — the operator's login, as on a single-operator deployment. */
 const FAKE_VIEWER = 'operator';
 
 export class FakeIssuesIntegration

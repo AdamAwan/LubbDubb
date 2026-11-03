@@ -556,6 +556,7 @@ They are the only `Injectable` providers. `inject(event)` accepts:
 | `new_issue`               | Adds an open issue.                                                    |
 | `issue_state`             | Opens/closes an issue.                                                 |
 | `issue_linked_pr`         | Sets `linkedPrNumber`.                                                 |
+| `issue_comment`           | Posts a comment on an issue as `author`, the way a person would.       |
 
 `pr_closed` **moves** the row rather than copying it. `mergePr` still marks a PR merged in place so the
 deterministic loop settles; a PR present in both lists would have the world diff report one merge
@@ -569,6 +570,12 @@ lands, so the concern is gone rather than re-fired every pulse.
 The fake sink "sends" by reflecting the effect back into its own world (marking the answered comment
 handled) and recording a connector event, so nothing leaves the machine while the seam stays real and
 testable. It resolves no ref URLs, so refs render as plain text in the cockpit.
+
+The harness's own issue comments (`upsertIssueComment`) are posted by the fake as `operator` — the
+operator's own login, as on a single-operator deployment — and an injected `issue_comment` may carry that
+same author. So a test of [pulling comments into a discussion](40-discussions.md#pulling-tracker-comments-in)
+can only pass by skipping the harness's comments by record; a pull that tested the author would drop the
+operator's own.
 
 There is no `injectable` flag on the snapshot and no route to gate. A running harness reads its
 provider; a panel that told it something had happened would be a way to lie to yourself about what it

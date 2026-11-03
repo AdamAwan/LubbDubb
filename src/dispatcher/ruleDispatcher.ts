@@ -20,8 +20,7 @@ import { DEFAULT_VALIDATION, type ValidationPolicy } from '../validation/policy.
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import { DEFAULT_PLANNING, issueOrigin, type PlanningPolicy } from '../plans/planning.js';
 import { sittingHolds } from '../intake/sitting.js';
-import { questionHold } from '../discussions/questionHold.js';
-import { discussionNoteFor } from '../discussions/promptSection.js';
+import { LIFTABLE_HOLDS } from './admission.js';
 import { type Candidate, type RawAction, type StageContext } from './rules/context.js';
 import {
   activeOriginsOf,
@@ -33,6 +32,7 @@ import {
   pinResolver,
   planRoutes,
   sequencingView,
+  discussionView,
   workItemGates,
 } from './ruleDispatcherStage.js';
 import { manualJob } from './rules/manualJob.js';
@@ -208,7 +208,7 @@ export class RuleDispatcher implements Dispatcher {
     const overrideRank = new Map((ctx.priorityOverrides ?? []).map((o) => [o.origin, o.rank]));
     const expedited = expeditedFor(ctx, s.openPrs, this.pickup.containerTypes);
     const cleared = s.candidates.map((c) =>
-      (c.held === 'sequenced' || c.held === 'questions') && (expedited(c.origin) || overrideRank.has(c.origin))
+      c.held !== undefined && LIFTABLE_HOLDS.has(c.held) && (expedited(c.origin) || overrideRank.has(c.origin))
         ? { ...c, held: undefined }
         : c,
     );
@@ -283,11 +283,14 @@ export class RuleDispatcher implements Dispatcher {
 
     const criteriaByOrigin = new Map((ctx.goalCriteria ?? []).map((c) => [c.originRef, c]));
     const investigations = investigationView(ctx, pickup);
+    const issueByNumber = new Map(ctx.world.issues.map((i) => [i.number, i]));
+    const sequencing = sequencingView(ctx, pickup);
 
     return {
       ...cycleLookups(ctx),
       ...gates,
-      ...sequencingView(ctx, pickup),
+      ...sequencing,
+      ...discussionView(ctx, sequencing.sequenceWaits, plansByOrigin, issueByNumber),
       ...this.policies(),
       ...workItemGates(pickup),
       ctx,
@@ -298,8 +301,7 @@ export class RuleDispatcher implements Dispatcher {
       openPrs,
       readingBehindFleet: (prNumber: number) => behind.has(prReadRef(prNumber)),
       plansByOrigin,
-      liveIssue: (issueNumber: number) =>
-        retained.has(issueNumber) ? null : (ctx.world.issues.find((i) => i.number === issueNumber) ?? null),
+      liveIssue: (issueNumber: number) => (retained.has(issueNumber) ? null : (issueByNumber.get(issueNumber) ?? null)),
       partsPlanFor: (issueNumber: number) => {
         const plan = plansByOrigin.get(issueOrigin(issueNumber));
         if (!plan || (plan.status !== 'active' && plan.status !== 'complete')) return null;
@@ -308,16 +310,6 @@ export class RuleDispatcher implements Dispatcher {
       sittingHolds: (issueNumber: number) =>
         sittingHolds(ctx.closedSittings, issueNumber, plansByOrigin.get(issueOrigin(issueNumber)) ?? null),
       criteriaFor: (issueNumber: number) => criteriaByOrigin.get(issueOrigin(issueNumber)) ?? null,
-      questionHold: (issueNumber: number) => {
-        const issue = ctx.world.issues.find((i) => i.number === issueNumber) ?? { number: issueNumber };
-        return questionHold(ctx.discussion, issue, plansByOrigin.has(issueOrigin(issueNumber)));
-      },
-      discussionNote: (issueNumber: number) =>
-        discussionNoteFor(
-          ctx.discussion,
-          issueNumber,
-          ctx.world.issues.find((i) => i.number === issueNumber)?.parent?.number ?? null,
-        ),
       profileOverrides,
       pinFor: pinResolver(ctx, plansByOrigin, profileOverrides),
       parentCandidates: candidateParents(ctx.world.issues, pickup.containerTypes),

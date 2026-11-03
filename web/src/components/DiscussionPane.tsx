@@ -5,12 +5,12 @@ import { discussionPrompt } from '../cockpit/desktopLink.js';
 import { DISCUSSION_KINDS, DISCUSSION_STATES } from '../cockpit/place.js';
 import type { CockpitView } from '../view/viewModel.js';
 import type {
-  AppState,
   DiscussionEntry,
   DiscussionEntryState,
   DiscussionKind,
   DiscussionNeighbour,
   DiscussionReading,
+  WorldSnapshot,
 } from '../types.js';
 import { BareLink, Button } from './button.js';
 import { DesktopLink } from './DesktopLink.js';
@@ -35,7 +35,7 @@ const STATE_TONE: Record<DiscussionEntryState, TagTone> = {
   dropped: 'grey',
 };
 
-function useDiscussion(number: number, state: AppState): { reading: DiscussionReading | null; failed: boolean } {
+function useDiscussion(number: number, world: WorldSnapshot): { reading: DiscussionReading | null; failed: boolean } {
   const [reading, setReading] = useState<DiscussionReading | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -53,7 +53,7 @@ function useDiscussion(number: number, state: AppState): { reading: DiscussionRe
     return () => {
       live = false;
     };
-  }, [number, state]);
+  }, [number, world]);
   return { reading: reading?.number === number ? reading : null, failed };
 }
 
@@ -66,7 +66,7 @@ export function DiscussionPane({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
-  const { reading, failed } = useDiscussion(number, view.state);
+  const { reading, failed } = useDiscussion(number, view.state.world);
   if (reading === null) {
     return (
       <section className="cn-card cn-disc">
@@ -122,11 +122,7 @@ export function DiscussionPane({
       ) : shown.length === 0 ? (
         <p className="muted">Nothing here matches the filters.</p>
       ) : (
-        <ol className="cn-disc-list">
-          {shown.map((entry, i) => (
-            <Entry key={entry.id ?? `${i}:${entry.heading}`} entry={entry} refUrls={view.state.refUrls} />
-          ))}
-        </ol>
+        <EntryList entries={shown} refUrls={view.state.refUrls} />
       )}
     </section>
   );
@@ -151,64 +147,80 @@ function FileLink({ reading }: { reading: DiscussionReading }): JSX.Element | nu
 function Filters({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   return (
     <div className="cn-disc-filters">
-      <span role="group" aria-label="Kind">
-        <FilterButton
-          pressed={view.discussionKind === null}
-          onClick={() => actions.filterDiscussion({ discussionKind: null })}
-        >
-          Every kind
-        </FilterButton>
-        {DISCUSSION_KINDS.map((kind) => (
-          <FilterButton
-            key={kind}
-            pressed={view.discussionKind === kind}
-            onClick={() => actions.filterDiscussion({ discussionKind: kind })}
-          >
-            {KIND[kind].label}
-          </FilterButton>
-        ))}
-      </span>
-      <span role="group" aria-label="State">
-        <FilterButton
-          pressed={view.discussionState === null}
-          onClick={() => actions.filterDiscussion({ discussionState: null })}
-        >
-          Any state
-        </FilterButton>
-        {DISCUSSION_STATES.map((state) => (
-          <FilterButton
-            key={state}
-            pressed={view.discussionState === state}
-            onClick={() => actions.filterDiscussion({ discussionState: state })}
-          >
-            {state}
-          </FilterButton>
-        ))}
-      </span>
+      <FilterGroup
+        label="Kind"
+        every="Every kind"
+        values={DISCUSSION_KINDS}
+        chosen={view.discussionKind}
+        name={(kind) => KIND[kind].label}
+        onPick={(discussionKind) => actions.filterDiscussion({ discussionKind })}
+      />
+      <FilterGroup
+        label="State"
+        every="Any state"
+        values={DISCUSSION_STATES}
+        chosen={view.discussionState}
+        name={(state) => state}
+        onPick={(discussionState) => actions.filterDiscussion({ discussionState })}
+      />
     </div>
   );
 }
 
-function FilterButton({
-  pressed,
-  onClick,
-  children,
+function FilterGroup<T extends string>({
+  label,
+  every,
+  values,
+  chosen,
+  name,
+  onPick,
 }: {
-  pressed: boolean;
-  onClick: () => void;
-  children: string;
+  label: string;
+  every: string;
+  values: readonly T[];
+  chosen: T | null;
+  name: (value: T) => string;
+  onPick: (value: T | null) => void;
+}): JSX.Element {
+  const options: Array<{ value: T | null; text: string }> = [
+    { value: null, text: every },
+    ...values.map((value) => ({ value, text: name(value) })),
+  ];
+  return (
+    <span role="group" aria-label={label}>
+      {options.map(({ value, text }) => {
+        const pressed = chosen === value;
+        return (
+          <Button
+            key={value ?? ''}
+            ghost={!pressed}
+            size="small"
+            usage="discussion.filter"
+            logs={!pressed}
+            aria-pressed={pressed}
+            onClick={() => onPick(value)}
+          >
+            {text}
+          </Button>
+        );
+      })}
+    </span>
+  );
+}
+
+function EntryList({
+  entries,
+  refUrls,
+}: {
+  entries: readonly DiscussionEntry[];
+  refUrls: Record<string, string>;
 }): JSX.Element {
   return (
-    <Button
-      ghost={!pressed}
-      size="small"
-      usage="discussion.filter"
-      logs={!pressed}
-      aria-pressed={pressed}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
+    <ol className="cn-disc-list">
+      {entries.map((entry, i) => (
+        <Entry key={entry.id ?? `${i}:${entry.heading}`} entry={entry} refUrls={refUrls} />
+      ))}
+    </ol>
   );
 }
 
@@ -262,11 +274,7 @@ function Related({
             </span>
             {n.title !== null && <span className="muted">{n.title}</span>}
           </h4>
-          <ol className="cn-disc-list">
-            {[...n.standingDecisions, ...n.openQuestions].map((entry, i) => (
-              <Entry key={entry.id ?? `${i}:${entry.heading}`} entry={entry} refUrls={refUrls} />
-            ))}
-          </ol>
+          <EntryList entries={[...n.standingDecisions, ...n.openQuestions]} refUrls={refUrls} />
         </div>
       ))}
     </div>
