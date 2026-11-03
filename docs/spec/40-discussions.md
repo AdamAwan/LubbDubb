@@ -4,8 +4,10 @@
 > is italic for that reason. Remove this marker section by section as each piece lands.
 
 A running record of the talk around a story or a feature — notes, ideas, decisions and open
-questions — kept as **Markdown files in a folder the operator chooses**, read by the fleet, written to
-by agents, and published to the tracker as one tidy comment when the operator says so.
+questions — kept as **Markdown files in a folder the operator chooses**. The operator works on it mainly by
+**talking it through in Claude** with the LubbDubb plugin ([below](#talking-it-through-in-claude)).
+The fleet reads it, agents add to it, and it is published to the tracker as one tidy comment when
+the operator says so.
 
 The ticket says what to build. The reasons, the alternatives that were turned down and the questions
 still open live in people's heads, in chat, and in comment threads nobody re-reads. A planner handed
@@ -83,12 +85,12 @@ Offer XLSX as well.
 
 The heading reads `<Kind> · [<state> ·] <date> · <author> ^<id>`:
 
-| Kind     | States                                  | Who may write it         |
-| -------- | --------------------------------------- | ------------------------ |
-| Note     | —                                       | operator, agent, tracker |
-| Idea     | `open`, `accepted`, `parked`, `dropped` | operator, agent, tracker |
-| Question | `open`, `answered`                      | operator, agent, tracker |
-| Decision | —                                       | **operator only**        |
+| Kind     | States                                  | Who may write it                         |
+| -------- | --------------------------------------- | ---------------------------------------- |
+| Note     | —                                       | operator, agent, tracker                 |
+| Idea     | `open`, `accepted`, `parked`, `dropped` | operator, agent, tracker                 |
+| Question | `open`, `answered`                      | operator, agent, tracker                 |
+| Decision | —                                       | **operator only** (in Claude or by hand) |
 
 - **The `^id` is an Obsidian block id**, so an entry can be linked to from elsewhere in a vault
   (`[[142 Export to CSV#^d-7f3a]]`). The harness mints it and reads it; a person adding an entry by hand
@@ -128,7 +130,7 @@ _appended_ (never interpolated — see [05](05-dispatcher.md#prompt-templates)):
 Parked and dropped ideas are left out: they are history, and handing them over invites the agent to
 build them.
 
-## What agents write
+## What fleet agents write
 
 One new MCP tool, _`discussion_add`_, in _src/mcp/tools/discussionAdd.ts_:
 
@@ -139,6 +141,9 @@ discussion_add({ kind: 'note' | 'idea' | 'question', body: string })
 - The ref is the agent's own origin, never an argument — an agent writes to the story it is working
   on and nowhere else.
 - `kind: 'decision'` is refused. Decisions are the operator's.
+- It shares its name with the desktop tool of the same name, as `validation_report` does; the two
+  are separate builds on separate channels, and a change to one is checked against the other. →
+  [11](11-mcp-tools.md#the-desktop-channel)
 - The author is written as `agent <rule>#<task id>`.
 - Like every new tool it is named in `MCP_TOOL_NAMES` and placed in `UNIVERSAL_TOOLS`, or it is in
   no agent's `tools/list`. → [11](11-mcp-tools.md#which-tools-an-agent-is-advertised)
@@ -175,32 +180,80 @@ Comments other people leave on the ticket are pulled into the file on the harnes
 Reading issue comments is new to both providers: a _listIssueComments_ method on each `*Api` interface
 and its scripted fake, in the same change. → [15](15-integrations.md)
 
+## Talking it through in Claude
+
+**The main way in is a conversation in the operator's own Claude, through the LubbDubb plugin** —
+the desktop channel ([11](11-mcp-tools.md#the-desktop-channel)), not the cockpit. Discussion is talk,
+and the place the operator already talks is Claude. The files and the cockpit are for reading it back.
+
+`/lubbdubb:discuss <n> [what's on your mind]` opens a conversation about story or feature `<n>`. The
+skill lives at _plugin/skills/discuss/SKILL.md_ and ships with the plugin like every other skill.
+
+1. **It reads first.** `discussion_read` returns the file's entries, plus — for a story — its
+   feature's standing decisions and open questions, and for a feature its stories' open questions.
+   Claude opens with what is still open, not a recap of everything.
+2. **It talks.** Claude has the repository open, so a question the code can answer, it answers by
+   reading the code, and proposes the answer for the operator to accept. A product question it asks.
+3. **It writes down what the conversation settles,** as it goes — never the transcript. Each write
+   is shown before it is made: _"Log this as a decision: export uses the browser download?"_ Nothing
+   lands without the operator's yes.
+
+### The desktop tools
+
+Named in `DESKTOP_TOOL_NAMES`, built in _src/mcp/desktopDiscussion.ts_, never in `buildTools`:
+
+| Tool                 | Does                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| _discussion_read_    | The entries for one story or feature, with the related ones described above.               |
+| _discussion_add_     | Adds a note, idea, question or **decision**. Author is written as `operator (via Claude)`. |
+| _discussion_settle_  | Answers a question; accepts, parks or drops an idea; supersedes a decision.                |
+| _discussion_publish_ | Posts the summary the operator approved. → [publishing](#publishing)                       |
+| _discussion_pull_    | Pulls new tracker comments in now, rather than waiting for the cycle.                      |
+
+- **Decisions can be written here and nowhere else in the fleet**, because the operator is in the
+  conversation. Claude proposes the wording; the operator's yes is what makes it a decision.
+- **Claude's own view is labelled as Claude's.** An idea Claude suggests and the operator wants kept
+  is written as an idea authored `Claude (suggested)`, not as the operator's.
+- **Every write goes through the same object the cockpit's would** — _src/discussions/discussionFile.ts_ —
+  never a second implementation. → [11](11-mcp-tools.md#every-write-goes-through-the-object-the-cockpits-click-goes-through)
+- **Each write tells the cockpit** through `DesktopToolDeps.changed`, so a page that is open shows it.
+- **Answering an open question lifts its hold** on the next cycle, so a `/lubbdubb:discuss` that
+  clears the last question is what lets the story start.
+
+### Where else it is reached from
+
+- `/lubbdubb:next` offers a held story's open questions as one ask, and hands off to
+  `/lubbdubb:discuss <n>` to answer them.
+- `/lubbdubb:feature` and `/lubbdubb:plan` read the discussion and hand off to `/lubbdubb:discuss`
+  when the talk turns to something worth writing down; they write nothing themselves.
+- The cockpit's Discussion tab carries a deep link that opens `/lubbdubb:discuss <n>`.
+
 ## Publishing
 
-The operator presses **Publish** on the cockpit's Discussion tab:
+In the conversation — _"publish this"_ or `/lubbdubb:discuss <n> publish`:
 
-1. A short agent run drafts a summary from the file: standing decisions, accepted ideas, answered
-   questions, and what is still open. Notes and parked or dropped ideas are not published.
-2. The operator edits the draft in the cockpit and approves it.
-3. It goes out through `upsertIssueComment` as **one** comment. Its id is written to `published`;
-   publishing again edits that comment rather than adding one.
+1. Claude drafts the summary from the file: standing decisions, accepted ideas, answered questions,
+   and what is still open. Notes and parked or dropped ideas are left out.
+2. The operator reads it and changes it in the conversation until they are happy.
+3. `discussion_publish` posts the approved text through `upsertIssueComment` as **one** comment, and
+   writes its id to `published`. Publishing again edits that comment rather than adding one.
 
-Nothing reaches the tracker without step 2.
+Nothing reaches the tracker without step 2. The tool takes only the final text; it composes nothing.
 
 ## Turning an idea into a story
 
-An idea has a **Make story** action. It files a new ticket through `ticketFiler`, with the idea's
-body as the description, the watch label, and the parent set to the idea's feature (or the story's
-feature, if the idea sits on a story). The idea flips to `accepted` and gains a `Became [[<n> <slug>]]`
-line. Everything the ticket must carry goes in `IssueCreateInput`, not in a prompt. →
-[13](13-jobs-and-tickets.md#filing-a-ticket)
+In the conversation — _"make that a story"_: the skill hands off to `/lubbdubb:file` with the idea's
+body as the starting draft and its feature as the parent, so the ticket gets the same checks, watch
+label and confirmation as any other. Once it is filed, `discussion_settle` marks the idea `accepted`
+with a `Became [[<n> <slug>]]` line. Everything the ticket must carry goes in `IssueCreateInput`
+through `ticketFiler`, not in a prompt. → [13](13-jobs-and-tickets.md#filing-a-ticket)
 
 ## In the cockpit
 
-A **Discussion** tab on the story and feature views: the entries, filters by kind and state, inline
-actions (answer, accept / park / drop, supersede, make story), an editor for new entries, a link that
-opens the file (`obsidian://` when the folder is inside a vault), and Publish. Every ref drawn with
-`<Ref>`.
+A read-mostly **Discussion** tab on the story and feature views: the entries, filters by kind and
+state, a link that opens the file (`obsidian://` when the folder is inside a vault), and a button
+that opens `/lubbdubb:discuss <n>` in Claude. Open questions holding a story are shown on it and in
+Up next. Every ref drawn with `<Ref>`.
 
 ## Where it will live
 
@@ -211,8 +264,10 @@ opens the file (`obsidian://` when the folder is inside a vault), and Publish. E
 | The hold                 | _src/discussions/questionHold.ts_   |
 | Pulling tracker comments | _src/discussions/pullDesk.ts_       |
 | Prompt section           | _src/discussions/promptSection.ts_  |
-| The agent's tool         | _src/mcp/tools/discussionAdd.ts_    |
-| Routes                   | _src/server/routes/discussions.ts_  |
+| The fleet agent's tool   | _src/mcp/tools/discussionAdd.ts_    |
+| The desktop tools        | _src/mcp/desktopDiscussion.ts_      |
+| The skill                | _plugin/skills/discuss/SKILL.md_    |
+| Read route for the tab   | _src/server/routes/discussions.ts_  |
 
 ## Still to decide
 
