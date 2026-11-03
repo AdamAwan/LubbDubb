@@ -174,6 +174,10 @@ What they can say at any point:
 - **An agent's question is typed straight into a running agent**, and it acts on
   it. If the operator is unsure, leave it open and skip it rather than send a
   guess.
+- **A story waiting on open questions is not an ask here.** It shows in the
+  cockpit's Up next as _waiting on N open questions_. When the operator wants to
+  clear one, hand off to `/lubbdubb:discuss <n>`, which reads the questions and
+  writes the answers.
 
 ### What not to do
 

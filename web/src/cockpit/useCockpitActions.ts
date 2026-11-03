@@ -270,6 +270,7 @@ function placeActions(go: Go) {
           : [...current.goalShut.filter((name) => name !== section), section].sort((a, b) => a.localeCompare(b)),
       })),
     openGoalTab: (tab) => go({ goalTab: tab }),
+    filterDiscussion: (next) => go(next),
     openRemoteSheet: (environment) => go({ sheetEnvironment: environment }),
   } satisfies Partial<CockpitActions>;
 }

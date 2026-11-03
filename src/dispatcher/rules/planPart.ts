@@ -16,7 +16,7 @@ import {
 } from '../../plans/parts.js';
 import { budgetNote } from '../../pr/prSplit.js';
 import { goalCriteriaNote } from '../../criteria/note.js';
-import type { Candidate, RawAction, StageContext } from './context.js';
+import type { Candidate, IssueHold, RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `plan-part`)
 
@@ -59,6 +59,7 @@ function planCandidates(
   const index = bySlug(parts);
   const inFlight = parts.filter((p) => s.activeOrigins.has(partOrigin(issueNumber, p.slug))).length;
   let room = s.planning.maxConcurrentPartsPerIssue - inFlight;
+  const hold = unapproved ? null : s.issueHold(issueNumber, { sequence: false });
   const ready = parts
     .filter((p) => !partIsHuman(p))
     .filter((p) => p.status === 'ready' && !s.activeOrigins.has(partOrigin(issueNumber, p.slug)))
@@ -96,7 +97,7 @@ function planCandidates(
     const cooling = verdict.kind === 'cooldown';
     const capped = !cooling && room <= 0;
     if (!cooling && !capped) room -= 1;
-    const held = cooling ? 'cooldown' : capped ? 'capped' : undefined;
+    const held = cooling ? 'cooldown' : capped ? 'capped' : (hold ?? undefined);
     candidates.push({
       depth,
       issueNumber,
@@ -116,7 +117,7 @@ function partCandidate(
   atoms: PlanAtom[],
   index: Map<string, PlanPart>,
   issueNumber: number,
-  held: 'cooldown' | 'capped' | 'unapproved' | undefined,
+  held: 'cooldown' | 'capped' | 'unapproved' | IssueHold | undefined,
 ): Candidate {
   const origin = partOrigin(issueNumber, part.slug);
   const branch = part.branch ?? partBranch(issueNumber, part.slug);
@@ -127,12 +128,15 @@ function partCandidate(
     base === s.defaultBranch
       ? `Part "${part.slug}" of issue #${issueNumber} is ready and has no agent.`
       : `Part "${part.slug}" of issue #${issueNumber} is ready and stacks on ${base}.`;
-  const reason =
-    held === 'capped'
-      ? `${stacks} Held: issue #${issueNumber} is already at its ${s.planning.maxConcurrentPartsPerIssue}-part concurrency cap.`
-      : held === 'unapproved'
-        ? `${stacks} Held: the plan for issue #${issueNumber} is awaiting your approval — nothing is scheduled until you accept it.`
-        : stacks;
+  const why =
+    typeof held === 'object'
+      ? held.reason
+      : held === 'capped'
+        ? `Held: issue #${issueNumber} is already at its ${s.planning.maxConcurrentPartsPerIssue}-part concurrency cap.`
+        : held === 'unapproved'
+          ? `Held: the plan for issue #${issueNumber} is awaiting your approval — nothing is scheduled until you accept it.`
+          : null;
+  const reason = why === null ? stacks : `${stacks} ${why}`;
   return {
     origin,
     rule: 'plan-part',
@@ -140,7 +144,7 @@ function partCandidate(
     kind: 'code',
     branch,
     reason,
-    held,
+    held: typeof held === 'object' ? held.held : held,
     action: {
       type: 'dispatch_code_agent',
       branch,
@@ -161,6 +165,7 @@ function partCandidate(
         }) +
         partDeclarationNote(part, atoms) +
         goalCriteriaNote(s.criteriaFor(issueNumber)) +
+        s.discussionNote(issueNumber) +
         budgetNote(s.planning.fileBudget) +
         partOutcomeNote(part) +
         s.watchDeclareNote +

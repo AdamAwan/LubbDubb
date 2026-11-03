@@ -227,7 +227,7 @@ test('reaching an environment opens on the close-out it is owed against', () => 
 
 test('every tab reads something, even on a goal that has nothing', () => {
   /* A tracker that cannot place work items, or the goal's missing parent is an ask. */
-  const nav = buildGoalNav({ ...bare(), placesWorkItems: false });
+  const nav = buildGoalNav({ ...bare(), placesWorkItems: false, discussions: true });
   assert.deepEqual(
     nav.map((e) => e.tab),
     [...GOAL_TABS],

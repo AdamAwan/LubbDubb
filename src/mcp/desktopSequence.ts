@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { issueOriginRef } from '../issueOrigins.js';
+import { storiesUnder } from '../issueRelations.js';
 import { desktopIssueRef } from '../validation/desktop.js';
 import { toolSchema } from './schema.js';
 import { issueWatchGateReason } from '../dispatcher/issuePickup.js';
@@ -182,7 +183,7 @@ export function featureFor(
   const issues = world?.issues ?? [];
   const self = issues.find((i) => i.number === issue);
   const number = self?.parent?.number ?? issue;
-  const stories = issues.filter((i) => i.parent?.number === number);
+  const stories = storiesUnder(issues, number);
   if (stories.length === 0) {
     return {
       ok: false,

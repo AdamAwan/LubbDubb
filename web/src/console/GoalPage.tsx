@@ -22,6 +22,7 @@ import {
   goalPanes,
 } from '../view/goalPage.js';
 import { GoalCriteria } from '../components/GoalCriteria.js';
+import { DiscussionPane } from '../components/DiscussionPane.js';
 import { PartDescriptionsProvider } from '../components/partDescriptions.js';
 import { IntakeSitting } from '../components/IntakeSitting.js';
 import { PredictionReview } from '../components/PredictionReview.js';
@@ -102,6 +103,7 @@ export function GoalPage({
           </div>
         )}
         {tab === 'ask' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'discussion' && <DiscussionPane number={page.issue.number} view={view} actions={actions} />}
         {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'validate' && <ValidatePane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'close' && <ClosePane page={page} view={view} actions={actions} folds={folds} />}

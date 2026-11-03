@@ -17,7 +17,7 @@ import {
 } from '../src/integrations/github/issues.js';
 import { diffWorlds } from '../src/world/worldDiff.js';
 import type { Issue, WorldSnapshot } from '../src/types.js';
-import { resolvePullDetail } from '../src/integrations/github/octokitGitHubApi.js';
+import { resolvePullDetail } from '../src/integrations/github/pullDetail.js';
 import type {
   GhAnnotation,
   GhCheckRun,
@@ -231,6 +231,9 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async createPullReviewReply(number, inReplyTo, body): Promise<GhCommentRef> {
       recorded.reviewReplies.push({ number, inReplyTo, body });
       return { url: `https://github.com/o/r/pull/${number}#discussion_r${inReplyTo}`, id: inReplyTo };
+    },
+    async listIssueComments() {
+      return [];
     },
     async createIssueComment(number, body): Promise<GhCommentRef> {
       recorded.issueComments.push({ number, body });

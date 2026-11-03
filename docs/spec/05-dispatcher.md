@@ -450,16 +450,17 @@ the candidate; `waiting` was decided inline by the headroom cut; and **suppressi
 represented at all** — a rule superseded by an earlier one `continue`d, so its candidate vanished with
 no queue entry and no reason anywhere. That is the same invisibility `capped` was introduced to fix.
 
-| Verdict      | Becomes                                                                               |
-| ------------ | ------------------------------------------------------------------------------------- |
-| dispatch     | The agent spawns.                                                                     |
-| note         | `respond_to_agent` on the branch's running agent (`branch-notify`).                   |
-| escalate     | `escalate_to_human` (`cooldown-escalate`).                                            |
-| `cooldown`   | Queued, held by the per-origin re-dispatch throttle.                                  |
-| `capped`     | Queued, held by `maxConcurrentPartsPerIssue`.                                         |
-| `unapproved` | Queued, held because the plan's decomposition is still a proposal.                    |
-| `superseded` | Queued, held because an earlier rule claimed this issue — for as long as it holds it. |
-| `waiting`    | Queued, held by fleet headroom — the only reason the cut decides, not a rule.         |
+| Verdict      | Becomes                                                                                                                     |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| dispatch     | The agent spawns.                                                                                                           |
+| note         | `respond_to_agent` on the branch's running agent (`branch-notify`).                                                         |
+| escalate     | `escalate_to_human` (`cooldown-escalate`).                                                                                  |
+| `cooldown`   | Queued, held by the per-origin re-dispatch throttle.                                                                        |
+| `capped`     | Queued, held by `maxConcurrentPartsPerIssue`.                                                                               |
+| `unapproved` | Queued, held because the plan's decomposition is still a proposal.                                                          |
+| `superseded` | Queued, held because an earlier rule claimed this issue — for as long as it holds it.                                       |
+| `questions`  | Queued, held by an open question in the story's discussion file. → [40](40-discussions.md#an-open-question-holds-the-story) |
+| `waiting`    | Queued, held by fleet headroom — the only reason the cut decides, not a rule.                                               |
 
 **Every held reason reaches the queue.** That is the contract, and it is what makes "nothing happened
 and nobody can say why" unrepresentable.
@@ -650,7 +651,10 @@ candidates **once, immediately before the headroom cut**, into three tiers:
 
 It **only re-orders**. It never clears a `held` verdict: a cooldown, cap, pause, absent watch tag or
 unapproved plan holds an item wherever the override places it, because the cut walk reads `held`
-independently of position. Overriding a hold _into_ dispatch is a different feature, out of scope.
+independently of position. The two exceptions are `sequenced` and `questions` — `LIFTABLE_HOLDS` in
+`src/dispatcher/admission.ts`, the same pair `StageContext.issueHold` answers: an override, or the goal's
+priority flag, clears either, because both hold work only until the operator says go — an order and an
+open question are the operator's to overrule ([40](40-discussions.md#an-open-question-holds-the-story)).
 
 An override is written by `POST /api/upnext/order` (replace-all) and pruned once its origin stops
 being tracked — see [16](16-http-api.md) and [14](14-persistence.md).
@@ -766,7 +770,7 @@ than a queue arrangement that decays.
 ```
 
 `status` is `dispatching` or one of the held reasons in [Admission](#admission) — `waiting`,
-`cooldown`, `capped`, `unapproved`, `superseded`. `rule` is always the rule that **proposed** the
+`cooldown`, `capped`, `unapproved`, `superseded`, `sequenced`, `questions`, `sitting`. `rule` is always the rule that **proposed** the
 candidate; what held it is the status. `expedited` is present only on a row whose goal the operator marked a
 priority ([above](#marking-a-goal-a-priority)) — the ordering's own explanation, shipped as a fact so
 the cockpit does not re-derive it.
@@ -1068,7 +1072,8 @@ is:
   `appraising` does — and `issue-plan` reads it through `investigationSupersedes`,
   which also holds while a current record waits on the operator or was resolved _close_ or _ask_.
   Every one of those holds reads the label first, so removing it lifts them all.
-- Held behind a story's predecessors like the appraiser, queued `sequenced`.
+- Held behind a story's predecessors like the appraiser, queued `sequenced`, then by an open question, queued
+  `questions` — one `StageContext.issueHold` call.
 - **Fails open**: a spent attempt cap returns the issue to the planner with no escalation.
 
 The prompt carries the title and body, and the dispatch's `originTitle` / `originSummary` are what the

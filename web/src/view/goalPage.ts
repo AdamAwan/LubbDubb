@@ -95,6 +95,8 @@ export interface GoalPageView {
   obligations: GoalObligations;
   /** The tracker can give a work item a parent and an area path, which the Ask tab then checks for. */
   placesWorkItems: boolean;
+  /** `discussionsDir` is set, so the row carries a Discussion tab. → docs/spec/40-discussions.md#in-the-cockpit */
+  discussions: boolean;
 }
 
 /** The environments carrying each obligation, in promotion order. Empty where none does. */
@@ -162,6 +164,7 @@ export function buildGoalPage(
     sequence: goalSequence(state, issue),
     obligations: goalObligations(state.config.environments),
     placesWorkItems: state.config.canPlaceWorkItem,
+    discussions: state.config.discussions,
   };
 }
 
@@ -424,7 +427,7 @@ function tailBegun(page: GoalPageView): boolean {
   return issue.state !== 'open' || Boolean(issue.delivery) || Boolean(issue.shortfall) || Boolean(issue.retrospective);
 }
 
-export const GOAL_TABS = ['ask', 'plan', 'validate', 'close', 'watch'] as const;
+export const GOAL_TABS = ['ask', 'discussion', 'plan', 'validate', 'close', 'watch'] as const;
 
 export type GoalTab = (typeof GOAL_TABS)[number];
 
@@ -437,7 +440,7 @@ export type GoalTab = (typeof GOAL_TABS)[number];
  * obligation unless it is named here, so `GoalObligations` stops compiling until a new one is
  * placed on one side of that line deliberately. → docs/spec/17-cockpit.md#the-panes
  */
-export type ObligationTab = Exclude<GoalTab, 'ask' | 'plan'>;
+export type ObligationTab = Exclude<GoalTab, 'ask' | 'discussion' | 'plan'>;
 
 /* A tab's id is its label, lower case: the pane the label says is the pane
    `?pane=` names and the pane `GOAL_TAB_OF` maps a section to. The two drifted
@@ -446,6 +449,7 @@ export type ObligationTab = Exclude<GoalTab, 'ask' | 'plan'>;
    for. → docs/spec/17-cockpit.md#the-panes */
 const GOAL_TAB_LABEL: Record<GoalTab, string> = {
   ask: 'Ask',
+  discussion: 'Discussion',
   plan: 'Plan',
   validate: 'Validate',
   close: 'Close',
@@ -488,7 +492,9 @@ export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
  * → docs/spec/17-cockpit.md#the-panes
  */
 export function goalPanes(page: GoalPageView): GoalTab[] {
-  return GOAL_TABS.filter((tab) => tab !== 'watch' || page.obligations.watch.length > 0);
+  return GOAL_TABS.filter(
+    (tab) => (tab !== 'watch' || page.obligations.watch.length > 0) && (tab !== 'discussion' || page.discussions),
+  );
 }
 
 /**
@@ -702,6 +708,7 @@ interface GoalNavEntry {
 export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
   const stages: Record<GoalTab, GoalStage> = {
     ask: askStage(page),
+    discussion: { reading: 'notes and questions', tone: 'grey', done: null },
     plan: planStage(page),
     validate: validationStage(page),
     close: closeStage(page),
@@ -709,7 +716,7 @@ export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
   };
   return goalPanes(page).map((tab) => {
     const needsYou = goalPaneAsks(page, tab).length > 0 || (tab === 'ask' && parentAsked(page));
-    const on = tab === 'ask' || tab === 'plan' ? [] : page.obligations[tab];
+    const on = tab === 'ask' || tab === 'discussion' || tab === 'plan' ? [] : page.obligations[tab];
     return { tab, label: GOAL_TAB_LABEL[tab], ...stages[tab], needsYou, on };
   });
 }

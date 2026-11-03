@@ -29,6 +29,12 @@ through a one-line box.
 4. **Send them back.** Say what is now waiting for them in the cockpit. That is
    where this ends.
 
+The goal's discussion (`discussion_read`) holds the decisions and answered
+questions the planner was handed; read it before arguing with a plan that seems to
+ignore something. When the talk settles a decision or answers a question rather
+than changing the plan, hand off to `/lubbdubb:discuss <n>` — this skill writes
+nothing there itself.
+
 **Which amendment you just made depends on `status`**, and they are not the same
 thing to say out loud. Read it off `plan_read` before you call anything:
 

@@ -1,5 +1,6 @@
 import { issueOriginRef } from '../issueOrigins.js';
 import type { GoalCriteriaVersion, Plan } from '../types.js';
+import type { DiscussionReader } from '../discussions/reader.js';
 
 // → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner
 
@@ -14,6 +15,8 @@ export interface GoalIntake {
   closedSittings: ClosedSittings;
   criteria: GoalCriteriaVersion[];
   judgeOwed: string[];
+  /** Absent where discussions are off. → docs/spec/40-discussions.md */
+  discussion?: DiscussionReader;
 }
 
 export const SITTING_REASON = 'awaiting your prediction and criteria';

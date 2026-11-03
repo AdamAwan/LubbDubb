@@ -116,7 +116,7 @@ and skips **every pass whose subject is the world snapshot**:
 `connector.getState` and `recordWorldChanges` — plus every pass the
 [pulse registry](#the-pulse-registry) declares `readWorld: true`, which today is `plans`, `prWatch`,
 `prWorkItems`, `naming`, `branchReaps`, `updates`, `environments`, `appErrors`, `appErrorTracker`, `remoteValidation`, `notices`,
-and `pool` at the `reconcile` phase, and `appraisals`, `areaPaths`,
+`pool` and `discussionPulls` ([40](40-discussions.md#pulling-tracker-comments-in)) at the `reconcile` phase, and `appraisals`, `areaPaths`,
 `reviewedElsewhere` and `tickets` at the phases below it.
 
 Each of those already ran against this exact world, on the cycle that read it, and each is idempotent —

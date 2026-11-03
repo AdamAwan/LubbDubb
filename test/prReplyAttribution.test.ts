@@ -151,6 +151,7 @@ function githubApi(script: GhScript): GitHubApi {
     getJobLog: unused,
     listIssuesChangedSince: unused,
     createPullReviewReply: unused,
+    listIssueComments: unused,
     createIssueComment: unused,
     updateIssueComment: unused,
     mergePull: unused,

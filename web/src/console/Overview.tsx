@@ -446,7 +446,7 @@ export function queueRow(item: QueueItem, view: CockpitView, actions: CockpitAct
     title: item.title,
     refs: <Ref to={item.origin} />,
     facts: [{ label: 'rule', value: item.rule }],
-    whyLabel: item.status,
+    whyLabel: item.status === 'questions' ? 'open questions' : item.status,
     whyTone: item.status === 'unapproved' ? 'ask' : held ? 'hold' : 'quiet',
     why: item.reason,
     chips:

@@ -33,4 +33,5 @@ export type InjectableEvent =
   | { kind: 'pr_closed'; prNumber: number; merged?: boolean; mergeCommitSha?: string }
   | { kind: 'new_issue'; number: number; title: string; body?: string; labels?: string[] }
   | { kind: 'issue_state'; number: number; state: 'open' | 'closed' }
-  | { kind: 'issue_linked_pr'; number: number; prNumber: number };
+  | { kind: 'issue_linked_pr'; number: number; prNumber: number }
+  | { kind: 'issue_comment'; number: number; author: string; body: string };

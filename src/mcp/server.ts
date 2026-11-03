@@ -48,6 +48,7 @@ interface McpBridgeServerOptions {
   localRun?: McpToolDeps['localRun'];
   judge?: McpToolDeps['judge'];
   investigateLabel?: McpToolDeps['investigateLabel'];
+  discussions?: McpToolDeps['discussions'];
   repoRoot?: string;
   argsRetentionDays?: number;
   errors?: ErrorRecorder;
@@ -221,6 +222,7 @@ export class McpBridgeServer {
         localRun: this.opts.localRun,
         judge: this.opts.judge,
         investigateLabel: this.opts.investigateLabel,
+        discussions: this.opts.discussions,
         repoRoot: this.opts.repoRoot,
         errors: this.opts.errors,
       },

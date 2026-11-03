@@ -37,6 +37,11 @@ export function prNumberOf(ref: string): number | null {
   return found === undefined ? null : Number(found);
 }
 
+export function prOriginNumber(originRef: string | null): number | null {
+  const found = /^pr:(\d+)(?::|$)/.exec(originRef ?? '')?.[1];
+  return found === undefined ? null : Number(found);
+}
+
 export function groupBy<T, K>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
   const grouped = new Map<K, T[]>();
   for (const row of rows) {

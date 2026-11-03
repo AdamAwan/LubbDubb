@@ -232,6 +232,7 @@ export function buildDemoState(): DemoSeed {
       containerTypes: ['Feature', 'Epic'],
       featureBoard: true,
       featureSummaries: DEMO_FEATURE_SUMMARIES,
+      discussions: false,
       botPrs: true,
       appErrors: true,
       canPlaceWorkItem: true,

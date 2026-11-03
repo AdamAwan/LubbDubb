@@ -68,6 +68,7 @@ import type {
   SpendTrendPayload,
   WorkRootsPayload,
   TicketsPayload,
+  DiscussionReading,
   FeatureBoardPayload,
   FeatureSequence,
   WorkSubtreePayload,
@@ -161,6 +162,7 @@ const realApi = {
     return authFetch(`/api/tickets${search === '' ? '' : `?${search}`}`).then((r) => json<TicketsPayload>(r));
   },
   getFeatures: () => authFetch('/api/features').then((r) => json<FeatureBoardPayload>(r)),
+  getDiscussion: (number: number) => authFetch(`/api/discussions/${number}`).then((r) => json<DiscussionReading>(r)),
   answerFeatureSequence: (number: number, answer: 'accepted' | 'declined', by: string) =>
     post<FeatureSequence>(`/api/features/${number}/sequence`, { answer, by }),
   // The gate's two presses. The reveal's response is the only copy of the plan

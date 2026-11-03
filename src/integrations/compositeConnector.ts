@@ -30,7 +30,7 @@ import type {
   WorkItemParentInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
-import type { BotPrDetail, BotPullRequest, TrackerItem, WorldSnapshot } from '../types.js';
+import type { BotPrDetail, BotPullRequest, TrackerComment, TrackerItem, WorldSnapshot } from '../types.js';
 import { DEFAULT_READ_LANES, type ReadLanes, type ReadPlan } from '../world/readPlan.js';
 import { signOff, type SignOffKind } from '../sink/signOff.js';
 import { markdownToHtml } from '../sink/markdownToHtml.js';
@@ -43,6 +43,7 @@ import {
   isInjectable,
   isIssueCloseCapable,
   isIssueCommentCapable,
+  isIssueCommentReadable,
   isIssueCreateCapable,
   isIssueImageCapable,
   isIssueKeySearchCapable,
@@ -357,6 +358,17 @@ export class CompositeConnector
     const handler = this.integrations.find(isIssueCommentCapable);
     if (!handler) throw new Error('no integration can comment on issues (no issues provider is IssueCommentCapable)');
     return handler.upsertIssueComment({ ...input, body: this.signed(handler, input.body) });
+  }
+
+  canListIssueComments(): boolean {
+    return this.integrations.some(isIssueCommentReadable);
+  }
+
+  async listIssueComments(number: number, since: string | null): Promise<TrackerComment[]> {
+    const handler = this.integrations.find(isIssueCommentReadable);
+    if (!handler)
+      throw new Error('no integration can read issue comments (no issues provider is IssueCommentReadable)');
+    return handler.listIssueComments(number, since);
   }
 
   async listBotPullRequests(authors: readonly RegExp[]): Promise<BotPullRequest[]> {

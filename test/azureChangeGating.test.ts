@@ -121,6 +121,7 @@ function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script:
     completePullRequest: nope,
     async setPullLabel() {},
     async setWorkItemState() {},
+    listWorkItemComments: nope,
     createWorkItemComment: nope,
     createWorkItemAttachment: nope,
     linkWorkItemAttachment: nope,

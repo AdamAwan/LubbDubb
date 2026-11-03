@@ -109,6 +109,7 @@ offers no such control, and the day it does, the cell is where it is added.
 | `criteria`       | `expand` `edit` `abandon` `close`                                                                       |
 | `prediction`     | `expand` `create` `accept` `reject` `waive` `undo` `close`                                              |
 | `sequence`       | `accept` `reject` `open`                                                                                |
+| `discussion`     | `filter` `open`                                                                                         |
 | `watch`          | `expand` `create` `edit` `accept` `reject` `defer` `waive` `abandon` `close`                            |
 | `schedule`       | `expand` `create` `edit` `abandon` `stop` `undo` `close`                                                |
 | `review-thread`  | `reject` `undo`                                                                                         |

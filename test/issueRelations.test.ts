@@ -315,6 +315,7 @@ function relationApi(
     completePullRequest: unused,
     setPullLabel: unused,
     setWorkItemState: unused,
+    listWorkItemComments: unused,
     createWorkItemComment: unused,
     createWorkItemAttachment: unused,
     linkWorkItemAttachment: unused,

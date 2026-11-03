@@ -20,6 +20,8 @@ export interface GitHubApi {
   listOpenIssues(label?: string): Promise<GhIssue[]>;
   listIssuesChangedSince(since: string, label?: string): Promise<GhIssue[]>;
   listIssueTimeline(number: number): Promise<GhTimelineEvent[]>;
+  /** The issue's comments, oldest first; `since` narrows to those updated at or after it. */
+  listIssueComments(number: number, since?: string): Promise<GhIssueComment[]>;
 
   createPullReviewReply(number: number, inReplyTo: number, body: string): Promise<GhCommentRef>;
   createIssueComment(number: number, body: string): Promise<GhCommentRef>;
@@ -158,6 +160,13 @@ export interface GhTimelineEvent {
   sourcePrNumber: number | null;
   label: string | null;
   actorLogin: string | null;
+}
+
+export interface GhIssueComment {
+  id: number;
+  authorLogin: string;
+  body: string;
+  createdAt: string;
 }
 
 export interface GhCommentRef {

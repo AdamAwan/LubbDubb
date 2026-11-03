@@ -797,7 +797,7 @@ judged against a repository missing exactly what that predecessor was going to b
 schema, interface or migration the ticket names is genuinely absent, which is `unclear`'s own
 wording: _names things that do not exist_.
 
-So `issue-appraisal` reads `StageContext.sequenceWaits` and is held with `held: 'sequenced'` like
+So `issue-appraisal` reads `StageContext.sequenceWaits`, through `StageContext.issueHold`, and is held with `held: 'sequenced'` like
 `issue-plan`, queued in Up next with the reason naming what it waits behind
 ([33](33-story-sequencing.md#the-appraiser-is-held-as-well)). It is held **in front of** the verdict
 rather than informed after it, because an appraisal is a record and this hold is not: `appraisalHold`

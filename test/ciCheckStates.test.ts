@@ -111,6 +111,7 @@ function fakeApi(evals: AzPolicyEvaluation[], pulls: AzPull[] = [pull()]): Azure
     setWorkItemAreaPath: () => Promise.reject(new Error('not used')),
     setWorkItemTag: unused('setWorkItemTag'),
     linkWorkItemToPull: unused('linkWorkItemToPull'),
+    listWorkItemComments: unused('listWorkItemComments'),
     createWorkItemComment: unused('createWorkItemComment'),
     updateWorkItemComment: unused('updateWorkItemComment'),
     createPull: unused('createPull'),

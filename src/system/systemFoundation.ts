@@ -2,6 +2,9 @@ import { tmpdir } from 'node:os';
 import type { AskSnapshot } from '../asks/queue.js';
 import { dirname, join } from 'node:path';
 import type { Config } from '../config/config.js';
+import { DiscussionFiles, discussionRepoFolder } from '../discussions/discussionFile.js';
+import { DiscussionPullDesk } from '../discussions/pullDesk.js';
+import { recordIssueComments } from '../sink/issueCommentsSent.js';
 import { Store } from '../store/store.js';
 import { CompositeConnector } from '../integrations/compositeConnector.js';
 import { buildIntegrations } from '../integrations/registry.js';
@@ -223,6 +226,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
       config.localRunRoot,
       errors,
     );
+  const discussions = new DiscussionFiles({ dir: config.discussionsDir, repo: discussionRepoFolder(config), errors });
   const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot, errors);
   const keeper = opts.cloneKeeper ?? (realClone(opts) ? new GitCloneKeeper(config.repoRoot) : undefined);
   const cloneUpkeep = keeper === undefined ? undefined : new CloneUpkeepDesk({ keeper, errors });
@@ -232,7 +236,9 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     errors,
     ingressInbox,
     connector,
-    sink: opts.sink ?? connector,
+    sink: recordIssueComments(opts.sink ?? connector, (issue, ref) =>
+      store.issueComments.recordIssueCommentSent(issue, ref),
+    ),
     areaPaths,
     backend,
     runtimeControl,
@@ -240,6 +246,13 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     gitObserver,
     cloneUpkeep,
     watchLabel: watchLabelFor(config.labelPrefix),
+    discussions,
+    discussionPulls: new DiscussionPullDesk({
+      discussions,
+      comments: connector,
+      sent: (issue) => store.issueComments.issueCommentRefs(issue),
+      errors,
+    }),
   };
 }
 

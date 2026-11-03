@@ -19,7 +19,7 @@ import type { Foundation, LateBinding } from './systemFoundation.js';
 
 export function buildDesktop(
   config: Config,
-  { store, connector, runtimeControl, errors }: Foundation,
+  { store, connector, sink, runtimeControl, errors, discussions, discussionPulls }: Foundation,
   predictions: PredictionStore,
   prompts: PromptTemplates,
   late: LateBinding,
@@ -49,6 +49,9 @@ export function buildDesktop(
     renderTicketBody: (vars) => prompts.render('brief-ticket-body', vars),
     profileNames: () => orderedProfiles(config.agentModels).map((p) => p.name),
     connector,
+    comments: sink,
+    discussions,
+    discussionPulls,
     labelPrefix: config.labelPrefix,
     issueContainerTypes: config.issueContainerTypes,
     agentModels: config.agentModels,

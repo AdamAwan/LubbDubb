@@ -3,6 +3,7 @@ import { allGoalReach } from '../environments/reach.js';
 import { DESKTOP_EJECTION_TOOLS } from './desktopEjection.js';
 import { DESKTOP_SEQUENCE_TOOLS } from './desktopSequence.js';
 import { DESKTOP_FEATURE_TOOLS } from './desktopFeature.js';
+import { DESKTOP_DISCUSSION_TOOLS } from './desktopDiscussion.js';
 import { DESKTOP_REMOTE_TOOLS } from './desktopRemote.js';
 import { issueOrigin } from '../plans/planning.js';
 import { describeLocalRun } from '../localRun/describe.js';
@@ -506,6 +507,7 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   plan_amend: planAmend,
   ...DESKTOP_SEQUENCE_TOOLS,
   ...DESKTOP_FEATURE_TOOLS,
+  ...DESKTOP_DISCUSSION_TOOLS,
   local_run: localRun,
   description_read: descriptionRead,
   description_check: descriptionCheck,

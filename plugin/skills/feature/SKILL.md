@@ -23,6 +23,10 @@ this up to"; `feature 500 <anything>` is that conversation.
    order is `/lubbdubb:order 500`; a missing story is
    filing a ticket with `/lubbdubb:file`; one story's plan is
    `/lubbdubb:plan`. Say which one you are moving to before you do.
+5. **What is decided goes in the discussion.** `discussion_read` shows the
+   Feature's standing decisions and its stories' open questions. When the talk
+   settles something worth writing down, hand off to `/lubbdubb:discuss 500` —
+   this skill writes nothing there itself.
 
 - **`summary: null` means nobody summarised it.** Do not write your own account
   and present it as the harness's.

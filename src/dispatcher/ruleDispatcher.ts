@@ -20,6 +20,7 @@ import { DEFAULT_VALIDATION, type ValidationPolicy } from '../validation/policy.
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import { DEFAULT_PLANNING, issueOrigin, type PlanningPolicy } from '../plans/planning.js';
 import { sittingHolds } from '../intake/sitting.js';
+import { LIFTABLE_HOLDS } from './admission.js';
 import { type Candidate, type RawAction, type StageContext } from './rules/context.js';
 import {
   activeOriginsOf,
@@ -31,6 +32,7 @@ import {
   pinResolver,
   planRoutes,
   sequencingView,
+  discussionView,
   workItemGates,
 } from './ruleDispatcherStage.js';
 import { manualJob } from './rules/manualJob.js';
@@ -206,7 +208,9 @@ export class RuleDispatcher implements Dispatcher {
     const overrideRank = new Map((ctx.priorityOverrides ?? []).map((o) => [o.origin, o.rank]));
     const expedited = expeditedFor(ctx, s.openPrs, this.pickup.containerTypes);
     const cleared = s.candidates.map((c) =>
-      c.held === 'sequenced' && (expedited(c.origin) || overrideRank.has(c.origin)) ? { ...c, held: undefined } : c,
+      c.held !== undefined && LIFTABLE_HOLDS.has(c.held) && (expedited(c.origin) || overrideRank.has(c.origin))
+        ? { ...c, held: undefined }
+        : c,
     );
     const ranked = rankByPriorityOverride(cleared, overrideRank, expedited);
 
@@ -279,11 +283,14 @@ export class RuleDispatcher implements Dispatcher {
 
     const criteriaByOrigin = new Map((ctx.goalCriteria ?? []).map((c) => [c.originRef, c]));
     const investigations = investigationView(ctx, pickup);
+    const issueByNumber = new Map(ctx.world.issues.map((i) => [i.number, i]));
+    const sequencing = sequencingView(ctx, pickup);
 
     return {
       ...cycleLookups(ctx),
       ...gates,
-      ...sequencingView(ctx, pickup),
+      ...sequencing,
+      ...discussionView(ctx, sequencing.sequenceWaits, plansByOrigin, issueByNumber, this.pickup.containerTypes),
       ...this.policies(),
       ...workItemGates(pickup),
       ctx,
@@ -294,8 +301,7 @@ export class RuleDispatcher implements Dispatcher {
       openPrs,
       readingBehindFleet: (prNumber: number) => behind.has(prReadRef(prNumber)),
       plansByOrigin,
-      liveIssue: (issueNumber: number) =>
-        retained.has(issueNumber) ? null : (ctx.world.issues.find((i) => i.number === issueNumber) ?? null),
+      liveIssue: (issueNumber: number) => (retained.has(issueNumber) ? null : (issueByNumber.get(issueNumber) ?? null)),
       partsPlanFor: (issueNumber: number) => {
         const plan = plansByOrigin.get(issueOrigin(issueNumber));
         if (!plan || (plan.status !== 'active' && plan.status !== 'complete')) return null;

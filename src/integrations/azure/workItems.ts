@@ -14,13 +14,14 @@ import type {
   WorkItemParentInput,
   WorkItemStateInput,
 } from '../../sink/actionSink.js';
-import type { Issue, IssueRelative, IssueState, TrackerItem } from '../../types.js';
+import type { Issue, IssueRelative, IssueState, TrackerComment, TrackerItem } from '../../types.js';
 import type { AreaPathTree } from '../../intake/placement.js';
 import type {
   WorldCapability,
   Integration,
   IssueCloseCapable,
   IssueCommentCapable,
+  IssueCommentReadable,
   IssueImageCapable,
   IssueCreateCapable,
   IssueKeySearchCapable,
@@ -71,6 +72,7 @@ export class AzureDevOpsWorkItemsIntegration
     IssueLabelCapable,
     IssueCreateCapable,
     IssueCommentCapable,
+    IssueCommentReadable,
     IssueImageCapable,
     IssueKeySearchCapable,
     IssueReopenCapable,
@@ -267,6 +269,13 @@ export class AzureDevOpsWorkItemsIntegration
     const attachment = await this.opts.api.createWorkItemAttachment(input.fileName, input.bytes);
     await this.opts.api.linkWorkItemAttachment(input.number, attachment.url, input.fileName);
     return { ok: true, url: attachment.url };
+  }
+
+  async listIssueComments(number: number, since: string | null): Promise<TrackerComment[]> {
+    const comments = await this.opts.api.listWorkItemComments(number);
+    return comments
+      .filter((c) => since === null || Date.parse(c.createdDate) > Date.parse(since))
+      .map((c) => ({ id: String(c.id), author: c.author, body: c.text, createdAt: c.createdDate }));
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {

@@ -32,7 +32,7 @@ import type {
   WorkItemStateInput,
 } from '../../sink/actionSink.js';
 import type { Store } from '../../store/store.js';
-import type { WorldSnapshot } from '../../types.js';
+import type { TrackerComment, WorldSnapshot } from '../../types.js';
 import { CompositeConnector } from '../compositeConnector.js';
 import { FakeWorldStore } from './fakeWorld.js';
 import { FakeGitHubIntegration } from './fakeGitHub.js';
@@ -125,6 +125,10 @@ export class FakeConnector implements Connector, ActionSink, IssueImageSink, Iss
   }
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
     return this.composite.upsertIssueComment(input);
+  }
+
+  listIssueComments(number: number, since: string | null): Promise<TrackerComment[]> {
+    return this.composite.listIssueComments(number, since);
   }
 
   canAttachIssueImage(): boolean {

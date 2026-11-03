@@ -122,6 +122,7 @@ function fakeApi(evals: AzPolicyEvaluation[], requeue: RequeueScript = { asked: 
     setWorkItemAreaPath: () => Promise.reject(new Error('not used')),
     setWorkItemTag: unused('setWorkItemTag'),
     linkWorkItemToPull: unused('linkWorkItemToPull'),
+    listWorkItemComments: unused('listWorkItemComments'),
     createWorkItemComment: unused('createWorkItemComment'),
     updateWorkItemComment: unused('updateWorkItemComment'),
     createPull: unused('createPull'),

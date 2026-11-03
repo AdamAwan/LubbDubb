@@ -59,6 +59,7 @@ import { BotPrRiskStore } from './botPrRisks.js';
 import { BotPrOutcomeStore } from './botPrOutcomes.js';
 import { PrThreadReopenStore } from './prThreadReopens.js';
 import { PrReplyStore } from './prReplies.js';
+import { IssueCommentStore } from './issueComments.js';
 import { PrThreadLabelStore, PR_THREAD_LABEL_COLUMNS } from './prThreadLabels.js';
 import { PrArchiveStore } from './prArchive.js';
 import { ObstacleStore, OBSTACLE_COLUMNS } from './obstacles.js';
@@ -189,6 +190,7 @@ export class Store {
   readonly botPrOutcomes: BotPrOutcomeStore;
   readonly threadReopens: PrThreadReopenStore;
   readonly prReplies: PrReplyStore;
+  readonly issueComments: IssueCommentStore;
   readonly prThreadLabels: PrThreadLabelStore;
   readonly prArchive: PrArchiveStore;
   readonly obstacles: ObstacleStore;
@@ -259,6 +261,7 @@ export class Store {
     this.botPrOutcomes = new BotPrOutcomeStore(ctx);
     this.threadReopens = new PrThreadReopenStore(ctx);
     this.prReplies = new PrReplyStore(ctx);
+    this.issueComments = new IssueCommentStore(ctx);
     this.prThreadLabels = new PrThreadLabelStore(ctx);
     this.prArchive = new PrArchiveStore(ctx);
     this.obstacles = new ObstacleStore(ctx);

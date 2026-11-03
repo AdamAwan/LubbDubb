@@ -31,6 +31,7 @@ import { PR_SPLITS_SCHEMA } from './schema/prSplits.js';
 import { PR_REVIEW_EXTERNALS_SCHEMA } from './schema/prReviewExternals.js';
 import { PR_THREAD_REOPENS_SCHEMA } from './schema/prThreadReopens.js';
 import { PR_REPLIES_SCHEMA } from './schema/prReplies.js';
+import { ISSUE_COMMENTS_SCHEMA } from './schema/issueComments.js';
 import { PR_THREAD_LABELS_SCHEMA } from './schema/prThreadLabels.js';
 import { PR_ARCHIVE_SCHEMA } from './schema/prArchive.js';
 import { DECISIONS_SCHEMA } from './schema/decisions.js';
@@ -93,6 +94,7 @@ export const SCHEMA =
   PR_REVIEW_EXTERNALS_SCHEMA +
   PR_THREAD_REOPENS_SCHEMA +
   PR_REPLIES_SCHEMA +
+  ISSUE_COMMENTS_SCHEMA +
   PR_THREAD_LABELS_SCHEMA +
   PR_ARCHIVE_SCHEMA +
   DECISIONS_SCHEMA +

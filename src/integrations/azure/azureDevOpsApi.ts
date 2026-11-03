@@ -52,6 +52,8 @@ export interface AzureDevOpsApi {
   /** Hold an uploaded attachment against a work item, so it outlives the pruning of unreferenced ones. */
   linkWorkItemAttachment(id: number, url: string, comment: string): Promise<void>;
 
+  /** The work item's discussion comments, oldest first, every page. */
+  listWorkItemComments(id: number): Promise<AzWorkItemComment[]>;
   createWorkItemComment(id: number, text: string): Promise<AzWorkItemCommentRef>;
   updateWorkItemComment(id: number, commentId: number, text: string): Promise<AzWorkItemCommentRef>;
 
@@ -86,6 +88,14 @@ export interface AzureDevOpsApi {
 
 export interface AzWorkItemCommentRef {
   id: number;
+}
+
+export interface AzWorkItemComment {
+  id: number;
+  /** The author's unique name (their sign-in), else their display name. */
+  author: string;
+  text: string;
+  createdDate: string;
 }
 
 export interface AzAttachmentRef {

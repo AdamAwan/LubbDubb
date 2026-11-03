@@ -273,6 +273,8 @@ export function useCockpit(): CockpitStatus {
       goalTab: place.goalTab,
       goalOpen: place.goalOpen,
       goalShut: place.goalShut,
+      discussionKind: place.discussionKind,
+      discussionState: place.discussionState,
       configTab: place.configTab,
       configGroup: place.configGroup,
       ticketWatch: place.ticketWatch,

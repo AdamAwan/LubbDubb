@@ -2,6 +2,8 @@ import { Octokit } from '@octokit/rest';
 import { retry } from '@octokit/plugin-retry';
 import { throttling } from '@octokit/plugin-throttling';
 import { EtagCache, installConditionalRequests } from './etagCache.js';
+import { listIssueComments } from './issueComments.js';
+import { resolvePullDetail } from './pullDetail.js';
 import type { MergeMethod } from '../../sink/actionSink.js';
 import { withinClosedWindow } from '../closedWindow.js';
 import type {
@@ -11,6 +13,7 @@ import type {
   GhCombinedStatus,
   GhCommentRef,
   GhIssue,
+  GhIssueComment,
   GhMergeResult,
   GhPullDetail,
   GhPullFile,
@@ -73,8 +76,6 @@ interface GqlReviewThreadPage {
   };
 }
 
-const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
 const MAX_RETRIES = 3;
 
 const MAX_PRIMARY_LIMIT_WAIT_S = 60;
@@ -85,27 +86,6 @@ export function waitOutRateLimit(retryAfterS: number, retryCount: number): boole
 }
 
 const ResilientOctokit = Octokit.plugin(retry, throttling);
-
-interface ResolvePullOpts {
-  retries?: number;
-  delayMs?: number;
-  sleep?: (ms: number) => Promise<void>;
-}
-
-export async function resolvePullDetail(
-  fetchDetail: () => Promise<GhPullDetail>,
-  opts: ResolvePullOpts = {},
-): Promise<GhPullDetail> {
-  const retries = opts.retries ?? 3;
-  const delayMs = opts.delayMs ?? 1000;
-  const sleep = opts.sleep ?? realSleep;
-  let detail = await fetchDetail();
-  for (let i = 0; i < retries && detail.mergeable === null && !detail.merged; i++) {
-    await sleep(delayMs);
-    detail = await fetchDetail();
-  }
-  return detail;
-}
 
 export class OctokitGitHubApi implements GitHubApi {
   private viewer: string | null = null;
@@ -382,6 +362,10 @@ export class OctokitGitHubApi implements GitHubApi {
       body,
     });
     return { url: data.html_url, id: data.id };
+  }
+
+  listIssueComments(number: number, since?: string): Promise<GhIssueComment[]> {
+    return listIssueComments(this.octokit, this.base, number, since);
   }
 
   async createIssueComment(number: number, body: string): Promise<GhCommentRef> {
