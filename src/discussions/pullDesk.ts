@@ -51,7 +51,17 @@ export class DiscussionPullDesk {
     const due = this.nowMs() - PULL_INTERVAL_MS;
     const queue = numbers.filter((n) => tracked.has(n) && (this.lastPulledAt.get(n) ?? -Infinity) <= due);
     const worker = async (): Promise<void> => {
-      for (let n = queue.shift(); n !== undefined; n = queue.shift()) await this.pull(n);
+      for (let n = queue.shift(); n !== undefined; n = queue.shift()) {
+        try {
+          await this.pull(n);
+        } catch (error) {
+          this.deps.errors.record({
+            source: 'cycle',
+            message: `Tracker comments for #${n} could not be pulled.`,
+            detail: failure(error),
+          });
+        }
+      }
     };
     await Promise.all(Array.from({ length: Math.min(PULL_CONCURRENCY, queue.length) }, worker));
   }

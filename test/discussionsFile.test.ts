@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  statSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
@@ -311,4 +312,25 @@ test('one resolver names a story or a feature for every reader and writer', () =
   assert.equal(resolveSubject(issues, 200, undefined).kind, 'feature', 'a top-level parent with no type');
   assert.deepEqual(discussionSubject(issues, 999, undefined), { number: 999, title: '', kind: 'story', parent: null });
   assert.equal(resolveSubject(issues, 999, undefined).kind, null, 'nothing known');
+  const typed = [issue(300, null, 'Bug'), issue(301, 300)];
+  assert.equal(resolveSubject(typed, 300, undefined).kind, 'story', 'a typed non-container stays a story');
+});
+
+test('a file added or edited in the same clock tick as a read is not missed', () => {
+  const { discussions, folder } = files();
+  const write = discussions.add(story, { kind: 'question', body: 'Keep blanks?', author: 'operator' });
+  assert.ok(write.ok);
+  assert.deepEqual(discussions.numbers(), [142]);
+  const tick = statSync(folder).mtime;
+  writeFileSync(join(folder, '150 Later.md'), '## Note · 2026-11-03 · operator\n\nnew\n');
+  utimesSync(folder, tick, tick);
+  assert.deepEqual(discussions.numbers(), [142, 150], 'a new file in the same tick is listed');
+
+  assert.equal(discussions.read(142)!.entries[0]!.state, 'open');
+  const before = statSync(write.path);
+  const text = readFileSync(write.path, 'utf8');
+  writeFileSync(write.path, text.replace('Question · open ·', 'Question · done ·'));
+  utimesSync(write.path, before.atime, before.mtime);
+  assert.equal(statSync(write.path).size, before.size, 'the edit kept the size');
+  assert.equal(discussions.read(142)!.entries[0]!.unreadable, true, 'a same-size, same-tick edit is read afresh');
 });

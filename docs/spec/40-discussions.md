@@ -163,6 +163,15 @@ the dispatcher reading every held story's file every pulse costs a `stat`, not a
 drops both for what it touched. A duplicate number is resolved — and recorded, once — when the listing is
 built; a listing or a file that cannot be read is recorded and answered as absent, as before.
 
+**An mtime is only trusted once it is old.** File systems stamp times on a coarse clock (a jiffy on Linux,
+seconds or worse on FAT and synced vaults), so a file Obsidian creates or edits in the same tick as a read
+leaves the mtime — and a same-size edit the size — where they were. Trusted then, the listing never sees the
+new file (and the next write creates a second one for the same number), or a question answered by hand stays
+open in the cache and goes on holding the story. So a listing or a parsed file whose mtime is within two
+seconds of when it was taken is read again, and a write that is about to create a file re-lists the folder
+first. A rebuilt listing drops the parsed files it no longer names, so a file renamed in Obsidian does not
+stay in memory. The Obsidian vault is looked for once per object, a vault that is not there included.
+
 The author strings are `DISCUSSION_AUTHORS`: `operator (via Claude)`,
 `Claude (suggested)`, `agent <rule>#<task id>` and `@<login> (tracker)`. The date is the machine's
 local date. The pure selectors over a file's entries — `standingDecisions`, `openQuestions`,
@@ -213,7 +222,9 @@ discussion_add({ kind: 'note' | 'idea' | 'question', body: string })
   over the stored world, so a reviewer can ask too), or the work a `job:<id>` requeue stands in for. Any other
   origin is refused.
 - A first write creates the file, headed from the world's issue (`discussionSubject`,
-  `src/discussions/subject.ts`): a container type is a `feature`, anything else a `story` with its parent.
+  `src/discussions/subject.ts`) by the one resolver described under [the cockpit](#in-the-cockpit): a
+  container type is a `feature`, and so is an issue with no type, no parent and stories under it;
+  anything else is a `story` with its parent.
 - `kind: 'decision'` is refused. Decisions are the operator's.
 - It shares its name with the desktop tool of the same name, as `validation_report` does; the two
   are separate builds on separate channels, and a change to one is checked against the other. →
@@ -410,8 +421,12 @@ nothing: every change is made in Claude or in the file.
   and open questions; for a **feature** the standing decisions and open questions of each story under it
   that has any. Story or feature is decided by `resolveSubject` (`src/discussions/subject.ts`), the one
   resolver every reader and writer of a file uses: a container type (`isContainerIssue`) is a feature, and so
-  is an issue with no parent and stories under it (a tracker with no issue types); anything else the world
-  holds is a story; the file's own front matter decides only where the world cannot say. A feature's stories
+  is an issue with **no type**, no parent and stories under it (a tracker with no issue types) — a typed
+  issue that is not a container type stays a story whatever hangs under it; anything else the world
+  holds is a story; the file's own front matter decides only where the world cannot say. **A feature never
+  reaches up**: a Feature under an Epic is not held by the Epic's open questions or handed its decisions,
+  in the hold, the prompt section or this reading — the "feature" a file pairs with is only ever a
+  story's. A feature's stories
   are `storiesUnder` (`src/issueRelations.ts`), which `sequence_read` uses too. → [16](16-http-api.md#get-apidiscussionsnumber)
 - **The file link is `obsidian://open?path=…` when the file sits inside a vault** — a folder above it
   holding `.obsidian/` — and otherwise the path itself, drawn as text: a browser will not follow a

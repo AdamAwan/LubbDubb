@@ -290,7 +290,7 @@ export class RuleDispatcher implements Dispatcher {
       ...cycleLookups(ctx),
       ...gates,
       ...sequencing,
-      ...discussionView(ctx, sequencing.sequenceWaits, plansByOrigin, issueByNumber),
+      ...discussionView(ctx, sequencing.sequenceWaits, plansByOrigin, issueByNumber, this.pickup.containerTypes),
       ...this.policies(),
       ...workItemGates(pickup),
       ctx,

@@ -39,7 +39,7 @@ function isFeature(
 ): boolean {
   if (issue === null) return doc?.frontMatter.kind === 'feature';
   if (isContainerIssue(issue, containerTypes)) return true;
-  return !issue.parent && storiesUnder(issues, issue.number).length > 0;
+  return !issue.issueType && !issue.parent && storiesUnder(issues, issue.number).length > 0;
 }
 
 function parentOf(

@@ -16,6 +16,7 @@ import { questionHold } from '../src/discussions/questionHold.js';
 import type { DiscussionReader } from '../src/discussions/reader.js';
 import { DISCUSSION_AUTHORS } from '../src/discussions/discussionFile.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
+import { discussionView } from '../src/dispatcher/ruleDispatcherStage.js';
 import type { DiscussionDocument, Issue, IssueRelative } from '../src/types.js';
 import { failAppraisalOpen, onePartPlanRows, spentAppraisalAttempts } from './support/plans.js';
 
@@ -220,4 +221,33 @@ test('through the system: an unreadable folder fails open', async () => {
   await system.harness.runCycle('manual');
   assert.ok(system.store.tasks.listTasks().some((t) => t.originRef === planOrigin(1)));
   system.store.close();
+});
+
+test('a Feature under an Epic is not held by the Epic, and is not handed its decisions', () => {
+  const epic: IssueRelative = {
+    number: 1,
+    title: 'Platform',
+    issueType: 'Epic',
+    workItemState: 'Active',
+    state: 'open',
+  };
+  const feature: Issue = { ...story(87, epic), title: 'Reporting', issueType: 'Feature' };
+  const read = reader({
+    1: doc(1, `${OPEN}\n## Decision · 2026-11-01 · operator ^d-0001\n\nEpic-wide.\n`),
+    87: doc(87, ''),
+    142: doc(142, ''),
+  });
+  const view = discussionView(
+    { discussion: read } as unknown as DispatchContext,
+    new Map(),
+    new Map(),
+    new Map([
+      [87, feature],
+      [142, story(142)],
+    ]),
+    undefined,
+  );
+  assert.equal(view.issueHold(87), null, 'the Epic’s question does not hold the Feature');
+  assert.doesNotMatch(view.discussionNote(87), /Epic-wide/);
+  assert.equal(view.issueHold(142), null, 'nor its story, which pairs with the Feature only');
 });

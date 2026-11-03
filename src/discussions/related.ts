@@ -2,7 +2,6 @@ import type { DiscussionFrontMatter, DiscussionSubjectKind, Issue } from '../typ
 import type { DiscussionNeighbour, DiscussionReading } from '../wire.js';
 import type { DiscussionFiles } from './discussionFile.js';
 import { openQuestions, standingDecisions } from './entries.js';
-import { discussionPair } from './reader.js';
 import { resolveSubject } from './subject.js';
 
 // → docs/spec/40-discussions.md#in-the-cockpit
@@ -16,12 +15,11 @@ export function readDiscussion(
   containerTypes: readonly string[] | undefined,
 ): { reading: DiscussionReading; frontMatter: DiscussionFrontMatter | null } {
   const read = (n: number): ReturnType<Files['read']> => discussions.read(n);
-  const self = issues.find((i) => i.number === number);
-  const { story: doc, feature } = discussionPair(read, number, self?.parent?.number ?? null);
+  const doc = read(number);
   const subject = resolveSubject(issues, number, containerTypes, doc);
   const near =
     subject.kind === 'story' && subject.parent !== null
-      ? [neighbour(discussions, feature, subject.parent.number, 'feature', issues)]
+      ? [neighbour(discussions, read(subject.parent.number), subject.parent.number, 'feature', issues)]
       : subject.stories.map((s) => neighbour(discussions, read(s.number), s.number, 'story', issues));
   return {
     reading: {

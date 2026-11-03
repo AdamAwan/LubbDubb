@@ -105,8 +105,11 @@ export function failure(error: unknown): string {
 
 interface Listing {
   mtimeMs: number;
+  listedAt: number;
   paths: Map<number, string>;
 }
+
+const COARSE_CLOCK_MS = 2000;
 
 interface Parsed {
   mtimeMs: number;
@@ -158,7 +161,8 @@ export class DiscussionFiles {
       if (path === null) return null;
       const stat = statSync(path);
       const cached = this.parsed.get(path);
-      if (cached !== undefined && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.doc;
+      const settled = Date.now() - stat.mtimeMs > COARSE_CLOCK_MS;
+      if (settled && cached?.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.doc;
       const doc = { path, ...parseDiscussion(readFileSync(path, 'utf8')) };
       this.parsed.set(path, { mtimeMs: stat.mtimeMs, size: stat.size, doc });
       return doc;
@@ -174,13 +178,13 @@ export class DiscussionFiles {
 
   obsidianUrl(path: string): string | null {
     if (this.folder === null) return null;
-    this.vault ??= vaultRoot(this.folder);
+    if (this.vault === undefined) this.vault = vaultRoot(this.folder);
     return this.vault === null ? null : `obsidian://open?path=${encodeURIComponent(path)}`;
   }
 
   add(subject: DiscussionSubject, input: NewDiscussionEntry): DiscussionWrite {
     return this.write(subject.number, 'add to', () => {
-      const path = this.locate(subject.number) ?? this.create(subject);
+      const path = this.locateFresh(subject.number) ?? this.create(subject);
       const before = existsSync(path) ? readFileSync(path, 'utf8') : this.header(subject);
       return this.append(path, before, input);
     });
@@ -192,7 +196,7 @@ export class DiscussionFiles {
     keys: FrontMatterKeys = {},
   ): { ok: true; path: string } | Refusal {
     return this.write(subject.number, 'add to', () => {
-      const path = this.locate(subject.number) ?? this.create(subject);
+      const path = this.locateFresh(subject.number) ?? this.create(subject);
       let text = this.withIds(existsSync(path) ? readFileSync(path, 'utf8') : this.header(subject));
       const taken = entryIds(text);
       for (const input of inputs) text = appendBlock(text, this.block(input, taken).block);
@@ -333,7 +337,9 @@ export class DiscussionFiles {
   private listing(): Map<number, string> {
     if (this.folder === null || !existsSync(this.folder)) return new Map();
     const mtimeMs = statSync(this.folder).mtimeMs;
-    if (this.listed?.mtimeMs === mtimeMs) return this.listed.paths;
+    const listed = this.listed;
+    if (listed?.mtimeMs === mtimeMs && listed.listedAt - mtimeMs > COARSE_CLOCK_MS) return listed.paths;
+    const listedAt = Date.now();
     const found = new Map<number, string[]>();
     for (const d of readdirSync(this.folder, { withFileTypes: true })) {
       const number = Number(LEADING_NUMBER.exec(d.name)?.[1]);
@@ -341,8 +347,15 @@ export class DiscussionFiles {
       found.set(number, [...(found.get(number) ?? []), join(this.folder, d.name)]);
     }
     const paths = new Map([...found].map(([number, matches]) => [number, this.oldest(number, matches)]));
-    this.listed = { mtimeMs, paths };
+    this.listed = { mtimeMs, listedAt, paths };
+    const named = new Set(paths.values());
+    for (const path of this.parsed.keys()) if (!named.has(path)) this.parsed.delete(path);
     return paths;
+  }
+
+  private locateFresh(number: number): string | null {
+    this.listed = null;
+    return this.locate(number);
   }
 
   private oldest(number: number, matches: string[]): string {
