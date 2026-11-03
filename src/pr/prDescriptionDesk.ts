@@ -29,9 +29,9 @@ export class PrDescriptionDesk {
 
   async run(world: WorldSnapshot): Promise<void> {
     const { sink, store, errors } = this.deps;
-    const closed = closedPullRequests(world, store);
+    const isClosed = closedPullRequests(world, store);
     for (const pending of store.prDescriptions.unpushedDescriptions()) {
-      if (closed.has(pending.prNumber)) {
+      if (isClosed(pending.prNumber)) {
         store.prDescriptions.markPrClosed(pending.id);
         continue;
       }
@@ -46,7 +46,7 @@ export class PrDescriptionDesk {
       }
     }
     for (const pending of store.prDescriptions.unpushedDrafts()) {
-      if (closed.has(pending.prNumber)) {
+      if (isClosed(pending.prNumber)) {
         store.prDescriptions.markDraftPrClosed(pending.originRef);
         continue;
       }
@@ -63,15 +63,8 @@ export class PrDescriptionDesk {
   }
 }
 
-function closedPullRequests(world: WorldSnapshot, store: Store): { has(prNumber: number): boolean } {
-  const closed = new Set((world.closedPullRequests ?? []).map((pr) => pr.number));
-  const listed = new Set<number>();
-  for (const pr of world.pullRequests) {
-    listed.add(pr.number);
-    if (prState(pr) !== 'open') closed.add(pr.number);
-    else closed.delete(pr.number);
-  }
-  return {
-    has: (prNumber) => closed.has(prNumber) || (!listed.has(prNumber) && store.prArchive.isArchived(prNumber)),
-  };
+function closedPullRequests(world: WorldSnapshot, store: Store): (prNumber: number) => boolean {
+  const listed = new Map(world.pullRequests.map((pr) => [pr.number, prState(pr) !== 'open']));
+  const swept = new Set((world.closedPullRequests ?? []).map((pr) => pr.number));
+  return (prNumber) => listed.get(prNumber) ?? (swept.has(prNumber) || store.prArchive.isArchived(prNumber));
 }
