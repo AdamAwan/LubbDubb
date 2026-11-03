@@ -1,5 +1,17 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import type { Config } from '../config/config.js';
 import type { ErrorRecorder } from '../errorLog.js';
@@ -159,13 +171,18 @@ export class DiscussionFiles {
     try {
       const path = this.locate(number);
       if (path === null) return null;
-      const stat = statSync(path);
-      const cached = this.parsed.get(path);
-      const settled = Date.now() - stat.mtimeMs > COARSE_CLOCK_MS;
-      if (settled && cached?.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.doc;
-      const doc = { path, ...parseDiscussion(readFileSync(path, 'utf8')) };
-      this.parsed.set(path, { mtimeMs: stat.mtimeMs, size: stat.size, doc });
-      return doc;
+      const fd = openSync(path, 'r');
+      try {
+        const stat = fstatSync(fd);
+        const cached = this.parsed.get(path);
+        const settled = Date.now() - stat.mtimeMs > COARSE_CLOCK_MS;
+        if (settled && cached?.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.doc;
+        const doc = { path, ...parseDiscussion(readFileSync(fd, 'utf8')) };
+        this.parsed.set(path, { mtimeMs: stat.mtimeMs, size: stat.size, doc });
+        return doc;
+      } finally {
+        closeSync(fd);
+      }
     } catch (error) {
       this.deps.errors.record({
         source: 'server',
