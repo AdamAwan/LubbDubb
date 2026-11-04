@@ -12,7 +12,6 @@ import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from '../review/policy.js';
 import type { PrReviewCharters } from '../review/prReview.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
 import { expeditedOrigins } from './goalPriority.js';
-import { redBaseChecks } from '../obstacles/ownership.js';
 import { candidateParents } from '../issueRelations.js';
 import { resolveAgentProfile } from '../agents/modelPolicy.js';
 import { prReadRef, refsFinishedSince } from '../world/readPlan.js';
@@ -35,7 +34,6 @@ import {
   workItemGates,
 } from './ruleDispatcherStage.js';
 import { manualJob } from './rules/manualJob.js';
-import { obstacleRepair } from './rules/obstacleRepair.js';
 import { prConcerns } from './rules/prConcerns.js';
 import { prReviewTriage } from './rules/prReviewTriage.js';
 import { prSplit } from './rules/prSplit.js';
@@ -70,7 +68,6 @@ import { botPrRisk } from './rules/botPrRisk.js';
 
 export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'manual-job': manualJob,
-  'obstacle-repair': obstacleRepair,
   'pr-review-triage': prReviewTriage,
   'pr-split': prSplit,
   'pr-describe': prDescribe,
@@ -309,7 +306,6 @@ export class RuleDispatcher implements Dispatcher {
       appraising: new Set<number>(),
       investigating: new Set<number>(),
       investigations,
-      redBaseChecks: redBaseChecks(openPrs),
       consider: considerWith(ctx, this.cooldown, raw, candidates),
       pickup,
     };
@@ -406,8 +402,6 @@ function expeditedFor(
       issues: ctx.world.issues,
       plans: ctx.plans ?? [],
       parts: ctx.planParts ?? [],
-      obstacles: ctx.obstacles ?? [],
-      obstacleBlocks: ctx.obstacleBlocks ?? [],
     },
     containerTypes,
   );

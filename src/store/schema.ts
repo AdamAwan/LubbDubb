@@ -52,7 +52,6 @@ import { MCP_CALLS_SCHEMA } from './schema/mcpCalls.js';
 import { POOL_SCHEMA } from './schema/pool.js';
 import { LOCAL_VALIDATIONS_SCHEMA } from './schema/localValidations.js';
 import { RATE_LIMITS_SCHEMA } from './schema/rateLimits.js';
-import { OBSTACLES_SCHEMA } from './schema/obstacles.js';
 import { EJECTIONS_SCHEMA } from './schema/ejections.js';
 import { PR_DESCRIPTIONS_SCHEMA } from './schema/prDescriptions.js';
 import { BOT_PR_RISKS_SCHEMA } from './schema/botPrRisks.js';
@@ -113,7 +112,6 @@ export const SCHEMA =
   POOL_SCHEMA +
   LOCAL_VALIDATIONS_SCHEMA +
   RATE_LIMITS_SCHEMA +
-  OBSTACLES_SCHEMA +
   EJECTIONS_SCHEMA +
   PR_DESCRIPTIONS_SCHEMA +
   BOT_PR_RISKS_SCHEMA +

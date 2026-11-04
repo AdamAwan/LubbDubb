@@ -10,6 +10,7 @@ import { applyThreadReopens } from '../pr/prThreads.js';
 import { expiresAt } from '../ejection/policy.js';
 import type { IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { investigationStandings } from '../intake/investigation.js';
+import { blockedGoals } from '../escalation/blocked.js';
 import { pausedIssueNumbers } from '../goalPause.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import { detectFileOverlaps, OVERLAP_AGENT_WINDOW } from '../fileOverlap.js';
@@ -290,8 +291,7 @@ export function contextReads(r: VerdictReadsOn) {
     deliverySignals: deliverySignals(),
     appraisals,
     investigations: investigationStandings(world.issues, investigations(), system.issuePickup),
-    obstacleBlocks: store.obstacles.listObstacleBlocks(),
-    obstacles: store.obstacles.obstacleBoard(),
+    goalBlocks: [...blockedGoals(store.escalations.listOpenEscalations()).values()],
     runs: issueRuns,
     headroom: control.paused ? 0 : Math.max(0, control.cap - store.agents.countLiveAgents()),
     paused: control.paused,

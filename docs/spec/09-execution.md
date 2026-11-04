@@ -727,37 +727,15 @@ dispatch prompt whenever the goal carries an instruction nobody has concluded ye
 - **An untouched goal appends nothing**, so its prompt is byte-identical to one composed before this
   existed.
 
-## What the fleet has already run into reaches the agent
+## Nothing fleet-wide is appended
 
-`recordDispatchTask` appends the obstacles whose **keys intersect this dispatch** — the checks it is
-about, the paths its goal touches — through `src/obstacles/delivery.ts`
-→ [27](27-obstacles.md#delivery).
-
-- **There is no fleet-wide block, and there is no system-prompt half.** Everything the board holds is
-  keyed, and a keyed thing is delivered to the dispatches it is about. The claim store that did inject
-  one fleet-wide is gone ([27](27-obstacles.md#what-the-claim-store-left-behind)), and what replaced
-  it deliberately did not rebuild it: blanket context at these sizes is skimmed rather than read, and
-  adding to it makes every line already in it worth less.
-- **In the executor rather than in a rule**, the attachments' placement for the attachments' reason:
-  every dispatch passes through `recordDispatchTask` whatever composed it. **No rule, desk or gate
-  reads the board to decide a dispatch** — the one exception is the bounded repair rule, which is a
-  candidate in the pipeline like any other ([05](05-dispatcher.md#the-rule-book)).
-- **The scope is the goal, not the concern.** `dispatchFactScopes` collapses `pr:412:ci` to
-  `goal:pr:412` through `corroborationGoal` — the same collapse a voice is counted under, so the scope
-  a row is delivered on and the scope it is judged against cannot drift. `pr:412:ci` and
-  `pr:412:comments` are two origins of one goal.
-- **A check name is matched exactly**, `priorRemedies`' choice and the same fragility for the same
-  reason: a prefix match would put another job's history in front of an agent under a name it would
-  read as its own.
-- **Only what reaches agents is delivered** — `standing` and `owned`, asked of `reachesAgents` rather
-  than restated, so the states that reach a prompt and the states the intake answers _it is not yours_
-  on cannot drift. A `signature` or a `cmd` key delivers nothing: a key that may not resolve an
-  obstacle may not decide who is told about one.
-- **Appended, never interpolated.** Prompt templates are operator-overridable and `loadPromptTemplates`
-  rejects only _unknown_ placeholders, so an `{obstacles}` token would be dropped in silence by every
-  override written before this existed — on exactly the deployments that customised most.
-- **A dispatch nothing on the board matches appends nothing**, so its prompt is byte-identical to one
-  composed before this existed.
+There is no block about what other agents have run into, keyed or blanket. The claim store that
+injected one fleet-wide is gone, and so is the obstacle board that appended the rows whose keys
+matched a dispatch: a goal one agent could not get past is now parked for the operator
+([06](06-issue-pickup.md#blocked-parks-the-goal-for-you)), and what reaches the next agent on it is the
+reason that agent gave, carried as an instruction once the operator releases it
+([above](#the-operators-own-instructions-reach-the-agent)). Blanket context at these sizes is skimmed
+rather than read, and adding to it makes every line already in it worth less.
 
 ## An operator's attachments reach the agent
 

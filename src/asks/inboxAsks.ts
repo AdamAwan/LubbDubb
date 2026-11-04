@@ -69,6 +69,7 @@ function escalationSummary(
     }
   }
   if (context.permission) return oneLine(`${context.permission.toolName}: ${context.permission.summary}`);
+  if (context.blocked) return oneLine(`Blocked: ${context.blocked.reason}`);
   if (isShortfallAsk(originRef)) return 'Assessed as not delivered';
   const questions = Array.isArray(context.questions) ? context.questions.length : 0;
   if (questions > 0) return `${questions} questions from the agent`;
@@ -141,6 +142,7 @@ export function escalationRows(state: AskInputs): AskDraft[] {
         agentLabel: agentLabelOf(e.agentId, state),
         holding: holdingForEscalation(originRef, state),
         raisedAt: e.createdAt,
+        ...(e.context.blocked ? { verb: 'Release' } : {}),
       };
     });
 }

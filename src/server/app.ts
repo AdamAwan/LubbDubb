@@ -35,7 +35,6 @@ import { register as registerLocalRun } from './routes/localRun.js';
 import { register as registerLocalValidation } from './routes/localValidation.js';
 import { register as registerMcpUsage } from './routes/mcpUsage.js';
 import { register as registerPlugin } from './routes/plugin.js';
-import { register as registerObstacles } from './routes/obstacles.js';
 import { register as registerPets } from './routes/pets.js';
 import { register as registerPool } from './routes/pool.js';
 import { register as registerPlans } from './routes/plans.js';
@@ -84,7 +83,6 @@ const ROUTE_MODULES: RouteModule[] = [
   registerLocalValidation,
   registerMcpUsage,
   registerPlugin,
-  registerObstacles,
   registerPets,
   registerPool,
   registerPlans,

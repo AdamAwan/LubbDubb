@@ -2797,7 +2797,7 @@ const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   local: { label: 'Local runs', blurb: 'Bringing a goal’s branch up on this machine to look at it' },
   obstacle: {
     label: 'Obstacles',
-    blurb: 'Repairing something in the fleet’s way — a red base, a wall three goals have hit',
+    blurb: 'Repairs the retired obstacle board dispatched — nothing spends here now, and past spend still reads',
   },
   job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
@@ -3617,7 +3617,6 @@ function buildDemoUsage(): UsagePayload {
     reach('ticket', 'operated', 55, 50, 18),
     reach('feature', 'linked-never-visited', 0, 0, 0),
     reach('agent', 'operated', 74, 71, 26),
-    reach('obstacle', 'linked-never-visited', 0, 0, 0),
     reach('local-run', 'visited-never-operated', 2, 2, 0),
     reach('job', 'operated', 8, 8, 3),
     reach('retro', 'never-linked', 0, 0, 0),
@@ -3655,14 +3654,6 @@ function buildDemoUsage(): UsagePayload {
           openPastWindow: 0,
           medianAnswerMs: 26 * 60_000,
           parkedCostUsd: 27.6,
-        }),
-        ask('obstacle-ownership', 'obstacle', 'Obstacle ownership', 'Something in the way, unowned', {
-          offered: 4,
-          settled: 1,
-          declined: null,
-          openPastWindow: 2,
-          medianAnswerMs: null,
-          parkedCostUsd: null,
         }),
         ask('validation-bench', 'validation', 'Validation bench', 'The close-out obligation on a delivered goal', {
           offered: 11,
@@ -3719,7 +3710,6 @@ const DEMO_SUBJECT_LABEL: Record<UsageSubject, string> = {
   ticket: 'Tickets',
   feature: 'The feature board',
   agent: 'Agents',
-  obstacle: 'Obstacles',
   'local-run': 'The local run',
   job: 'Jobs',
   retro: 'Retros',
@@ -4721,8 +4711,6 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
   };
 }
 
-const DEMO_NO_BOARD = 'the demo has no obstacle board to act on';
-
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string, from = 0) => getServer().getTranscript(agentId, from),
@@ -4811,24 +4799,6 @@ export const demoApi = {
         refUrls[goal.originRef] = tracker.replace(/\d+$/, String(goal.issueNumber));
     return { allowance, refUrls };
   },
-  getObstacles: () =>
-    Promise.resolve({
-      rows: [],
-      counts: {
-        sightings: 0,
-        goals: 0,
-        told: 0,
-        window: { since: new Date().toISOString(), calls: 0, callers: 0, agents: 0 },
-      },
-      dormantMs: 7 * 24 * 60 * 60 * 1000,
-      canFileTickets: false,
-      ticketApproval: true,
-    }),
-  muteObstacle: (_id: string, _muted: boolean) => Promise.reject(new Error(DEMO_NO_BOARD)),
-  decideObstacleTicket: (_id: string, _approved: boolean) => Promise.reject(new Error(DEMO_NO_BOARD)),
-  ownObstacle: (_id: string, _ownerRef: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
-  retireObstacle: (_id: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
-  writeDownObstacle: (_id: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
   getPoolInsights: (project: string | null) =>
     Promise.resolve({
       rollup: {

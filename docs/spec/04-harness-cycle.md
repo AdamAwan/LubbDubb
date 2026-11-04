@@ -437,8 +437,8 @@ flowchart TD
    decision, so it must not be able to break the pulse.
 
    Below the graph and the environment probes, and still above `decide`, `notices.run(prev, world)`
-   raises the knowledge notices the harness can see for itself and ends the ones the world has settled
-   ([27](27-obstacles.md#the-harness-is-a-voice)). It is handed the **pair** step 2's diff was taken
+   raises the knowledge notices the harness can see for itself and ends the ones the world has settled.
+   It is handed the **pair** step 2's diff was taken
    from, read before the baseline moved on, so the two cannot come to be looking at different pulses.
    Its position is the point: the knowledge block a dispatch carries is rendered at launch, a few steps
    below, so a notice raised under that line would not reach the agents dispatched on this pulse and
@@ -473,42 +473,6 @@ flowchart TD
    `clusters.run()` groups the proposals a machine thinks are one claim. Its position in the pulse is
    **not** load-bearing at all: nothing waits on a cluster, it takes its own cadence, and the page an
    operator opens is the only reader of what it writes.
-
-   `obstacles.run(pass)` is the whole obstacle subsystem, five stages on one pulse slot and in one
-   order ([27](27-obstacles.md#one-desk-on-the-pulse)). The **voice** records what the harness has seen
-   for itself on the board the agents read — a check red on a branch other pull requests are based on,
-   a check flapping red-then-green on one commit. **The harness is one of the two voices**, so a row it
-   files is standing from the first agent's report rather than the second, which is what makes the
-   two-goal gate safe on a small fleet ([27](27-obstacles.md#the-harness-is-a-voice)). It runs first
-   because a row filed there is one the same pass goes on to tell a running agent about, take up, and
-   promise to watch a condition for — on the pulse that saw it rather than the next.
-
-   The **reading** is what a model may decide about the rows no voice has landed words on since. It is
-   the one thing here the pulse does not wait for: a model round trip is not a provider's, nothing
-   below waits on a reading, and a pulse that blocked on one would hold every dispatch behind a call
-   this subsystem makes for its own convenience. What it writes is read by the pulse that finds it
-   written, which for a suggestion nobody is bound by and a ticket nobody has filed yet is a pulse
-   either way.
-
-   The **notices** tell the agents now running what has changed about an obstacle since they were
-   dispatched — their own reports being taken up or settled, and what a second voice has since
-   corroborated. The **ownership** then records who owns each row and which goals the board has let
-   back out. The whole pass is **above `decide`**, and both halves matter: a block cleared here is a
-   goal rule `issue-plan` sees this pulse rather than next, and a row owned here reads as owned in
-   the prompt of every dispatch composed below — an agent told _do not fix it, #841 has it_ on the
-   pulse the ticket was filed. The desk also sits **below `notices`** for the reason it sits above
-   `decide`: an agent whose report was taken up is told so by the pulse that took it. Awaited but never
-   blocking — every failure inside is recorded and non-fatal, and a tracker that will not answer costs
-   the ticket and nothing else.
-
-   The **endings** are how each row finishes: a condition the harness promised to watch, the owner
-   landing, the reporter's clock, or nothing having said it for a week. Like the voice, it is **skipped
-   on a local cycle**, and here for a sharper reason than the diff one: a resolution fires on two
-   consecutive _real_ world readings, and the resolving read is never one a local cycle served — a
-   local cycle re-serves the snapshot the last real one read, so counting it would take one reading
-   twice and close an obstacle that is still live, the fleet pays for it again, and nothing is red.
-   It runs last, because it reads the owner the ownership stage may have just written. Every failure
-   inside is recorded and non-fatal.
 
    `pool.run()` is the distance above `fleet`: what other fleets have vouched for, landed here, and
    what this fleet has vouched for, sent out ([28](28-cross-fleet-pool.md)). Above the launch line,
@@ -625,9 +589,8 @@ There is one entry type, because a desk is a sweep that runs at its own phase. A
   [local cycle](#what-runs-and-what-does-not). One flag per pass, in one place, instead of the guard
   repeated at every call site.
   The walk **awaits every pass**, sync or async alike, and there is no flag to opt out of that. A pass
-  with work the pulse must not block on starts that work itself and returns — `obstacles` does, for its
-  model reading ([27](27-obstacles.md#one-desk-on-the-pulse)), and `cloneUpkeep` for a repack
-  ([09](09-execution.md#the-clones-object-store)) — which keeps the
+  with work the pulse must not block on starts that work itself and returns — `cloneUpkeep` does, for a
+  repack ([09](09-execution.md#the-clones-object-store)), and `botPrRisks` for its provider sweep — which keeps the
   decision beside the call it is about rather than in a registry flag every other pass has to be read
   against.
 - **`run(deps, at)`** — how the pass is called, through `deps.<id>?.`, so a pass the deployment does not
@@ -640,18 +603,17 @@ There is one entry type, because a desk is a sweep that runs at its own phase. A
 against the declared list**, so moving a pass that must stay below another fails a test instead of
 breaking silently:
 
-| Constraint                                         | Why                                                                                                                                                                              |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `graph` → `environments`, immediately              | merge attribution walks `parentRef`, so a graph one pulse stale resolves nothing ([24](24-environments.md#recording-a-landing))                                                  |
-| `environments` → `remoteValidation`                | a sheet is assembled off the arrivals the environment desk records ([36](36-remote-validation.md))                                                                               |
-| `environments` → `appErrors`                       | an error read is held against the head the environment desk's probe just recorded ([39](39-app-errors.md#the-deploy-window))                                                     |
-| `appErrors` → `appErrorTracker`                    | the tracker is searched for the groups the read just moved ([39](39-app-errors.md#the-tracker-lock))                                                                             |
-| `remoteValidation` → `validationReady`             | the validate row's detail carries **this** pulse's sheet                                                                                                                         |
-| `validationAsks` → `validationReady` → `closeOuts` | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                                                         |
-| `plans` → `graph`                                  | the part→PR observations the reconciler just made are the ones recorded                                                                                                          |
-| `graph` → `graduations` → `pool`                   | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([28](28-cross-fleet-pool.md))                                   |
-| `notices` → `obstacles`                            | an agent whose report was taken up is told so by the pulse that took it; the five obstacle stages keep their order inside the desk ([27](27-obstacles.md#one-desk-on-the-pulse)) |
-| `prWatch` → `prWorkItems`                          | one pass says the pull request is the fleet's, the other which work item it is for                                                                                               |
+| Constraint                                         | Why                                                                                                                                            |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `graph` → `environments`, immediately              | merge attribution walks `parentRef`, so a graph one pulse stale resolves nothing ([24](24-environments.md#recording-a-landing))                |
+| `environments` → `remoteValidation`                | a sheet is assembled off the arrivals the environment desk records ([36](36-remote-validation.md))                                             |
+| `environments` → `appErrors`                       | an error read is held against the head the environment desk's probe just recorded ([39](39-app-errors.md#the-deploy-window))                   |
+| `appErrors` → `appErrorTracker`                    | the tracker is searched for the groups the read just moved ([39](39-app-errors.md#the-tracker-lock))                                           |
+| `remoteValidation` → `validationReady`             | the validate row's detail carries **this** pulse's sheet                                                                                       |
+| `validationAsks` → `validationReady` → `closeOuts` | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                       |
+| `plans` → `graph`                                  | the part→PR observations the reconciler just made are the ones recorded                                                                        |
+| `graph` → `graduations` → `pool`                   | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([28](28-cross-fleet-pool.md)) |
+| `prWatch` → `prWorkItems`                          | one pass says the pull request is the fleet's, the other which work item it is for                                                             |
 
 The same test asserts the walk reaches every entry in the declared order, and that no id is walked
 twice — a duplicate is what would make a position, and so every one of those constraints, mean

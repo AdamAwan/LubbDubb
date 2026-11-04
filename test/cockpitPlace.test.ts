@@ -33,9 +33,6 @@ test('every place round-trips through the query string', () => {
     at({ panel: 'record' }),
     at({ goal: 'issue:142' }),
     at({ tab: 'tickets', goal: 'issue:142', agent: 'agent-7' }),
-    at({ tab: 'obstacles' }),
-    at({ tab: 'obstacles', obstacle: 'obs_abc' }),
-    at({ tab: 'obstacles', obstacle: 'obs_abc', obstacleEnded: true }),
     at({ panel: 'faults' }),
     at({ panel: 'launch' }),
     at({ panel: { ask: 'esc-9' } }),
@@ -117,7 +114,7 @@ test('a place has exactly one spelling', () => {
 });
 
 test('a goal or a pull request is read under a tab that could have led to it', () => {
-  for (const tab of ['insights', 'obstacles', 'pets', 'config']) {
+  for (const tab of ['insights', 'pets', 'config']) {
     assert.equal(readPlace(`?tab=${tab}&goal=issue:142`).tab, 'overview', `${tab} does not list goals`);
     assert.equal(readPlace(`?tab=${tab}&pr=706`).tab, 'overview', `${tab} does not list pull requests`);
   }
@@ -159,22 +156,20 @@ test('a link to the retired vivarium panel lands on the Pets page', () => {
   assert.equal(readPlace('?panel=pets&hatch=pet_7f2a1c').hatch, 'pet_7f2a1c', 'and keeps the egg it was opening');
 });
 
-test('links to the retired knowledge, findings and lessons surfaces land on the obstacle board', () => {
-  assert.equal(readPlace('?tab=knowledge').tab, 'obstacles');
-  assert.equal(readPlace('?panel=knowledge').tab, 'obstacles');
-  assert.equal(readPlace('?panel=knowledge&fact=fact_abc').tab, 'obstacles', 'the fact id is simply dropped');
-  assert.equal(readPlace('?panel=findings').tab, 'obstacles');
-  assert.equal(readPlace('?panel=lessons').tab, 'obstacles');
-  assert.equal(readPlace('?panel=findings').panel, null, 'and open no panel over it');
+test('links to the retired obstacle, knowledge, findings and lessons surfaces land on the overview', () => {
+  for (const query of ['?tab=obstacles', '?tab=knowledge', '?panel=knowledge', '?panel=findings', '?panel=lessons']) {
+    assert.equal(readPlace(query).tab, 'overview', query);
+    assert.equal(readPlace(query).panel, null, `${query} opens no panel`);
+  }
+  assert.equal(
+    readPlace('?tab=obstacles&obs=obs_abc').goal,
+    null,
+    'an obstacle id names nothing any more, and is simply dropped',
+  );
   assert.equal(
     readPlace('?panel=lessons&goal=issue:142').goal,
     'issue:142',
     'and keep the rest of the place they carried',
-  );
-  assert.equal(
-    readPlace('?tab=tickets&panel=findings').tab,
-    'tickets',
-    'an explicit tab is the operator saying where they meant to be',
   );
 });
 

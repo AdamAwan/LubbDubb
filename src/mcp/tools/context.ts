@@ -8,7 +8,7 @@ import type {
   HumanTaskInput,
   IssueConclusion,
   IssueConclusionVerdict,
-  ObstacleBlock,
+  GoalBlock,
   PadDecision,
   PartOutcomeKind,
   PlanPart,
@@ -64,9 +64,9 @@ export interface AgentToolTarget {
   ): { ok: true; conclusion: IssueConclusion } | { ok: false; error: string };
   recordBlocked(
     agentId: string,
-    obstacleId: string,
+    reason: string,
     note: string,
-  ): { ok: true; block: ObstacleBlock } | { ok: false; error: string };
+  ): { ok: true; block: GoalBlock } | { ok: false; error: string };
   recordAssessment(
     agentId: string,
     verdict: AssessmentVerdict,

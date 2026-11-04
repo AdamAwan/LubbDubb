@@ -84,3 +84,28 @@ test("predictions' and goal criteria's tables are dropped on the next boot", () 
     assert.ok(!names.includes(table), table);
   assert.ok(names.includes('plans'), 'the plans the gate stood in front of are not one of them');
 });
+
+test("the obstacle board's tables are dropped on the next boot, blocks and all", () => {
+  const path = join(mkdtempSync(join(tmpdir(), 'lubbdubb-retired-obstacles-')), 'old.db');
+  const db = new Database(path);
+  const retired = [
+    'obstacles',
+    'obstacle_keys',
+    'obstacle_sightings',
+    'obstacle_notices',
+    'obstacle_blocks',
+    'obstacle_conditions',
+    'obstacle_writeups',
+    'obstacle_readings',
+    'obstacle_suggestions',
+  ];
+  for (const table of retired) db.exec(`CREATE TABLE ${table} (id TEXT)`);
+  db.prepare(`INSERT INTO obstacle_blocks VALUES ('issue:12')`).run();
+  db.close();
+
+  new Store(path).close();
+
+  const names = tables(path);
+  for (const table of retired) assert.ok(!names.includes(table), table);
+  assert.ok(names.includes('escalations'), 'a block is an escalation now, and that table stays');
+});

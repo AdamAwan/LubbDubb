@@ -146,7 +146,7 @@ test('a part agent is told the plan concludes the issue, not it', () => {
   const r = conclusionOrigin('issue:12:part:schema');
   assert.equal(r.ok, false);
   assert.match(r.ok === false ? r.error : '', /part of issue #12's plan/);
-  assert.match(r.ok === false ? r.error : '', /raise it/);
+  assert.match(r.ok === false ? r.error : '', /plan_correct/);
 });
 
 test('a planning agent is pointed at plan_submit', () => {

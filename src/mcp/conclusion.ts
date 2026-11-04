@@ -12,9 +12,8 @@ export const CONCLUSION_VERDICT_HELP: Record<IssueConclusionVerdict | typeof BLO
   done: 'everything the issue asked for is delivered and merged; nothing further should be scheduled for it',
   more_work: 'you delivered part of it, or found that more is needed — the issue should come back round',
   blocked:
-    'you could not finish because of something that is not this goal, and you have raised it — name it with ' +
-    'obstacle: "<id>". The goal parks until that clears, rather than coming back round for another agent to ' +
-    'hit the same wall',
+    'you could not finish because of something that is not this goal — say what stopped you in reason. The ' +
+    'goal parks for the operator, rather than coming back round for another agent to hit the same wall',
 };
 
 const MAX_CONCLUSION_NOTE = 2000;
@@ -22,8 +21,8 @@ const MAX_CONCLUSION_NOTE = 2000;
 export function validateConclusion(
   args: Record<string, unknown>,
 ):
-  | { ok: true; verdict: IssueConclusionVerdict; note: string; obstacleId: null }
-  | { ok: true; verdict: typeof BLOCKED_STATUS; note: string; obstacleId: string }
+  | { ok: true; verdict: IssueConclusionVerdict; note: string; reason: null }
+  | { ok: true; verdict: typeof BLOCKED_STATUS; note: string; reason: string }
   | { ok: false; error: string } {
   const verdict = args.status;
   if (typeof verdict !== 'string' || !CONCLUSION_STATUSES.includes(verdict as (typeof CONCLUSION_STATUSES)[number])) {
@@ -34,14 +33,19 @@ export function validateConclusion(
         CONCLUSION_STATUSES.map((v) => `${v}: ${CONCLUSION_VERDICT_HELP[v]}`).join('. '),
     };
   }
-  const obstacleId = typeof args.obstacle === 'string' ? args.obstacle.trim() : '';
-  if (verdict === BLOCKED_STATUS && obstacleId === '') {
+  const reason = typeof args.reason === 'string' ? args.reason.trim() : '';
+  if (verdict === BLOCKED_STATUS && reason === '') {
     return {
       ok: false,
       error:
-        'obstacle is required for blocked: the id of the obstacle that stopped you, which is the "id" in ' +
-        'the answer raise gave you. If you have not raised it, raise it first — a block that names nothing ' +
-        'parks your goal with nothing to lift it.',
+        'reason is required for blocked: say what stopped you, in your own words. The operator reads it to ' +
+        'decide when to release the goal, and the next agent reads it after they do.',
+    };
+  }
+  if (reason.length > MAX_CONCLUSION_NOTE) {
+    return {
+      ok: false,
+      error: `reason is too long (${reason.length} chars, max ${MAX_CONCLUSION_NOTE}). Summarise it.`,
     };
   }
   const note = typeof args.note === 'string' ? args.note.trim() : '';
@@ -50,15 +54,15 @@ export function validateConclusion(
       ok: false,
       error:
         'note is required. Say what you delivered (for done), what is still outstanding (for more_work), or ' +
-        'what you got as far as before the obstacle stopped you (for blocked) — an operator decides what ' +
+        'what you got as far as before you were stopped (for blocked) — an operator decides what ' +
         'happens to the ticket from this note alone.',
     };
   }
   if (note.length > MAX_CONCLUSION_NOTE) {
     return { ok: false, error: `note is too long (${note.length} chars, max ${MAX_CONCLUSION_NOTE}). Summarise it.` };
   }
-  if (verdict === BLOCKED_STATUS) return { ok: true, verdict: BLOCKED_STATUS, note, obstacleId };
-  return { ok: true, verdict: verdict as IssueConclusionVerdict, note, obstacleId: null };
+  if (verdict === BLOCKED_STATUS) return { ok: true, verdict: BLOCKED_STATUS, note, reason };
+  return { ok: true, verdict: verdict as IssueConclusionVerdict, note, reason: null };
 }
 
 export function outstandingWorkNote(note: string, at: string): string {

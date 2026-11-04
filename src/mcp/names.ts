@@ -45,13 +45,11 @@ export const MCP_TOOL_NAMES = [
   'pr_describe',
   'description_review',
   'report_remedy',
-  'raise',
 ] as const;
 
 export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
 
 export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
-  raise: 'addendum',
   escalate: 'addendum',
   plan_correct: 'addendum',
   world_read: 'addendum',
@@ -95,7 +93,6 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
 };
 
 export const UNIVERSAL_TOOLS: readonly McpToolName[] = [
-  'raise',
   'escalate',
   'plan_correct',
   'world_read',
@@ -170,7 +167,13 @@ export const RETIRED_TOOL_NAMES: readonly string[] = [
   'review_pack_check',
   'criteria_alignment',
   'prediction_judge',
+  'raise',
 ];
+
+export function namesRetiredTool(text: string, tool: string): boolean {
+  if (tool.includes('_')) return text.includes(tool);
+  return text.includes(`\`${tool}\``) || new RegExp(`\\b${tool}\\(|\\bcall ${tool}\\b`, 'i').test(text);
+}
 
 const REVIEW_PACK_TOOLS: readonly string[] = ['review_pack_submit', 'review_pack_check'];
 
@@ -194,11 +197,12 @@ export function retiredToolMessage(name: string): string {
     );
   }
   return (
-    `${name} has been retired. Everything it did is now one call: raise(what, why_not_mine) — say what ` +
-    'you hit and why it is not your own change doing, and the harness works out the rest. **The call ' +
-    'is the lookup**: it comes back with whether anybody else has hit it, who owns it if anyone does, ' +
-    'and what they saw. There is no search tool; call raise the moment you are in pain. If you reached ' +
-    'this from a prompt that named it, that prompt is out of date.'
+    `${name} has been retired, and what it reported to is gone with it: nothing records an observation ` +
+    'for other agents any more. If something that is not your goal stops you from finishing, ' +
+    'call conclude_work with status "blocked" and say what stopped you in reason: the goal parks and the ' +
+    'operator is asked to release it. If your task has no conclude_work, escalate instead. Anything short of ' +
+    'that — a check that flaked, a seam you had to work out — goes in your own note or pull request. If you ' +
+    'reached this from a prompt that named it, that prompt is out of date.'
   );
 }
 

@@ -216,7 +216,6 @@ test('a remedy records the return and files nothing beside it', async () => {
   });
   assert.equal(res.isError, false);
   assert.equal(system.store.remedies.listRemediesSince('2000-01-01T00:00:00.000Z').length, 1);
-  assert.deepEqual(system.store.obstacles.listObstacles(), [], 'the one door is `raise`, and this is not it');
   system.store.close();
 });
 

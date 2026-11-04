@@ -1394,7 +1394,20 @@ export interface EscalationContext {
   planId?: string;
   issueNumber?: number;
   permission?: PermissionRequest;
+  blocked?: GoalBlock;
   [key: string]: unknown;
+}
+
+/**
+ * A goal an agent concluded `blocked`: parked for the operator, who releases it.
+ * Carried on the escalation that asks them, which is the block's only record.
+ * → docs/spec/06-issue-pickup.md#blocked-parks-the-goal-for-you
+ */
+export interface GoalBlock {
+  originRef: string;
+  reason: string;
+  note: string;
+  agentId: string;
 }
 
 interface PermissionRequest {
@@ -2386,103 +2399,6 @@ export interface PoolPublication {
   dirty: boolean;
   checkedAt: string | null;
 }
-
-export type ObstacleKeyKind = 'check' | 'test' | 'path' | 'signature' | 'cmd';
-
-export type ObstacleState = 'sighted' | 'standing' | 'owned' | 'resolved' | 'dormant' | 'muted';
-
-export type ObstacleKind = 'obstacle' | 'note';
-
-export interface ObstacleKey {
-  id: string;
-  obstacleId: string;
-  kind: ObstacleKeyKind;
-  value: string;
-  binds: boolean;
-  confirmations: number;
-  createdAt: string;
-}
-
-export interface ObstacleSighting {
-  id: string;
-  obstacleId: string;
-  agentId: string | null;
-  taskId: string | null;
-  goalRef: string | null;
-  sessionId: string | null;
-  transition: string | null;
-  words: string;
-  whyNotMine: string | null;
-  matchedBy: string;
-  createdAt: string;
-}
-
-export interface ObstacleStanding {
-  obstacle: Obstacle;
-  keys: ObstacleKey[];
-  voices: number;
-  goalRefs: string[];
-  words: string[];
-}
-
-export interface ObstacleBlock {
-  originRef: string;
-  obstacleId: string;
-  agentId: string | null;
-  taskId: string | null;
-  note: string;
-  createdAt: string;
-}
-
-export interface Obstacle {
-  id: string;
-  what: string;
-  kind: ObstacleKind;
-  state: ObstacleState;
-  ownerRef: string | null;
-  until: string | null;
-  createdAt: string;
-  updatedAt: string;
-  lastSeenAt: string;
-  endedBy: ObstacleEnding | null;
-  ticketDecision: ObstacleTicketDecision | null;
-}
-
-export type ObstacleTicketDecision = 'approved' | 'declined';
-
-export type ObstacleEnding = 'condition' | 'landing' | 'expiry' | 'decay' | 'written-down' | 'retired';
-
-export interface ObstacleCondition {
-  id: string;
-  obstacleId: string;
-  kind: 'check-green';
-  checkName: string;
-  branch: string;
-  metAt: string | null;
-  createdAt: string;
-}
-
-export interface ObstacleWriteUp {
-  obstacleId: string;
-  jobId: string;
-  prRef: string | null;
-  outcome: ObstacleWriteUpOutcome | null;
-  createdAt: string;
-  settledAt: string | null;
-}
-
-export type ObstacleWriteUpOutcome = 'landed' | 'abandoned';
-
-export interface ObstacleDeskReading {
-  obstacleId: string;
-  readAt: string;
-  takenAt: string;
-  purpose: ObstaclePurpose | null;
-  title: string | null;
-  body: string | null;
-}
-
-export type ObstaclePurpose = 'ticket' | 'docs';
 
 /**
  * The four things a reviewer has to be able to answer, as the questions the

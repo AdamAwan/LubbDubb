@@ -30,7 +30,6 @@ import type { AppErrorDesk } from '../appErrors/desk.js';
 import type { AppErrorTrackerDesk } from '../appErrors/tracker.js';
 import type { RemoteValidationDesk } from '../validation/remote/desk.js';
 import type { RemoteIntentDesk } from '../validation/remote/intent.js';
-import type { ObstacleDesk } from '../obstacles/desk.js';
 import type { PoolDesk } from '../pool/poolDesk.js';
 import type { CloneUpkeepDesk } from '../git/cloneUpkeep.js';
 import type { DiscussionPullDesk } from '../discussions/pullDesk.js';
@@ -66,7 +65,6 @@ export interface PulseDeps {
   notices?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
   graduations?: { run(): void };
   clusters?: { run(): void };
-  obstacles?: ObstacleDesk;
   pool?: PoolDesk;
   discussionPulls?: DiscussionPullDesk;
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
@@ -144,11 +142,6 @@ const ENTRIES = [
     { id: 'notices', readWorld: true, run: (d, at) => d.notices?.run(at.previousWorld, at.world) },
     { id: 'graduations', readWorld: false, run: (d) => d.graduations?.run() },
     { id: 'clusters', readWorld: false, run: (d) => d.clusters?.run() },
-    {
-      id: 'obstacles',
-      readWorld: false,
-      run: (d, at) => d.obstacles?.run({ previousWorld: at.previousWorld, world: at.world, readWorld: at.readWorld }),
-    },
     { id: 'pool', readWorld: true, run: (d) => d.pool?.run() },
     { id: 'discussionPulls', readWorld: true, run: (d, at) => d.discussionPulls?.run(at.world) },
   ]),

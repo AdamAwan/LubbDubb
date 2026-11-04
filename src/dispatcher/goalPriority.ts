@@ -1,6 +1,6 @@
-import type { GoalPriority, Issue, ObstacleBlock, ObstacleStanding, Plan, PlanPart, PullRequest } from '../types.js';
+import type { GoalPriority, Issue, Plan, PlanPart, PullRequest } from '../types.js';
 import { issueBranch } from './issuePickup.js';
-import { issueOriginRef, issueOriginRole, obstacleOriginId } from '../issueOrigins.js';
+import { issueOriginRef, issueOriginRole } from '../issueOrigins.js';
 import { markedNumbers } from '../goalPause.js';
 import { cascadeToChildren } from '../issueRelations.js';
 import { prOriginNumber } from '../primitives.js';
@@ -12,8 +12,6 @@ interface GoalWorld {
   issues: readonly Issue[];
   plans: readonly Plan[];
   parts: readonly PlanPart[];
-  obstacles?: readonly ObstacleStanding[];
-  obstacleBlocks?: readonly ObstacleBlock[];
 }
 
 export function expeditedOrigins(
@@ -24,7 +22,7 @@ export function expeditedOrigins(
   // A flag on a container covers the work under it, transitively — the same span the
   // pause covers, through the same function, because "get this Feature over the line
   // first" and "stop this Feature" have to mean the same body of work. Expanded here
-  // and once: the pull requests, the plans, the parts and the obstacles below are all
+  // and once: the pull requests, the plans and the parts below are all
   // read off `numbers`, so each of them follows the children without knowing about them.
   const numbers = [...cascadeToChildren(markedNumbers(goals), world.issues, containerTypes)];
   if (numbers.length === 0) return () => false;
@@ -45,18 +43,8 @@ export function expeditedOrigins(
     if (part.prNumber !== null && flaggedPlans.has(part.planId)) prNumbers.add(part.prNumber);
   }
 
-  const flaggedGoals = new Set(numbers.map((n) => issueOriginRef('root', n)));
-  const flaggedObstacles = new Set([
-    ...(world.obstacles ?? [])
-      .filter((row) => row.goalRefs.some((ref) => flaggedGoals.has(ref)))
-      .map((row) => row.obstacle.id),
-    ...(world.obstacleBlocks ?? []).filter((b) => flaggedGoals.has(b.originRef)).map((b) => b.obstacleId),
-  ]);
-
   return (originRef: string): boolean => {
     for (const n of numbers) if (issueOriginRole(n, originRef) !== null) return true;
-    const obstacle = obstacleOriginId(originRef);
-    if (obstacle !== null) return flaggedObstacles.has(obstacle);
     const pr = prOriginNumber(originRef);
     return pr !== null && prNumbers.has(pr);
   };

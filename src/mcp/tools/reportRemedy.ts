@@ -32,8 +32,8 @@ export const reportRemedy: ToolFactory = ({ deps, agent, task, ok }) => {
       '"nothing would have" is a useful answer, and a fleet that always says the second learns ' +
       'nothing.\n\n' +
       'When the guard is "undocumented" — the thing that would have caught it is written down ' +
-      'nowhere — `raise` it as well, in its own call: that is the one door, and it is where the next ' +
-      'agent hitting the same wall will find it.\n\n' +
+      'nowhere — say so in the guard itself, plainly: that answer is what an operator reads to ' +
+      'decide what to write down.\n\n' +
       'This schedules nothing, closes nothing and is posted nowhere. It does not say your work is ' +
       'finished — nothing here replaces pushing the fix.',
     inputSchema: toolSchema(

@@ -401,8 +401,7 @@ labelled as the account's, with nothing red. A caller that genuinely has no read
 says so.
 
 `defaultWindow` — the window a reading with no control of its own took — **went with its last caller**,
-the Knowledge page's cost figure. That page and the injected block it priced are gone
-([27](27-obstacles.md#what-the-claim-store-left-behind)), and every reading left here has a time bar of
+the Knowledge page's cost figure. That page and the injected block it priced are gone, and every reading left here has a time bar of
 its own. A reading that needs one again brings it back rather than reaching for `resolveWindow`
 directly: a caller with no time bar quietly acquiring the `session` window is exactly what the required
 `limits` argument above exists to stop.
@@ -428,8 +427,9 @@ splits of one pot of money, plus the coverage caveat:
   `:validate-local-fix:` — an agent writing and pushing code, whatever prompted it),
   `ci` (`pr:<n>:ci`, `pr:<n>:ci-gate`), `landing` (every other `pr:*`), `evidence` (`:assess`,
   `:retro`, `:validate:`, `:validate-failure:`, `:validate-local:`), `local` (a local run — the
-  environment itself, where the validation driving it is the `evidence` beside it), `obstacle` (`obstacle:<id>` — a repair for something in the
-  fleet's way, [27](27-obstacles.md#ownership)), `job` (`job:*`) and `other`. A partition: they sum to
+  environment itself, where the validation driving it is the `evidence` beside it), `obstacle` (`obstacle:<id>` — a repair the retired obstacle board
+  dispatched; nothing spends here now, and the phase stays so that spend already recorded still reads
+  as what it was, [05](05-dispatcher.md#the-rule-book)), `job` (`job:*`) and `other`. A partition: they sum to
   the fleet total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather than a second one, so **a
   new origin suffix is classified in exactly one place** — an unrecognised suffix surfaces as `other`
   rather than being folded into whichever neighbour looked closest. `local` is the one phase that is
@@ -1063,16 +1063,13 @@ two from the caller's own task origin and refuses every other caller by name; th
 assert is a column reporting whatever each agent took it to mean, and the counts would be worth
 nothing.
 
-**`undocumented` names something written down nowhere, and what an agent does about that is `raise`
-it** — in its own call, on the board that keys and counts it ([27](27-obstacles.md#the-intake)). The
-remedy used to carry a `claim` field of its own, which meant the same sentence reached a different
-store, under a different gate and with no matching, depending on which tool the agent happened to be
-holding. One door, and this is not it: the remedy is the **event record** of one return to a pull
-request and nothing else.
+**`undocumented` names something written down nowhere**, and the guard is where the agent says so —
+plainly, for the operator who reads the reliability page to decide what to write down. The remedy used
+to carry a `claim` field of its own, and later pointed the agent at a separate intake beside it; both
+are gone. The remedy is the **event record** of one return to a pull request and nothing else.
 
-**The remedy row is the account of an event, and only that.** It keeps its counts and its dollars, it
-lands whatever an agent does or does not raise beside it, and nothing on this page is derived from the
-obstacle board.
+**The remedy row is the account of an event, and only that.** It keeps its counts and its dollars, and
+nothing on this page is derived from anything an agent filed beside it.
 
 **An account is not a red, and not a run.** One agent that settled four reds in one dispatch files
 one row; a pull request that went red four times over four days collects four. So `accounts` is never

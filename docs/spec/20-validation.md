@@ -1480,10 +1480,11 @@ questions: a shortfall says the work is not finished, and a failed check says th
 not do what somebody checked it for.
 
 **The diagnosis is the deliverable, and it fixes nothing.** What a failed check needs first is an
-account of why, and the three endings an agent can honestly reach already have doors: `escalate` for
-a real defect, which is a decision about delivered work and a person's to take; `validation_amend`
-for a check that describes something that no longer exists; `raise` for what the next agent should
-not have to work out again. Nothing here opens a pull request, files a ticket or schedules work —
+account of why, and the endings an agent can honestly reach already have doors: `escalate` for
+a real defect, which is a decision about delivered work and a person's to take, and `validation_amend`
+for a check that describes something that no longer exists. A failure that is real and not about this
+goal — the fixture, the environment, a service that was down — is said plainly in what the agent hands
+back. Nothing here opens a pull request, files a ticket or schedules work —
 validation's standing promise is that it blocks nothing, and a rule that answered a failed check by
 putting a change into the world on its own authority would be the same overreach in the other
 direction.

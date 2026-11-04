@@ -116,8 +116,6 @@ export interface CockpitView {
   viewingRetro: string | null;
   hatching: string | null;
   viewingScratchpad: string | null;
-  viewingObstacle: string | null;
-  obstacleEnded: boolean;
   insightsView: InsightsView;
   insightsScope: InsightsScope;
   insightsWindow: InsightsWindow;
@@ -170,8 +168,6 @@ interface ViewInputs {
   viewingRetro: string | null;
   hatching: string | null;
   viewingScratchpad: string | null;
-  viewingObstacle?: string | null;
-  obstacleEnded?: boolean;
   insightsView: InsightsView;
   insightsScope?: InsightsScope;
   insightsWindow: InsightsWindow;
@@ -396,7 +392,5 @@ function modalView(input: ViewInputs) {
     viewingRetro: input.viewingRetro,
     hatching: input.hatching,
     viewingScratchpad: input.viewingScratchpad,
-    viewingObstacle: input.viewingObstacle ?? null,
-    obstacleEnded: input.obstacleEnded ?? false,
   } satisfies Partial<CockpitView>;
 }

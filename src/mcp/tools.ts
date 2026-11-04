@@ -18,7 +18,6 @@ import { openPr } from './tools/openPr.js';
 import { planNotNeeded } from './tools/planNotNeeded.js';
 import { planCorrect } from './tools/planCorrect.js';
 import { planSubmit } from './tools/planSubmit.js';
-import { raise as raiseFact } from './tools/raise.js';
 import { reportRemedy } from './tools/reportRemedy.js';
 import { replyToReview } from './tools/replyToReview.js';
 import { requestHumanTask } from './tools/requestHumanTask.js';
@@ -87,7 +86,6 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   pr_describe: prDescribe,
   description_review: descriptionReview,
   report_remedy: reportRemedy,
-  raise: raiseFact,
 };
 
 export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] {

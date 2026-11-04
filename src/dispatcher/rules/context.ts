@@ -22,7 +22,6 @@ import type {
   IssueShortfall,
   LocalRun,
   LocalValidation,
-  ObstacleStanding,
   Plan,
   PrReview,
   PrReviewRoute,
@@ -83,8 +82,6 @@ export interface StageContext {
   validationChecks: Map<string, ValidationCheck[]>;
   /** Each goal's validation plan: the plan's hint, and the planner's stamp once it has run. */
   validationPlans: ReadonlyMap<string, ValidationPlanRecord>;
-  obstacles: readonly ObstacleStanding[];
-  redBaseChecks: ReadonlySet<string>;
   appraising: Set<number>;
   investigating: Set<number>;
   investigations: InvestigationStandings;

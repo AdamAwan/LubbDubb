@@ -148,7 +148,7 @@ filter of their own is hiding every tagged item on the tracker.
 | `wiring`       | nothing tagged, and nothing ever picked up              | the same, on the one day an empty panel is unreadable because none has ever been full                                                                           |
 | `agent`        | `agentMode` is `raw`, or `claudeCommand` is not on PATH | a `raw` dispatch writes a transcript and never calls a model                                                                                                    |
 | `billing`      | `ANTHROPIC_API_KEY` is in the environment               | agents inherit it and the CLI prefers a key with no prompt, so the whole fleet bills the API ([02](02-configuration.md#secrets))                                |
-| `prompt-tools` | a prompt override names a tool `raise` replaced         | the tool still works, so nothing is broken — the deployment is one withdrawal away from a call refused with nothing in the logs                                 |
+| `prompt-tools` | a prompt override names a retired tool                  | the tool still works, so nothing is broken — the deployment is one withdrawal away from a call refused with nothing in the logs                                 |
 | `restart`      | the file holds changes this process is not running      | `warn`, not `bad` — the harness works, it is just not working on what the operator last wrote                                                                   |
 | `clone`        | the project is a partial clone, or over its pack limit  | `warn` — every git that touches an object it lacks fetches it on demand, and the clone grows a pack per fetch with nothing failing                              |
 
@@ -245,9 +245,12 @@ whole argument stated backwards.
 
 ### An override that names a retired tool
 
-`report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` are **retired**:
-`raise` is the one door, and advertising six ways to file one observation is the taxonomy the intake
-removed ([27](27-obstacles.md#the-intake)).
+`report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` are **retired**,
+and so is `raise`, which replaced the four and went with the obstacle board; every name on
+`RETIRED_TOOL_NAMES` is read here, the later removals' with them. A name is matched as written in the template, except
+where it is also an English word: `raise` counts only as `` `raise` ``, `raise(` or _call raise_, because an override
+saying _raise it with the operator_ names no tool and a check that said it did would be a reading an
+operator learns to ignore (`namesRetiredTool`, `src/mcp/names.ts`).
 
 They spent a release registered-but-named-nowhere rather than deleted, for one reason — an operator's
 prompt override written before the intake may still name one, and unlike a `PromptId`, whose removal
@@ -258,13 +261,14 @@ deployments that customised most.
 **This check is what let the withdrawal be taken.** It turns "we cannot know who still names these"
 into a reading an operator can act on. The other half is that the names outlived their
 implementations: `RETIRED_TOOL_NAMES` is what keeps this check answerable, and what keeps the call
-itself answered with a refusal naming `raise` rather than lost as a protocol error
+itself answered with a refusal saying what replaced it, if anything did, rather than lost as a protocol
+error
 ([11](11-mcp-tools.md#retired-tools)).
 
 - **`bad`, since the withdrawal.** While the four were still registered this was a `warn`: the call
   still worked and the deployment was one withdrawal away from breaking. The withdrawal has happened,
   so an override naming one now sends every agent it dispatches at a name that answers only with a
-  refusal. The agent recovers — it is told to say `raise`, and the call is recorded so the Insights
+  refusal. The agent recovers — it is told what is left in its place, and the call is recorded so the Insights
   MCP tab shows it ([17](17-cockpit.md#mcp)) — but a prompt of the operator's own is spending a turn
   on nothing, every dispatch.
 - **Only the operator's overrides are read**, and a deployment with none draws **no check at all**
@@ -273,8 +277,8 @@ itself answered with a refusal naming `raise` rather than lost as a protocol err
   harness's own text for the harness's own mistake. Where there are overrides and none names one, the
   `ok` row is the reading having been taken, the same shape `credential` has when the variable is
   present.
-- **The row names what an operator can act on**: the template, the tool it names, and `raise` as what
-  to say instead. A count of offending overrides is a quantity with the whole remedy — which file,
+- **The row names what an operator can act on**: the template, the tool it names, and that the name
+  comes out of it — each tool's refusal says what replaced it. A count of offending overrides is a quantity with the whole remedy — which file,
   which word — missing from it. The list is capped for `restart`'s reason.
 - **The fix is a `goto` to the config page's Prompts tab.** The override is a file in
   `promptTemplatesDir` rather than a config leaf, so there is no `set` the harness could apply; and a

@@ -16,9 +16,8 @@ export const retroSubmit: ToolFactory = ({ deps, agent, ok }) => ({
     'left and the record the harness kept; reconcile them and say where they disagree. This schedules ' +
     'nothing, closes nothing and is posted nowhere — a human reads it and decides what to change.\n\n' +
     'Anything this run taught that outlives the goal — a seam, an invariant, a defect you noticed in ' +
-    'passing — goes through `raise` rather than here: one call, and the harness works out what kind of ' +
-    'thing it is. Something true only of this goal belongs in the scratchpad, where it dies with the ' +
-    'goal, correctly.',
+    'passing — goes in the document itself, for the operator to act on. Something true only of this ' +
+    'goal belongs in the scratchpad, where it dies with the goal, correctly.',
   inputSchema: toolSchema(
     z.object({
       summary: z

@@ -84,7 +84,6 @@ export function placeReach(place: Place): { key: PlaceKey; view: UiUsageEvent | 
   if (place.plan !== null) return { key: 'plan', view: 'plan.view' };
   if (place.retro !== null) return { key: 'retro', view: 'retro.view' };
   if (place.agent !== null) return { key: 'agent', view: 'agent.view' };
-  if (place.obstacle !== null) return { key: 'obstacle', view: 'obstacle.view' };
   const panel = place.panel;
   if (panel !== null && typeof panel === 'object') return { key: 'ask', view: 'escalation.view' };
   if (panel !== null) {
@@ -127,7 +126,6 @@ export function panelClose(panel: Panel): ControlUsage {
 const TAB_REACH: Record<ConsoleTab, { key: PlaceKey; view: TabView }> = {
   overview: { key: 'overview', view: 'fleet.view' },
   tickets: { key: 'tickets', view: 'ticket.view' },
-  obstacles: { key: 'obstacles', view: 'obstacle.view' },
   features: { key: 'features', view: 'feature.view' },
   bots: { key: 'bots', view: 'bot-pr.view' },
   errors: { key: 'errors', view: 'app-error.view' },

@@ -79,12 +79,6 @@ test('the desks handed the diff are handed the pair the diff was taken from', as
   await runPulse('reconcile', deps, AT, true);
   const call = calls.find((c) => c.id === 'notices');
   assert.deepEqual(call?.args, ['run', PREV, WORLD], 'notices reads the previous world and this one');
-  const obstacles = calls.find((c) => c.id === 'obstacles');
-  assert.deepEqual(
-    obstacles?.args,
-    ['run', { previousWorld: PREV, world: WORLD, readWorld: true }],
-    'the obstacle desk is handed the pair the diff was taken from, and whether the world was read',
-  );
 });
 
 test('every pass is awaited — a pass that must not block the pulse starts its own work itself', async () => {
@@ -96,12 +90,12 @@ test('every pass is awaited — a pass that must not block the pulse starts its 
   const deps = {
     ...bareDeps(),
     graph: { record: slow('graph') },
-    obstacles: { run: slow('obstacles') },
+    pool: { run: slow('pool') },
   } as unknown as PulseDeps;
   await runPulse('reconcile', deps, AT, true);
   assert.deepEqual(
     order,
-    ['graph', 'obstacles'],
+    ['graph', 'pool'],
     "an async pass finishes before the next one starts; declining to block is the pass's own business",
   );
 });
@@ -125,10 +119,6 @@ test('the graph is recorded after the reconciler and before anything that reads 
   below('graph', 'plans', 'the part→PR observations the reconciler just made are the ones recorded');
   below('graduations', 'graph', 'it reads the graph, so above that line it acts on a merge a pulse late');
   below('pool', 'graduations', 'a claim that left for the repository is out of the document before it is derived');
-});
-
-test('the obstacle desk runs below the world notices it answers', () => {
-  below('obstacles', 'notices', 'an agent whose report was taken up is told so by the pulse that took it');
 });
 
 test('the pull request register is tagged before it is linked', () => {

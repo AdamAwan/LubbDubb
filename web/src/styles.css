@@ -346,9 +346,7 @@ body {
 .cn-card > h3,
 .cn-setup-tbl th,
 .cn-fact-k,
-.cn-group,
-.ob-tile-l,
-.ob-not-mine-l {
+.cn-group {
   font-size: var(--label-size);
   font-weight: var(--label-weight);
   letter-spacing: var(--label-track);
@@ -385,8 +383,7 @@ body {
 .cn-sig-field > span,
 .cn-setup-tbl th,
 .cn-fact-k,
-.cn-group,
-.ob-not-mine-l {
+.cn-group {
   font-size: var(--label-size-sm);
 }
 
@@ -4559,7 +4556,7 @@ select:disabled {
      literal, which is what keeps it following the theme an operator picked. */
   --sp-local: color-mix(in srgb, var(--blue) 45%, var(--green));
   /* The ninth, mixed for the eighth's reason and from the two it sits between: what
-     a repair costs reads as a red thing on somebody else's branch. */
+     a repair of the retired obstacle board cost, kept so its past spend still reads. */
   --sp-obstacle: color-mix(in srgb, var(--red) 55%, var(--violet));
   --sp-job: var(--violet);
   --sp-other: var(--grey);

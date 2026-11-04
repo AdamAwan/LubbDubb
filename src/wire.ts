@@ -100,8 +100,6 @@ import type {
   LocalRunFreshness,
   LocalRunPorts,
   LocalRunTurn,
-  ObstacleSighting,
-  ObstacleStanding,
   Plan,
   PlanAmendmentAuthor,
   PlanAtom,
@@ -1090,9 +1088,6 @@ export type {
   PrDescriptionVersion,
   LocalValidationFinding,
   LocalValidationStatus,
-  ObstacleKey,
-  ObstacleSighting,
-  ObstacleState,
   Plan,
   PlanAtom,
   PlanCaveat,
@@ -1317,30 +1312,4 @@ export interface PoolInsightsPayload {
   trends: PoolTrends;
   projects: string[];
   fleets: PoolFleetReading[];
-}
-
-export interface ObstacleBoardRow extends ObstacleStanding {
-  sightings: ObstacleSighting[];
-}
-
-export interface ObstacleBoardCounts {
-  sightings: number;
-  goals: number;
-  told: number;
-  window: ObstacleCallRate;
-}
-
-export interface ObstacleCallRate {
-  since: string;
-  calls: number;
-  callers: number;
-  agents: number;
-}
-
-export interface ObstacleBoardPayload {
-  rows: ObstacleBoardRow[];
-  counts: ObstacleBoardCounts;
-  dormantMs: number;
-  canFileTickets: boolean;
-  ticketApproval: boolean;
 }

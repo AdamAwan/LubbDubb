@@ -208,21 +208,20 @@ variable.
 
 The appended system prompt is the protocol and, where the tool channel is wired, the tool addendum.
 There is no third part, and the two that used to be there are both gone: the lesson block, and the
-claim store's block that replaced it (`renderKnowledgeBlock`) →
-[27](27-obstacles.md#what-the-claim-store-left-behind).
+claim store's block that replaced it (`renderKnowledgeBlock`), both removed with the stores behind
+them.
 
 **The placement rule that produced them still holds, and is the reason nothing replaced them.** A
 system-prompt append is **identical across every agent in the fleet**, so it is a cached prefix paid
 once; everything `recordDispatchTask` appends is per-goal and variable, so it is fresh input tokens on
 every dispatch. Anything that churns per dispatch belongs in the task prompt — and everything the
-harness now has to tell an agent about the fleet's own experience is _keyed_, so it is per dispatch by
-construction ([09](09-execution.md#what-the-fleet-has-already-run-into-reaches-the-agent)).
+harness tells an agent about its goal's own history — the previous agent's note, an operator's
+instructions, a released block's reason — is per goal, so it is per dispatch by construction
+([09](09-execution.md#nothing-fleet-wide-is-appended)).
 
 **Blanket context was the wrong instrument, not merely the wrong place.** A block every agent reads
 before it reads any code is skimmed rather than read at the sizes this harness runs against, and each
-line added to one makes every line already in it worth less. The board that replaced the store
-delivers a row to the dispatches its keys match and to nowhere else, which is the same budget spent on
-the agents it is actually about → [27](27-obstacles.md#delivery).
+line added to one makes every line already in it worth less.
 
 **`agentProtocol.ts` reads no store, and that is structural rather than a habit.** It composes the
 protocol from its own constants; anything else an agent must read is appended by the executor, at the

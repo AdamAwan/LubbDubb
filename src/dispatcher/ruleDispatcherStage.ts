@@ -9,7 +9,6 @@ import {
   type IssuePickupPolicy,
 } from './issuePickup.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
-import { blockedGoals } from '../obstacles/blocked.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { appraisalHold } from '../intake/appraisal.js';
 import { investigationStandings } from '../intake/investigation.js';
@@ -49,7 +48,7 @@ export function issueGates(
   const appraisalParked = (issue: Issue): boolean =>
     appraisalHold(appraisals.get(issueOrigin(issue.number)) ?? null, issue) !== null;
 
-  const blocked = blockedGoals(ctx.obstacleBlocks ?? [], ctx.obstacles ?? []);
+  const blocked = new Set((ctx.goalBlocks ?? []).map((block) => block.originRef));
 
   const retained = new Set(ctx.retainedIssues ?? []);
 
@@ -219,7 +218,6 @@ export function cycleLookups(
   | 'conclusions'
   | 'shortfallsByOrigin'
   | 'validationPlans'
-  | 'obstacles'
   | 'prReviewRoutes'
   | 'prSplits'
   | 'descriptionDrafts'
@@ -237,7 +235,6 @@ export function cycleLookups(
     conclusions: new Map((ctx.conclusions ?? []).map((c) => [c.originRef, c])),
     shortfallsByOrigin: new Map((ctx.shortfalls ?? []).map((sf) => [sf.originRef, sf])),
     validationPlans: new Map((ctx.validationPlans ?? []).map((r) => [r.originRef, r])),
-    obstacles: ctx.obstacles ?? [],
     prReviewRoutes: new Map((ctx.prReviewRoutes ?? []).map((route) => [route.prNumber, route])),
     prSplits: new Map((ctx.prSplits ?? []).map((v) => [v.prNumber, v])),
     descriptionDrafts: ctx.descriptionDrafts ?? [],

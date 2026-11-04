@@ -23,10 +23,8 @@ façade, and the only thing that caught a forgotten one was the call site failin
 a domain module is now the whole change.
 
 What stays on `Store` is what is not a forward: `close()` (it asks `TranscriptStore` to flush before
-the handle goes), and the three reads that genuinely span two modules —
-`sumUsageCostSince` and `listCostDeltasSince`, which add an agent's spend to a local run's, and
-`writeUpObstacle`, which opens a job and records the write-up against the obstacle in one
-transaction. A composite belongs here because it is the caller that holds both modules; a method
+the handle goes), and the two reads that genuinely span two modules —
+`sumUsageCostSince` and `listCostDeltasSince`, which add an agent's spend to a local run's. A composite belongs here because it is the caller that holds both modules; a method
 that only names one belongs on that one.
 
 | Module                | Tables                                                                          |
@@ -114,8 +112,8 @@ The clock is injectable (`Clock`), so tests get deterministic timestamps.
 ### Compiled statements are memoised per connection
 
 better-sqlite3 does **not** cache prepared statements: every `db.prepare(sql)` re-parses and re-plans
-the SQL. A point lookup like `getTask` is called inside loops — the end-of-run pass, the obstacle and
-recovery desks, the escalation inbox — so preparing it afresh each call dominated the call. Measured
+the SQL. A point lookup like `getTask` is called inside loops — the end-of-run pass, the
+recovery desk, the escalation inbox — so preparing it afresh each call dominated the call. Measured
 on this repo's driver, 20k point lookups cost 156 ms preparing each time against 38 ms re-using the
 compiled statement.
 
@@ -403,8 +401,8 @@ now reads hatched rows only, which answers its own question whatever a later mig
 
 #### There is none right now
 
-The three that existed all folded rows into `knowledge_facts`, and they went with the store
-([27](27-obstacles.md#what-the-claim-store-left-behind)) — `runOnce` itself with them, since `knip`
+The three that existed all folded rows into `knowledge_facts`, and they went with the claim store
+that table belonged to — `runOnce` itself with them, since `knip`
 runs every rule at error and an exported function with no caller is a failure. The `store_migrations`
 rows already stamped on a running deployment are harmless; the next migration that needs the mechanism
 brings it back, under a **fresh** id, and everything above still governs it.
@@ -448,7 +446,14 @@ is constructed. A table whose module went with it is declared where the list is 
 `GOAL_CRITERIA_RETIRED_TABLES` drops `goal_criteria`, `goal_criteria_alignments` and
 `goal_criteria_drift`. Those two features were removed whole at the operator's request, and what they
 held was almost entirely the record of a gate skipped — a reveal stamp with nothing predicted — so the
-removal is the reclaiming the paragraph below asks to be asked for.
+removal is the reclaiming the paragraph below asks to be asked for. `OBSTACLE_RETIRED_TABLES` drops
+the obstacle board's nine — `obstacles`, `obstacle_keys`, `obstacle_sightings`, `obstacle_notices`,
+`obstacle_blocks`, `obstacle_conditions`, `obstacle_writeups`, `obstacle_readings` and
+`obstacle_suggestions` — removed whole at the operator's request too, and every row in them machine
+written: an agent's report, the harness's own reading of a transition, a model desk's suggestion.
+`obstacle_blocks` is the one with consequence, and the drop is fail-open: a goal it held parked comes
+back to pickup on the next boot, because a block is an escalation now and nothing raised one for it
+([06](06-issue-pickup.md#blocked-parks-the-goal-for-you)).
 The drop needs nothing recorded to say it has run: the table's existence is what says it is outstanding,
 and the drop is what removes it.
 
@@ -864,14 +869,14 @@ Three properties are why the matrix is data rather than prose (#222):
   notices. It states only which rows may _exist_ together; which wins where two may coexist stays
   `resolveIssueConclusion`'s question.
 
-**`obstacle_blocks` is deliberately not a fifth kind**, and the reason is the matrix's own. Every
+**A `blocked` conclusion is deliberately not a fifth kind**, and the reason is the matrix's own. Every
 table above answers _is this goal's work finished_ and clears the answers it contradicts; a block
-answers _can it be attempted right now_, and its exit is the **obstacle** rather than the issue
-([27](27-obstacles.md#blocked-is-an-answer)). Folded in, it would have to name what it clears — and a
-block that cleared a delivery is delivered work handed back to the fleet, which is the failure
-[20](20-validation.md#when-a-check-fails) names from the other side. It is owned by
-`src/store/obstacles.ts` with the rest of the board, and nothing clears it but the ownership desk's
-own sweep.
+answers _can it be attempted right now_, and its exit is **the operator** rather than the issue
+([06](06-issue-pickup.md#blocked-parks-the-goal-for-you)). Folded in, it would have to name what it
+clears — and a block that cleared a delivery is delivered work handed back to the fleet, which is the
+failure [20](20-validation.md#when-a-check-fails) names from the other side. It has no table at all:
+the open escalation that asks the operator to release it is its whole record, and answering or
+dismissing that escalation is the only thing that ends it.
 
 `recordVerdict` deliberately does **not** compose the row. The four are not the same shape in the
 ways that matter — a conclusion preserves `created_at` where the others preserve `decided_at`, a
@@ -1265,8 +1270,7 @@ together**, though it still emits a node from each separately (the open reading 
 that opened and merged inside one pulse interval, or merged while the process was restarting, is only ever
 seen in the `closedPrWindowMs` list — so that window is the fold's one and only chance at the edge. Resolve
 parentage from `pullRequests` alone and such a node is written with a null parent, and write-once then means
-_permanently_ detached: its goal's spend reads as unattributed, an obstacle write-up watching for the
-job's PR never settles, and the unrecorded-work detector offers a ticket for work a merged pull
+_permanently_ detached: its goal's spend reads as unattributed, and the unrecorded-work detector offers a ticket for work a merged pull
 request already did. The same reason applies to the arm that adopts a **job** by the issue its PR links to. It is also what
 makes a **new adoption arm retroactive**: `COALESCE(work_nodes.parent_ref, excluded.parent_ref)` fills
 a stored null on the next pulse, so a rule that adopts work the fold used to emit parentless needs no

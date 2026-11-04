@@ -94,7 +94,7 @@ export function replyOrigin(
       `review it, and ` +
       `this task's origin is ${originRef ?? '(none)'}. Do not post to the thread yourself instead: if you ` +
       `have something to say about a pull request that is not yours to answer, say it in the summary you ` +
-      `finish with, or raise it.`,
+      `finish with, or escalate it.`,
   };
 }
 

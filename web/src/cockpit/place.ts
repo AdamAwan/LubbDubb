@@ -24,8 +24,6 @@ export interface Place {
   retro: string | null;
   hatch: string | null;
   scratchpad: string | null;
-  obstacle: string | null;
-  obstacleEnded: boolean;
   /** Which pane of the goal page is open, or null to let the lifecycle rule pick. */
   goalTab: GoalTab | null;
   /**
@@ -131,17 +129,7 @@ export const FEATURE_SORTS: readonly FeatureSort[] = ['wants-you', 'moved', 'don
 export type FeaturePrFilter = 'open' | 'done' | 'all';
 const FEATURE_PRS: readonly FeaturePrFilter[] = ['open', 'done', 'all'];
 
-const TABS: readonly ConsoleTab[] = [
-  'overview',
-  'tickets',
-  'obstacles',
-  'features',
-  'bots',
-  'errors',
-  'insights',
-  'pets',
-  'config',
-];
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'features', 'bots', 'errors', 'insights', 'pets', 'config'];
 
 const HOME_TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'features'];
 
@@ -201,8 +189,6 @@ export const NOWHERE: Place = {
   goalShut: [],
   discussionKind: null,
   discussionState: null,
-  obstacle: null,
-  obstacleEnded: false,
   configTab: 'values',
   configGroup: null,
   insightsView: 'economics',
@@ -239,16 +225,12 @@ const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mc
 const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = {
   backlog: 'tickets',
   work: 'tickets',
-  knowledge: 'obstacles',
 };
 
 const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = {
-  knowledge: 'obstacles',
   /* The vivarium panel is the Pets page now, so a saved `?panel=pets` link lands
      on the surface that absorbed it rather than on the overview. */
   pets: 'pets',
-  findings: 'obstacles',
-  lessons: 'obstacles',
 };
 const SECTIONS: readonly string[] = GOAL_SECTIONS;
 export const DISCUSSION_KINDS: readonly DiscussionKind[] = ['note', 'idea', 'question', 'decision'];
@@ -310,15 +292,7 @@ function readPagePicks(
   query: URLSearchParams,
 ): Pick<
   Place,
-  | 'goalTab'
-  | 'goalOpen'
-  | 'goalShut'
-  | 'discussionKind'
-  | 'discussionState'
-  | 'obstacle'
-  | 'obstacleEnded'
-  | 'configTab'
-  | 'configGroup'
+  'goalTab' | 'goalOpen' | 'goalShut' | 'discussionKind' | 'discussionState' | 'configTab' | 'configGroup'
 > {
   return {
     goalTab: GOAL_TABS.find((t) => t === param(query, 'pane')) ?? null,
@@ -326,8 +300,6 @@ function readPagePicks(
     goalShut: readStrings(param(query, 'shut')).filter((name) => SECTIONS.includes(name)),
     discussionKind: DISCUSSION_KINDS.find((k) => k === param(query, 'dkind')) ?? null,
     discussionState: DISCUSSION_STATES.find((s) => s === param(query, 'dstate')) ?? null,
-    obstacle: param(query, 'obs'),
-    obstacleEnded: query.has('ended'),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
     configGroup: param(query, 'keys'),
   };
@@ -530,8 +502,6 @@ function writePagePicks(query: URLSearchParams, place: Place): void {
   if (place.goalShut.length > 0) query.set('shut', place.goalShut.join(','));
   if (place.discussionKind !== null) query.set('dkind', place.discussionKind);
   if (place.discussionState !== null) query.set('dstate', place.discussionState);
-  if (place.obstacle !== null) query.set('obs', place.obstacle);
-  if (place.obstacleEnded) query.set('ended', '1');
   if (place.configTab !== 'values') query.set('section', place.configTab);
   if (place.configGroup !== null) query.set('keys', place.configGroup);
 }

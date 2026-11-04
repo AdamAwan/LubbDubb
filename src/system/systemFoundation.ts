@@ -28,7 +28,6 @@ import type { SessionFactory } from '../agents/session.js';
 import { killProcessTree, type ProcessReaper } from '../agents/processTree.js';
 import { EscalationInbox } from '../escalation/escalationInbox.js';
 import { ProposalDesk } from '../proposals/proposalDesk.js';
-import type { ObstacleReader } from '../obstacles/desk.js';
 import type { EnvironmentHealthProber } from '../environments/healthProber.js';
 import type { AppErrorReader } from '../appErrors/reader.js';
 import type { ReviewProber } from '../review/reviewedElsewhere.js';
@@ -91,7 +90,6 @@ export interface BuildOptions {
   projectConfigFile?: string;
   upstream?: UpstreamIssues;
   poolTransport?: PoolTransport;
-  obstacleReader?: ObstacleReader;
   bootedAt?: string;
   /** Overrides the harness's stuck-cycle threshold. Injected by tests; nothing else sets it. */
   stuckCycleAfterMs?: number;

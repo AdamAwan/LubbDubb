@@ -176,7 +176,7 @@ test('a retired name is answered, so an override that still names one is not a d
         ? /nothing replaces them/
         : RETIRED_FEATURE_TOOLS.has(name)
           ? /nothing replaces it/
-          : /raise/,
+          : /conclude_work with status "blocked"/,
       'the refusal names the door that replaced it, or says there is none',
     );
   }
@@ -1624,7 +1624,7 @@ test('every origin fence points a refused caller at a tool that accepts it', () 
       const error = verdict.error ?? '';
       const named = Object.keys(accepts).filter((name) => name !== tool && error.includes(name));
       if (named.length === 0) {
-        assert.match(error, /escalate|raise/, `${tool} refusing ${origin} names no tool and no other remedy`);
+        assert.match(error, /escalate/, `${tool} refusing ${origin} names no tool and no other remedy`);
         continue;
       }
       for (const name of named) {

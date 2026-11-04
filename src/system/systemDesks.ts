@@ -10,7 +10,6 @@ import { boundedFetch, CYCLE_FETCH_WAIT_MS } from '../git/boundedFetch.js';
 import { PlanReconciler } from '../plans/planReconciler.js';
 import { AppraisalDesk } from '../intake/appraisalDesk.js';
 import { TicketSweep } from '../tickets/sweep.js';
-import { ObstacleDesk } from '../obstacles/desk.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { PrNamingDesk } from '../pr/prNamingDesk.js';
 import { PrBodyEditDesk } from '../pr/prBodyEditDesk.js';
@@ -250,10 +249,10 @@ export function buildBenchDesks(
   config: Config,
   opts: BuildOptions,
   base: Foundation,
-  { prompts }: Channels,
-  { sequenceWatchPolicy, agents }: Fleet,
+  _channels: Channels,
+  { sequenceWatchPolicy }: Fleet,
 ) {
-  const { store, connector, sink, errors, runtimeControl, watchLabel } = base;
+  const { store, connector, sink, errors, runtimeControl } = base;
   const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => sink.canCloseIssue());
 
   const unwatchedChildren = new UnwatchedChildDesk({
@@ -292,20 +291,6 @@ export function buildBenchDesks(
 
   const tickets = new TicketSweep({ store, source: connector, errors });
 
-  const obstacles = new ObstacleDesk({
-    store,
-    fleet: agents,
-    dormantMs: config.obstacleDormantMs,
-    watchLabel,
-    ticketApproval: config.obstacleTicketApproval,
-    reader: opts.obstacleReader,
-    repoRoot: config.repoRoot,
-    filing: trackerCoordinates(config) ? filing : undefined,
-    ticketBody: (vars) => prompts.render('obstacle-ticket-body', vars),
-    docsPrompt: (vars) => prompts.render('docs-change', vars),
-    errors,
-  });
-
   const botPrs = new BotPrReader({ source: connector, authors: () => config.botPrs.authors, errors });
 
   return {
@@ -320,7 +305,6 @@ export function buildBenchDesks(
     filing,
     upstream,
     tickets,
-    obstacles,
     botPrs,
     botPrRisks: new BotPrRiskDesk({
       store,

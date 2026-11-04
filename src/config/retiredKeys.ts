@@ -35,10 +35,8 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   issuePickupRequireOwnLabel: 'the ownership gate is "ownWorkOnly", and who "own" means is "userId"',
   'github.defaultAssignee': 'tickets the harness files are assigned to "userId"',
   'azureDevOps.defaultAssignee': 'tickets the harness files are assigned to "userId"',
-  lessonBlockChars:
-    'nothing is injected fleet-wide any more — the claim store this bounded is gone, and everything the obstacle board holds is keyed and delivered to the dispatches it is about',
-  knowledgeBlockChars:
-    'nothing is injected fleet-wide any more — the claim store this bounded is gone, and everything the obstacle board holds is keyed and delivered to the dispatches it is about',
+  lessonBlockChars: 'nothing is injected fleet-wide any more — the claim store this bounded is gone',
+  knowledgeBlockChars: 'nothing is injected fleet-wide any more — the claim store this bounded is gone',
   knowledgeScopeStaleDays: 'the Knowledge page it was a reading for is gone with the claim store behind it',
   knowledgeColdDays: 'the Knowledge page it was a reading for is gone with the claim store behind it',
   agentIdleWaitMs:
@@ -55,6 +53,10 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   goalCriteria:
     "goal criteria were removed — the planner's own acceptance criteria, per part, are what a goal is checked against",
   'goalCriteria.enabled': 'goal criteria were removed',
+  obstacleDormantMs:
+    'obstacles were removed — nothing keeps a board of what is in the fleet\'s way, so nothing on it goes dormant. An agent that is stopped concludes "blocked" and the goal waits for you to release it',
+  obstacleTicketApproval:
+    'obstacles were removed, and the bug the board proposed for each one with them — nothing files a ticket for something an agent hit',
   'remoteValidation.runTimeoutMs':
     "the harness no longer spawns the browser suite — the remote validation run's agent invokes the runner in its own shell, under its own stall park, so there is no invocation for the harness to kill",
 };

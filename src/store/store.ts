@@ -62,7 +62,6 @@ import { PrReplyStore } from './prReplies.js';
 import { IssueCommentStore } from './issueComments.js';
 import { PrThreadLabelStore, PR_THREAD_LABEL_COLUMNS } from './prThreadLabels.js';
 import { PrArchiveStore } from './prArchive.js';
-import { ObstacleStore, OBSTACLE_COLUMNS } from './obstacles.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore } from './world.js';
 import { ErrorStore } from './errors.js';
@@ -73,7 +72,7 @@ import { TicketStore, TICKET_COLUMNS } from './tickets.js';
 import { SequenceStore, SEQUENCE_COLUMNS } from './sequences.js';
 import { PrDescriptionStore, PR_DESCRIPTION_COLUMNS } from './prDescriptions.js';
 import { consumeIntentsForExistingSheets, RemoteIntentStore, REMOTE_INTENT_COLUMNS } from './remoteIntents.js';
-import type { Job, CostDelta } from '../types.js';
+import type { CostDelta } from '../types.js';
 
 // → docs/spec/14-persistence.md
 
@@ -87,6 +86,18 @@ const GOAL_CRITERIA_RETIRED_TABLES: readonly string[] = [
   'goal_criteria_drift',
 ];
 
+const OBSTACLE_RETIRED_TABLES: readonly string[] = [
+  'obstacles',
+  'obstacle_keys',
+  'obstacle_sightings',
+  'obstacle_notices',
+  'obstacle_blocks',
+  'obstacle_conditions',
+  'obstacle_writeups',
+  'obstacle_readings',
+  'obstacle_suggestions',
+];
+
 function migrate(db: Database.Database, clock: Clock): void {
   renameTables(db, ISSUE_VERDICT_RENAMES);
   dropRetiredTables(db, [
@@ -95,6 +106,7 @@ function migrate(db: Database.Database, clock: Clock): void {
     ...REVIEW_PACK_RETIRED_TABLES,
     ...PREDICTION_RETIRED_TABLES,
     ...GOAL_CRITERIA_RETIRED_TABLES,
+    ...OBSTACLE_RETIRED_TABLES,
   ]);
   const intentsAreNew = !tableExists(db, 'remote_run_intents');
   rebuildTables(db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS], () => db.exec(SCHEMA));
@@ -122,7 +134,6 @@ function migrate(db: Database.Database, clock: Clock): void {
     PR_REVIEW_COLUMNS,
     PR_THREAD_LABEL_COLUMNS,
     SCRATCH_COLUMNS,
-    OBSTACLE_COLUMNS,
     SEQUENCE_COLUMNS,
     EJECTION_COLUMNS,
     PR_DESCRIPTION_COLUMNS,
@@ -204,7 +215,6 @@ export class Store {
   readonly issueComments: IssueCommentStore;
   readonly prThreadLabels: PrThreadLabelStore;
   readonly prArchive: PrArchiveStore;
-  readonly obstacles: ObstacleStore;
   readonly decisions: DecisionStore;
   readonly world: WorldStore;
   readonly errors: ErrorStore;
@@ -273,7 +283,6 @@ export class Store {
     this.issueComments = new IssueCommentStore(ctx);
     this.prThreadLabels = new PrThreadLabelStore(ctx);
     this.prArchive = new PrArchiveStore(ctx);
-    this.obstacles = new ObstacleStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -304,14 +313,5 @@ export class Store {
       ...this.agents.listUsageEventsSince(sinceIso).map((e) => ({ costUsd: e.costUsd, at: e.at })),
       ...this.localRuns.listLocalRunCostDeltasSince(sinceIso),
     ].sort((a, b) => a.at.localeCompare(b.at));
-  }
-
-  writeUpObstacle(obstacleId: string, work: { title: string; prompt: string }): Job {
-    const write = this.db.transaction((): Job => {
-      const job = this.jobs.createJob({ title: work.title, prompt: work.prompt, kind: 'code' });
-      this.obstacles.recordObstacleWriteUp(obstacleId, job.id);
-      return job;
-    });
-    return write();
   }
 }

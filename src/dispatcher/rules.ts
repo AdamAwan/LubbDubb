@@ -37,14 +37,6 @@ const RULES = [
   },
 
   {
-    id: 'obstacle-repair',
-    kind: 'rule',
-    name: 'Something is blocking the fleet',
-    description:
-      'An obstacle two or more agents reported — and which is blocking the fleet *now*, meaning a base branch is red or three independent voices have hit it — gets one code agent to fix it. It is the second of the two ways an obstacle gets an owner (the other is a ticket, filed by the ownership desk and ranked like any other goal), and it is a capability rather than a convenience: a store that can queue work can put agents on the fleet. So it is one rule, here where it can be seen, taking the headroom cut like every other candidate — and bounded on top of that to **one repair in flight at a time**, because the cut bounds how many agents run and not how many of them this rule may be. It sits above every world-driven rule because what it dispatches for is, by construction, in front of the work those rules are about to propose: an agent sent to a red base is an agent sent to the reason the next four dispatches would have failed. Nothing an agent calls reaches it — no agent stakes a claim on an obstacle, because a lock an agent takes is a lock an agent forgets. A repair that spends its attempt cap escalates rather than looping: an obstacle three agents could not clear is what an operator wants to be told about.',
-  },
-
-  {
     id: 'pr-review-triage',
     kind: 'rule',
     name: 'Choose how to review a pull request',
@@ -263,6 +255,13 @@ const RULES = [
     description:
       'Retired. It put one sealed desk agent on an operator\u2019s prediction, to mark it against the plan beside the operator\u2019s own marks. Predictions were removed, and the judge with them. The id stays so decisions and spend recorded under it still read, and so a deployment whose `agentModels.byRule` names it still boots.',
   },
+  {
+    id: 'obstacle-repair',
+    kind: 'retired',
+    name: 'Something is blocking the fleet',
+    description:
+      'Retired. It put one code agent on an obstacle two agents had reported and which was blocking the fleet now \u2014 a red base branch, or three voices on one wall. Obstacles were removed, and the board this repaired from with them: an agent stopped by something that is not its goal concludes `blocked` with its reason, and the goal waits for an operator to release it. The id stays so decisions and spend recorded under it still read, and so a deployment whose `agentModels.byRule` names it still boots.',
+  },
 
   {
     id: 'validation-plan',
@@ -304,7 +303,7 @@ const RULES = [
     kind: 'rule',
     name: 'A validation check came back failed',
     description:
-      'A validation check that somebody ran against the delivered goal and recorded as **failed** gets one code agent, in a read-only checkout of the default branch, to reproduce it and say what is behind it. It is the one negative verdict in the harness that used to schedule nothing: an assessment that says the goal was not reached reaches `issue-shortfall`, a red build reaches `pr-ci-failing`, and a person who watched the delivered thing not work wrote a note that waited for them to come back to it. It is deliberately **not** wired through a shortfall, which would clear the goal’s delivery row and so un-park the goal, settle its close-out obligation and decline the very bench row the reading was taken for — a shortfall says the work is not finished, and a failed check says the finished work does not do what somebody checked it for. The agent fixes nothing and files nothing on its own authority: it diagnoses, and the doors it already has carry the three honest endings — `escalate` for a real defect somebody has to decide about, `validation_amend` for a check describing something that no longer exists, `raise` for what the next agent should not have to rediscover. It cannot record a reading at all, structurally: `validation_report` resolves its check from the dispatch origin and this rule’s origin is not one it parses, so an agent that decides the check actually passes is refused by the tool rather than by a sentence in a prompt. Each reading gets its own attempt budget — a check that failed, was fixed and failed again is looked at again — and a spent cap escalates nothing, because the flag and the note are already in front of the operator.',
+      'A validation check that somebody ran against the delivered goal and recorded as **failed** gets one code agent, in a read-only checkout of the default branch, to reproduce it and say what is behind it. It is the one negative verdict in the harness that used to schedule nothing: an assessment that says the goal was not reached reaches `issue-shortfall`, a red build reaches `pr-ci-failing`, and a person who watched the delivered thing not work wrote a note that waited for them to come back to it. It is deliberately **not** wired through a shortfall, which would clear the goal’s delivery row and so un-park the goal, settle its close-out obligation and decline the very bench row the reading was taken for — a shortfall says the work is not finished, and a failed check says the finished work does not do what somebody checked it for. The agent fixes nothing and files nothing on its own authority: it diagnoses, and the doors it already has carry the two honest endings — `escalate` for a real defect somebody has to decide about, and `validation_amend` for a check describing something that no longer exists. It cannot record a reading at all, structurally: `validation_report` resolves its check from the dispatch origin and this rule’s origin is not one it parses, so an agent that decides the check actually passes is refused by the tool rather than by a sentence in a prompt. Each reading gets its own attempt budget — a check that failed, was fixed and failed again is looked at again — and a spent cap escalates nothing, because the flag and the note are already in front of the operator.',
   },
 
   {

@@ -5,8 +5,7 @@ import type {
   IssueAppraisal,
   IssueDelivery,
   IssueRun,
-  ObstacleBlock,
-  ObstacleStanding,
+  GoalBlock,
   Plan,
   PlanPart,
   PullRequest,
@@ -14,7 +13,6 @@ import type {
   WorldEvent,
 } from '../types.js';
 import { deliveryHold } from '../delivery/delivery.js';
-import { blockedGoals } from '../obstacles/blocked.js';
 import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { appraisalHold, appraisalOrigin, hasWorkStarted, isAppraised } from '../intake/appraisal.js';
 import {
@@ -127,7 +125,7 @@ type IssuePickupStatusKind =
   | 'delivered'
   | 'appraisal'
   | 'investigation'
-  | 'obstacle'
+  | 'parked'
   | 'cooldown'
   | 'escalated'
   | 'blocked'
@@ -152,8 +150,7 @@ export interface IssuePickupContext {
   deliverySignals?: WorldEvent[];
   appraisals?: IssueAppraisal[];
   investigations?: InvestigationStandings;
-  obstacleBlocks?: ObstacleBlock[];
-  obstacles?: ObstacleStanding[];
+  goalBlocks?: GoalBlock[];
   runs?: IssueRun[];
   headroom: number;
   paused: boolean;
@@ -227,12 +224,12 @@ function standingHoldStatus(issue: Issue, origin: string, ctx: IssuePickupContex
   });
   if (held) return { eligible: false, status: 'delivered', reasons: [held] };
 
-  const block = blockedGoals(ctx.obstacleBlocks ?? [], ctx.obstacles ?? []).get(origin);
+  const block = ctx.goalBlocks?.find((b) => b.originRef === origin);
   if (block) {
     return {
       eligible: false,
-      status: 'obstacle',
-      reasons: [`blocked behind ${block.obstacleId}: ${block.note}`],
+      status: 'parked',
+      reasons: [`concluded blocked — waiting on you to release it: ${block.reason}`],
     };
   }
 

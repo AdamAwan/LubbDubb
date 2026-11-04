@@ -20,9 +20,6 @@ import { assessIssueNumber } from '../delivery/assessment.js';
 import { issueForPr } from '../pr/prIssue.js';
 import { liveParts } from '../plans/parts.js';
 import { goalOriginFor } from '../scratch/pad.js';
-import { dispatchFactScopes } from '../knowledge/block.js';
-import { corroborationGoal } from '../knowledge/knowledge.js';
-import { obstaclesForDispatch, renderObstacleNote } from '../obstacles/delivery.js';
 import { retryNote, type RetryResume } from './retryResume.js';
 import { handoverNote, type HandoverResume } from './handoverResume.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
@@ -104,13 +101,11 @@ export function dispatchPrompt(
       ? handoverNote()
       : null;
   const instructions = instructionsFor(origin, store, deps.instructionTracker);
-  const obstacles = obstaclesFor(action, store);
   return [
     note,
     action.prompt,
     instructions,
     evidence,
-    obstacles,
     guidance,
     outstanding,
     prior,
@@ -127,20 +122,6 @@ export function dispatchPrompt(
 function attachmentsFor(originRef: string | null | undefined, store: Store): string | null {
   if (!originRef) return null;
   return attachmentsNote(store.jobs.listAttachments(goalOriginFor(originRef) ?? originRef)) || null;
-}
-
-function obstaclesFor(action: DispatchAction, store: Store): string | null {
-  const scopes = dispatchFactScopes(
-    action.originRef ?? null,
-    action.type === 'dispatch_code_agent' ? (action.ciChecks ?? null) : null,
-  );
-  const goal = corroborationGoal(action.originRef ?? null);
-  const paths = goal === null ? [] : store.agents.listGoalFiles(goal).map((file) => file.path);
-  if (scopes.length === 0 && paths.length === 0) return null;
-  const rows = store.obstacles
-    .listObstacles()
-    .map((obstacle) => ({ obstacle, keys: store.obstacles.listObstacleKeys(obstacle.id) }));
-  return renderObstacleNote(obstaclesForDispatch({ rows, scopes, paths })) || null;
 }
 
 function instructionsFor(

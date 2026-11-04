@@ -40,10 +40,10 @@ export const VALIDATION_PROMPTS = {
       'There are three honest endings, and each has its own door:\n\n' +
       '- **It is a real defect in what was delivered.** Say what it is and where it lives, then call escalate with the diagnosis: this is a decision about delivered work and it belongs to a person, not to an agent that has just read the code.\n' +
       '- **The check is wrong** — it names a screen that moved, a command that was renamed, a flag that never existed. Call validation_amend to correct its wording. Do not amend a check you merely could not get to pass; a check you disagree with is not a check that is wrong.\n' +
-      '- **The failure is real and is not about this goal** — the fixture, the environment, a dependency, a service that was down. Say so plainly, and raise what the next agent should not have to work out again.\n\n' +
+      '- **The failure is real and is not about this goal** — the fixture, the environment, a dependency, a service that was down. Say so plainly in what you hand back, so the next agent does not have to work it out again.\n\n' +
       '**You cannot record a result on this check, and you should not try.** The reading belongs to whoever took it: they ran the procedure and you did not. Your job is the account of why it failed, not a second opinion on whether it did — and if what you find is that it passes now, that is a sentence for the person who will re-run it, not a reading of your own.\n\n' +
       '**Do not conclude from the code alone.** A green build, a passing test suite and code that looks correct are none of them this check — it exists precisely because those had all happened and it failed anyway. If you cannot reproduce the failure, say that, and say what you tried.',
-    doc: "Sent to a code agent when a validation check on a delivered goal was recorded as `failed` (rule `validation-failed`). The check's own procedure and expectation, and the reading being diagnosed with its note and who took it, are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the halves the agent cannot start without. The agent is in a read-only checkout and fixes nothing: it diagnoses, and escalates, amends the check or raises what it learned. Placeholders: {number} {title} {letter} {root}.",
+    doc: "Sent to a code agent when a validation check on a delivered goal was recorded as `failed` (rule `validation-failed`). The check's own procedure and expectation, and the reading being diagnosed with its note and who took it, are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the halves the agent cannot start without. The agent is in a read-only checkout and fixes nothing: it diagnoses, and escalates or amends the check. Placeholders: {number} {title} {letter} {root}.",
   },
   'local-validation': {
     placeholders: ['number', 'title'],
@@ -91,7 +91,8 @@ export const VALIDATION_PROMPTS = {
       'If what you find is that it cannot be fixed from here \u2014 it is somebody else\u2019s service, it ' +
       'needs a credential you do not have, it is not one thing \u2014 say exactly that in what you conclude ' +
       'and stop. An honest account of why it is not fixable is worth more than a change that does not fix it.',
-    doc: 'Sent to a code agent dispatched to repair an obstacle blocking the fleet (rule `obstacle-repair`). The keys the obstacle identifies as, and the reporters\u2019 own sentences, are *appended* rather than interpolated, so an override that never learned about them cannot silently drop the whole of what the agent has to go on. Placeholders: {claim}.',
+    retired: true,
+    doc: '**Retired \u2014 no longer rendered.** It was sent to a code agent dispatched to repair an obstacle blocking the fleet (rule `obstacle-repair`, retired with it). Obstacles were removed: an agent stopped by something that is not its goal concludes `blocked` with its reason, and the goal waits for an operator to release it. An override left here still loads; it is simply not sent. Placeholders: {claim}.',
   },
   'obstacle-ticket-body': {
     placeholders: ['claim', 'keys', 'voices', 'goals', 'sightings'],
@@ -103,7 +104,8 @@ export const VALIDATION_PROMPTS = {
       'and priced like any other work.\n\n' +
       '## What the agents said\n\n{sightings}\n\n' +
       'Those are reports, in their authors\u2019 own words, not a diagnosis.',
-    doc: 'The **body** of the ticket the ownership desk files for a standing obstacle \u2014 the item itself, not a prompt: nothing is dispatched to write it. The label, the type, the assignee and the bug relation are arguments to the filing and are deliberately not here. Placeholders: {claim} {keys} {voices} {goals} {sightings}.',
+    retired: true,
+    doc: '**Retired \u2014 no longer rendered.** It was the body of the ticket the obstacle ownership desk filed for a standing obstacle. Obstacles were removed, and nothing files a ticket for something an agent hit. An override left here still loads; it is simply not sent. Placeholders: {claim} {keys} {voices} {goals} {sightings}.',
   },
   'local-run': {
     placeholders: [],

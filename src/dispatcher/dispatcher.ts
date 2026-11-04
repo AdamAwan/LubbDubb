@@ -14,8 +14,7 @@ import type {
   IssueDelivery,
   IssueShortfall,
   Job,
-  ObstacleBlock,
-  ObstacleStanding,
+  GoalBlock,
   Plan,
   PlanAmendment,
   PlanAtom,
@@ -97,8 +96,7 @@ export interface DispatchContext {
   featureStandings?: { number: number; title: string; key: string; lines: string[] }[];
   featureSummaryKeys?: Pick<FeatureSummary, 'originRef' | 'standingKey' | 'standingLines' | 'repeats' | 'repeatKeys'>[];
   featureSequences?: FeatureSequence[];
-  obstacles?: ObstacleStanding[];
-  obstacleBlocks?: ObstacleBlock[];
+  goalBlocks?: GoalBlock[];
   agentHeadroom: number;
   recentDecisions: Decision[];
   proposals?: Proposal[];

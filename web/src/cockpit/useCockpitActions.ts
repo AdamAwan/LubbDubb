@@ -25,7 +25,6 @@ export function useCockpitActions(refresh: Refresh, go: Go): { actions: CockpitA
       ...planActions(then),
       ...prActions(then),
       ...watchActions(then, refresh),
-      ...obstacleActions(then),
       ...upNextActions(then),
       ...remoteValidationActions(then),
       ...localRunActions(then),
@@ -138,16 +137,6 @@ function watchActions(then: Then, refresh: Refresh) {
   } satisfies Partial<CockpitActions>;
 }
 
-function obstacleActions(then: Then) {
-  return {
-    muteObstacle: (id, muted) => then(api.muteObstacle(id, muted)),
-    decideObstacleTicket: (id, approved) => then(api.decideObstacleTicket(id, approved)),
-    ownObstacle: (id, ownerRef) => then(api.ownObstacle(id, ownerRef)),
-    retireObstacle: (id) => then(api.retireObstacle(id)),
-    writeDownObstacle: (id) => then(api.writeDownObstacle(id)),
-  } satisfies Partial<CockpitActions>;
-}
-
 function upNextActions(then: Then) {
   return {
     reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
@@ -230,7 +219,6 @@ function placeActions(go: Go) {
     viewRetro: (issueRef) => go({ retro: issueRef }),
     hatchEgg: (id) => go({ hatch: id }),
     viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
-    setObstacleQuery: (next) => go(next),
     openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
     openInsights: (where) =>
       go((current) => {

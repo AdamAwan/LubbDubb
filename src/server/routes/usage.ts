@@ -27,7 +27,6 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           escalations: store.escalations.listEscalations(),
           proposals: store.escalations.listProposals(),
           humanTasks: store.humanTasks.listHumanTasks(ALL),
-          obstacles: store.obstacles.listObstacles(),
           upgrade: store.upgrades.readUpgradeIntent(),
           landings: store.landings.listStackLandings(ALL),
           plans,

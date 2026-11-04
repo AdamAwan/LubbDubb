@@ -87,8 +87,8 @@ export class AgentToolDesk implements AgentToolTarget {
   readonly recordConclusion: AgentToolTarget['recordConclusion'] = (agentId, verdict, note) =>
     this.withCaller(agentId, ({ task }) => verdicts.recordConclusion(this.ctx, agentId, task, verdict, note));
 
-  readonly recordBlocked: AgentToolTarget['recordBlocked'] = (agentId, obstacleId, note) =>
-    this.withCaller(agentId, ({ task }) => verdicts.recordBlocked(this.ctx, agentId, task, obstacleId, note));
+  readonly recordBlocked: AgentToolTarget['recordBlocked'] = (agentId, reason, note) =>
+    this.withCaller(agentId, ({ task }) => verdicts.recordBlocked(this.ctx, agentId, task, reason, note));
 
   readonly recordAssessment: AgentToolTarget['recordAssessment'] = (agentId, verdict, summary, detail, cause, part) =>
     this.withCaller(agentId, ({ task }) =>

@@ -85,7 +85,6 @@ offers no such control, and the day it does, the cell is where it is added.
 | `ticket`         | `view` `expand` `filter` `create` `accept` `reject` `waive` `undo` `close` `open`                       |
 | `feature`        | `view` `expand` `filter` `defer` `stop` `undo` `close` `open`                                           |
 | `agent`          | `view` `expand` `edit` `accept` `reject` `abandon` `stop` `send` `close`                                |
-| `obstacle`       | `view` `expand` `create` `accept` `reject` `waive` `stop` `undo` `close`                                |
 | `local-run`      | `view` `expand` `filter` `create` `edit` `reject` `stop` `close` `open`                                 |
 | `job`            | `view` `expand` `create` `edit` `stop` `close`                                                          |
 | `retro`          | `view` `close`                                                                                          |
@@ -257,7 +256,7 @@ button press: `FoldToggle` names `<subject>.expand` and `<subject>.close` itself
 dialog is `<subject>.close`, so "how often is this opened and left without acting" is one `group by`
 rather than a count folded into the opens — and a disclosure logs `expand` as it opens and `close` as it
 folds, never `expand` both ways. **A pause is `stop` and its resume is `undo`**, on every
-subject that has one — the fleet, a schedule, a Feature, an obstacle's mute.
+subject that has one — the fleet, a schedule, a Feature.
 
 #### A control that is not a `<button>`
 
@@ -327,14 +326,13 @@ nobody ever performs is a control nobody needs.
 
 **The asks**, one row each, over the window:
 
-| Ask                | The record it is folded from                                                          |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| Escalation         | `escalations` — `answeredAt` against `dismissed`                                      |
-| Human task         | `human_tasks`, `kind = 'ask'` — `done` against `declined`                             |
-| Plan approval      | `proposals`, `kind = 'plan'` — `createdAt` and `decidedAt`                            |
-| Obstacle ownership | `obstacles` — [27](27-obstacles.md)                                                   |
-| Validation bench   | `human_tasks`, `kind = 'validate'` — the close-out obligation, [20](20-validation.md) |
-| Upgrade            | the upgrade intent — [21](21-self-update.md)                                          |
+| Ask              | The record it is folded from                                                          |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Escalation       | `escalations` — `answeredAt` against `dismissed`                                      |
+| Human task       | `human_tasks`, `kind = 'ask'` — `done` against `declined`                             |
+| Plan approval    | `proposals`, `kind = 'plan'` — `createdAt` and `decidedAt`                            |
+| Validation bench | `human_tasks`, `kind = 'validate'` — the close-out obligation, [20](20-validation.md) |
+| Upgrade          | the upgrade intent — [21](21-self-update.md)                                          |
 
 **Plan approval is folded from `proposals`, not from `plans`.** The `plans` table carries no stamp
 for entering or leaving `awaiting_approval`, and `updatedAt` moves afterwards for reasons that are
@@ -390,9 +388,8 @@ outstanding for longer than the whole span. That is the only way to say _too lon
 serving six spans.
 
 **`null` is never zero.** A row whose record cannot answer a column ships `null` for it, which is
-`src/insights/mcpInsights.ts`' doctrine applied one actor over: an obstacle's `updated_at` moves on every
-sighting, so there is no instant to measure a wait to, and a landing records the click and never the
-offer. A panel drawing a zero there would be manufacturing a finding out of a missing column.
+`src/insights/mcpInsights.ts`' doctrine applied one actor over: a landing records the click and never
+the offer. A panel drawing a zero there would be manufacturing a finding out of a missing column.
 
 #### How a wait is priced
 

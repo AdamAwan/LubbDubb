@@ -42,8 +42,7 @@ export type ConsolePanel =
   | { ask: string }
   | null;
 
-export type ConsoleTab =
-  'overview' | 'tickets' | 'obstacles' | 'features' | 'bots' | 'errors' | 'insights' | 'pets' | 'config';
+export type ConsoleTab = 'overview' | 'tickets' | 'features' | 'bots' | 'errors' | 'insights' | 'pets' | 'config';
 
 export type InsightsView =
   'economics' | 'allowance' | 'reliability' | 'throughput' | 'causes' | 'trend' | 'mcp' | 'usage';
@@ -191,14 +190,6 @@ export interface CockpitActions {
   openErrors(
     where: Partial<Pick<Place, 'errorsBand' | 'errorsSteady' | 'errorsSort' | 'errorsShow' | 'errorsText'>>,
   ): void;
-
-  setObstacleQuery(next: Partial<Pick<Place, 'obstacle' | 'obstacleEnded'>>): void;
-
-  muteObstacle(id: string, muted: boolean): Promise<void>;
-  decideObstacleTicket(id: string, approved: boolean): Promise<void>;
-  ownObstacle(id: string, ownerRef: string): Promise<void>;
-  retireObstacle(id: string): Promise<void>;
-  writeDownObstacle(id: string): Promise<void>;
 
   completeHumanTask(id: string, note?: string): Promise<void>;
   declineHumanTask(id: string, note: string): Promise<void>;

@@ -125,8 +125,6 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'appErrorMinCount',
       'appErrorIgnore',
       'remoteValidation',
-      'obstacleDormantMs',
-      'obstacleTicketApproval',
       'autoUseAgentDescriptions',
     ],
   },

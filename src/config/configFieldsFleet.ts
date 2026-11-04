@@ -62,19 +62,6 @@ export const FLEET_FIELDS: readonly ConfigField[] = [
     why: 'The furthest back a read may reach to catch up on closes it missed while the harness was down. The window above is the ordinary reach; this is the cap on the extra.',
   },
   {
-    path: 'obstacleDormantMs',
-    type: 'number',
-    ms: true,
-    access: 'plain',
-    why: 'How long an obstacle nobody re-reports and nothing owns stays on the board before it goes dormant. Its keys survive, so a re-report reopens it rather than filing a second one.',
-  },
-  {
-    path: 'obstacleTicketApproval',
-    type: 'boolean',
-    access: 'plain',
-    why: 'Whether a bug the fleet wants filed for an obstacle waits for your approval on the Obstacles tab. On, the harness proposes and you decide; off, the pulse files it itself. Either way the row stays standing and keeps every way out that is not a person.',
-  },
-  {
     path: 'environments',
     type: 'json',
     access: 'fileOnly',

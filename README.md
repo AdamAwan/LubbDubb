@@ -95,6 +95,7 @@ Grouped by where in the loop it sits. Each line links to the spec that owns it.
 | **Planning**       | One pull request, or a dependency-chained decomposition into parts each with its own branch and scope — or "this is already done". → [08][s08]            |
 | **Plan approval**  | Always. A plan carries risks, scope-outs and how anyone will know it worked, and can be discussed with a conversational planner. → [08][s08]              |
 | **Assessment**     | Asked of what was delivered, not of the agent's confidence. Its `no` arm replans, adds a part, or escalates. → [08][s08]                                  |
+| **Blocked**        | An agent stopped by something that is not its goal says so, with its reason; the goal waits in your queue until you release it. → [06][s06]               |
 | **Validation**     | Checks that can only be answered by running the delivered thing, written for a person — or handed to your own Claude Code. → [20][s20]                    |
 | **Retrospective**  | One write-up per delivered goal, from the shared scratchpad and the harness's own record of what it cost. → [13][s13]                                     |
 | **Close-out**      | The harness never closes a ticket. It files a standing obligation with your name on it, which settles once the tracker stops listing it open. → [13][s13] |
@@ -106,7 +107,6 @@ Grouped by where in the loop it sits. Each line links to the spec that owns it.
 | **Environments**         | Off by default. The commit each PR landed as, and whether each environment has it yet — asked with your own command, three-valued. → [24][s24]     |
 | **Arrivals**             | Arriving somewhere can be what opens what a delivered goal owes you, and what puts a line on the ticket. Both opt-in, per environment. → [24][s24] |
 | **Post-deploy watch**    | A goal declares what a running system must show; an arrival opens a window, and your telemetry is asked on a schedule. No model in it. → [29][s29] |
-| **Obstacles**            | What is in the fleet's way, keyed rather than matched on prose: two independent voices, an owner, and an exit that is never a person. → [27][s27]  |
 | **The cross-fleet pool** | The distance above `fleet`: one namespace per fleet in a shared repository, with a corroboration model and a digest. → [28][s28]                   |
 
 ### Watching the harness itself
@@ -399,6 +399,5 @@ security workflows, and the hosted GitHub Pages demo build.
 [s24]: docs/spec/24-environments.md
 [s25]: docs/spec/25-supply.md
 [s26]: docs/spec/26-setup.md
-[s27]: docs/spec/27-obstacles.md
 [s28]: docs/spec/28-cross-fleet-pool.md
 [s29]: docs/spec/29-post-deploy-watch.md
