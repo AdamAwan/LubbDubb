@@ -47,12 +47,10 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'azureDevOps.filters.prAuthor': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.workItemAssignedTo': 'work items are filtered to "userId"\'s while "ownWorkOnly" is on',
   prediction: 'predictions were removed — nothing is asked before a plan is read, and no plan is withheld from you',
-  'prediction.enabled': 'predictions were removed',
   predictionAggregateMinGoals:
     'predictions were removed, and the aggregate this thresholded with them — the pull request description figures it also gated now need ten checked descriptions, fixed',
   goalCriteria:
     "goal criteria were removed — the planner's own acceptance criteria, per part, are what a goal is checked against",
-  'goalCriteria.enabled': 'goal criteria were removed',
   obstacleDormantMs:
     'obstacles were removed — nothing keeps a board of what is in the fleet\'s way, so nothing on it goes dormant. An agent that is stopped concludes "blocked" and the goal waits for you to release it',
   obstacleTicketApproval:

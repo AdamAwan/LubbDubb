@@ -19,8 +19,7 @@ import { EscalationInbox } from '../escalation/escalationInbox.js';
 import { ProposalDesk } from '../proposals/proposalDesk.js';
 import { StackLandingDesk } from '../stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from '../escalation/context.js';
-import { blockOf, blockPrompt, releaseInstruction } from '../escalation/blocked.js';
-import type { Escalation } from '../types.js';
+import { wireBlocks } from '../escalation/blocked.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from '../mcp/server.js';
 import type { McpDesktopServer } from '../mcp/desktop.js';
 import { buildDesktop } from './systemDesktop.js';
@@ -435,25 +434,7 @@ function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, esc
     });
   });
 
-  agents.on('blocked', ({ taskId, block }) => {
-    if (store.escalations.listOpenEscalations().some((e) => blockOf(e)?.originRef === block.originRef)) return;
-    escalations.create({
-      type: 'resolve_ambiguity',
-      prompt: blockPrompt(block),
-      context: { taskTitle: store.tasks.getTask(taskId)?.title, originRef: block.originRef, blocked: block },
-      taskId,
-    });
-  });
-  const release = (escalation: Escalation): void => {
-    const block = blockOf(escalation);
-    if (block === null) return;
-    store.instructions.addIssueInstruction({
-      originRef: block.originRef,
-      text: releaseInstruction(block, escalation.response),
-    });
-  };
-  escalations.on('answered', ({ escalation }: { escalation: Escalation }) => release(escalation));
-  escalations.on('dismissed', (escalation: Escalation) => release(escalation));
+  wireBlocks(store, agents, escalations);
 
   agents.on('status', ({ agentId, status }) => {
     if (status === 'killed') escalations.dismissEscalationsForAgent(agentId, 'agent killed');

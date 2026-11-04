@@ -147,3 +147,59 @@ test('dismissing the ask releases the goal too, with the reason alone', async ()
     system.store.close();
   }
 });
+
+test('a second block on a goal already parked joins the open ask, so its reason is not lost', async () => {
+  const system = build();
+  try {
+    await withIssue(system);
+    const first = spawnAgent(system);
+    const second = spawnAgent(system);
+    await conclude(system, first, { status: 'blocked', reason: 'staging is down', note: 'nothing done' });
+    const res = await conclude(system, second, { status: 'blocked', reason: 'the vendor API 500s', note: 'half done' });
+    assert.equal(res.isError, false, res.text);
+    assert.match(res.text, /operator has been asked/);
+
+    const open = system.store.escalations.listOpenEscalations();
+    assert.equal(open.length, 1, 'one goal, one ask');
+    assert.match(open[0]!.prompt, /staging is down/);
+    assert.match(open[0]!.prompt, /the vendor API 500s/, 'the later reason is in front of the operator');
+
+    system.escalations.dismiss(open[0]!.id);
+    const [instruction] = system.store.instructions.listStandingInstructions('issue:12');
+    assert.match(instruction?.text ?? '', /staging is down/);
+    assert.match(instruction?.text ?? '', /the vendor API 500s/, 'and both go to the next agent');
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a block whose issue closed is settled by the harness, and writes no instruction', async () => {
+  const system = build();
+  try {
+    await withIssue(system);
+    const agent = spawnAgent(system);
+    await conclude(system, agent, { status: 'blocked', reason: 'staging is down', note: 'nothing done' });
+    system.agents.complete(agent.id);
+
+    assert.deepEqual(system.escalations.tidyClosedBlocks(await system.connector.getState()), []);
+    assert.equal(system.store.escalations.listOpenEscalations().length, 1, 'an open issue keeps its block');
+
+    assert.deepEqual(
+      system.escalations.tidyClosedBlocks({ ...(await system.connector.getState()), issues: [], staleSources: ['x'] }),
+      [],
+      'a stale read settles nothing',
+    );
+
+    system.connector.inject({ kind: 'issue_state', number: 12, state: 'closed' });
+    const world = await system.connector.getState();
+    const settled = system.escalations.tidyClosedBlocks({
+      ...world,
+      issues: world.issues.filter((i) => i.number !== 12),
+    });
+    assert.equal(settled.length, 1);
+    assert.equal(system.store.escalations.listOpenEscalations().length, 0, 'the ask is off the queue');
+    assert.deepEqual(system.store.instructions.listStandingInstructions('issue:12'), [], 'nothing was released');
+  } finally {
+    system.store.close();
+  }
+});

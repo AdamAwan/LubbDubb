@@ -576,8 +576,8 @@ would hand delivered work back to the fleet. Standing instructions on the goal a
 conclusion settles them.
 
 **Its exit is you, and only you.** The block is an **escalation**, raised by the harness rather than
-by the agent: `recordBlocked` (`src/agents/agentVerdicts.ts`) emits `blocked`, and the composition root
-opens one escalation carrying the block in its context (`context.blocked`, a `GoalBlock`) and its
+by the agent: `recordBlocked` (`src/agents/agentVerdicts.ts`) emits `blocked`, and `wireBlocks`
+(`src/escalation/blocked.ts`, threaded through the composition root) opens one escalation carrying the block in its context (`context.blocked`, a `GoalBlock`) and its
 prompt saying what the agent said. That escalation is the block's **only record**: the goal is held
 exactly while it is open, which `blockedGoals` reads off the open escalations for the pickup chip and
 for `eligibleIssues` alike. One record means the hold and the ask cannot drift apart — there is no
@@ -600,6 +600,23 @@ takes it from wherever it was.
 Nothing releases it on its own. An earlier design waited on a shared obstacle record clearing, and
 was removed: a block an operator never sees is a goal that never comes back with nothing red, and a
 fleet-wide board deciding when the wall is gone was the part that did not work.
+
+**One open block per goal, and a second one joins it.** An agent that concludes `blocked` on a goal
+already holding an open block — a part's agent that was running when its sibling stopped, say —
+does not open a second ask and is not dropped: `joinBlocks` appends its reason and note to the
+standing block, and the escalation is **restated** in place (`EscalationInbox.restate`, prompt and
+context rewritten, the item still open). The tool tells that agent the operator was asked, and it is
+true — the operator reads both reasons on the one item, and releasing it carries both to the next
+agent.
+
+**A block whose issue closed is settled by the harness.** The one exception to "only you": once the
+issue is no longer open there is nothing to release, and an ask left up for it is a card nobody can
+usefully answer. The pulse's `closedBlocks` pass (`EscalationInbox.tidyClosedBlocks`, `afterVerdicts`,
+`readWorld: true`) dismisses every open block whose issue — `issueSubtreeNumber` of its origin — is
+absent from the world's open issues, the same absence the issue runs read as closed. It runs only on a
+fresh read with no stale source, because a partial read that dropped the issue would settle a live
+block. The dismissal is marked `by: 'harness'`, and that release writes **no instruction**: a goal
+that is reopened later starts clean, rather than with a note claiming you released it.
 
 ## The delivery park (`delivered`)
 

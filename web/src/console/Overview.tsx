@@ -347,10 +347,12 @@ export const PICKUP_WORD: Record<string, string> = {
   retained: 'kept',
   container: 'a container',
   investigation: 'investigating',
+  parked: 'blocked',
 };
 
 const PICKUP_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
   escalated: 'ask',
+  parked: 'ask',
   unwatched: 'hold',
   blocked: 'hold',
   cooldown: 'hold',

@@ -71,7 +71,11 @@ export interface PulseDeps {
   ejections?: { sweepExpiries(): unknown[] };
   burn?: SpendBurnDesk;
   cloneUpkeep?: CloneUpkeepDesk;
-  escalations?: { tidyDeadAgents(): unknown[]; tidySettledMerges(): unknown[] };
+  escalations?: {
+    tidyDeadAgents(): unknown[];
+    tidySettledMerges(): unknown[];
+    tidyClosedBlocks(world: WorldSnapshot): unknown[];
+  };
   appraisals?: AppraisalDesk;
   areaPaths?: AreaPathDirectory;
   localValidations?: { sweep(): void };
@@ -160,6 +164,7 @@ const ENTRIES = [
   ...phase('afterVerdicts', [
     { id: 'appraisals', readWorld: true, run: (d, at) => d.appraisals?.announce(at.world) },
     { id: 'areaPaths', readWorld: true, run: (d) => d.areaPaths?.refresh() },
+    { id: 'closedBlocks', readWorld: true, run: (d, at) => d.escalations?.tidyClosedBlocks(at.world) },
   ]),
   ...phase('afterOrigins', [{ id: 'issueRuns', readWorld: false, run: (d, at) => recordIssueRuns(d, at) }]),
   ...phase('afterReviews', [

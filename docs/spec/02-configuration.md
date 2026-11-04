@@ -133,8 +133,8 @@ rather than the field inside it. The list:
 | `agentIdleWaitMs`                                                      | the removed `pty` runtime's silence watch; `agentSilenceParkMs` reads the same silence off the stream ([10](10-agent-runtimes.md))             |
 | `sessionTranscriptRoot`                                                | only `pty` tailed a transcript file; the stream transport carries it in structure ([10](10-agent-runtimes.md))                                 |
 | `remoteValidation.runTimeoutMs`                                        | the harness spawns no browser suite to kill; the run agent invokes it ([36](36-remote-validation.md#configuration))                            |
-| `prediction`, `prediction.enabled`, `predictionAggregateMinGoals`      | predictions, their judge and their aggregate were removed                                                                                      |
-| `goalCriteria`, `goalCriteria.enabled`                                 | goal criteria were removed; a part's `acceptance` is what work is checked against ([08](08-planning.md#plan-parts))                            |
+| `prediction`, `predictionAggregateMinGoals`                            | predictions, their judge and their aggregate were removed                                                                                      |
+| `goalCriteria`                                                         | goal criteria were removed; a part's `acceptance` is what work is checked against ([08](08-planning.md#plan-parts))                            |
 | `obstacleDormantMs`, `obstacleTicketApproval`                          | obstacles were removed; a stopped agent concludes `blocked` and you release the goal ([06](06-issue-pickup.md#blocked-parks-the-goal-for-you)) |
 
 Both lists are permanent — a config written before a removal outlives the release that made it.

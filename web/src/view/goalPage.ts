@@ -301,18 +301,6 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
 }
 
 /**
- * Whether the plan has been approved and the work is under way. `planning` and
- * `awaiting_approval` are the two states in which nothing has been agreed yet, so
- * the plan is still one the operator is deciding on.
- *
- * @public the seam the goal page reads to place the plan card
- */
-export function planUnderWay(page: GoalPageView): boolean {
-  const status = page.plan?.status ?? null;
-  return status !== null && status !== 'planning' && status !== 'awaiting_approval';
-}
-
-/**
  * The ask carrying this goal's plan verdict, while the plan is still waiting on one —
  * or null wherever there is nothing to decide here.
  *

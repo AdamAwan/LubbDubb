@@ -117,7 +117,7 @@ and skips **every pass whose subject is the world snapshot**:
 [pulse registry](#the-pulse-registry) declares `readWorld: true`, which today is `plans`, `prWatch`,
 `prWorkItems`, `naming`, `branchReaps`, `updates`, `environments`, `appErrors`, `appErrorTracker`, `remoteValidation`, `notices`,
 `pool` and `discussionPulls` ([40](40-discussions.md#pulling-tracker-comments-in)) at the `reconcile` phase, and `appraisals`, `areaPaths`,
-`reviewedElsewhere` and `tickets` at the phases below it.
+`closedBlocks` ([06](06-issue-pickup.md#blocked-parks-the-goal-for-you)), `reviewedElsewhere` and `tickets` at the phases below it.
 
 Each of those already ran against this exact world, on the cycle that read it, and each is idempotent —
 so re-running them can produce provider traffic and never a new verdict. `notices` is skipped for a

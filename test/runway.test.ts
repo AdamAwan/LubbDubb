@@ -881,3 +881,18 @@ test('findings waiting on the operator are held, while an investigator still out
   assert.equal(r.held, 1);
   assert.equal(r.inflight, 1);
 });
+
+test('a goal parked behind an open block is held, not queued supply', () => {
+  const r = readRunway(
+    input({
+      issues: [issue(1), issue(2)],
+      pickup: {
+        ...input().pickup,
+        headroom: 3,
+        goalBlocks: new Map([['issue:1', { originRef: 'issue:1', reason: 'main is red', note: '', agentId: 'a' }]]),
+      },
+    }),
+  );
+  assert.equal(r.held, 1);
+  assert.equal(r.queued, 1);
+});

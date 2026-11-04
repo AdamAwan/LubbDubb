@@ -102,6 +102,7 @@ export class Hub {
       this.broadcast({ type: 'escalation:dismissed', escalation });
       this.broadcast({ type: 'dirty', sections: ['inbox'] });
     });
+    escalations.on('restated', () => this.broadcast({ type: 'dirty', sections: ['inbox'] }));
 
     const refetchLocalRun = (): void => {
       if (this.localRunPending !== null) return;

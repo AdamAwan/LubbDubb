@@ -15,6 +15,7 @@ import type { RunwayDesk } from './supply/runwayDesk.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
 import { investigationStandings } from './intake/investigation.js';
+import { blockedGoals } from './escalation/blocked.js';
 import type { Action, IssueRun, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './pr/prThreads.js';
 import { runPulse, type PulseDeps, type PulsePhase } from './system/pulseDesks.js';
@@ -473,6 +474,7 @@ export class Harness extends EventEmitter {
           this.deps.store.investigations.list(),
           this.deps.issuePickup,
         ),
+        goalBlocks: blockedGoals(this.deps.store.escalations.listOpenEscalations()),
         runs: issueRuns,
         headroom: r.headroom,
         paused: this.deps.runtime.paused,
