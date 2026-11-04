@@ -1,5 +1,6 @@
 import type {
   AppState,
+  PrPerson,
   BugFiling,
   Ejection,
   EjectionOutcome,
@@ -357,7 +358,10 @@ const realApi = {
     post<{ ok: true }>(`/api/issues/${issueNumber}/shortfall/overrule`, { text }),
   releaseEnvironmentGate: (issueNumber: number, released: boolean, note?: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/environment-gate`, { released, note }),
-  assignPr: (prNumber: number, personId: string) => post<{ ok: true }>(`/api/prs/${prNumber}/assign`, { personId }),
+  assignPr: (prNumber: number, personId: string, name?: string) =>
+    post<{ ok: true }>(`/api/prs/${prNumber}/assign`, { personId, name }),
+  searchAssignees: (query: string) =>
+    authFetch(`/api/prs/assignees?q=${encodeURIComponent(query)}`).then((r) => json<PrPerson[]>(r)),
   declineAssignPr: (prNumber: number) => post<{ ok: true }>(`/api/prs/${prNumber}/assign/decline`, {}),
   reopenPrThread: (prNumber: number, threadId: string, reopened: boolean) =>
     post<{ ok: true }>(`/api/prs/${prNumber}/threads/${encodeURIComponent(threadId)}/reopen`, { reopened }),

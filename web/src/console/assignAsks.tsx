@@ -1,10 +1,11 @@
-import { useState, type JSX, type ReactNode } from 'react';
+import { useEffect, useState, type JSX, type ReactNode } from 'react';
+import type { PrPerson } from '../types.js';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { Ref } from '../components/refs.js';
-import { ButtonRow } from '../components/button.js';
+import { Button, ButtonRow } from '../components/button.js';
 import { oneLine } from '../view/needLines.js';
 import { assignAskOf, assignGroupLine, type AssignAsk } from '../view/askGroups.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../view/askKinds.js';
@@ -34,7 +35,8 @@ export function AssignButtons({ ask, actions }: { ask: AssignAsk; actions: Cockp
   return (
     <ShortlistButtons
       people={ask.assignAsk}
-      onPick={(id) => actions.assignPr(ask.number, id)}
+      search={actions.searchAssignees}
+      onPick={(person) => actions.assignPr(ask.number, person.id, person.name)}
       onDecline={() => actions.declineAssignPr(ask.number)}
     />
   );
@@ -42,29 +44,23 @@ export function AssignButtons({ ask, actions }: { ask: AssignAsk; actions: Cockp
 
 function ShortlistButtons({
   people,
+  search,
   onPick,
   onDecline,
   disabled = false,
 }: {
   people: AssignAsk['assignAsk'];
-  onPick: (personId: string) => Promise<void>;
+  search: (query: string) => Promise<PrPerson[]>;
+  onPick: (person: PrPerson) => Promise<void>;
   onDecline: () => Promise<void>;
   disabled?: boolean;
 }): JSX.Element {
   return (
     <>
       {people.map((person) => (
-        <AsyncButton
-          key={person.id}
-          size="small"
-          usage="pr-assignee.accept"
-          disabled={disabled}
-          onClick={() => onPick(person.id)}
-          title={`Assign ${person.name} in the tracker`}
-        >
-          {person.name}
-        </AsyncButton>
+        <PersonButton key={person.id} person={person} onPick={onPick} disabled={disabled} />
       ))}
+      <AssigneeSearch shortlisted={people} search={search} onPick={onPick} disabled={disabled} />
       <AsyncButton
         size="small"
         usage="pr-assignee.reject"
@@ -135,10 +131,102 @@ export function AssignGroup({
         <ShortlistButtons
           people={first.assignAsk}
           disabled={none}
-          onPick={(id) => each((n) => actions.assignPr(n, id))}
+          search={actions.searchAssignees}
+          onPick={(person) => each((n) => actions.assignPr(n, person.id, person.name))}
           onDecline={() => each((n) => actions.declineAssignPr(n))}
         />
       </div>
     </div>
+  );
+}
+
+const SEARCH_DELAY_MS = 250;
+
+function PersonButton({
+  person,
+  onPick,
+  disabled,
+}: {
+  person: PrPerson;
+  onPick: (person: PrPerson) => Promise<void>;
+  disabled: boolean;
+}): JSX.Element {
+  return (
+    <AsyncButton
+      size="small"
+      usage="pr-assignee.accept"
+      disabled={disabled}
+      onClick={() => onPick(person)}
+      title={`Assign ${person.name} in the tracker`}
+    >
+      {person.name}
+    </AsyncButton>
+  );
+}
+
+/**
+ * The shortlist is a hint, not the limit: anyone the tracker would take is a search away.
+ * → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
+ */
+function AssigneeSearch({
+  shortlisted,
+  search,
+  onPick,
+  disabled,
+}: {
+  shortlisted: readonly PrPerson[];
+  search: (query: string) => Promise<PrPerson[]>;
+  onPick: (person: PrPerson) => Promise<void>;
+  disabled: boolean;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [found, setFound] = useState<PrPerson[]>([]);
+  useEffect(() => {
+    setFound([]);
+    if (!open || typed.trim() === '') return;
+    let live = true;
+    const timer = setTimeout(() => {
+      search(typed).then(
+        (people) => live && setFound(people),
+        () => live && setFound([]),
+      );
+    }, SEARCH_DELAY_MS);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [open, typed, search]);
+  if (!open)
+    return (
+      <Button
+        size="small"
+        ghost
+        usage="pr-assignee.expand"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        title="Search the tracker for someone not on the shortlist"
+      >
+        {shortlisted.length === 0 ? 'Pick someone…' : 'Someone else…'}
+      </Button>
+    );
+  return (
+    <>
+      <input
+        className="cn-inline"
+        autoFocus
+        placeholder="Search people"
+        aria-label="Search people to assign"
+        value={typed}
+        disabled={disabled}
+        onChange={(e) => setTyped(e.target.value)}
+        onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
+      />
+      {found
+        .filter((p) => !shortlisted.some((s) => s.id === p.id))
+        .map((person) => (
+          <PersonButton key={person.id} person={person} onPick={onPick} disabled={disabled} />
+        ))}
+    </>
   );
 }

@@ -82,6 +82,8 @@ export interface AzureDevOpsApi {
   setPullBody(pullRequestId: number, body: string): Promise<void>;
   setPullBase(pullRequestId: number, base: string): Promise<void>;
   addPullReviewer(pullRequestId: number, reviewerId: string): Promise<void>;
+  /** People in the organisation a search matches, by name or mail: the id a reviewer is added by. */
+  searchIdentities(query: string): Promise<{ id: string; name: string }[]>;
   removePullReviewer(pullRequestId: number, reviewerId: string): Promise<void>;
   deleteBranch(branch: string): Promise<boolean>;
 }

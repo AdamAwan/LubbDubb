@@ -48,8 +48,9 @@ function readShortlist(desk: PrAssignDesk, pr: number, shortlist: PrPerson[]): T
     shortlist,
     next:
       shortlist.length === 0
-        ? 'There is nobody to offer — the harness has not yet seen who these pull requests usually go to.'
+        ? 'There is no shortlist yet — ask the operator who, and pass their name or id as `person`.'
         : 'Put the shortlist to the operator, then call again with `person`, or `decline: true` for nobody.',
+    others: 'The shortlist is a hint. Anyone the tracker knows can be named as `person`, by id or name.',
   });
 }
 
@@ -60,13 +61,23 @@ async function assign(
   open: readonly PullRequest[],
   shortlist: PrPerson[],
 ): Promise<ToolCallResult> {
-  const chosen = pick(shortlist, person);
+  const listed = pick(shortlist, person);
+  const found = listed === undefined ? await desk.search(person) : [];
+  const byName = found.filter((p) => p.name.toLowerCase() === person.trim().toLowerCase());
+  if (listed === undefined && !found.some((p) => p.id === person.trim()) && byName.length > 1)
+    return toolError(
+      `More than one person is called "${person}": ${byName.map((p) => `${p.name} (${p.id})`).join(', ')}. ` +
+        'Ask the operator which, and call again with their id.',
+    );
+  const chosen = listed ?? pick(found, person);
   if (chosen === undefined)
     return toolError(
-      `"${person}" is not on the shortlist, and only a shortlisted person can be assigned from here. ` +
-        `The shortlist is: ${shortlist.map((p) => `${p.name} (${p.id})`).join(', ') || 'empty'}.`,
+      `The tracker has nobody that is exactly "${person}". ` +
+        (found.length === 0
+          ? 'Its search found nobody either.'
+          : `Its search found: ${found.map((p) => `${p.name} (${p.id})`).join(', ')}. Call again with one of those ids.`),
     );
-  const assigned = await desk.assign(pr, chosen.id, open);
+  const assigned = await desk.assign(pr, chosen.id, open, person.trim());
   if (!assigned.ok) return toolError(`Nothing was assigned: ${assigned.refusal}.`);
   return toolJson({
     pr,
@@ -78,16 +89,17 @@ async function assign(
 export const prAssign: DesktopToolFactory = (deps) => ({
   description:
     'Answer "this pull request is ready — want to assign it to someone?". Given `person`, the pull request ' +
-    'is **assigned on the tracker** to them — someone from the shortlist the harness learnt from who the ' +
-    "operator's pull requests usually go to. Given `decline: true`, nobody is assigned and the ask goes away. " +
-    'Given neither, nothing changes and the reply is the shortlist to choose from. Only assign on the ' +
+    'is **assigned on the tracker** to them — anyone the tracker knows, by id or name; the shortlist the ' +
+    "harness learnt from who the operator's pull requests usually go to is a hint, not the limit. Given " +
+    '`decline: true`, nobody is assigned and the ask goes away. Given neither, nothing changes and the ' +
+    'reply is the shortlist to suggest. Only assign on the ' +
     "operator's say-so: the person is told.",
   inputSchema: toolSchema(
     z.object({
       pr: z.number().describe('The pull request number, e.g. 312.'),
       person: z
         .string()
-        .describe('Optional. The shortlisted person to assign, by id or by name as the shortlist gives them.')
+        .describe('Optional. The person to assign, by id or name — from the shortlist or anyone the tracker knows.')
         .optional(),
       decline: z
         .boolean()

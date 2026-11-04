@@ -143,7 +143,9 @@ comments created strictly after `since`, oldest first, for pulling them into a d
 (by identity id, as an optional reviewer) on Azure. It reaches callers as `PrAssignSink`, a
 capability beside `ActionSink` in the same way `IssueImageSink` is. Only the cockpit's assign ask
 writes one ([07](07-pull-requests.md#asking-who-should-look-at-it)), and a provider without it simply
-never raises the ask. On the read side, both providers report `PullRequest.assignees`: GitHub's
+never raises the ask. The same capability finds people to offer past the shortlist, `findAssignees`:
+GitHub's `listAssignees` (every login the repository accepts, filtered locally), Azure's
+`IdentityPicker/Identities` search (the identity id a reviewer is added by). On the read side, both providers report `PullRequest.assignees`: GitHub's
 assignee logins, and Azure's individually named reviewers (teams left out, the same as for
 `viewerAssignment`). Both come off the list payload the snapshot already reads.
 

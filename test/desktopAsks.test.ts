@@ -37,6 +37,8 @@ function assignSink(assigned: PrAssignInput[]): ActionSink & PrAssignSink {
       assigned.push(input);
       return { ok: true };
     },
+    findAssignees: async (query) =>
+      [{ id: 'erin', name: 'Erin Shaw' }].filter((p) => p.name.toLowerCase().includes(query.toLowerCase())),
   };
   return new Proxy(own, {
     get: (target, key) => target[key as keyof typeof target] ?? (() => false),
@@ -218,7 +220,7 @@ function seedPrs(system: System): void {
     pr(2, { state: 'merged', merged: true, assignees: [dave] }),
     pr(3, { state: 'merged', merged: true, assignees: [carol] }),
   ]);
-  system.store.world.setWorldBaseline({ takenAt: NOW, pullRequests: [pr(7), pr(8)], issues: [] });
+  system.store.world.setWorldBaseline({ takenAt: NOW, pullRequests: [pr(7), pr(8), pr(9)], issues: [] });
 }
 
 test('pr_assign reads the shortlist, assigns by name through the desk, and declines', async () => {
@@ -233,8 +235,8 @@ test('pr_assign reads the shortlist, assigns by name through the desk, and decli
     assert.deepEqual(d.changes, [], 'and tells the cockpit nothing');
 
     const stranger = await d.call('pr_assign', { pr: 7, person: 'eve' });
-    assert.ok(stranger.isError);
-    assert.match(stranger.text, /not on the shortlist/);
+    assert.ok(stranger.isError, 'a name the tracker does not know is refused');
+    assert.match(stranger.text, /found nobody/);
 
     const done = await d.call('pr_assign', { pr: 7, person: 'Carol' });
     assert.equal(done.isError, false, done.text);
@@ -250,6 +252,10 @@ test('pr_assign reads the shortlist, assigns by name through the desk, and decli
     assert.ok(d.system.store.prAssignAsks.isAnswered(8));
     assert.equal(d.assigned.length, 1, 'declining writes nothing to the tracker');
     assert.equal(d.changes.length, 2, 'a decline is broadcast too, and a refusal never is');
+
+    const offList = await d.call('pr_assign', { pr: 9, person: 'Erin Shaw' });
+    assert.equal(offList.isError, false, `the shortlist is a hint, not the limit: ${offList.text}`);
+    assert.deepEqual(d.assigned.at(-1), { prNumber: 9, personId: 'erin' });
 
     const gone = await d.call('pr_assign', { pr: 99, decline: true });
     assert.ok(gone.isError, 'a pull request that is not open is refused');

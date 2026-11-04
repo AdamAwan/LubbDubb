@@ -182,6 +182,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
       recorded.reviewersAdded.push({ id, reviewerId });
     },
     async removePullReviewer() {},
+    async searchIdentities(query) {
+      return query === 'ada' ? [{ id: 'guid-ada', name: 'Ada Lovelace' }] : [];
+    },
     async listPullChanges() {
       return { base: null, head: null, files: [] };
     },
@@ -1477,6 +1480,13 @@ test('a PR reports its individually named reviewers, and assignPr adds one by id
   assert.deepEqual(pr.assignees, [{ id: 'id-bob', name: 'Bob Ferreira' }]);
   await sc.assignPr({ prNumber: 7, personId: 'id-bob' });
   assert.deepEqual(recorded.reviewersAdded, [{ id: 7, reviewerId: 'id-bob' }]);
+});
+
+test('findAssignees searches the organisation, and a blank search asks nothing', async () => {
+  const { api } = fakeApi({ viewer: 'me@acme.com', pulls: [] });
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+  assert.deepEqual(await sc.findAssignees(' ada '), [{ id: 'guid-ada', name: 'Ada Lovelace' }]);
+  assert.deepEqual(await sc.findAssignees('  '), []);
 });
 
 test('attachIssueImage uploads the bytes and holds them against the work item', async () => {

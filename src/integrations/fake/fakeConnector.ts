@@ -32,7 +32,7 @@ import type {
   WorkItemStateInput,
 } from '../../sink/actionSink.js';
 import type { Store } from '../../store/store.js';
-import type { TrackerComment, WorldSnapshot } from '../../types.js';
+import type { PrPerson, TrackerComment, WorldSnapshot } from '../../types.js';
 import { CompositeConnector } from '../compositeConnector.js';
 import { FakeWorldStore } from './fakeWorld.js';
 import { FakeGitHubIntegration } from './fakeGitHub.js';
@@ -182,6 +182,10 @@ export class FakeConnector implements Connector, ActionSink, IssueImageSink, Iss
 
   assignPr(input: PrAssignInput): Promise<SendResult> {
     return this.composite.assignPr(input);
+  }
+
+  findAssignees(query: string): Promise<PrPerson[]> {
+    return this.composite.findAssignees(query);
   }
 
   updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {

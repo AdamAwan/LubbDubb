@@ -15,7 +15,8 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { BotPrDetail, BotPullRequest, PrThreadState, PullRequest } from '../../types.js';
+import type { BotPrDetail, BotPullRequest, PrPerson, PrThreadState, PullRequest } from '../../types.js';
+import { searchLogins } from '../../pr/assigneeSearch.js';
 import { threadComments } from '../../pr/prThreads.js';
 import { authoredBy } from '../integration.js';
 import type {
@@ -275,6 +276,11 @@ export class FakeGitHubIntegration
       });
     });
     return { ok: true, ref: input.personId };
+  }
+
+  async findAssignees(query: string): Promise<PrPerson[]> {
+    const known = this.world.read().pullRequests.flatMap((pr) => (pr.assignees ?? []).map((p) => p.id));
+    return searchLogins([...new Set([FAKE_VIEWER, ...known])], query);
   }
 
   async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
