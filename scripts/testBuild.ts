@@ -39,7 +39,7 @@ execFileSync(
 );
 
 // The plugins are shipped as written, mod sources and all, so they are copied rather than compiled.
-for (const plugin of ['plugin', 'pr-assistant']) cpSync(join(ROOT, plugin), join(OUT, plugin), { recursive: true });
+cpSync(join(ROOT, 'plugin'), join(OUT, 'plugin'), { recursive: true });
 
 for (const asset of files.filter((p) => !p.endsWith('.ts') && !p.endsWith('.tsx'))) {
   const dest = join(OUT, relative(ROOT, asset));

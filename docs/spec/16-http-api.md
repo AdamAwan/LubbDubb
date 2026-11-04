@@ -1764,16 +1764,14 @@ names its path only.
 
 ### `GET /api/plugin`
 
-Whether the operator's Claude Code has [the LubbDubb plugins](11-mcp-tools.md#the-plugin) — `lubbdubb` and
-`pr-assistant`, read as one answer — for the MCP
+Whether the operator's Claude Code has [the LubbDubb plugin](11-mcp-tools.md#the-plugin) — for the MCP
 tab's first step and the band under the top bar ([17](17-cockpit.md#the-plugin)):
 `PluginStatusPayload` — `{ state, bundle: {marketplaceDir, version} | null, skills, legacySkill }` with
 `reason` on `unknown` and `installed` on the rest, a union rather than nullable fields. `state` is
 `missing`, `stale`, `current` or `unknown`, and `unknown` is never folded into `missing` — it means the bundle was not written at boot or
 `claude plugin list` could not answer, and a cockpit told _not installed_ on that would ask every
-operator to reinstall a plugin that is fine. `missing` is either plugin absent at user scope while neither installed one is behind. `bundle`
-is the version this harness wrote, into both; `installed` is the version Claude Code holds — on `stale`,
-the first installed plugin's that differs from it, `lubbdubb`'s before `pr-assistant`'s
+operator to reinstall a plugin that is fine. `missing` is the plugin absent at user scope. `bundle`
+is the version this harness wrote; `installed` is the version Claude Code holds
 ([11](11-mcp-tools.md#installing-it)).
 
 `skills` is the `lubbdubb` plugin's skill names, which the tab lists rather than a copy of its own. Held for a

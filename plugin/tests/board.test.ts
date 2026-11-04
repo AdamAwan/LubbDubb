@@ -277,7 +277,6 @@ test('the panel only drafts a skill into the prompt box; it never sends', async 
   await ui.press({ key: 'next' })
   await ui.press({ key: 'feature-90-ask' })
   await ui.press({ key: 'ask-e2-go' })
-  await ui.press({ key: 'pr-413-action' })
   await ui.unmount()
 
   expect(sent).toEqual([])
@@ -285,7 +284,6 @@ test('the panel only drafts a skill into the prompt box; it never sends', async 
     '/lubbdubb:next',
     '/lubbdubb:feature 90',
     '/lubbdubb:next e2',
-    '/pr-assistant:pr walk 413',
   ])
 })
 

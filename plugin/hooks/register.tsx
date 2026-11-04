@@ -432,7 +432,6 @@ export const register: Register = (on, options) => {
               meta: pr.state,
               metaColor: TONE[pr.tone].color,
               href: pr.url,
-              action: { label: 'Review With Me', onPress: draft($, `/pr-assistant:pr walk ${pr.number}`) },
             }),
           )}
           {now.prs.length > 6 && <Text dimColor>{`  +${now.prs.length - 6} more`}</Text>}
