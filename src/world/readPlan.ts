@@ -36,10 +36,9 @@ interface ReadPlanInputs {
 
 export function buildReadPlan(input: ReadPlanInputs): ReadPlan {
   const { previous, lanes } = input;
-  const fresh = new Set<string>();
-  if (previous === null) return { hot: 'all', fresh, ...lanes };
+  if (previous === null) return { hot: 'all', fresh: new Set(), ...lanes };
 
-  for (const ref of refsFinishedSince(input.tasks, previous.pullRequests, previous.takenAt)) fresh.add(ref);
+  const fresh = new Set(refsFinishedSince(input.tasks, previous.pullRequests, previous.takenAt));
 
   const hot = new Set<string>();
   for (const pr of previous.pullRequests) if (isUnsettledPr(pr)) hot.add(prReadRef(pr.number));

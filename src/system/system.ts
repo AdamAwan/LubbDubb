@@ -163,7 +163,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     graph: new WorkGraphRecorder({ store: base.store, errors: base.errors }),
   };
   const harness = buildHarness(config, opts, { base, channels, fleet, intake, envs, bench, late });
-  const pulse = wirePulse(config, opts, base, fleet, harness);
+  const pulse = wirePulse(config, base, fleet, harness);
   const local = buildLocalRuns(config, opts, base, runtime);
   const system: System = {
     config,
@@ -457,7 +457,7 @@ function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, esc
   });
 }
 
-function wirePulse(config: Config, opts: BuildOptions, base: Foundation, fleet: Fleet, harness: Harness) {
+function wirePulse(config: Config, base: Foundation, fleet: Fleet, harness: Harness) {
   const { store, errors, worktrees, runtimeControl } = base;
   const { agents } = fleet;
   wireAgentEvents(base, fleet);
