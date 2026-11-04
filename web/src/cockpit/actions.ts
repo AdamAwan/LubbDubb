@@ -1,4 +1,5 @@
 import type {
+  PrPerson,
   TenantCommandOutput,
   GoalWatchDeclaration,
   EjectionOutcome,
@@ -124,6 +125,7 @@ export interface CockpitActions {
   selectPr(prNumber: number | null): void;
   reopenThread(prNumber: number, threadId: string, reopened: boolean): Promise<void>;
   assignPr(prNumber: number, personId: string, name?: string): Promise<void>;
+  searchAssignees(query: string): Promise<PrPerson[]>;
   declineAssignPr(prNumber: number): Promise<void>;
   closeBotPr(prNumber: number): Promise<void>;
   unclaimBotPr(prNumber: number): Promise<void>;

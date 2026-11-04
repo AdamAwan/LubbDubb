@@ -1,5 +1,4 @@
 import { useEffect, useState, type JSX, type ReactNode } from 'react';
-import { api } from '../api.js';
 import type { PrPerson } from '../types.js';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
@@ -36,6 +35,7 @@ export function AssignButtons({ ask, actions }: { ask: AssignAsk; actions: Cockp
   return (
     <ShortlistButtons
       people={ask.assignAsk}
+      search={actions.searchAssignees}
       onPick={(person) => actions.assignPr(ask.number, person.id, person.name)}
       onDecline={() => actions.declineAssignPr(ask.number)}
     />
@@ -44,11 +44,13 @@ export function AssignButtons({ ask, actions }: { ask: AssignAsk; actions: Cockp
 
 function ShortlistButtons({
   people,
+  search,
   onPick,
   onDecline,
   disabled = false,
 }: {
   people: AssignAsk['assignAsk'];
+  search: (query: string) => Promise<PrPerson[]>;
   onPick: (person: PrPerson) => Promise<void>;
   onDecline: () => Promise<void>;
   disabled?: boolean;
@@ -58,7 +60,7 @@ function ShortlistButtons({
       {people.map((person) => (
         <PersonButton key={person.id} person={person} onPick={onPick} disabled={disabled} />
       ))}
-      <AssigneeSearch shortlisted={people} onPick={onPick} disabled={disabled} />
+      <AssigneeSearch shortlisted={people} search={search} onPick={onPick} disabled={disabled} />
       <AsyncButton
         size="small"
         usage="pr-assignee.reject"
@@ -129,6 +131,7 @@ export function AssignGroup({
         <ShortlistButtons
           people={first.assignAsk}
           disabled={none}
+          search={actions.searchAssignees}
           onPick={(person) => each((n) => actions.assignPr(n, person.id, person.name))}
           onDecline={() => each((n) => actions.declineAssignPr(n))}
         />
@@ -167,10 +170,12 @@ function PersonButton({
  */
 function AssigneeSearch({
   shortlisted,
+  search,
   onPick,
   disabled,
 }: {
   shortlisted: readonly PrPerson[];
+  search: (query: string) => Promise<PrPerson[]>;
   onPick: (person: PrPerson) => Promise<void>;
   disabled: boolean;
 }): JSX.Element {
@@ -182,7 +187,7 @@ function AssigneeSearch({
     if (!open || typed.trim() === '') return;
     let live = true;
     const timer = setTimeout(() => {
-      api.searchAssignees(typed).then(
+      search(typed).then(
         (people) => live && setFound(people),
         () => live && setFound([]),
       );
@@ -191,7 +196,7 @@ function AssigneeSearch({
       live = false;
       clearTimeout(timer);
     };
-  }, [open, typed]);
+  }, [open, typed, search]);
   if (!open)
     return (
       <Button
