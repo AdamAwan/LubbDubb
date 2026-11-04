@@ -1,6 +1,7 @@
 import type { PrPerson } from '../types.js';
 
 const MAX_MATCHES = 20;
+const LOGINS_TTL_MS = 5 * 60_000;
 
 /** The ids a search names, best first: an exact id, then a prefix, then anywhere in it. */
 function matchingPeople(ids: readonly string[], query: string): string[] {
@@ -26,4 +27,17 @@ export function loginPeople(logins: readonly string[]): PrPerson[] {
 /** Logins a search names, as people: a login is both a GitHub user's id and their name. */
 export function searchLogins(logins: readonly string[], query: string): PrPerson[] {
   return loginPeople(matchingPeople(logins, query));
+}
+
+/** One list for every search for a while: a list of logins is a paginated read, and a search is a keystroke. */
+export function cachedLogins(load: () => Promise<string[]>, now: () => number = Date.now): () => Promise<string[]> {
+  let held: { at: number; logins: Promise<string[]> } | null = null;
+  return () => {
+    if (held === null || now() - held.at > LOGINS_TTL_MS) {
+      const logins = load();
+      held = { at: now(), logins };
+      logins.then(undefined, () => (held = null));
+    }
+    return held.logins;
+  };
 }

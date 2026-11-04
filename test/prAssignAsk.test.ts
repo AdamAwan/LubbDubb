@@ -14,6 +14,7 @@ import { DEFAULT_PLANNING } from '../src/plans/planning.js';
 import { assignShortlist } from '../src/pr/prAssignAsk.js';
 import type { ActionSink, PrAssignInput, PrAssignSink } from '../src/sink/actionSink.js';
 import type { PrPerson, PullRequest } from '../src/types.js';
+import { cachedLogins } from '../src/pr/assigneeSearch.js';
 
 const carol: PrPerson = { id: 'carol', name: 'Carol' };
 const dave: PrPerson = { id: 'dave', name: 'Dave' };
@@ -224,4 +225,27 @@ test('a merged pull request’s own author is never offered, even when they self
 test('an assignment made through the ask counts towards the shortlist', () => {
   const list = assignShortlist([], [{ prNumber: 5, person: dave }], 'me');
   assert.deepEqual(list, [dave]);
+});
+
+test('the assignable logins are read once for a run of searches, and again once stale or failed', async () => {
+  let reads = 0;
+  let fail = false;
+  let at = 0;
+  const logins = cachedLogins(
+    async () => {
+      reads += 1;
+      if (fail) throw new Error('rate limited');
+      return ['erin'];
+    },
+    () => at,
+  );
+  await logins();
+  await logins();
+  assert.equal(reads, 1);
+  at = 10 * 60_000;
+  fail = true;
+  await assert.rejects(logins());
+  fail = false;
+  assert.deepEqual(await logins(), ['erin']);
+  assert.equal(reads, 3, 'a failed read is not held');
 });

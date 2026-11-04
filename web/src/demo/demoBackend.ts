@@ -115,15 +115,16 @@ import { demoAppErrorDetail, demoAppErrors } from './demoAppErrors.js';
 import { DemoPredictions } from './predictions.js';
 import { isContainerType } from '../issueGroups.js';
 
+import { inFlight } from '../view/localValidation.js';
+import { planCaveatsOf } from '../planCaveats.js';
+import { buildGoalPage } from '../view/goalPage.js';
+
 const DEMO_ASSIGNEES: PrPerson[] = [
   { id: 'priya', name: 'Priya Natarajan' },
   { id: 'marcus', name: 'Marcus Webb' },
   { id: 'lena', name: 'Lena Okafor' },
   { id: 'tomasz', name: 'Tomasz Nowak' },
 ];
-import { inFlight } from '../view/localValidation.js';
-import { planCaveatsOf } from '../planCaveats.js';
-import { buildGoalPage } from '../view/goalPage.js';
 
 // → docs/spec/17-cockpit.md
 

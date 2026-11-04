@@ -129,9 +129,10 @@ export class PrAssignDesk {
   /** Anyone the tracker would take on a pull request, beyond the shortlist, whose id or name a search names. */
   async search(query: string): Promise<PrPerson[]> {
     const { sink, errors } = this.opts;
-    if (this.assigner() === undefined || sink.findAssignees === undefined) return [];
+    const wanted = query.trim();
+    if (wanted === '' || this.assigner() === undefined || sink.findAssignees === undefined) return [];
     try {
-      return await sink.findAssignees(query);
+      return await sink.findAssignees(wanted);
     } catch (err) {
       errors.record({ source: 'provider', message: `searching for PR assignees failed: ${(err as Error).message}` });
       return [];

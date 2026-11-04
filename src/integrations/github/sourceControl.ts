@@ -19,7 +19,7 @@ import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import { claimGitHubBotPr, listGitHubBotPulls, readGitHubBotPrDetail, readGitHubReleaseNotes } from './botPulls.js';
 import { stripLogTimestamp } from '../ciLogLines.js';
-import { loginPeople, searchLogins } from '../../pr/assigneeSearch.js';
+import { cachedLogins, loginPeople, searchLogins } from '../../pr/assigneeSearch.js';
 import type {
   BotPrClaimable,
   BotPrDetailReadable,
@@ -352,7 +352,8 @@ export class GitHubSourceControlIntegration
     return { ok: true, ref: input.personId };
   }
 
-  findAssignees: PrAssignCapable['findAssignees'] = async (q) => searchLogins(await this.opts.api.listAssignees(), q);
+  private readonly assignable = cachedLogins(() => this.opts.api.listAssignees());
+  findAssignees: PrAssignCapable['findAssignees'] = async (q) => searchLogins(await this.assignable(), q);
 
   async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
     await this.opts.api.updatePullBranch(input.prNumber);

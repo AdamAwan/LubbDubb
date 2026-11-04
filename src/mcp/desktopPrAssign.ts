@@ -61,8 +61,9 @@ async function assign(
   open: readonly PullRequest[],
   shortlist: PrPerson[],
 ): Promise<ToolCallResult> {
-  const found = pick(shortlist, person) === undefined ? await desk.search(person.trim()) : [];
-  const chosen = pick(shortlist, person) ?? pick(found, person);
+  const listed = pick(shortlist, person);
+  const found = listed === undefined ? await desk.search(person) : [];
+  const chosen = listed ?? pick(found, person);
   if (chosen === undefined)
     return toolError(
       `The tracker has nobody that is exactly "${person}". ` +

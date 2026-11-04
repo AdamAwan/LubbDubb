@@ -56,16 +56,7 @@ function ShortlistButtons({
   return (
     <>
       {people.map((person) => (
-        <AsyncButton
-          key={person.id}
-          size="small"
-          usage="pr-assignee.accept"
-          disabled={disabled}
-          onClick={() => onPick(person)}
-          title={`Assign ${person.name} in the tracker`}
-        >
-          {person.name}
-        </AsyncButton>
+        <PersonButton key={person.id} person={person} onPick={onPick} disabled={disabled} />
       ))}
       <AssigneeSearch shortlisted={people} onPick={onPick} disabled={disabled} />
       <AsyncButton
@@ -148,6 +139,28 @@ export function AssignGroup({
 
 const SEARCH_DELAY_MS = 250;
 
+function PersonButton({
+  person,
+  onPick,
+  disabled,
+}: {
+  person: PrPerson;
+  onPick: (person: PrPerson) => Promise<void>;
+  disabled: boolean;
+}): JSX.Element {
+  return (
+    <AsyncButton
+      size="small"
+      usage="pr-assignee.accept"
+      disabled={disabled}
+      onClick={() => onPick(person)}
+      title={`Assign ${person.name} in the tracker`}
+    >
+      {person.name}
+    </AsyncButton>
+  );
+}
+
 /**
  * The shortlist is a hint, not the limit: anyone the tracker would take is a search away.
  * → docs/spec/07-pull-requests.md#asking-who-should-look-at-it
@@ -172,7 +185,7 @@ function AssigneeSearch({
     let live = true;
     const timer = setTimeout(() => {
       api.searchAssignees(typed).then(
-        (people) => live && setFound(people.filter((p) => !shortlisted.some((s) => s.id === p.id))),
+        (people) => live && setFound(people),
         () => live && setFound([]),
       );
     }, SEARCH_DELAY_MS);
@@ -180,7 +193,7 @@ function AssigneeSearch({
       live = false;
       clearTimeout(timer);
     };
-  }, [open, typed, shortlisted]);
+  }, [open, typed]);
   if (!open)
     return (
       <Button
@@ -206,18 +219,11 @@ function AssigneeSearch({
         onChange={(e) => setTyped(e.target.value)}
         onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
       />
-      {found.map((person) => (
-        <AsyncButton
-          key={person.id}
-          size="small"
-          usage="pr-assignee.accept"
-          disabled={disabled}
-          onClick={() => onPick(person)}
-          title={`Assign ${person.name} in the tracker`}
-        >
-          {person.name}
-        </AsyncButton>
-      ))}
+      {found
+        .filter((p) => !shortlisted.some((s) => s.id === p.id))
+        .map((person) => (
+          <PersonButton key={person.id} person={person} onPick={onPick} disabled={disabled} />
+        ))}
     </>
   );
 }
