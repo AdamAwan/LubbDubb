@@ -141,21 +141,20 @@ What they can say at any point:
 ### Talking one through on the side
 
 A long talk about one pull request or plan fills this loop's context with
-things no later ask needs. A subagent cannot talk to the operator, so the side
-thread is a **new chat** that opens on that one ask:
+things no later ask needs. A subagent cannot talk to the operator, and nothing
+here can open a thread for them, so offer them one they open themselves:
 
-1. `ask_skip` the ask here, so this loop moves on without it.
-2. Give them the way in, built from the ask's `id`:
-   - **in the Claude app**, a link —
-     `claude://code/new?q=<prompt>&folder=<this checkout's absolute path>`, the
-     prompt `/lubbdubb:next <id> only`, URL-encoded;
-   - **in a terminal**, the command to run in a second one:
-     `claude "/lubbdubb:next <id> only"`.
-3. Carry on with `ask_next`.
-
-The side chat talks it through, sends the operator's answer, and stops. Once it
-is answered there it leaves the queue for good; if they come back without
-answering, `ask_skip` with `undo: true` brings it back here.
+- **In the Claude desktop app, a side chat** — `Cmd+;` / `Ctrl+;`, or `/btw`.
+  It sees this conversation up to now, card included, and adds nothing back to
+  it. They talk it through there, then come back here with their decision, and
+  you send it as in step 6. Wait for them: the ask stays in front until they do.
+- **Anywhere else, a new chat on that one ask.** `ask_skip` it here, give them
+  `/lubbdubb:next <id> only` — as a link,
+  `claude://code/new?q=<prompt>&folder=<this checkout's absolute path>` with the
+  prompt URL-encoded, or as `claude "/lubbdubb:next <id> only"` for a second
+  terminal — and carry on with `ask_next`. That chat answers the ask and stops;
+  if they come back without answering, `ask_skip` with `undo: true` brings it
+  back here.
 
 ### When the answer is not a tool here
 
