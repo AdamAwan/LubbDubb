@@ -63,16 +63,10 @@ test('every API route declared under routes/ refuses an unauthenticated request'
     worktrees: new FakeWorktreeManager(),
     backend: new FakePtyBackend(),
     errorMirror: () => {},
-    ingressSecrets: {},
   });
   const { app } = await buildApp(system);
 
   for (const route of routes) {
-    if (route.url.startsWith('/ingress/')) {
-      const res = await app.inject({ method: route.method, url: route.url, payload: {} });
-      assert.equal(res.statusCode, 404, `${route.url} must answer 404 with no ingress secret configured`);
-      continue;
-    }
     if (
       route.url.startsWith('/artifacts/') ||
       route.url.startsWith('/attachments/') ||

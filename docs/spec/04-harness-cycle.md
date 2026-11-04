@@ -25,8 +25,7 @@ returns a report with `cycleId: 'coalesced'` and a zeroed summary rather than qu
 exist because a cycle can be started two ways: by the timer (through `Heartbeat`) and directly by a
 route calling `harness.runCycle('manual')`.
 
-A cycle's `source` is `'timer'`, `'manual'`, `'boot'`, [`'local'`](#the-local-cycle) or
-[`'ingress'`](30-ingress.md#triggering-a-pulse).
+A cycle's `source` is `'timer'`, `'manual'`, `'boot'` or [`'local'`](#the-local-cycle).
 
 ### The trailing edge
 
@@ -36,7 +35,7 @@ more `manual` cycle — not awaited, since the route that asked has already had 
 back and what it is owed is a cycle that _starts after its write_, not a response held open for two
 of them.
 
-Without it the operator's request was simply lost. `local` and `ingress` each own a `CycleTrigger`
+Without it the operator's request was simply lost. `local` owns a `CycleTrigger`
 (`src/cycleTrigger.ts`) that retries a refusal a second later; `manual` is the one source with no
 trigger, because it is a route awaiting a report inline — so a "more work", a watch or an unblock that
 landed inside a running cycle waited for the next heartbeat, thirty seconds on a busy fleet and five
@@ -199,11 +198,6 @@ of endings, and how soon to re-ask a blocker that clears in seconds — not a po
 differently. Neither is a thing an operator can reason about from outside, and every key is a support
 question ([02](02-configuration.md#the-cadence-keys)).
 
-The same class serves the [ingress](30-ingress.md#triggering-a-pulse), with two of its numbers set
-differently, and the difference is the whole reason it takes them: what the ingress fires is a **real**
-cycle, so it carries a floor between fires that this one has no need of. A local cycle reads no world,
-so a burst of them costs a store pass each and there is nothing to ration.
-
 ## Hot and cold
 
 Not every entity deserves the same clock, and before this one number governed all of them.
@@ -249,19 +243,15 @@ Above both lanes sits `ReadPlan.fresh`: the refs this read must re-hydrate whate
 says and whatever lane they are on. It is asked before the lanes and answers an age bound of zero,
 which is always past, so the cache drops exactly those entries and re-reads them.
 
-It has two writers, and they name the same kind of fact — _something happened to this entity that its
-change token does not report_:
+Its one writer is **the fleet's own finished work** — the entities a task reached a terminal on since
+the last reading (`refsFinishedSince`). That names a fact the change token does not report: an agent
+that answers a review thread changes the field the concern is gated on, and **resolving a thread moves
+no `updated_at`**, so the token cannot report it. Without this the real cycle after an agent ends
+reuses the hydration that describes that agent's work as still to do.
+→ [Where the world _is_ the memory](#where-the-world-is-the-memory)
 
-- **An inbound delivery**, drained from the `IngressInbox` ([30](30-ingress.md#invalidating-precisely)).
-- **The fleet's own finished work** — the entities a task reached a terminal on since the last reading
-  (`refsFinishedSince`). An agent that answers a review thread changes the field the concern is gated
-  on, and **resolving a thread moves no `updated_at`**, so the token cannot report it. Without this the
-  real cycle after an agent ends reuses the hydration that describes that agent's work as still to do.
-  → [Where the world _is_ the memory](#where-the-world-is-the-memory)
-
-Both beat the lane rather than widening it, for the same reason: an entity either of them names is
-usually one whose token has not moved, so anything short of overriding the reuse entirely would change
-nothing at all.
+It beats the lane rather than widening it, for the same reason: an entity it names is usually one whose
+token has not moved, so anything short of overriding the reuse entirely would change nothing at all.
 
 ### Who owns the cold-lane interval
 
@@ -324,7 +314,6 @@ list of them is above, and no step below reads differently for it.
 flowchart TD
     T(["Heartbeat timer · POST /api/pulse · boot"]) --> SEEN
     L(["an agent ended — CycleTrigger, debounced"]) --> SEEN
-    IN(["a verified webhook delivery — CycleTrigger, debounced and floored"]) --> SEEN
     SEEN["localRun.noteAlive() — date the environment this process holds"] --> RH{"recovery.pendingCount() > 0?"}
     RH -- yes --> HELD(["cycleId: held — no snapshot, no dispatch, no act"])
     RH -- no --> CF{"cycle already in flight?"}
@@ -780,9 +769,5 @@ reports whose ids are not `cyc_*`.
 - **An agent reaching a terminal state** — `done` or `reaped`, through `CycleTrigger`, as a
   [local cycle](#the-local-cycle), so the slot it freed is refilled in a moment rather than at the next
   beat.
-- **A verified inbound webhook delivery** that named at least one entity — through a second
-  `CycleTrigger`, as a **real** cycle carrying the invalidation the delivery implied
-  ([30](30-ingress.md#triggering-a-pulse)). Only on a deployment that has set a webhook secret; there is
-  no such source on any other.
 - `POST /api/jobs`, `POST /api/findings/:id/promote`, `POST /api/plans/:id/replan`, and each of the
   watch/exclude label toggles — each kicks a cycle so the change takes effect immediately.

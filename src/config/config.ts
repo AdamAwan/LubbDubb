@@ -126,7 +126,6 @@ export interface Config {
   port: number;
   host: string;
   auth: AuthConfig;
-  ingress: IngressBounds;
 }
 
 interface RemoteValidationPolicy {
@@ -169,13 +168,6 @@ const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = {
 interface AuthConfig {
   enabled: boolean;
   tokenFile: string;
-}
-
-interface IngressBounds {
-  debounceMs: number;
-  minCycleGapMs: number;
-  requestsPerMinute: number;
-  maxBodyBytes: number;
 }
 
 export interface GitHubConfig {
@@ -314,7 +306,6 @@ const DEFAULTS: Config = {
   port: 4300,
   host: '127.0.0.1',
   auth: { enabled: true, tokenFile: '.lubbdubb/cockpit-token' },
-  ingress: { debounceMs: 1_000, minCycleGapMs: 5_000, requestsPerMinute: 600, maxBodyBytes: 1_048_576 },
 };
 
 function resolveRootPaths(merged: Config): void {
@@ -349,7 +340,6 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   merged.localValidation = { ...DEFAULTS.localValidation, ...overrides.localValidation };
   merged.remoteValidation = { ...DEFAULTS.remoteValidation, ...overrides.remoteValidation };
   merged.auth = { ...DEFAULTS.auth, ...overrides.auth };
-  merged.ingress = { ...DEFAULTS.ingress, ...overrides.ingress };
   merged.ci = { checks: overrides.ci?.checks ?? DEFAULTS.ci.checks };
   merged.environments = overrides.environments ?? DEFAULTS.environments;
   return merged;
@@ -378,7 +368,6 @@ export const DEEP_MERGED_BLOCKS = [
   'localValidation',
   'remoteValidation',
   'auth',
-  'ingress',
   'ci',
   'github',
   'azureDevOps',

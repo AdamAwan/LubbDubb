@@ -12,8 +12,8 @@ rather than through an import**, so the type system cannot see it. A deny-list a
 what closes it, and `test/spawnEnv.test.ts` asserts both that the keys are stripped and that neither
 spawn site has gone back to spreading `process.env` wholesale.
 
-`LUBBDUBB_INGRESS_SECRET`, `LUBBDUBB_INGRESS_BASIC` and `LUBBDUBB_DESKTOP_CREDENTIAL` are credentials
-of the same kind, which no agent has any reason to hold.
+`LUBBDUBB_DESKTOP_CREDENTIAL` is a credential of the same kind, which no agent has any reason to
+hold.
 
 This strips what is **inherited**. Anything the harness deliberately hands a session through its own
 spec still arrives, because the spec is spread after — which is how `LUBBDUBB_MCP_TOKEN`,

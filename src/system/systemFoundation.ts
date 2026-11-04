@@ -49,8 +49,6 @@ import { EjectionDesk } from '../ejection/desk.js';
 import { ActionExecutor } from '../executor/actionExecutor.js';
 import { watchLabelFor } from '../watchLabels.js';
 import { Harness } from '../harness.js';
-import type { IngressSecrets } from '../ingress/ingress.js';
-import { IngressInbox } from '../ingress/inbox.js';
 import { RuntimeControl } from '../runtimeControl.js';
 import { LocalRunner } from '../localRun/runner.js';
 import { LocalValidationDesk } from '../validation/local/desk.js';
@@ -85,7 +83,6 @@ export interface BuildOptions {
   tenants?: TenantKeeper;
   pluginCli?: PluginCli;
   errorMirror?: (entry: ErrorLogEntry) => void;
-  ingressSecrets?: IngressSecrets;
   configFile?: string;
   projectConfigFile?: string;
   upstream?: UpstreamIssues;
@@ -196,7 +193,6 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
   store.surfaceReach.pruneSurfaceReach(true);
   const now = (): string => new Date().toISOString();
   const errors = new ErrorLog(store, opts.errorMirror);
-  const ingressInbox = new IngressInbox();
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
   const connector = new CompositeConnector(integrations, now, {
     hotMaxAgeMs: config.hotReadMaxAgeMs,
@@ -232,7 +228,6 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     store,
     now,
     errors,
-    ingressInbox,
     connector,
     sink: recordIssueComments(opts.sink ?? connector, (issue, ref) =>
       store.issueComments.recordIssueCommentSent(issue, ref),

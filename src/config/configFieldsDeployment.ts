@@ -71,30 +71,4 @@ export const DEPLOYMENT_FIELDS: readonly ConfigField[] = [
     access: 'advanced',
     why: 'Where a minted token is persisted. Ignored when LUBBDUBB_TOKEN is set.',
   },
-  {
-    path: 'ingress.debounceMs',
-    type: 'number',
-    ms: true,
-    access: 'advanced',
-    why: 'How long a burst of webhook deliveries settles before one cycle fires.',
-  },
-  {
-    path: 'ingress.minCycleGapMs',
-    type: 'number',
-    ms: true,
-    access: 'advanced',
-    why: 'Floor between two cycles a delivery may cause. The one lever on what an inbound flood can spend of this fleet’s provider budget.',
-  },
-  {
-    path: 'ingress.requestsPerMinute',
-    type: 'number',
-    access: 'advanced',
-    why: 'Deliveries accepted per minute across the whole endpoint before a 429. Keyed to the endpoint, not the caller: a webhook arrives from a whole address range.',
-  },
-  {
-    path: 'ingress.maxBodyBytes',
-    type: 'number',
-    access: 'advanced',
-    why: 'Largest delivery body read before a 413. Bounds the work an unverified caller can buy.',
-  },
 ];

@@ -95,7 +95,11 @@ down at boot over one stale line. `lessonBlockChars`, `agentIdleWaitMs` and `ses
 are entries of a second kind: each named a thing that is gone rather than a switch that went
 unconditional — a block that no longer renders, and two keys the removed `pty` runtime alone read.
 `remoteValidation.runTimeoutMs` is the same kind: the kill for a browser suite the harness no longer
-spawns ([36](36-remote-validation.md#configuration)). So are `prediction`, `goalCriteria` and
+spawns ([36](36-remote-validation.md#configuration)). `ingress` is too: the bounds on an inbound
+webhook endpoint that was removed whole, so the harness hears about the world by polling alone and
+there is no delivery left to bound. Its warning also tells the operator to unset
+`LUBBDUBB_INGRESS_SECRET` / `LUBBDUBB_INGRESS_BASIC`, which nothing reads any more, and to delete the
+webhook pointed at `/ingress/`, which now answers `404`. So are `prediction`, `goalCriteria` and
 `predictionAggregateMinGoals`: the switches for two features that were removed whole — the prediction
 an operator wrote before reading a plan, its judge and its aggregate, and the goal-level criteria
 written beside the planner's — rather than made unconditional. A deployment that had them on boots
@@ -136,6 +140,7 @@ rather than the field inside it. The list:
 | `prediction`, `predictionAggregateMinGoals`                            | predictions, their judge and their aggregate were removed                                                                                      |
 | `goalCriteria`                                                         | goal criteria were removed; a part's `acceptance` is what work is checked against ([08](08-planning.md#plan-parts))                            |
 | `obstacleDormantMs`, `obstacleTicketApproval`                          | obstacles were removed; a stopped agent concludes `blocked` and you release the goal ([06](06-issue-pickup.md#blocked-parks-the-goal-for-you)) |
+| `ingress`                                                              | the inbound webhook endpoint was removed; polling is the only way the world is read                                                            |
 
 Both lists are permanent — a config written before a removal outlives the release that made it.
 
@@ -442,10 +447,6 @@ resolve them against the wrong directory:
 | `host`                         | `string`  | `127.0.0.1`                 | Bind address. Loopback by default; `"0.0.0.0"` exposes the cockpit on the network and then requires `auth.enabled`. Overridable via `LUBBDUBB_HOST`.                                                                                                                                                                                                                                                                                                                             |
 | `auth.enabled`                 | `boolean` | `true`                      | Require a bearer token on `/api/*` and `/ws`. See [16 — HTTP API](16-http-api.md#authentication).                                                                                                                                                                                                                                                                                                                                                                                |
 | `auth.tokenFile`               | `string`  | `.lubbdubb/cockpit-token`   | Where a minted token is persisted (0600). Ignored when `LUBBDUBB_TOKEN` is set.                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `ingress.debounceMs`           | `number`  | `1000`                      | How long a burst of webhook deliveries settles before one cycle fires. Inert unless a webhook secret is set in the environment. → [30](30-ingress.md#what-a-delivery-is-allowed-to-cost)                                                                                                                                                                                                                                                                                         |
-| `ingress.minCycleGapMs`        | `number`  | `5000`                      | Floor between two cycles a delivery may cause. The one lever on what an inbound flood can spend of this fleet's provider budget.                                                                                                                                                                                                                                                                                                                                                 |
-| `ingress.requestsPerMinute`    | `number`  | `600`                       | Deliveries accepted per minute across the whole endpoint before a `429`. Keyed to the endpoint, not the caller.                                                                                                                                                                                                                                                                                                                                                                  |
-| `ingress.maxBodyBytes`         | `number`  | `1048576`                   | Largest delivery body read before a `413`. Bounds the work an unverified caller can buy.                                                                                                                                                                                                                                                                                                                                                                                         |
 | `dbPath`                       | `string`  | `.lubbdubb/lubbdubb.sqlite` | SQLite file. Overridable via `LUBBDUBB_DB`. `:memory:` is supported (tests).                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 #### The cadence keys
@@ -474,10 +475,6 @@ be set wrong:
   at all — `coldReadMaxAgeMs` and `hotReadMaxAgeMs` are where that decision moved
   ([04](04-harness-cycle.md#who-owns-the-cold-lane-interval)). A constant _and_ a lane would have been
   two clocks for one decision, with the shorter one silently winning.
-- The ingress's replay ledger (2048 delivery ids), the inbox cap (512 refs) and the per-delivery ref
-  cap (16). Each is a bound on a hostile input rather than a policy
-  ([30](30-ingress.md#what-a-delivery-is-allowed-to-cost)); an operator who raises one is choosing to
-  accept more of something they did not send.
 - The read plan's own event tail (200 rows). It is a cost hint about which entities are moving; an
   entity that falls off the end of it is re-read on the slow lane rather than the fast one, which is
   not an outcome worth a setting.
@@ -1392,12 +1389,6 @@ committed:
   ([26](26-setup.md#the-credential-check-asks-both-routes)): with `az login` done and no variable
   set the harness reads everything, and a check that asked only the variable called a working
   deployment unreadable.
-- **The inbound ingress** — `LUBBDUBB_INGRESS_SECRET` (GitHub's HMAC secret) and
-  `LUBBDUBB_INGRESS_BASIC` (Azure's `user:password` basic credential). There is no `ingress.enabled`
-  key: the presence of a variable **is** the on switch for that provider, so a boolean cannot disagree
-  with it, and a deployment with neither answers `404` on the endpoint exactly as it did before the
-  endpoint existed. The four `ingress.*` keys above are the bounds it runs under, not credentials.
-  → [30](30-ingress.md#turning-it-on)
 - **Model credentials are inherited**, not supplied. Agents spawn with `{...process.env, ...spec.env}`
   plus only `LUBBDUBB_PROMPT`, `LUBBDUBB_TASK_ID`, and the status-file / events-dir variables. In
   non-interactive mode `claude` always uses `ANTHROPIC_API_KEY` when it is present, with no approval

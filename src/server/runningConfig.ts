@@ -144,7 +144,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'dbPath',
     ],
   },
-  { title: 'Server', keys: ['port', 'host', 'auth', 'ingress'] },
+  { title: 'Server', keys: ['port', 'host', 'auth'] },
 ];
 
 export function groupedTopLevelKeys(): ReadonlySet<string> {
