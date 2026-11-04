@@ -1,7 +1,6 @@
 import type { Store } from '../store/store.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import type { DispatchContext } from './dispatcher.js';
-import { blockedGoals } from '../escalation/blocked.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -84,7 +83,6 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
     descriptionDrafts: store.prDescriptions.pendingDrafts(),
     uncheckedDescriptions: store.prDescriptions.uncheckedDescriptions(),
     prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
-    goalBlocks: [...blockedGoals(store.escalations.listOpenEscalations()).values()],
     investigations: store.investigations.list(),
   };
 }

@@ -150,7 +150,7 @@ export interface IssuePickupContext {
   deliverySignals?: WorldEvent[];
   appraisals?: IssueAppraisal[];
   investigations?: InvestigationStandings;
-  goalBlocks?: GoalBlock[];
+  goalBlocks?: ReadonlyMap<string, GoalBlock>;
   runs?: IssueRun[];
   headroom: number;
   paused: boolean;
@@ -224,7 +224,7 @@ function standingHoldStatus(issue: Issue, origin: string, ctx: IssuePickupContex
   });
   if (held) return { eligible: false, status: 'delivered', reasons: [held] };
 
-  const block = ctx.goalBlocks?.find((b) => b.originRef === origin);
+  const block = ctx.goalBlocks?.get(origin);
   if (block) {
     return {
       eligible: false,

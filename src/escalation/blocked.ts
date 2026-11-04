@@ -8,7 +8,7 @@ export function blockOf(escalation: Escalation): GoalBlock | null {
   return block;
 }
 
-export function blockedGoals(escalations: readonly Escalation[]): Map<string, GoalBlock> {
+export function blockedGoals(escalations: readonly Escalation[]): ReadonlyMap<string, GoalBlock> {
   const out = new Map<string, GoalBlock>();
   for (const escalation of escalations) {
     if (escalation.status !== 'open') continue;

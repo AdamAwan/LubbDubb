@@ -22,6 +22,7 @@ import { discussionNoteFor } from '../discussions/promptSection.js';
 import { isContainerIssue } from '../issueRelations.js';
 import { sequenceableFeatures as sequenceable, DEFAULT_SEQUENCE_MAX_CHILDREN } from '../sequence/sequence.js';
 import { isActive, type Candidate, type ConsiderOptions, type StageContext } from './rules/context.js';
+import { blockedGoals } from '../escalation/blocked.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -48,7 +49,7 @@ export function issueGates(
   const appraisalParked = (issue: Issue): boolean =>
     appraisalHold(appraisals.get(issueOrigin(issue.number)) ?? null, issue) !== null;
 
-  const blocked = new Set((ctx.goalBlocks ?? []).map((block) => block.originRef));
+  const blocked = blockedGoals(ctx.openEscalations);
 
   const retained = new Set(ctx.retainedIssues ?? []);
 

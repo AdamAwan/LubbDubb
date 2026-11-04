@@ -76,8 +76,7 @@ export function fleetDiscussions(
   };
 }
 
-/** Fresh each pulse. → docs/spec/40-discussions.md#what-agents-read */
-/** What the pulse hands the dispatcher about each goal. Absent where discussions are off. */
+/** What the pulse hands the dispatcher about each goal, fresh each pulse; absent where discussions are off. → docs/spec/40-discussions.md#what-agents-read */
 export interface GoalIntake {
   discussion?: DiscussionReader;
 }

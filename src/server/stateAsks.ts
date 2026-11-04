@@ -21,7 +21,7 @@ export function descriptionFeedback(store: Store, open: Set<number>): Descriptio
 
 /** The open escalations and the proposals. */
 export function inbox(r: Reads): Pick<CockpitState, 'escalations' | 'proposals'> {
-  return { escalations: r.store.escalations.listOpenEscalations(), proposals: r.proposals };
+  return { escalations: r.openEscalations(), proposals: r.proposals };
 }
 
 /**

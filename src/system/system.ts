@@ -19,7 +19,7 @@ import { EscalationInbox } from '../escalation/escalationInbox.js';
 import { ProposalDesk } from '../proposals/proposalDesk.js';
 import { StackLandingDesk } from '../stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from '../escalation/context.js';
-import { blockedGoals, blockOf, blockPrompt, releaseInstruction } from '../escalation/blocked.js';
+import { blockOf, blockPrompt, releaseInstruction } from '../escalation/blocked.js';
 import type { Escalation } from '../types.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from '../mcp/server.js';
 import type { McpDesktopServer } from '../mcp/desktop.js';
@@ -436,7 +436,7 @@ function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, esc
   });
 
   agents.on('blocked', ({ taskId, block }) => {
-    if (blockedGoals(store.escalations.listOpenEscalations()).has(block.originRef)) return;
+    if (store.escalations.listOpenEscalations().some((e) => blockOf(e)?.originRef === block.originRef)) return;
     escalations.create({
       type: 'resolve_ambiguity',
       prompt: blockPrompt(block),

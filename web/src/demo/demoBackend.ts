@@ -3804,7 +3804,6 @@ function buildDemoMcp(): McpInsights {
     tool('knowledge_ask', 'addendum', 156, 0, 780, 18, 0),
     tool('request_permission', 'point-of-use', 149, 0, 1_400, 9, 0),
     tool('conclude_part', 'point-of-use', 121, 4, 34, 22, 24),
-    tool('raise', 'addendum', 96, 2, 28, 31, 0),
     tool('plan_submit', 'addendum', 84, 6, 96, 44, 0),
     tool('open_pr', 'addendum', 71, 5, 2_900, 51, 0),
     tool('validation_report', 'point-of-use', 58, 3, 22, 62, 12),
@@ -3851,13 +3850,14 @@ function buildDemoMcp(): McpInsights {
       verdict: 'retired',
       label: 'Retired, and still being called',
       blurb: 'This name was withdrawn. Something is still naming it, and every call to it spends a turn on a refusal.',
-      remedy: 'Find the prompt override that names it and say `raise` instead. The Setup reading names the file.',
+      remedy: 'Find the prompt override that names it and take it out. The Setup reading names the file.',
       calls: 6,
       refused: 6,
       namedInAddendum: false,
       namedInPrompts: 1,
       lastCalledAt: ago(96),
-      lastRefusal: 'report_finding has been retired. Everything it did is now one call: raise(claim, evidence)',
+      lastRefusal:
+        'report_finding has been retired, and what it reported to is gone with it: nothing records an observation for other agents any more.',
     },
     {
       tool: 'validation_amend',
@@ -4013,7 +4013,7 @@ function buildDemoMcp(): McpInsights {
       namingRow(
         'retired',
         'Retired',
-        'A withdrawn name, answered only with a refusal naming `raise`. Any call at all is a prompt out of date.',
+        'A withdrawn name, answered only with a refusal saying what replaced it. Any call at all is a prompt out of date.',
         retired,
       ),
     ],
@@ -4039,7 +4039,8 @@ function buildDemoMcp(): McpInsights {
         channel: 'fleet',
         refused: 6,
         calls: 6,
-        message: 'report_finding has been retired. Everything it did is now one call: raise(claim, evidence)',
+        message:
+          'report_finding has been retired, and what it reported to is gone with it: nothing records an observation for other agents any more.',
         at: ago(96),
       },
       {

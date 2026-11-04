@@ -78,6 +78,7 @@ export function baseReads(system: System, opts: SnapshotOpts | undefined) {
     }));
   const allHumanTasks = once(() => store.humanTasks.listAllHumanTasks());
   const proposals = store.escalations.listProposals();
+  const openEscalations = once(() => store.escalations.listOpenEscalations());
   const bugFilings = store.bugFilings.listBugFilings();
   const overlaps = once(() => {
     const overlapAgents = agents().slice(0, OVERLAP_AGENT_WINDOW);
@@ -107,6 +108,7 @@ export function baseReads(system: System, opts: SnapshotOpts | undefined) {
     ejectionViews,
     allHumanTasks,
     proposals,
+    openEscalations,
     bugFilings,
     overlaps,
   };
@@ -291,7 +293,7 @@ export function contextReads(r: VerdictReadsOn) {
     deliverySignals: deliverySignals(),
     appraisals,
     investigations: investigationStandings(world.issues, investigations(), system.issuePickup),
-    goalBlocks: [...blockedGoals(store.escalations.listOpenEscalations()).values()],
+    goalBlocks: blockedGoals(r.openEscalations()),
     runs: issueRuns,
     headroom: control.paused ? 0 : Math.max(0, control.cap - store.agents.countLiveAgents()),
     paused: control.paused,

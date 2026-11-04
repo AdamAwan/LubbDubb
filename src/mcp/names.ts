@@ -175,25 +175,20 @@ export function namesRetiredTool(text: string, tool: string): boolean {
   return text.includes(`\`${tool}\``) || new RegExp(`\\b${tool}\\(|\\bcall ${tool}\\b`, 'i').test(text);
 }
 
-const REVIEW_PACK_TOOLS: readonly string[] = ['review_pack_submit', 'review_pack_check'];
-
 const REMOVED_FEATURE_TOOLS: Readonly<Record<string, string>> = {
-  criteria_alignment: 'goal criteria were removed from the harness',
-  prediction_judge: 'predictions were removed from the harness, and the prediction judge with them',
+  review_pack_submit: 'review packs were removed from the harness, and nothing replaces them',
+  review_pack_check: 'review packs were removed from the harness, and nothing replaces them',
+  criteria_alignment: 'goal criteria were removed from the harness, and nothing replaces it',
+  prediction_judge:
+    'predictions were removed from the harness, and the prediction judge with them, and nothing replaces it',
 };
 
 export function retiredToolMessage(name: string): string {
   const removed = REMOVED_FEATURE_TOOLS[name];
   if (removed !== undefined) {
     return (
-      `${name} has been retired: ${removed}, and nothing replaces it. There is nothing to hand back. If you ` +
-      'reached this from a prompt that named it, that prompt is out of date.'
-    );
-  }
-  if (REVIEW_PACK_TOOLS.includes(name)) {
-    return (
-      `${name} has been retired: review packs were removed from the harness, and nothing replaces them. ` +
-      'There is nothing to hand back. If you reached this from a prompt that named it, that prompt is out of date.'
+      `${name} has been retired: ${removed}. There is nothing to hand back. If you reached this from a prompt ` +
+      'that named it, that prompt is out of date.'
     );
   }
   return (
