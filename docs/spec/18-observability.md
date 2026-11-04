@@ -401,8 +401,7 @@ labelled as the account's, with nothing red. A caller that genuinely has no read
 says so.
 
 `defaultWindow` — the window a reading with no control of its own took — **went with its last caller**,
-the Knowledge page's cost figure. That page and the injected block it priced are gone
-([27](27-obstacles.md#what-the-claim-store-left-behind)), and every reading left here has a time bar of
+the Knowledge page's cost figure. That page and the injected block it priced are gone, and every reading left here has a time bar of
 its own. A reading that needs one again brings it back rather than reaching for `resolveWindow`
 directly: a caller with no time bar quietly acquiring the `session` window is exactly what the required
 `limits` argument above exists to stop.
@@ -428,8 +427,9 @@ splits of one pot of money, plus the coverage caveat:
   `:validate-local-fix:` — an agent writing and pushing code, whatever prompted it),
   `ci` (`pr:<n>:ci`, `pr:<n>:ci-gate`), `landing` (every other `pr:*`), `evidence` (`:assess`,
   `:retro`, `:validate:`, `:validate-failure:`, `:validate-local:`), `local` (a local run — the
-  environment itself, where the validation driving it is the `evidence` beside it), `obstacle` (`obstacle:<id>` — a repair for something in the
-  fleet's way, [27](27-obstacles.md#ownership)), `job` (`job:*`) and `other`. A partition: they sum to
+  environment itself, where the validation driving it is the `evidence` beside it), `obstacle` (`obstacle:<id>` — a repair the retired obstacle board
+  dispatched; nothing spends here now, and the phase stays so that spend already recorded still reads
+  as what it was, [05](05-dispatcher.md#the-rule-book)), `job` (`job:*`) and `other`. A partition: they sum to
   the fleet total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather than a second one, so **a
   new origin suffix is classified in exactly one place** — an unrecognised suffix surfaces as `other`
   rather than being folded into whichever neighbour looked closest. `local` is the one phase that is
@@ -646,80 +646,22 @@ the goal. That is a large part of the argument for cohorting goals rather than b
 the closed end of the ticket mirror on top of the same all-time agent walk, and a tab an operator
 never opens should cost nothing.
 
-## The prediction record
-
-The one reading here that is not about the fleet. Everything else in this document records what the
-**fleet** did; this records whether the **operator's model of the system** was right, and it exists
-because approving a plan is a prediction, refusing one is a prediction, and none of them was ever
-scored, so none of them ever corrected. → [14](14-persistence.md#the-prediction-store-is-not-on-store)
-
-### A rate nobody should read is not shipped
-
-Every rate is `{rate, n} | null`, and **null means withheld**. Below `predictionAggregateMinGoals`
-marked goals the rate is **absent from the payload**, on exactly the terms `comparison` is above: a
-rate drawn off four goals is noise with a percentage sign on it, and withholding it from the payload
-is the only way the panel can be made not to draw it. A caption saying "small sample" is read by
-nobody.
-
-In its place the payload carries the **count toward the threshold**, so the panel says "4 goals
-marked; rates appear at 10" — a true statement rather than a rate.
-
-**Counts are never withheld.** How many goals carried a prediction, how many were marked, how many had
-criteria drift: those are facts at any n, and they are the figures that matter first anyway. And a
-rate never travels without the n it is over — `{rate, n}` is one object for that reason.
-
-**A slot with no data is absent, not zero.** The per-slot list is sparse: a slot no prediction ever
-filled has no entry, and a filled slot with no marks at a moment carries null for that moment. The
-four slots are not sacred, but adding a fifth later makes every earlier goal **absent** in that column
-rather than zero — the same reason an absent bucket beats a zero one in the runaway watch.
-
-### Three outcomes, because two would lie
-
-**predicted**, **declined**, and **not offered**. A goal with a reveal stamp and a prediction was
-predicted; a reveal stamp and no prediction was declined; **no reveal stamp at all was never offered**,
-which is what every goal from before the switch reads as, permanently. Folding the third into the
-second would open the aggregate on a decline rate the operator never earned, in the one week it has to
-earn any trust.
-
-The **decline rate is a first-class figure beside coverage**, and that is deliberate: the reveal gate's
-own failure mode is reflexive dismissal, and an operator tuning it out should be able to see that they
-are.
-
-### Nothing is grouped by author, and nothing could be
-
-Scoring people is out of scope, and on a single-operator deployment the question is smaller than it
-looks — one bearer token, no user model. The hazard is the day a second operator exists, when grouping
-by the `author` column would be one SQL clause away.
-
-So it is closed structurally rather than forbidden: `predictionFacts()` is the single door a prediction
-comes through on its way into the aggregate, and it drops both the slot text and the author. The
-builder's input type has no author field, so the clause a later change would reach for has nothing to
-group by. That is the no-op the design asks for, rather than a permission system that protects nothing
-and reads as though it does.
-
-**The aggregate reads marks and counts, never slot text**, and a prediction is never read by a model —
-including for analysing this. That is the price of the containment guarantee and it is paid knowingly:
-nothing aggregates _within_ a slot, so if an operator's `locus` predictions are reliably right for
-schema work and wrong for cockpit work, only a human reading the goals can see it. The alternative is
-classifying free text, which means a model reading predictions.
-
 ## How a description stood
 
 `GET /api/insights/descriptions` folds every
-description a desktop session checked. It inherits two rules from
-[the prediction record](#the-prediction-record) rather than inventing its own, and they are the
-reason this section is short:
+description a desktop session checked, under two rules:
 
-- **Never keyed by author.** `predictionAggregate` drops the `author` column and says why — the
-  aggregate is keyed by goal, and scoring people is out of scope. A description accuracy keyed by
-  person is a performance metric on an engineer, which is a different product from this one.
-- **Never a bare percentage.** Below `predictionAggregateMinGoals` the counts are withheld and the n
-  stands in their place, the shape `PredictionRate` already uses. A rate over four descriptions is
-  noise wearing a percentage.
+- **Never keyed by author.** The aggregate is keyed by goal, and scoring people is out of scope. A
+  description accuracy keyed by person is a performance metric on an engineer, which is a different
+  product from this one.
+- **Never a bare percentage.** Below `DESCRIPTION_AGGREGATE_THRESHOLD` — ten checked descriptions,
+  fixed — the counts are withheld and the n stands in their place. A rate over four descriptions is
+  noise wearing a percentage. The threshold was `predictionAggregateMinGoals`, borrowed from the
+  prediction aggregate; it became a constant when predictions were removed, since one table's bar is
+  no reason to keep a config key.
 
-It also drops the description's **text**, which a prediction's containment rule would demand and this
-one does not need: a description is published, so reading it leaks nothing. It is dropped so that no
-panel downstream can quote an operator back at themselves.
+It also drops the description's **text**. A description is published, so reading it leaks nothing; it
+is dropped so that no panel downstream can quote an operator back at themselves.
 
 `contradicted` is counted apart from `gaps` and is the figure worth reading on its own: it counts the
 pull requests that would have carried a false sentence into somebody's review. A single "wrong"
@@ -1121,16 +1063,13 @@ two from the caller's own task origin and refuses every other caller by name; th
 assert is a column reporting whatever each agent took it to mean, and the counts would be worth
 nothing.
 
-**`undocumented` names something written down nowhere, and what an agent does about that is `raise`
-it** — in its own call, on the board that keys and counts it ([27](27-obstacles.md#the-intake)). The
-remedy used to carry a `claim` field of its own, which meant the same sentence reached a different
-store, under a different gate and with no matching, depending on which tool the agent happened to be
-holding. One door, and this is not it: the remedy is the **event record** of one return to a pull
-request and nothing else.
+**`undocumented` names something written down nowhere**, and the guard is where the agent says so —
+plainly, for the operator who reads the reliability page to decide what to write down. The remedy used
+to carry a `claim` field of its own, and later pointed the agent at a separate intake beside it; both
+are gone. The remedy is the **event record** of one return to a pull request and nothing else.
 
-**The remedy row is the account of an event, and only that.** It keeps its counts and its dollars, it
-lands whatever an agent does or does not raise beside it, and nothing on this page is derived from the
-obstacle board.
+**The remedy row is the account of an event, and only that.** It keeps its counts and its dollars, and
+nothing on this page is derived from anything an agent filed beside it.
 
 **An account is not a red, and not a run.** One agent that settled four reds in one dispatch files
 one row; a pull request that went red four times over four days collects four. So `accounts` is never

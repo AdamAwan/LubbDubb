@@ -48,7 +48,7 @@ const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   local: { label: 'Local runs', blurb: 'Bringing a goal’s branch up on this machine to look at it' },
   obstacle: {
     label: 'Obstacles',
-    blurb: 'Repairing something in the fleet’s way — a red base, a wall three goals have hit',
+    blurb: 'Repairs the retired obstacle board dispatched — nothing spends here now, and past spend still reads',
   },
   job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },

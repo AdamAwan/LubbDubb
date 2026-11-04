@@ -5,7 +5,6 @@ import type { CycleStanding } from '../harness.js';
 import type { UpcomingPlan } from '../wire.js';
 import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { toolError, toolJson } from './protocol.js';
-import { isSealedRule } from './names.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -201,14 +200,6 @@ export const agentRead: DesktopToolFactory = (deps) => ({
     if (!id) return toolError('agentId required — take it from fleet_status.');
     const agent = deps.store.agents.getAgent(id);
     if (!agent) return toolError(`No agent "${id}". Call fleet_status for the ones that are running.`);
-    if (isSealedRule(deps.store.tasks.getTask(agent.taskId)?.rule))
-      return toolJson({
-        ...describeAgent(deps, agent),
-        sealed: true,
-        next:
-          'This agent is sealed: what it was told and what it said are shown to the operator in the cockpit ' +
-          'and to no model, this one included. Its status and spend are above.',
-      });
     const wanted =
       typeof args.chars === 'number' && Number.isFinite(args.chars) ? Math.floor(args.chars) : TRANSCRIPT_TAIL;
     const tail = Math.min(Math.max(wanted, 200), 100_000);

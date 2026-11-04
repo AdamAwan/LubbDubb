@@ -6,8 +6,6 @@ import { issueOrigin, planBranch, planOrigin } from '../../plans/planning.js';
 import { currentPlanSummary } from '../../plans/parts.js';
 import { relatedWorkNote } from '../../issueRelations.js';
 import { readOnlyDispatch, readOnlyNote } from './readOnlyDispatch.js';
-import { SITTING_REASON } from '../../intake/sitting.js';
-import { goalCriteriaNote } from '../../criteria/note.js';
 import { investigationNote, investigationStanding } from '../../intake/investigation.js';
 import { investigationSupersedes } from './issueInvestigate.js';
 import type { RuleHeld } from '../admission.js';
@@ -26,8 +24,6 @@ function planHold(
   if (s.appraising.has(issueNumber)) return { reason: supersededReason('issue-appraisal', reason), held: 'superseded' };
   const investigation = investigationSupersedes(s, issue, reason);
   if (investigation !== null) return { reason: investigation, held: 'superseded' };
-  if (s.sittingHolds(issueNumber))
-    return { reason: `${reason} Held: ${SITTING_REASON}, on the goal in the cockpit.`, held: 'sitting' };
   const hold = s.issueHold(issueNumber);
   if (hold) return { reason: `${reason} ${hold.reason}`, held: hold.held };
   return { reason, held: planner === 'cooldown' ? 'cooldown' : undefined };
@@ -90,7 +86,6 @@ export function issuePlan(s: StageContext): void {
             `Your plan needs neither: plan_submit records it directly, and ${PLAN_FILE} is read off disk where ` +
               'you write it.',
           ) +
-          goalCriteriaNote(s.criteriaFor(issue.number)) +
           s.discussionNote(issue.number) +
           budgetNote(s.planning.fileBudget) +
           atomNote() +

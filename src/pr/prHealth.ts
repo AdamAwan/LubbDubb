@@ -1,5 +1,5 @@
 import { isWatched } from '../watchLabels.js';
-import type { CiCheck, PrState, PullRequest } from '../types.js';
+import type { PrState, PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md
 
@@ -96,21 +96,4 @@ export function awaitingReview(pr: PullRequest, staffed: boolean): boolean {
     pr.ciStatus !== 'failing' &&
     !pr.unresolvedComments.some((c) => !c.handled)
   );
-}
-
-export function recoveredOnSameCommit(before: PullRequest | undefined, now: PullRequest): CiCheck[] {
-  if (!before || !before.headSha || !now.headSha || before.headSha !== now.headSha) return [];
-  const was = new Map((before.ciChecks ?? []).map((c) => [c.name, c]));
-  return (now.ciChecks ?? []).filter(
-    (check) => !check.advisory && check.status === 'passing' && was.get(check.name)?.status === 'failing',
-  );
-}
-
-export function newlyFailingChecks(before: PullRequest | undefined, now: PullRequest): CiCheck[] {
-  if (!before) return [];
-  const was = new Map((before.ciChecks ?? []).map((c) => [c.name, c]));
-  return (now.ciChecks ?? []).filter((check) => {
-    const previously = was.get(check.name);
-    return !check.advisory && check.status === 'failing' && previously !== undefined && previously.status !== 'failing';
-  });
 }

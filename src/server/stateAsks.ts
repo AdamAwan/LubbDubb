@@ -1,7 +1,6 @@
 import type { AskInputs } from '../asks/queue.js';
 import type { Store } from '../store/store.js';
 import type { CockpitState, DescriptionFeedback, StateSection, UndescribedPart } from '../wire.js';
-import { withheldAction, WITHHELD_PLAN } from './planReveal.js';
 import type { Reads } from './stateSnapshot.js';
 
 // → docs/spec/16-http-api.md#sections
@@ -20,23 +19,9 @@ export function descriptionFeedback(store: Store, open: Set<number>): Descriptio
   return store.prDescriptions.descriptionFeedback().filter((f) => open.has(f.prNumber));
 }
 
-/** The open escalations and the proposals, with a plan still behind the reveal gate withheld. */
-export function maskedInbox(r: Reads): Pick<CockpitState, 'escalations' | 'proposals'> {
-  const { store, withheld } = r;
-  return {
-    escalations: store.escalations.listOpenEscalations().map((e) => {
-      if (!withheld(e.context.planId)) return e;
-      return {
-        ...e,
-        prompt: WITHHELD_PLAN,
-        context: { ...e.context, detail: WITHHELD_PLAN, detailFrom: 'Withheld until the plan is revealed' },
-      };
-    }),
-    proposals: r.proposals.map((p) => {
-      if (!withheld(p.action.planId)) return p;
-      return { ...p, action: withheldAction(p.action) };
-    }),
-  };
+/** The open escalations and the proposals. */
+export function inbox(r: Reads): Pick<CockpitState, 'escalations' | 'proposals'> {
+  return { escalations: r.openEscalations(), proposals: r.proposals };
 }
 
 /**
@@ -71,7 +56,7 @@ const ASK_READS: Record<Exclude<StateSection, 'control' | 'asks'>, (r: Reads) =>
     parkedOnLimit: r.system.agents.limitedAgentIds(),
   }),
   queue: (r) => ({ jobs: r.store.jobs.listJobs() }),
-  inbox: (r) => ({ humanTasks: r.humanTasks, ...maskedInbox(r) }),
+  inbox: (r) => ({ humanTasks: r.humanTasks, ...inbox(r) }),
   activity: (r) => ({ decisions: r.shiftLog }),
 };
 

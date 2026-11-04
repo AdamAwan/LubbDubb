@@ -22,11 +22,8 @@ export const TICKET_PROMPTS = {
     retired: true,
     doc:
       '**Retired — no longer rendered.** It was sent to a desk agent when an operator clicked "File ' +
-      'ticket" on a claim, and the claim store it filed from is gone (`docs/spec/27-obstacles.md`). ' +
-      'What files a ticket now is the obstacle ownership desk, which composes the body mechanically ' +
-      'through `obstacle-ticket-body` rather than dispatching an agent to write one — a row on the ' +
-      'board already carries every sighting in its author\u2019s own words, which is what this prompt ' +
-      'was asking an agent to assemble. An override left here still loads; it is simply not sent.',
+      'ticket" on a claim, and the claim store it filed from is gone, as is the obstacle board that ' +
+      'replaced it. An override left here still loads; it is simply not sent.',
   },
   'docs-change': {
     placeholders: ['ref', 'summary', 'originRef'],
@@ -51,21 +48,18 @@ export const TICKET_PROMPTS = {
       'if someone does not know it. No mention of the harness, the agent, this job or the goal it was ' +
       'learned on — that provenance is the operator’s, and in the repository’s own docs it is noise ' +
       'about a tool the repository does not use.\n\n' +
-      '**Change documentation, not code.** If checking the claim turned up an actual defect, `raise` it ' +
-      'as its own claim, not a fix smuggled into a docs pull request.\n\n' +
+      '**Change documentation, not code.** If checking the claim turned up an actual defect, say so in ' +
+      'what you hand back rather than smuggling a fix into a docs pull request.\n\n' +
       'Finish by **opening a pull request**, and nothing else finishes this: not a commit on the ' +
       'integration branch, not a direct push, not a summary of what you would have written. This is ' +
       'the repository’s own knowledge going into the repository’s own tree, and a human merging it is ' +
       'the whole gate. If the pull request is not opened, nothing has happened — which is correct.',
+    retired: true,
     doc:
-      'Sent to a **code** agent when an operator promotes a `docs` finding (`POST /api/findings/:id/promote`) — ' +
-      'a fact about the repository that its own documentation does not state. A code job rather than a desk one ' +
-      'because it writes files in a tree, so it needs a worktree and a branch to open the pull request from. ' +
-      "Overridable for `finding-ticket`'s reason: which document owns what, how a change should be worded, and " +
-      'what your project wants in a docs PR are house style, not harness logic — a repository with a stated rule ' +
-      "about where documentation lives wants that rule here. The report's `where` and `detail` ride in on " +
-      '{summary} rather than placeholders of their own, so an override that predates them still renders them. ' +
-      'Placeholders: {ref} {summary} {originRef}.',
+      '**Retired — no longer rendered.** It was sent to a code agent to write a fact about the ' +
+      'repository into its own documentation: first when an operator promoted a `docs` finding, then ' +
+      'when the obstacle board wrote a standing note up. Both are gone. An override left here still ' +
+      'loads; it is simply not sent. Placeholders: {ref} {summary} {originRef}.',
   },
   'raise-bug': {
     placeholders: ['number', 'title', 'summary', 'tracker'],

@@ -14,7 +14,7 @@ import { GOAL_ANCHOR, GOAL_ASK_TAB, GOAL_TAB_OF } from '../view/goalPage.js';
  * it produced. A press that scrolled too early finds nothing and reads as a control
  * that does nothing at all.
  *
- * @public shared by the track strip, the pane jumps and the ask that leads to the reveal gate
+ * @public shared by the track strip, the pane jumps and the asks that lead to a card
  */
 export function scrollToAnchor(anchor: string): void {
   requestAnimationFrame(() => {

@@ -10,9 +10,8 @@ returns to pull requests cost, so a person can read where the money goes across 
 across a laptop.
 
 **It carried a second thing and no longer does.** A fleet's vouched **claims** crossed here too, so
-other fleets' agents were not sent to buy them again — and the claim store behind that arm is gone
-([27](27-obstacles.md#what-the-claim-store-left-behind)). There is nothing vouched to publish, and an
-obstacle is about _this_ repository's state right now, which crosses to nobody. The claims arm went
+other fleets' agents were not sent to buy them again — and the claim store behind that arm is gone.
+There is nothing vouched to publish. The claims arm went
 with it: no `claims.json`, no importer, no mirror of other fleets' prose, and no per-claim opt-out.
 What is documented below as the mechanism — one writer per namespace, a whole-document put, an
 envelope with the version on the outside — is unchanged and carries the digest alone.
@@ -929,8 +928,7 @@ such rather than as fleets that have published nothing, and the ones a week past
 as expired rather than dropped ([above](#a-mirrored-fleet-expires-after-a-week)). It draws nothing at all where no pool is
 configured, because an empty panel there would say in the operator's words that something is broken.
 
-It sat above the Knowledge page until that page went with the claim store behind it
-([27](27-obstacles.md#what-the-claim-store-left-behind)), and Insights is where it belongs anyway: it
+It sat above the Knowledge page until that page went with the claim store behind it, and Insights is where it belongs anyway: it
 is a reading about what this fleet publishes and reads, on the tab that answers what the fleet is
 costing and reaching.
 
@@ -964,8 +962,7 @@ on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on 
 - **No rule, desk or gate reads anything that arrives.** Nothing is dispatched, held or ranked because
   of a pooled reading.
 - **Nothing arriving reaches a prompt.** There is no arm that could put another fleet's words in front
-  of an agent, and the one that used to is gone with the store behind it
-  ([27](27-obstacles.md#what-the-claim-store-left-behind)).
+  of an agent, and the one that used to is gone with the store behind it.
 - **No reading acts.** A stale mirror and a fleet that has not published in a month are drawn for the
   person who can act on them, and neither moves anything. A fleet a week past its last digest has its
   rows expired out of the sums ([above](#a-mirrored-fleet-expires-after-a-week)) and is still only
@@ -977,8 +974,7 @@ on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on 
 
 **No columns, and that is the change.** The claims arm needed three additive `ALTER TABLE`s — a
 project stamp on each fact, a per-claim `keep_local`, and the pool fleet a corroborating voice came
-from — and all three went with the tables they were on
-([27](27-obstacles.md#what-the-claim-store-left-behind)). What the digest arm needs is derived per
+from — and all three went with the tables they were on. What the digest arm needs is derived per
 publish from rows the fleet already holds, and the envelope carries the project name.
 
 ### The mirror's own tables

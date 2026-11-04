@@ -65,7 +65,7 @@ export function remedyOrigin(
       `report_remedy is only for an agent dispatched to answer a pull request's failing CI or its ` +
       `review threads, and this task's origin is ${originRef ?? '(none)'}. If you are finishing work on ` +
       `an issue, use conclude_work; if you are writing up a goal, use retro_submit; if you noticed ` +
-      `something that is not your task at all, use raise.`,
+      `something that is not your task at all, say so in your remedy's note or escalate it.`,
   };
 }
 

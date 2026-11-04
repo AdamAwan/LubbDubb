@@ -7,11 +7,10 @@ a person can do, and the operator is the one who does it.
 
 **Three of what used to be here have gone.** A **finding** was a claim an agent filed and an operator
 ruled on; a **lesson** was a claim of a different kind — what working a goal taught about working this
-repository; both folded into one **claim store**, which has since gone too. What an agent hits or
-learns is a row on the obstacle board now, raised through one intake, matched on keys rather than on
-prose, and given an owner by the pulse rather than by a click. The **ticket** an obstacle gets is
-still filed by the machinery this document describes below.
-→ [27](27-obstacles.md#ownership)
+repository; both folded into one **claim store**, which has since gone too, and so has the obstacle
+board that replaced it. An agent stopped by something that is not its goal concludes `blocked` and the
+goal waits for the operator ([06](06-issue-pickup.md#blocked-parks-the-goal-for-you)); nothing files a
+ticket for what an agent hit.
 
 ## Jobs
 
@@ -216,8 +215,8 @@ knows or cares that a clock queued this one.
 
 That is the whole containment argument, and it is why there is no config key, no per-schedule
 concurrency limit and no "scheduled" flag anywhere downstream. A recurrence that could dispatch
-around the cap would be the capability escalation the obstacle board is careful to bound — one rule,
-in the pipeline, subject to the headroom cut ([27](27-obstacles.md#ownership)); one that queues is
+around the cap would be a capability escalation — work on the fleet that no rule in the pipeline
+proposed and no headroom cut bounded ([05](05-dispatcher.md#the-rule-book)); one that queues is
 just an operator who is asleep.
 
 ### The expression
@@ -326,10 +325,8 @@ Tests: `test/jobSchedules.test.ts`.
 
 ## Filing a ticket
 
-Five things file a tracker item: a standing **obstacle** the ownership desk gives an owner
-([27](27-obstacles.md#ownership)) — the one of the five the pulse takes rather than a click —
-unrecorded **work**, a **brief**, a **bug** an operator raised, and an **app error** pressed on the
-Errors tab ([39](39-app-errors.md#the-presses)). All five go through `ActionSink.createIssue`
+Four things file a tracker item: unrecorded **work**, a **brief**, a **bug** an operator raised, and
+an **app error** pressed on the Errors tab ([39](39-app-errors.md#the-presses)). All four go through `ActionSink.createIssue`
 ([15](15-integrations.md)), and none of them asks a model to run a `gh` / `az` command any more
 (issue #394).
 
@@ -338,7 +335,7 @@ Errors tab ([39](39-app-errors.md#the-presses)). All five go through `ActionSink
   **`issues` provider** is built from — so a ticket lands where the harness reads issues from and
   nowhere else. It returns null for `fake`, or for a provider selected without its config; every one
   of the four routes then 409s, and the snapshot ships `config.canFileTickets: false` so the cockpit
-  hides the buttons rather than offering a click that cannot work. One predicate, five surfaces.
+  hides the buttons rather than offering a click that cannot work. One predicate, four surfaces.
 - **The type, the labels, the assignee and any relation are decided by the harness.** `ticketAssignee`
   (`src/tickets/ticketAssignment.ts`) reads `userId` ([02](02-configuration.md#userid)); `filingType` /
   `bugFilingType` (`src/tickets/ticketTypes.ts`) read `issueFilingTypes` and `issueBugType`
@@ -355,24 +352,16 @@ Errors tab ([39](39-app-errors.md#the-presses)). All five go through `ActionSink
 - **The wording stays operator-overridable**, because how a ticket reads _is_ house style. Three arms
   render a ticket **body** from the template book — `work-item-ticket-body`, `brief-ticket-body` and
   `app-error-ticket-body` — and two keep an agent to write one. Nothing about the change moves that judgement into the harness.
-- **One arm keeps a desk agent, and four do not.** Where the whole body is already harness- or
-  operator-composed text (unrecorded work, a brief, an obstacle's sightings, an error group's
-  telemetry), a desk agent was
+- **One arm keeps a desk agent, and three do not.** Where the whole body is already harness- or
+  operator-composed text (unrecorded work, a brief, an error group's telemetry), a desk agent was
   spending a slot on one API call. Where the body is a judgement — writing up a symptom an operator
   observed, which no agent on the goal can derive because none of them ran it — the agent stays,
   narrowed to composing the title and body and handing both to `link_ticket`
   ([11](11-mcp-tools.md)).
 
-**An obstacle's arm composes its body mechanically**, and that is the one thing about it worth
-stating: the row already carries every sighting in its author's own words, so there is nothing for an
-agent to assemble. `obstacleTicketFields` (`src/obstacles/ownership.ts`) builds the fields and the
-operator's `obstacle-ticket-body` template does the wording, which keeps house style overridable
-without spending a slot on it. Where the deployment has a reader wired, the model desk's ticket prose
-replaces the mechanical composition, so the ticket says one thing once
-([27](27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not)).
-
-**The claim's own arm is gone with the store behind it.** `finding-ticket` is marked `retired: true`
-in the template book rather than deleted, which is the rule for every `PromptId`
+**The claim's own arm is gone with the store behind it**, and the obstacle's arm with the board.
+`finding-ticket`, `obstacle-ticket-body` and `docs-change` are marked `retired: true` in the template
+book rather than deleted, which is the rule for every `PromptId`
 ([05](05-dispatcher.md#prompt-templates)): removing an id turns every deployment that overrode it into
 a harness that will not boot.
 

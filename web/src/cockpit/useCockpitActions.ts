@@ -4,7 +4,6 @@ import type { AppliedFix } from '../view/needsYou.js';
 import { goalMove, homeTab, POOL_VIEWS } from './place.js';
 import type { CockpitActions } from './actions.js';
 import type { useNavigation } from './useNavigation.js';
-import { PREDICTION_PANE } from '../view/goalPage.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
 
@@ -26,7 +25,6 @@ export function useCockpitActions(refresh: Refresh, go: Go): { actions: CockpitA
       ...planActions(then),
       ...prActions(then),
       ...watchActions(then, refresh),
-      ...obstacleActions(then),
       ...upNextActions(then),
       ...remoteValidationActions(then),
       ...localRunActions(then),
@@ -139,16 +137,6 @@ function watchActions(then: Then, refresh: Refresh) {
   } satisfies Partial<CockpitActions>;
 }
 
-function obstacleActions(then: Then) {
-  return {
-    muteObstacle: (id, muted) => then(api.muteObstacle(id, muted)),
-    decideObstacleTicket: (id, approved) => then(api.decideObstacleTicket(id, approved)),
-    ownObstacle: (id, ownerRef) => then(api.ownObstacle(id, ownerRef)),
-    retireObstacle: (id) => then(api.retireObstacle(id)),
-    writeDownObstacle: (id) => then(api.writeDownObstacle(id)),
-  } satisfies Partial<CockpitActions>;
-}
-
 function upNextActions(then: Then) {
   return {
     reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
@@ -231,7 +219,6 @@ function placeActions(go: Go) {
     viewRetro: (issueRef) => go({ retro: issueRef }),
     hatchEgg: (id) => go({ hatch: id }),
     viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
-    setObstacleQuery: (next) => go(next),
     openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
     openInsights: (where) =>
       go((current) => {
@@ -244,7 +231,6 @@ function placeActions(go: Go) {
         return scope === 'pool' && !POOL_VIEWS.includes(view) ? { ...next, insightsView: 'economics' } : next;
       }),
     selectGoal: (ref) => go((current) => goalMove(current, ref)),
-    openGoalPrediction: (ref) => go((current) => ({ ...goalMove(current, ref), goalTab: PREDICTION_PANE })),
     openGoalPane: (ref, pane) => go((current) => ({ ...goalMove(current, ref), goalTab: pane })),
     selectPr: (prNumber) =>
       go((current) => (prNumber === null ? { pr: null } : { pr: prNumber, tab: homeTab(current.tab) })),

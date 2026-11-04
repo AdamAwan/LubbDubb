@@ -6,8 +6,6 @@ import type {
   Decision,
   Escalation,
   FeatureSequence,
-  GoalCriteriaAlignment,
-  GoalCriteriaVersion,
   GoalPause,
   GoalPriority,
   IssueConclusion,
@@ -16,8 +14,6 @@ import type {
   IssueDelivery,
   IssueShortfall,
   Job,
-  ObstacleBlock,
-  ObstacleStanding,
   Plan,
   PlanAmendment,
   PlanAtom,
@@ -46,7 +42,6 @@ import type {
 import type { AgentModels, ProfileSource } from '../agents/modelPolicy.js';
 import type { ParseResult } from './actions.js';
 import type { QueueStatus } from './admission.js';
-import type { ClosedSittings } from '../intake/sitting.js';
 import type { DispatchRuleId } from './rules.js';
 import type { DiscussionReader } from '../discussions/reader.js';
 
@@ -94,19 +89,12 @@ export interface DispatchContext {
   shortfalls?: IssueShortfall[];
   appraisals?: IssueAppraisal[];
   investigations?: IssueInvestigation[];
-  closedSittings?: ClosedSittings;
-  goalCriteria?: GoalCriteriaVersion[];
   /** Each issue's discussion file, read at most once a cycle. → docs/spec/40-discussions.md */
   discussion?: DiscussionReader;
-  criteriaAlignments?: GoalCriteriaAlignment[];
-  /** Goals owed a judge's second reading, as root origin refs. → 14-persistence.md#the-prediction-judge */
-  judgeOwed?: readonly string[];
   retrospectiveOrigins?: string[];
   featureStandings?: { number: number; title: string; key: string; lines: string[] }[];
   featureSummaryKeys?: Pick<FeatureSummary, 'originRef' | 'standingKey' | 'standingLines' | 'repeats' | 'repeatKeys'>[];
   featureSequences?: FeatureSequence[];
-  obstacles?: ObstacleStanding[];
-  obstacleBlocks?: ObstacleBlock[];
   agentHeadroom: number;
   recentDecisions: Decision[];
   proposals?: Proposal[];

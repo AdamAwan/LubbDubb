@@ -76,7 +76,11 @@ export function fleetDiscussions(
   };
 }
 
-/** Fresh each pulse. → docs/spec/40-discussions.md#what-agents-read */
-export function discussionIntake(files: DiscussionFiles): { discussion?: DiscussionReader } {
+/** What the pulse hands the dispatcher about each goal, fresh each pulse; absent where discussions are off. → docs/spec/40-discussions.md#what-agents-read */
+export interface GoalIntake {
+  discussion?: DiscussionReader;
+}
+
+export function discussionIntake(files: DiscussionFiles): GoalIntake {
   return files.enabled ? { discussion: memoReader((n) => files.read(n)) } : {};
 }

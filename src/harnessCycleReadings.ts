@@ -1,4 +1,4 @@
-import type { GoalIntake } from './intake/sitting.js';
+import type { GoalIntake } from './discussions/subject.js';
 import type {
   Agent,
   Decision,

@@ -256,8 +256,6 @@ export function useCockpit(): CockpitStatus {
       viewingRetro: place.retro,
       hatching: place.hatch,
       viewingScratchpad: place.scratchpad,
-      viewingObstacle: place.obstacle,
-      obstacleEnded: place.obstacleEnded,
       insightsView: place.insightsView,
       insightsScope: place.insightsScope,
       insightsWindow: place.insightsWindow,

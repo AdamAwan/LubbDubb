@@ -45,7 +45,6 @@ export const KIND_VERB: Record<NeedKind, string> = {
   description_note: 'Look',
   shortfall: 'Decide',
   intake: 'Let it in',
-  sitting: 'Write them down',
   findings: 'Decide',
   profile: 'Answer',
   placement: 'Pick a parent',

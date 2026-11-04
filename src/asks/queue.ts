@@ -2,7 +2,7 @@ import type { CockpitState } from '../wire.js';
 import type { SetupReading } from '../setup/reading.js';
 import type { AskGroup, AskKind, AskRow, AskUrgency } from './askRow.js';
 import { updateAskRows } from './updateAsks.js';
-import { findingsRows, intakeRows, placementRows, profileRows, sittingRows } from './issueAsks.js';
+import { findingsRows, intakeRows, placementRows, profileRows } from './issueAsks.js';
 import { refusedDispatchRows } from './refusedDispatches.js';
 import { assignAskRows, assignedPrRows, botPrRows, descriptionFeedbackRows, undescribedPartRows } from './prAsks.js';
 import { configRows, escalationRows, humanTaskRows, limitRows, recoveryRows } from './inboxAsks.js';
@@ -60,7 +60,6 @@ const KIND_URGENCY: Record<AskKind, AskUrgency> = {
   description_note: 'later',
   shortfall: 'next',
   intake: 'next',
-  sitting: 'now',
   findings: 'now',
   profile: 'next',
   close_out: 'next',
@@ -115,7 +114,6 @@ const STAGE_RANK: Record<AskKind, number> = {
   limit: 3,
   burn: 3,
   intake: 4,
-  sitting: 3,
   findings: 3,
   profile: 4,
   placement: 4,
@@ -173,7 +171,6 @@ export function buildAskQueue(
     ...escalationRows(state),
     ...limitRows(state),
     ...intakeRows(state),
-    ...sittingRows(state),
     ...findingsRows(state),
     ...profileRows(state),
     ...placementRows(state),

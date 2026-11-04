@@ -3,7 +3,6 @@ import type {
   Escalation,
   HumanTask,
   IssueConclusion,
-  Obstacle,
   Plan,
   PlanAmendment,
   Proposal,
@@ -24,7 +23,6 @@ export type OperatorRowId =
   | 'escalation'
   | 'human-task'
   | 'plan-approval'
-  | 'obstacle-ownership'
   | 'validation-bench'
   | 'upgrade'
   | 'stack-landing'
@@ -81,7 +79,6 @@ export interface OperatorInput {
   escalations: readonly Escalation[];
   proposals: readonly Proposal[];
   humanTasks: readonly HumanTask[];
-  obstacles: readonly Obstacle[];
   upgrade: UpgradeIntent;
   landings: readonly StackLanding[];
   plans: readonly Plan[];
@@ -224,18 +221,6 @@ function askSpecs(input: OperatorInput): RowSpec[] {
       countsOffers: true,
       parks: true,
       stamps: true,
-    },
-    {
-      id: 'obstacle-ownership',
-      kind: 'ask',
-      subject: 'obstacle',
-      label: 'Obstacle ownership',
-      blurb: 'Something in the fleet’s way, waiting for somebody to own it',
-      data: input.obstacles.filter((o) => o.kind === 'obstacle').map(fromObstacle),
-      declinable: true,
-      countsOffers: true,
-      parks: true,
-      stamps: false,
     },
     {
       id: 'validation-bench',
@@ -384,19 +369,6 @@ function fromEscalation(e: Escalation): Datum {
     openedAt: e.createdAt,
     settledAt: e.answeredAt,
     outcome: e.answeredAt !== null ? 'answered' : e.status === 'dismissed' ? 'declined' : 'open',
-  };
-}
-
-function fromObstacle(o: Obstacle): Datum {
-  return {
-    openedAt: o.createdAt,
-    settledAt: null,
-    outcome:
-      o.state === 'owned' || o.state === 'resolved'
-        ? 'answered'
-        : o.endedBy === 'retired' || o.state === 'muted'
-          ? 'declined'
-          : 'open',
   };
 }
 

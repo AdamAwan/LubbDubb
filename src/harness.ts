@@ -15,12 +15,13 @@ import type { RunwayDesk } from './supply/runwayDesk.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
 import { investigationStandings } from './intake/investigation.js';
+import { blockedGoals } from './escalation/blocked.js';
 import type { Action, IssueRun, RemoteRunBrief, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './pr/prThreads.js';
 import { runPulse, type PulseDeps, type PulsePhase } from './system/pulseDesks.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
-import type { GoalIntake } from './intake/sitting.js';
+import type { GoalIntake } from './discussions/subject.js';
 import { dispatchView, type CycleReadings } from './harnessCycleReadings.js';
 
 // → docs/spec/04-harness-cycle.md
@@ -52,7 +53,7 @@ interface HarnessDeps extends PulseDeps {
   issuePickup?: IssuePickupPolicy;
   localRun?: { noteAlive(): void };
   remoteRuns?: () => RemoteRunBrief[];
-  /** → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner */
+  /** → docs/spec/40-discussions.md */
   goalIntake?: () => GoalIntake;
   recovery?: { pendingCount(): number };
   freshReads?: { drain(): string[] };
@@ -353,9 +354,6 @@ export class Harness extends EventEmitter {
         remoteRuns: this.deps.remoteRuns?.() ?? [],
         modelPins: this.deps.modelPins,
         agentHeadroom: r.headroom,
-        closedSittings: r.intake.closedSittings,
-        goalCriteria: r.intake.criteria,
-        judgeOwed: r.intake.judgeOwed,
         discussion: r.intake.discussion,
       }),
     );
@@ -416,7 +414,7 @@ export class Harness extends EventEmitter {
       this.markPass('afterOrigins'),
     );
     const recentDecisions = store.decisions.listDecisions(200);
-    const intake = this.deps.goalIntake?.() ?? { closedSittings: null, criteria: [], judgeOwed: [] };
+    const intake = this.deps.goalIntake?.() ?? {};
     const liveAgents = store.agents.countLiveAgents();
     const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
     return {
@@ -476,7 +474,7 @@ export class Harness extends EventEmitter {
           this.deps.store.investigations.list(),
           this.deps.issuePickup,
         ),
-        closedSittings: r.intake.closedSittings,
+        goalBlocks: blockedGoals(this.deps.store.escalations.listOpenEscalations()),
         runs: issueRuns,
         headroom: r.headroom,
         paused: this.deps.runtime.paused,

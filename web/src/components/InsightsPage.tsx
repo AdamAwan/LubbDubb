@@ -5,7 +5,6 @@ import type {
   InsightsWindowView,
   McpInsights,
   PoolInsightsPayload,
-  PredictionAggregate,
   UsagePayload,
   ReliabilityInsights,
   ReviewLabelInsights,
@@ -27,7 +26,6 @@ import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
 import { UsageTab, usageCsv } from './UsageTab.js';
 import { PoolCauses, PoolEconomics, PoolThroughput, PoolUsage } from './PoolTab.js';
 import { PoolTrend } from './PoolTrendTab.js';
-import { PredictionTab } from './PredictionTab.js';
 import { Label } from './label.js';
 import { BareButton } from './button.js';
 import { POOL_VIEWS } from '../cockpit/place.js';
@@ -68,7 +66,6 @@ const TABS: readonly { id: InsightsView; label: string; asks: string; poolAsks?:
     poolAsks: 'Is what changed working, for everyone?',
   },
   { id: 'mcp', label: 'MCP', asks: 'Can the fleet reach its tools?' },
-  { id: 'prediction', label: 'Prediction', asks: 'Did you see the plan coming, and was the plan right?' },
   {
     id: 'usage',
     label: 'Usage',
@@ -107,7 +104,7 @@ export function InsightsPage({
   actions: CockpitActions;
 }): JSX.Element {
   const page = useRef<HTMLDivElement>(null);
-  const { spend, reliability, remedies, reviewLabels, trend, throughput, mcp, allowance, usage, prediction, pool } =
+  const { spend, reliability, remedies, reviewLabels, trend, throughput, mcp, allowance, usage, pool } =
     useInsightsData(view, scope, chosen, poolProject);
 
   const asks = askedBy(view, scope);
@@ -164,7 +161,6 @@ export function InsightsPage({
           mcp={mcp}
           throughput={throughput}
           allowance={allowance}
-          prediction={prediction}
           usage={usage}
           pool={pool}
           poolStep={poolStep}
@@ -337,7 +333,6 @@ function Body({
   mcp,
   throughput,
   allowance,
-  prediction,
   usage,
   pool,
   poolStep,
@@ -354,7 +349,6 @@ function Body({
   mcp: Fetched<McpInsights>;
   throughput: Fetched<ThroughputInsights>;
   allowance: Fetched<AllowancePayload>;
-  prediction: Fetched<PredictionAggregate>;
   usage: Fetched<UsagePayload>;
   pool: Fetched<PoolInsightsPayload>;
   poolStep: string | null;
@@ -389,18 +383,6 @@ function Body({
     return gated(mcp, 'Reading the tool channel…', 'Could not read the tool channel.', (data) => (
       <McpUsageTab insights={data} />
     ));
-
-  /* The route is not mounted at all with both keys off, so a read that does not
-     answer is the switch being off far more often than it is a fault — and this
-     surface reads the presence of the data, never the flag.
-     → docs/proposals/prediction-record-and-criteria-integrity.md */
-  if (view === 'prediction')
-    return gated(
-      prediction,
-      'Reading the prediction record…',
-      'Could not read the prediction record. Neither the reveal gate nor goal criteria is switched on, or the read failed.',
-      (data) => <PredictionTab aggregate={data} />,
-    );
 
   if (view === 'usage')
     return gated(usage, 'Reading what was asked of you…', 'Could not read the operator ledger.', (data) => (
@@ -443,10 +425,6 @@ function Exports({
   usage: UsagePayload | null;
   page: RefObject<HTMLDivElement | null>;
 }): JSX.Element | null {
-  /* The aggregate carries no author and no word of what was written, and it is not
-     a window's reading either — so it gets neither the CSV of a windowed tab nor,
-     by falling through, somebody else's. */
-  if (view === 'prediction') return null;
   const label = TABS.find((t) => t.id === view)?.label ?? 'Insights';
   const sheet = {
     heading: `Insights · ${label}`,

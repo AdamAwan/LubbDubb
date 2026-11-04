@@ -16,8 +16,6 @@ interface CloseOutInput {
   shortfalls: readonly IssueShortfall[];
   existing: readonly HumanTask[];
   validation: ReadonlyMap<string, { verdict: ValidationVerdict; outstanding: readonly string[] }>;
-  /** Each goal's criteria, one line per criterion as it was read. → 20-validation.md#satisfies-and-the-goals-criteria */
-  criteria?: ReadonlyMap<string, readonly string[]>;
   opened: ReadonlySet<string> | null;
   /** Goals with validation still ahead of the close: an open `validate` row, or an unanswered check set. */
   validating: ReadonlySet<string>;
@@ -106,7 +104,6 @@ function deliveryDetail(input: CloseOutInput, issue: Issue, delivery: IssueDeliv
     input.validation.get(originRef) ?? null,
     input.canClose,
     input.watch.get(originRef) ?? null,
-    input.criteria?.get(originRef) ?? [],
   );
 }
 
@@ -133,7 +130,6 @@ function closeOutDetail(
   validation: { verdict: ValidationVerdict; outstanding: readonly string[] } | null,
   canClose: boolean,
   watch: string | null,
-  criteria: readonly string[],
 ): string {
   const author = DELIVERY_AUTHOR[delivery.by];
   const by = author.charAt(0).toUpperCase() + author.slice(1);
@@ -152,7 +148,6 @@ function closeOutDetail(
       ...validation.outstanding.map((c) => `- ${c}`),
     );
   }
-  if (criteria.length > 0) lines.push('', '**Your criteria**', '', ...criteria);
   if (watch !== null) lines.push('', watch);
   if (issue.url) lines.push('', issue.url);
   return lines.join('\n');

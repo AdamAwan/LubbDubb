@@ -1,5 +1,4 @@
 import type { Config } from '../config/config.js';
-import type { PredictionStore } from '../store/predictions.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import type { LocalRunner } from '../localRun/runner.js';
 import type { LocalRunWatch } from '../localRun/watch.js';
@@ -10,7 +9,6 @@ import type { RemoteIntentDesk } from '../validation/remote/intent.js';
 import type { RemoteRunDesk } from '../validation/remote/run.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 import { prRefStyle } from '../pr/prRef.js';
-import { planIsWithheld } from '../server/planReveal.js';
 import { apiUrl } from '../server/apiUrl.js';
 import { buildRemoteSheets } from '../server/stateEnvironmentViews.js';
 import type { Foundation, LateBinding } from './systemFoundation.js';
@@ -20,16 +18,11 @@ import type { Foundation, LateBinding } from './systemFoundation.js';
 export function buildDesktop(
   config: Config,
   { store, connector, sink, runtimeControl, errors, discussions, discussionPulls }: Foundation,
-  predictions: PredictionStore,
   prompts: PromptTemplates,
   late: LateBinding,
 ): McpDesktopServer {
   return new McpDesktopServer({
     store,
-    // The desktop channel is the operator's own Claude Code, and it can read a plan
-    // aloud. It is handed the *answer* to whether a plan is withheld, never the means
-    // to ask — src/mcp/ must not be able to name the prediction store.
-    planWithheld: (plan) => planIsWithheld({ config, predictions }, plan),
     argsRetentionDays: config.mcpArgsRetentionDays,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,

@@ -45,7 +45,7 @@ function assignSink(assigned: PrAssignInput[]): ActionSink & PrAssignSink {
   }) as ActionSink & PrAssignSink;
 }
 
-async function deck(planWithheld = false): Promise<Deck> {
+async function deck(): Promise<Deck> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-asks-'));
   const assigned: PrAssignInput[] = [];
   const system = buildSystem(
@@ -70,7 +70,6 @@ async function deck(planWithheld = false): Promise<Deck> {
   );
   const server = new McpDesktopServer({
     ...desktopDeps(system),
-    ...(planWithheld ? { planWithheld: () => true } : {}),
     now: () => NOW,
     socketPath: process.platform === 'win32' ? `\\\\.\\pipe\\lubbdubb-asks-${Date.now()}` : join(dir, 'asks.sock'),
     credentialPath: join(dir, 'desktop.json'),
@@ -375,25 +374,7 @@ test('escalation_answer dismisses a question without answering it, and sends a p
   }
 });
 
-test('proposal_decide refuses a withheld plan, as the cockpit’s routes do, and keeps `declined` to check sets', async () => {
-  const d = await deck(true);
-  try {
-    const plan = d.system.store.escalations.createProposal({
-      kind: 'plan',
-      ref: 'issue:12:plan',
-      action: { type: 'propose_plan', reason: 'x', planId: 'plan_hidden' } as never,
-      escalationId: null,
-    });
-    for (const verdict of ['accept', 'reject', 'hold_ticket']) {
-      const refused = await d.call('proposal_decide', { id: plan.id, verdict });
-      assert.ok(refused.isError, `${verdict} is refused`);
-      assert.match(refused.text, /not been revealed/);
-    }
-    assert.equal(d.system.store.escalations.listProposals().find((p) => p.id === plan.id)?.status, 'pending');
-  } finally {
-    await d.close();
-  }
-
+test('proposal_decide keeps `declined` to check sets', async () => {
   const e = await deck();
   try {
     const merge = e.system.store.escalations.createProposal({

@@ -151,13 +151,12 @@ function priorWording(prev: ValidationCheck): ValidationRevision {
   };
 }
 
-/** What a re-declaration that says nothing about them keeps: the criteria a check answers, and why. */
+/** What a re-declaration that says nothing about it keeps: why the check is the right proof. */
 function keptWhenOmitted(
-  input: Pick<ValidationCheckInput, 'satisfies' | 'rationale'>,
+  input: Pick<ValidationCheckInput, 'rationale'>,
   prev: ValidationCheck | undefined,
-): Pick<ValidationCheck, 'satisfies' | 'rationale'> {
+): Pick<ValidationCheck, 'rationale'> {
   return {
-    satisfies: input.satisfies ?? prev?.satisfies ?? [],
     rationale: input.rationale ?? prev?.rationale ?? null,
   };
 }

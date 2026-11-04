@@ -90,12 +90,57 @@ test('a fresh database never has the retired columns, and they are not declared 
   const store = new Store(':memory:');
   try {
     const cols = columns((store as unknown as { db: Database.Database }).db);
-    assert.ok(!cols.includes('area') && !cols.includes('expects'));
+    assert.ok(!cols.includes('area') && !cols.includes('expects') && !cols.includes('satisfies'));
   } finally {
     store.close();
   }
   assert.equal(VALIDATION_COLUMNS.validation_checks?.area, undefined);
   assert.equal(VALIDATION_COLUMNS.validation_checks?.expects, undefined);
+  assert.equal(VALIDATION_COLUMNS.validation_checks?.satisfies, undefined);
+});
+
+test('a database carrying only satisfies loses it, keeps every other column, and boots twice quietly', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-satisfies-retire-'));
+  const path = join(dir, 'old.db');
+  try {
+    new Store(path).close();
+    const db = new Database(path);
+    db.exec(`ALTER TABLE validation_checks ADD COLUMN satisfies TEXT`);
+    const row: Row = {
+      origin_ref: GOAL,
+      id: 'an-order-places',
+      letter: 'A',
+      seq: 1,
+      title: 'An order still places',
+      check_do: 'Place one.',
+      check_expect: 'It places.',
+      uses: '[]',
+      covers: '[]',
+      satisfies: '["orders place"]',
+      rationale: 'the order path is the whole change',
+      state: 'unrun',
+      created_at: NOW,
+      updated_at: NOW,
+    };
+    const keys = Object.keys(row);
+    db.prepare(
+      `INSERT INTO validation_checks (${keys.join(', ')}) VALUES (${keys.map((k) => `@${k}`).join(', ')})`,
+    ).run(row);
+    const before = rowsOf(db);
+    db.close();
+
+    new Store(path).close();
+    const after = new Database(path);
+    assert.ok(!columns(after).includes('satisfies'), 'the column is gone');
+    assert.deepEqual(rowsOf(after), without(before, 'satisfies'), 'every other column came across untouched');
+    for (const r of VALIDATION_REBUILDS.filter((x) => x.table === 'validation_checks')) {
+      assert.equal(r.detect ? r.detect(after) : columns(after).includes(r.keyedOn), false);
+    }
+    after.close();
+    new Store(path).close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  }
 });
 
 test('an old database loses area and expects, every other column survives, and the second boot rebuilds nothing', () => {

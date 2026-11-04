@@ -1,4 +1,4 @@
-import { MCP_TOOL_NAMES, isSealedRule, type McpToolName, toolsForRule } from './names.js';
+import { MCP_TOOL_NAMES, type McpToolName, toolsForRule } from './names.js';
 import type { McpTool } from './protocol.js';
 import { retiredTools } from './retiredTools.js';
 import { buildToolContext, type McpIdentity, type McpToolDeps, type ToolFactory } from './tools/context.js';
@@ -18,7 +18,6 @@ import { openPr } from './tools/openPr.js';
 import { planNotNeeded } from './tools/planNotNeeded.js';
 import { planCorrect } from './tools/planCorrect.js';
 import { planSubmit } from './tools/planSubmit.js';
-import { raise as raiseFact } from './tools/raise.js';
 import { reportRemedy } from './tools/reportRemedy.js';
 import { replyToReview } from './tools/replyToReview.js';
 import { requestHumanTask } from './tools/requestHumanTask.js';
@@ -27,8 +26,6 @@ import { retroSubmit } from './tools/retroSubmit.js';
 import { reviewReport } from './tools/reviewReport.js';
 import { reviewRoute } from './tools/reviewRoute.js';
 import { splitAssess } from './tools/splitAssess.js';
-import { criteriaAlignment } from './tools/criteriaAlignment.js';
-import { predictionJudge } from './tools/predictionJudge.js';
 import { prDescribe } from './tools/prDescribe.js';
 import { descriptionReview } from './tools/descriptionReview.js';
 import { scratchAppend } from './tools/scratchAppend.js';
@@ -86,20 +83,14 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   review_report: reviewReport,
   review_route: reviewRoute,
   split_assess: splitAssess,
-  criteria_alignment: criteriaAlignment,
-  prediction_judge: predictionJudge,
   pr_describe: prDescribe,
   description_review: descriptionReview,
   report_remedy: reportRemedy,
-  raise: raiseFact,
 };
 
 export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] {
   const ctx = buildToolContext(deps, identity);
   const advertised = toolsForRule(identity.task.rule ?? null);
-  if (isSealedRule(identity.task.rule)) {
-    return MCP_TOOL_NAMES.filter((name) => advertised.has(name)).map((name) => ({ name, ...TOOLS[name](ctx) }));
-  }
   return [
     ...MCP_TOOL_NAMES.map((name) => ({
       name,

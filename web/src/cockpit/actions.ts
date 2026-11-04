@@ -42,11 +42,10 @@ export type ConsolePanel =
   | { ask: string }
   | null;
 
-export type ConsoleTab =
-  'overview' | 'tickets' | 'obstacles' | 'features' | 'bots' | 'errors' | 'insights' | 'pets' | 'config';
+export type ConsoleTab = 'overview' | 'tickets' | 'features' | 'bots' | 'errors' | 'insights' | 'pets' | 'config';
 
 export type InsightsView =
-  'economics' | 'allowance' | 'reliability' | 'throughput' | 'causes' | 'trend' | 'mcp' | 'prediction' | 'usage';
+  'economics' | 'allowance' | 'reliability' | 'throughput' | 'causes' | 'trend' | 'mcp' | 'usage';
 
 /* Whose numbers a reading is over. Every tab answers for this fleet; four of them
    the pool can answer too. → docs/spec/17-cockpit.md#just-me-or-the-pool */
@@ -107,16 +106,8 @@ export interface CockpitActions {
   }): void;
   selectGoal(ref: string | null): void;
   /**
-   * The goal, opened on the pane its prediction card is drawn in. Moment two is
-   * asked from the rail and answered on that card, so the press must carry the pane
-   * with it: `selectGoal` alone leaves the landing to the lifecycle rule, which
-   * sends a delivered goal to its record — a press that goes somewhere the question
-   * cannot be answered, with nothing red. → docs/spec/17-cockpit.md#the-address-bar
-   */
-  openGoalPrediction(ref: string): void;
-  /**
-   * The goal, opened on the pane the ask being pressed is answered in. Same rule as
-   * `openGoalPrediction`, one press wider: `selectGoal` alone drops the pane and leaves
+   * The goal, opened on the pane the ask being pressed is answered in. `selectGoal`
+   * alone drops the pane and leaves
    * the landing to the lifecycle rule, which sends a goal whose checks have begun to
    * Validate however the press was about its plan — an ask that opens a pane it is not
    * drawn in, with nothing red. → docs/spec/17-cockpit.md#which-pane-opens
@@ -199,14 +190,6 @@ export interface CockpitActions {
   openErrors(
     where: Partial<Pick<Place, 'errorsBand' | 'errorsSteady' | 'errorsSort' | 'errorsShow' | 'errorsText'>>,
   ): void;
-
-  setObstacleQuery(next: Partial<Pick<Place, 'obstacle' | 'obstacleEnded'>>): void;
-
-  muteObstacle(id: string, muted: boolean): Promise<void>;
-  decideObstacleTicket(id: string, approved: boolean): Promise<void>;
-  ownObstacle(id: string, ownerRef: string): Promise<void>;
-  retireObstacle(id: string): Promise<void>;
-  writeDownObstacle(id: string): Promise<void>;
 
   completeHumanTask(id: string, note?: string): Promise<void>;
   declineHumanTask(id: string, note: string): Promise<void>;

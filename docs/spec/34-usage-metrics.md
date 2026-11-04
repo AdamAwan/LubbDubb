@@ -85,7 +85,6 @@ offers no such control, and the day it does, the cell is where it is added.
 | `ticket`         | `view` `expand` `filter` `create` `accept` `reject` `waive` `undo` `close` `open`                       |
 | `feature`        | `view` `expand` `filter` `defer` `stop` `undo` `close` `open`                                           |
 | `agent`          | `view` `expand` `edit` `accept` `reject` `abandon` `stop` `send` `close`                                |
-| `obstacle`       | `view` `expand` `create` `accept` `reject` `waive` `stop` `undo` `close`                                |
 | `local-run`      | `view` `expand` `filter` `create` `edit` `reject` `stop` `close` `open`                                 |
 | `job`            | `view` `expand` `create` `edit` `stop` `close`                                                          |
 | `retro`          | `view` `close`                                                                                          |
@@ -104,10 +103,8 @@ offers no such control, and the day it does, the cell is where it is added.
 | `placement`      | `edit` `accept` `reject`                                                                                |
 | `profile`        | `accept` `reject`                                                                                       |
 | `priority`       | `create` `undo`                                                                                         |
-| `intake`         | `expand` `edit` `accept` `waive` `abandon` `open`                                                       |
+| `intake`         | `accept` `open`                                                                                         |
 | `investigation`  | `accept` `reject` `undo`                                                                                |
-| `criteria`       | `expand` `edit` `abandon` `close`                                                                       |
-| `prediction`     | `expand` `create` `accept` `reject` `waive` `undo` `close`                                              |
 | `sequence`       | `accept` `reject` `open`                                                                                |
 | `discussion`     | `filter` `open`                                                                                         |
 | `watch`          | `expand` `create` `edit` `accept` `reject` `defer` `waive` `abandon` `close`                            |
@@ -138,6 +135,11 @@ a retro is drawn flat and a pet's card is always whole — so `pr.expand`, `tick
 site is a **permanent silent zero**, which is the "never named" failure
 [`src/insights/mcpInsights.ts`](../../src/insights/mcpInsights.ts) exists to diagnose, one actor over. Each comes back
 on the day its control does.
+
+**Two subjects and four cells went with the features they counted.** `criteria` and `prediction` left
+when goal criteria and predictions were removed, and `intake` kept only `accept` and `open`: its
+`expand`, `edit`, `waive` and `abandon` were the intake sitting's composer. Rows already recorded
+under them stay in `surface_reach` and are read by nothing — the reach reading walks the live subjects.
 
 **A bug investigation's findings are their own subject, `investigation`**
 ([38](38-bug-investigation.md#resolving-the-findings)), not a verb on `intake`: they are a different
@@ -254,7 +256,7 @@ button press: `FoldToggle` names `<subject>.expand` and `<subject>.close` itself
 dialog is `<subject>.close`, so "how often is this opened and left without acting" is one `group by`
 rather than a count folded into the opens — and a disclosure logs `expand` as it opens and `close` as it
 folds, never `expand` both ways. **A pause is `stop` and its resume is `undo`**, on every
-subject that has one — the fleet, a schedule, a Feature, an obstacle's mute.
+subject that has one — the fleet, a schedule, a Feature.
 
 #### A control that is not a `<button>`
 
@@ -324,14 +326,13 @@ nobody ever performs is a control nobody needs.
 
 **The asks**, one row each, over the window:
 
-| Ask                | The record it is folded from                                                          |
-| ------------------ | ------------------------------------------------------------------------------------- |
-| Escalation         | `escalations` — `answeredAt` against `dismissed`                                      |
-| Human task         | `human_tasks`, `kind = 'ask'` — `done` against `declined`                             |
-| Plan approval      | `proposals`, `kind = 'plan'` — `createdAt` and `decidedAt`                            |
-| Obstacle ownership | `obstacles` — [27](27-obstacles.md)                                                   |
-| Validation bench   | `human_tasks`, `kind = 'validate'` — the close-out obligation, [20](20-validation.md) |
-| Upgrade            | the upgrade intent — [21](21-self-update.md)                                          |
+| Ask              | The record it is folded from                                                          |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Escalation       | `escalations` — `answeredAt` against `dismissed`                                      |
+| Human task       | `human_tasks`, `kind = 'ask'` — `done` against `declined`                             |
+| Plan approval    | `proposals`, `kind = 'plan'` — `createdAt` and `decidedAt`                            |
+| Validation bench | `human_tasks`, `kind = 'validate'` — the close-out obligation, [20](20-validation.md) |
+| Upgrade          | the upgrade intent — [21](21-self-update.md)                                          |
 
 **Plan approval is folded from `proposals`, not from `plans`.** The `plans` table carries no stamp
 for entering or leaving `awaiting_approval`, and `updatedAt` moves afterwards for reasons that are
@@ -387,9 +388,8 @@ outstanding for longer than the whole span. That is the only way to say _too lon
 serving six spans.
 
 **`null` is never zero.** A row whose record cannot answer a column ships `null` for it, which is
-`src/insights/mcpInsights.ts`' doctrine applied one actor over: an obstacle's `updated_at` moves on every
-sighting, so there is no instant to measure a wait to, and a landing records the click and never the
-offer. A panel drawing a zero there would be manufacturing a finding out of a missing column.
+`src/insights/mcpInsights.ts`' doctrine applied one actor over: a landing records the click and never
+the offer. A panel drawing a zero there would be manufacturing a finding out of a missing column.
 
 #### How a wait is priced
 
@@ -596,9 +596,6 @@ count — no refs, no text, no identity.
   `CHOICE_COPY`, its sweep in `SWEEPS` (both `Record`s over the union, so a choice with neither does
   not compile), the lists that sweep reads on `ChoiceInput`, and the reads that fill them in
   `byChoice` (`src/pool/digestArm.ts`).
-- **A choice the deployment does not offer is left out, not zeroed.** `choicesOff` names them —
-  `goal-criteria` where `goalCriteria.enabled` is off — so a fleet that was never asked does not
-  publish every goal as the planner's.
 
 | Choice             | A person's answer stood                                                           | An agent's answer stood                                  |
 | ------------------ | --------------------------------------------------------------------------------- | -------------------------------------------------------- |
@@ -606,7 +603,6 @@ count — no refs, no text, no identity.
 | `plan`             | `view` `expand` `filter` `edit` `accept` `reject` `abandon` `undo` `close` `open` |
 | `validation-check` | a pass or fail with `resultBy = 'operator'`                                       | a pass or fail by `agent`, `desktop`, `spec` or `script` |
 | `goal-verdict`     | a conclusion, delivery or shortfall by `operator`                                 | the same, by the assessor or an agent                    |
-| `goal-criteria`    | criteria written before the goal's first plan                                     | the goal planned with none, where `goalCriteria` is on   |
 | `watch-check`      | a live watch `authored = 'operator'`                                              | a live watch the plan declared                           |
 | `state-query`      | a query `authored = 'operator'`                                                   | a plan's or agent's query with an approval somewhere     |
 | `story-order`      | a proposed order declined                                                         | a proposed order accepted                                |
@@ -614,9 +610,9 @@ count — no refs, no text, no identity.
 **What it cannot see, stated rather than hidden.** A goal verdict and a check reading are one row
 each, overwritten, so a verdict a person later replaced counts once, as theirs. A declined watch or
 query is deleted, so it counts on neither side — only what a person ended up standing behind does.
-Criteria are dated at the goal's first plan, because the intake sitting's stamp lives in the
-prediction store, which the digest is deliberately not handed
-([14](14-persistence.md#the-prediction-store-is-not-on-store)).
+There was a `goal-criteria` choice, and the `choicesOff` list that left it out where the feature was
+off; both went with goal criteria. A pooled document from an older fleet may still carry its key, and
+`choiceLabel` passes an unknown key through as written.
 
 `pr-description.create` and `pr-description.accept` stay in the registry for the local reading — the
 ledger's "Writing a description" act and the press's reach — and are not how the pool counts the

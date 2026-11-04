@@ -85,7 +85,7 @@ export interface RunwayInput {
 
 const INFLIGHT = new Set(['active', 'has_pr', 'planning']);
 const QUEUED = new Set(['eligible', 'blocked', 'cooldown']);
-const HELD = new Set(['escalated', 'delivered', 'retained', 'sitting']);
+const HELD = new Set(['escalated', 'delivered', 'retained', 'parked']);
 
 interface StatusCounts {
   inflight: number;

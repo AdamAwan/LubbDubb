@@ -1,8 +1,10 @@
 import { EventEmitter } from 'node:events';
 import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
-import type { AgentStatus, Escalation, EscalationContext, EscalationType } from '../types.js';
+import type { AgentStatus, Escalation, EscalationContext, EscalationType, WorldSnapshot } from '../types.js';
 import { settledMergeAsks } from '../proposals/settledMerges.js';
+import { issueSubtreeNumber } from '../issueOrigins.js';
+import { blockOf } from './blocked.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -63,6 +65,15 @@ export class EscalationInbox extends EventEmitter {
     if (esc.status !== 'open') throw new Error(`Escalation ${id} is already ${esc.status}`);
     const updated = this.store.escalations.answerEscalation(id, response);
     this.emit('answered', { escalation: updated, routing: 'resolved_out_of_band' });
+    return updated;
+  }
+
+  restate(id: string, prompt: string, context: EscalationContext): Escalation {
+    const esc = this.store.escalations.getEscalation(id);
+    if (!esc) throw new Error(`Escalation ${id} not found`);
+    if (esc.status !== 'open') throw new Error(`Escalation ${id} is already ${esc.status}`);
+    const updated = this.store.escalations.restateEscalation(id, prompt, context);
+    this.emit('restated', updated);
     return updated;
   }
 
@@ -134,6 +145,40 @@ export class EscalationInbox extends EventEmitter {
       for (const id of ask.escalationIds) answered.push(this.settleResolved(id, ask.verdict));
     }
     return answered;
+  }
+
+  /**
+   * Settle every open block whose issue has left the open set. Run once per pulse on
+   * a fresh read, and idempotent.
+   *
+   * → docs/spec/06-issue-pickup.md#blocked-parks-the-goal-for-you
+   *
+   * @public reached through `HarnessDeps.escalations`, a structural seam.
+   */
+  tidyClosedBlocks(world: WorldSnapshot): Escalation[] {
+    if ((world.staleSources ?? []).length > 0) return [];
+    const open = new Set(world.issues.filter((i) => i.state === 'open').map((i) => i.number));
+    const at = new Date().toISOString();
+    const settled: Escalation[] = [];
+    for (const esc of this.store.escalations.listOpenEscalations()) {
+      const block = blockOf(esc);
+      const issueNumber = block === null ? null : issueSubtreeNumber(block.originRef);
+      if (issueNumber === null || open.has(issueNumber)) continue;
+      const reason = `#${issueNumber} is no longer open, so there is nothing left to release`;
+      const updated = this.store.escalations.dismissEscalation(esc.id, {
+        ...esc.context,
+        dismissal: { reason, at, by: 'harness' },
+      });
+      this.store.decisions.recordDecision({
+        cycleId: 'issue-lifecycle',
+        action: { type: 'no_op', reason: 'settle a block whose issue closed' },
+        outcome: 'executed',
+        detail: `Settled escalation ${esc.id}: ${reason}`,
+      });
+      this.emit('dismissed', updated);
+      settled.push(updated);
+    }
+    return settled;
   }
 
   /**

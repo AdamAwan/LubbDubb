@@ -173,7 +173,7 @@ test('a retired name being called is a finding, and it is not otherwise listed',
   });
   const verdict = called.quiet.find((q) => q.tool === 'report_finding');
   assert.equal(verdict?.verdict, 'retired');
-  assert.match(verdict?.remedy ?? '', /raise/);
+  assert.match(verdict?.remedy ?? '', /take it out/);
 });
 
 test('a desktop tool nobody used is a reading, not a fault, and carries no remedy', () => {

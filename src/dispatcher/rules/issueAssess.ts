@@ -1,5 +1,4 @@
 import { issueWatchGateReason, openPrForIssue } from '../issuePickup.js';
-import { criteriaItems } from '../../criteria/items.js';
 import { assessBranch, assessOrigin, hasPriorWork } from '../../delivery/assessment.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { planInFlight } from '../../plans/parts.js';
@@ -14,7 +13,7 @@ import type { RawAction, StageContext } from './context.js';
  * The assessor's second output, on `validation.checkSets` and while nobody has authored a check set
  * yet. Empty otherwise, so the prompt never asks for something the tool would refuse.
  */
-function authoringAppendix(s: StageContext, root: string, plan: Plan, issueNumber: number): string {
+function authoringAppendix(s: StageContext, root: string, plan: Plan): string {
   if (!s.checkSets) return '';
   const record = s.validationPlans.get(root) ?? null;
   if (checkSetAuthored({ record, checks: s.validationChecks.get(root) ?? [] })) return '';
@@ -24,7 +23,6 @@ function authoringAppendix(s: StageContext, root: string, plan: Plan, issueNumbe
       hint: record?.hint ?? null,
       parts: (s.ctx.planParts ?? []).filter((p) => p.planId === plan.id),
       environments: s.validationPlanNote,
-      criteria: criteriaItems(s.criteriaFor(issueNumber)?.text),
     })
   );
 }
@@ -64,7 +62,7 @@ export function issueAssess(s: StageContext): void {
             title: issue.title,
             body: issue.body,
             branch,
-          }) + authoringAppendix(s, root, plan, issue.number),
+          }) + authoringAppendix(s, root, plan),
         originRef: origin,
         originTitle: issue.title,
         originSummary: issue.body,

@@ -3,7 +3,6 @@ import { relTime, untilTime, linkify } from './util.js';
 import { renderMarkdown } from './markdown.js';
 import { AsyncButton } from './AsyncButton.js';
 import { CheckSetAsk, useCheckDeclines } from './CheckSetAsk.js';
-import { HOLDS_NOTHING_UP, PREDICT_WHY } from './PlanRevealGate.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
 import type { Escalation } from '../types.js';
@@ -126,7 +125,7 @@ export function CardDetail({
   now: number | undefined;
 }): JSX.Element {
   const { context } = escalation;
-  const { checkSet, gated, decidable } = card;
+  const { checkSet, decidable } = card;
   return (
     <>
       {context.approvals?.length ? (
@@ -153,21 +152,7 @@ export function CardDetail({
           wall it replaced, with a scrollbar. The card grows; the panel scrolls. */}
       {checkSet !== null ? <CheckSetAsk set={checkSet} declines={declines} /> : null}
 
-      {/* The stand-in is the *same sentence* as the prompt above it, so a withheld
-          plan drew "it is withheld until you reveal it" twice and made no case for
-          the press under it. The gate's own argument stands here instead: this card
-          is where the operator meets the plan first, and the offer has to be made
-          where it is met. → docs/spec/17-cockpit.md#the-reveal-gate */}
-      {gated ? (
-        <div className="esc-context">
-          <div className="lb lb-sm">Why you are being stopped</div>
-          <div className="esc-detail">
-            <p>
-              {PREDICT_WHY} {HOLDS_NOTHING_UP}
-            </p>
-          </div>
-        </div>
-      ) : context.detail && checkSet === null ? (
+      {context.detail && checkSet === null ? (
         <div className="esc-context">
           <div className="lb lb-sm">{detailLabel(context, escalation.agentId)}</div>
           <div className="esc-detail">{renderMarkdown(String(context.detail), refUrls)}</div>
@@ -249,8 +234,8 @@ export function PlanOpen({
   card: Card;
   onViewPlan: CardProps['onViewPlan'];
 }): JSX.Element | null {
-  const { planId, planDecidable, gated } = card;
-  if (!planId || planDecidable || gated) return null;
+  const { planId, planDecidable } = card;
+  if (!planId || planDecidable) return null;
   return (
     <Button className="esc-plan-open" usage={{ counted: 'plan.view' }} onClick={() => onViewPlan!(planId)}>
       <span className="esc-plan-open-label">Read the full plan</span>

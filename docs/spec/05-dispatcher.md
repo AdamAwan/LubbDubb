@@ -29,7 +29,8 @@ consumer is `decide` is read here, at one point, below the last sweep phase: the
 proposals, the standing jobs and ejections, the plan atoms and amendments, the validation checks and
 plans, the local run and its validations, the selector offerings, the feature summaries and
 sequences, the priority, pause and profile overrides, the prior remedies, the PR splits and the
-reviewed-elsewhere set, and the obstacle board.
+reviewed-elsewhere set, and the goals parked `blocked` (read off the open escalations that ask to
+release them, [06](06-issue-pickup.md#blocked-parks-the-goal-for-you)).
 
 Reading them here rather than where the pulse reads its own is safe for one stated reason: **no desk
 and no sweep between the two points writes any of those tables.** The sweeps that do write — the
@@ -149,8 +150,14 @@ and three claimed positions that were not positions (`1–2b`, `1–4`). Order l
 - **`retired`** — a rule that no longer runs. It has no stage, so it is not in the pipeline, and it is
   kept for the same reason the other non-rules are: rows name it. `RETIRED_RULE_IDS` is also what lets
   `agentModels.byRule` still name one at boot, ignored, rather than refuse to start a deployment that
-  configured it — the same reason a `PromptId` is retired rather than deleted. `issue-pickup` is the one
-  retired rule ([08](08-planning.md#a-planner-that-writes-no-plan-escalates)).
+  configured it — the same reason a `PromptId` is retired rather than deleted. Four rules are retired:
+  `issue-pickup` ([08](08-planning.md#a-planner-that-writes-no-plan-escalates)), `criteria-alignment`
+  and `prediction-judge`, which went with goal criteria and predictions, and `obstacle-repair`, which
+  went with the obstacle board. Each keeps a `RULE_TOOLS` row of `[]` and its retired prompt. The two
+  goal-scoped ones keep their `issueOrigins.ts` families (`criteria-alignment`, `prediction-judge`, both
+  `deliberation`), and `obstacle-repair`'s `obstacle:<id>` origin keeps `obstacleOriginId` and the
+  `obstacle` spend phase ([18](18-observability.md)), because their tasks and spend are persisted under
+  those origins and must still read as what they were.
 
 The registry keeps all four because `decisions.rule` is **persisted**: a row naming
 `cooldown-escalate` must still resolve years later. So the registry is the display vocabulary and the
@@ -179,7 +186,6 @@ unconditional.
 | -------------------------- | ---------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `manual-job`               | Operator-launched job                    | —                    | A queued job exists. Drained ahead of every world-driven rule.                                                                                                                                                                                                                                                                                                                                                                  |
 | `local-validation`         | Validate a goal on this machine          | —                    | An operator pressed Validate locally, so the harness brought that goal's code up in the machine's dev environment and one agent writes a test plan, drives the running application through it and reports. Dispatched while the environment is still coming up, read-only and pinned to the commit it stands at, with a browser as a second MCP server. → [32](32-local-validation.md)                                          |
-| `obstacle-repair`          | Something is blocking the fleet          | —                    | A standing obstacle is blocking the fleet **now** — a base branch red, or three or more independent voices — and nothing owns it. One code agent, on origin `obstacle:<id>`, bounded to one repair in flight across the fleet. → [27](27-obstacles.md#ownership)                                                                                                                                                                |
 | `pr-review-triage`         | Choose how to review a pull request      | `review`             | The project declares two or more `review.modes` and a watched, unreviewed PR has no route yet. One desk agent picks a mode; no branch, no checkout. Fails open onto `review.defaultMode`. → [07](07-pull-requests.md#choosing-how-to-review)                                                                                                                                                                                    |
 | `pr-split`                 | Pull request wide enough to be two       | —                    | An open PR the provider measured past `planning.fileBudget` changed files, mapping to an issue, with no verdict row against it. One read-only agent on `issue:<n>:split:<pr>` says whether the diff is one concept or several, and proposes the plan that separates them when it is several. One round for the life of the PR, whatever the answer. → [07](07-pull-requests.md#how-wide-a-pull-request-is)                      |
 | `pr-describe`              | Write a description handed back          | —                    | The operator pressed **Hand it to the agent** on an open part's pull request whose agent sent no draft. One read-only agent on `issue:<n>:describe:<pr>` reads the diff and writes the body through `pr_describe`, under `open_pr`'s rules. Only on a press. → [07](07-pull-requests.md#the-agents-draft)                                                                                                                       |
@@ -197,13 +203,11 @@ unconditional.
 | `work-item-back-to-pickup` | Stranded in review state                 | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion — not the in-flight verdict of its own parts plan. Asks a human once; moves nothing.                                                                                                                                                                                                                                    |
 | `issue-appraisal`          | Issue goal needs checking                | —                    | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                                                                                                                                                                                                                                                              |
 | `issue-investigate`        | Bug needs investigating                  | —                    | A watched open issue carrying the investigate label, with nothing started and no findings against its current text. One read-only code agent on `issue:<n>:investigate` finds the cause; the planner stands aside until an operator resolves the findings or the label comes off. → [38](38-bug-investigation.md)                                                                                                               |
-| `criteria-alignment`       | Your criteria against the ticket         | —                    | While a goal's intake sitting is open, the operator's criteria and the ticket's own are compared by one desk agent on `issue:<n>:criteria-alignment`. Holds nothing. → [08](08-planning.md#the-alignment-check)                                                                                                                                                                                                                 |
 | `issue-plan`               | Issue needs a plan                       | —                    | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                                                                                                                                                                                                                                                                       |
 | `issue-assess`             | Issue may be finished                    | —                    | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR. On `delivered` it writes the goal's validation check set too.                                                                                                                                                                                                                                                               |
 | `issue-shortfall`          | Assessment says the goal was missed      | —                    | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                                                                                                                                                                                                                                                                                              |
 | `issue-retro`              | Delivered goal needs a retrospective     | —                    | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included.                                                                                                                                                                                                                                                                   |
 | `plan-approval`            | Plan needs your approval                 | —                    | A planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                                                                                                                                                                                                                                                                                                                            |
-| `prediction-judge`         | Second reading of a prediction           | —                    | The operator has marked moment one on a goal and no judge has: one sealed desk agent on `issue:<n>:prediction-judge` marks the same slots. Once per goal. → [14](14-persistence.md#the-prediction-judge)                                                                                                                                                                                                                        |
 | `plan-amendment`           | A change to a plan needs approval        | —                    | A plan that is **running** has an amendment pending against it and no card up for that amendment. Touches the plan not at all; claims no headroom.                                                                                                                                                                                                                                                                              |
 | `plan-blocked`             | Approved plan is going nowhere           | —                    | A released plan has something blocked and nothing moving, so nothing will be dispatched for it — and a live part nobody refused is stuck behind it. Asks a human once; dispatches nobody.                                                                                                                                                                                                                                       |
 | `local-validation-fix`     | Fix what a local validation found        | —                    | A local validation was reported `failed` with findings: one writable code agent on the branch that was validated. Once per reading, latched on the row. Never a shortfall. → [32](32-local-validation.md#when-it-fails)                                                                                                                                                                                                         |
@@ -722,7 +726,7 @@ widened **once**, at the top, and three families reach it off that widened set:
 ### A flag on a container covers the work under it
 
 **The widening is the whole of it, and everything else follows without knowing.** The plans, the
-parts, the obstacles and the pull requests above are each resolved off the set of flagged numbers, so
+parts and the pull requests above are each resolved off the set of flagged numbers, so
 expanding that set once — before any of them are computed — is what carries a Feature's flag onto its
 stories' parts and onto the pull requests those stories opened. There is no second rule to keep in
 step.
@@ -770,7 +774,7 @@ than a queue arrangement that decays.
 ```
 
 `status` is `dispatching` or one of the held reasons in [Admission](#admission) — `waiting`,
-`cooldown`, `capped`, `unapproved`, `superseded`, `sequenced`, `questions`, `sitting`. `rule` is always the rule that **proposed** the
+`cooldown`, `capped`, `unapproved`, `superseded`, `sequenced`, `questions`. `rule` is always the rule that **proposed** the
 candidate; what held it is the status. `expedited` is present only on a row whose goal the operator marked a
 priority ([above](#marking-a-goal-a-priority)) — the ordering's own explanation, shipped as a fact so
 the cockpit does not re-derive it.
@@ -813,7 +817,7 @@ reads to know an agent is already on the issue.
 
 Most proposing rules call it, and it is the only place any of them reads `dispatchVerdict`. `opts.escalate`
 is optional because most have nowhere to escalate _to_: a summary or a sequence that has spent
-its attempts falls silent rather than putting a question to an operator, and only `obstacle-repair`,
+its attempts falls silent rather than putting a question to an operator, and only
 `pr-description-check` and the PR concerns raise one through it. `issue-plan` and `plan-part` escalate a
 spent cap too, but read their verdict through the plan route rather than `consider`. `opts.decisions` narrows the attempt
 window — `validation-failed` counts only the decisions since the reading it is answering, so a check

@@ -156,8 +156,6 @@ test('through the system: a question holds the planner until it is answered, the
     repoRoot: dir,
     discussionsDir: join(dir, 'vault'),
     heartbeatIntervalMs: 999_999,
-    prediction: { enabled: false },
-    goalCriteria: { enabled: false },
   });
   const system = buildSystem(config, {
     backend: new FakePtyBackend(),
@@ -207,8 +205,6 @@ test('through the system: an unreadable folder fails open', async () => {
     repoRoot: dir,
     discussionsDir: vault,
     heartbeatIntervalMs: 999_999,
-    prediction: { enabled: false },
-    goalCriteria: { enabled: false },
   });
   const system = buildSystem(config, {
     backend: new FakePtyBackend(),

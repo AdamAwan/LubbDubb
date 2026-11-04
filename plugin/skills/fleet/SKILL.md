@@ -135,9 +135,6 @@ and it is one door for six different things:
 5. **A check set can be accepted in part.** `declined` names the rows the
    operator said no to, each with their reason; the rest are released. Declining
    every row is not an accept — it sends the set back to be written again.
-6. **A plan the operator has not revealed is refused**, to read or to decide.
-   They reveal it on the goal in the cockpit, where their prediction is asked
-   first — that gate is theirs, and this channel does not go round it.
 
 ### What not to do
 

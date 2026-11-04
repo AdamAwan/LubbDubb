@@ -102,8 +102,6 @@ export function authoringBriefing(input: {
   hint: string | null;
   parts: readonly BriefedPart[];
   environments: string;
-  /** The goal's criteria, one per entry, as the current version states them. */
-  criteria?: readonly string[];
 }): string {
   const covering = input.parts.filter((part) => part.coverage !== null && part.coverage !== undefined);
   const lines = ['\n\n---\n', '## What the plan said was worth checking\n'];
@@ -147,23 +145,12 @@ export function authoringBriefing(input: {
     );
   }
 
-  const criteria = input.criteria ?? [];
-  if (criteria.length > 0) {
-    lines.push(
-      '## What the operator said "done" means\n',
-      ...criteria.map((c) => `- ${c}`),
-      '',
-      "These are the goal's own criteria, written by the operator before any plan existed, and they are the " +
-        'authority on the goal. Write **at least one check per criterion**, and name the criteria each check ' +
-        'answers in its `satisfies`, copying each exactly as it is listed above. A criterion no check names is ' +
-        'drawn as a gap on the sheet and on the close-out. The bar for a check still holds: where a criterion ' +
-        'is settled by the diff or the suite, the check that answers it can say so in its `do`.\n',
-      'Give every check a `rationale`: one line saying why it is the right proof of the criteria it ' +
-        'satisfies — what about the change makes this the test that would catch it ("the retry is the ' +
-        'whole change", "the old bug was a silent hang"). The operator reads it beside the check when ' +
-        'they decide whether to run the page.\n',
-    );
-  }
+  lines.push(
+    'Give every check a `rationale`: one line saying why it is the right proof of what it checks — what ' +
+      'about the change makes this the test that would catch it ("the retry is the whole change", "the old ' +
+      'bug was a silent hang"). The operator reads it beside the check when they decide whether to run the ' +
+      'page.\n',
+  );
 
   if (input.environments !== '') lines.push(input.environments);
   lines.push(TEST_PLAN_NOTE, WRITING_NOTE);

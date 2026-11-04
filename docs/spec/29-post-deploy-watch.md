@@ -438,10 +438,10 @@ and the dry run is the backstop that means none of them has to be complete:
   appended, never interpolated ([09](09-execution.md)).
 - **`describe`**, an optional command whose output is cached and appended the same way. A schema
   query, a sample row, whatever answers "what does this look like" on that stack.
-- **The board.** What an author gets wrong once — a property that arrives as a string and needs
-  casting — is something true of this deployment that the repository does not state, which is a
-  **note** ([27](27-obstacles.md#what-it-is)). Raised once and written down, rather than
-  rediscovered at full price by every agent.
+- **The repository.** What an author gets wrong once — a property that arrives as a string and needs
+  casting — is something true of this deployment that the repository does not state, and the place
+  for it is the repository's own documentation, written down once rather than rediscovered at full
+  price by every agent.
 
 ## The window
 

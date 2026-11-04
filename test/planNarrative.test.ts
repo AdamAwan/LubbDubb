@@ -459,8 +459,6 @@ test('POST /api/plans/:id/acceptance ticks a criterion, and refuses one the part
 async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
-    prediction: { enabled: false },
-    goalCriteria: { enabled: false },
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',

@@ -123,7 +123,6 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   description_note: 'The diff raises something your description does not',
   shortfall: 'Delivered work did not reach its goal',
   intake: 'The appraisal could not say a goal is workable',
-  sitting: 'Planning waits on your prediction and criteria',
   findings: 'An investigation’s findings are waiting on your call',
   permission: 'An agent wants a command',
   profile: 'A goal is waiting on which profile to run on',

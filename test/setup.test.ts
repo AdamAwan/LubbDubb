@@ -457,8 +457,17 @@ test('an override that still names a retired tool says which, and what to say in
   const check = found.checks.find((c) => c.id === 'prompt-tools');
   assert.equal(check?.verdict, 'bad');
   assert.match(check?.detail ?? '', /pr-ci-fix\.md names report_finding/);
-  assert.match(check?.remedy ?? '', /raise/);
+  assert.match(check?.remedy ?? '', /what replaced it/);
   assert.deepEqual(check?.fix, { kind: 'goto', label: 'Open Prompts', to: 'prompts' });
+});
+
+test('a retired name that is also a word counts only where it is written as a tool', async () => {
+  const prose = await reading(withOverride('pr-ci-fix', 'If the base is red, raise it with the operator.\n'));
+  assert.equal(prose.checks.find((c) => c.id === 'prompt-tools')?.verdict, 'ok');
+  const named = await reading(withOverride('pr-ci-fix', 'If the base is red, call `raise` and carry on.\n'));
+  const check = named.checks.find((c) => c.id === 'prompt-tools');
+  assert.equal(check?.verdict, 'bad');
+  assert.match(check?.detail ?? '', /pr-ci-fix\.md names raise/);
 });
 
 test('a deployment with no overrides draws no such check at all', async () => {

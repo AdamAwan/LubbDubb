@@ -5,7 +5,7 @@ import { configField, suggestedValue } from '../config/configFields.js';
 import type { ConfigChange } from '../config/configApply.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import type { CloneStanding } from '../git/cloneUpkeep.js';
-import { RETIRED_TOOL_NAMES } from '../mcp/names.js';
+import { namesRetiredTool, RETIRED_TOOL_NAMES } from '../mcp/names.js';
 import type { Store } from '../store/store.js';
 import { isWatched, watchLabelFor } from '../watchLabels.js';
 import { credentialVar } from './remote.js';
@@ -444,7 +444,7 @@ function retiredToolChecks(prompts: PromptTemplates): SetupCheck[] {
   const naming = overrides
     .map((template) => ({
       id: template.id,
-      tools: RETIRED_TOOL_NAMES.filter((tool) => template.template.includes(tool)),
+      tools: RETIRED_TOOL_NAMES.filter((tool) => namesRetiredTool(template.template, tool)),
     }))
     .filter((entry) => entry.tools.length > 0);
   if (naming.length === 0) {
@@ -464,7 +464,7 @@ function retiredToolChecks(prompts: PromptTemplates): SetupCheck[] {
       label: 'Prompt overrides',
       verdict: 'bad',
       detail: `${describeNaming(named)} — retired tools. A call to one is refused, so every dispatch on that prompt spends a turn on nothing.`,
-      remedy: 'Say `raise` instead: it takes any observation and the harness works out where it goes.',
+      remedy: 'Take the retired tool out of the override; its refusal says what replaced it, if anything did.',
       fix: { kind: 'goto', label: 'Open Prompts', to: 'prompts' },
     },
   ];

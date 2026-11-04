@@ -46,7 +46,6 @@ function emptyInput(now = NOW): OperatorInput {
     escalations: [],
     proposals: [],
     humanTasks: [],
-    obstacles: [],
     upgrade: IDLE_INTENT,
     landings: [],
     plans: [],
@@ -107,26 +106,7 @@ test('a wait is clipped to the window, so a month-old ask does not price a day o
 test('a record that cannot say answers null, never zero', () => {
   const insights = buildOperatorInsights({
     ...emptyInput(),
-    obstacles: [
-      {
-        id: 'ob1',
-        what: 'the staging login expired',
-        kind: 'obstacle',
-        state: 'owned',
-        ownerRef: 'issue:9',
-        until: null,
-        createdAt: iso(3 * HOUR),
-        updatedAt: iso(HOUR),
-        lastSeenAt: iso(HOUR),
-        endedBy: null,
-        ticketDecision: null,
-      },
-    ],
   });
-  const obstacles = row(insights.asks, 'obstacle-ownership');
-  assert.equal(obstacles.settled, 1);
-  assert.equal(obstacles.medianAnswerMs, null);
-  assert.equal(obstacles.parkedCostUsd, null);
   const landing = row(insights.acts, 'stack-landing');
   assert.equal(landing.parkedCostUsd, null);
   assert.equal(landing.offered, null);

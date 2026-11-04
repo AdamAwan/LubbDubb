@@ -2,7 +2,7 @@ import type { Escalation, HumanTask, PlanPart, Proposal } from '../types.js';
 import type { SetupReading, SetupVerdict } from '../setup/reading.js';
 import type { AskKind } from './askRow.js';
 import type { AskDraft, AskInputs } from './queue.js';
-import { agentLabelOf, askLine, goalOf, oneLine, opensAt, predictionOpensAt } from './lines.js';
+import { agentLabelOf, askLine, goalOf, oneLine, opensAt } from './lines.js';
 
 // → docs/spec/17-cockpit.md#the-queue-rail--needs-you
 
@@ -69,6 +69,7 @@ function escalationSummary(
     }
   }
   if (context.permission) return oneLine(`${context.permission.toolName}: ${context.permission.summary}`);
+  if (context.blocked) return oneLine(`Blocked: ${context.blocked.reason}`);
   if (isShortfallAsk(originRef)) return 'Assessed as not delivered';
   const questions = Array.isArray(context.questions) ? context.questions.length : 0;
   if (questions > 0) return `${questions} questions from the agent`;
@@ -116,19 +117,6 @@ const TASK_KIND: Record<HumanTask['kind'], AskKind> = {
   supply: 'supply',
 };
 
-/**
- * While the reveal gate stands the plan cannot be answered where the row is drawn — approving,
- * refusing and backing out are all refused server-side — so the row goes to the gate instead.
- * → docs/spec/16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed
- */
-function planWithheld(e: Escalation, state: AskInputs): boolean {
-  const { planId } = e.context;
-  if (typeof planId !== 'string') return false;
-  return (state.plans ?? []).some((p) => p.id === planId && !p.revealed);
-}
-
-const REVEAL_NOTE = 'Withheld — reveal it to read it, and the prediction is asked first';
-
 export function escalationRows(state: AskInputs): AskDraft[] {
   const proposals = state.proposals ?? [];
   return state.escalations
@@ -137,7 +125,6 @@ export function escalationRows(state: AskInputs): AskDraft[] {
       const proposal = proposals.find((p) => p.escalationId === e.id);
       const originRef = state.tasks.find((t) => t.id === e.taskId)?.originRef ?? e.context.originRef ?? null;
       const goalRef = goalOf(originRef, state);
-      const withheld = planWithheld(e, state);
       return {
         id: e.id,
         kind: kindOf(e, proposal, originRef),
@@ -145,18 +132,17 @@ export function escalationRows(state: AskInputs): AskDraft[] {
           type: 'escalation' as const,
           escalationId: e.id,
           proposalId: proposal?.id ?? null,
-          ...(withheld ? { planWithheld: true as const } : {}),
         },
         group: 'blocking' as const,
         title: askLine(escalationSummary(e, proposal, originRef, state), goalRef, state),
         goalRef,
         originRef,
-        opens: withheld ? predictionOpensAt(goalRef, state) : opensAt(goalRef, state),
-        ...(withheld ? { note: REVEAL_NOTE } : {}),
+        opens: opensAt(goalRef, state),
         agentId: e.agentId,
         agentLabel: agentLabelOf(e.agentId, state),
         holding: holdingForEscalation(originRef, state),
         raisedAt: e.createdAt,
+        ...(e.context.blocked ? { verb: 'Release' } : {}),
       };
     });
 }

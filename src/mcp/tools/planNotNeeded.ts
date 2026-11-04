@@ -15,7 +15,7 @@ export const planNotNeeded: ToolFactory = ({ deps, agent, ok }) => ({
     'the shape costs an agent, a branch and sometimes a pull request to discover what you already ' +
     'know. Use it only for a goal that is *met*: the code, the setting or the document the ticket ' +
     'asks for is in the repository now. A goal you cannot make sense of is not this — that is a ' +
-    'plan you should not be writing either, and the honest move there is to raise it. The harness ' +
+    'plan you should not be writing either, and the honest move there is to escalate it. The harness ' +
     'schedules nothing further for the issue while your verdict stands; it does not close the ' +
     'ticket, and an operator can undo it.',
   inputSchema: toolSchema(

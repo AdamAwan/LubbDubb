@@ -1,7 +1,7 @@
 import type {
   IssueConclusion,
   IssueConclusionVerdict,
-  ObstacleBlock,
+  GoalBlock,
   PartOutcomeKind,
   PlanPart,
   ShortfallCause,
@@ -52,29 +52,14 @@ export function recordBlocked(
   ctx: VerdictContext,
   agentId: string,
   task: Task,
-  obstacleId: string,
+  reason: string,
   note: string,
-): { ok: true; block: ObstacleBlock } | { ok: false; error: string } {
+): { ok: true; block: GoalBlock } | { ok: false; error: string } {
   const origin = conclusionOrigin(task.originRef);
   if (!origin.ok) return { ok: false, error: origin.error };
-  const obstacle = ctx.store.obstacles.getObstacle(obstacleId);
-  if (!obstacle) {
-    return {
-      ok: false,
-      error:
-        `No obstacle has that id (${obstacleId}), so nothing was recorded and your goal is not parked. ` +
-        `Name the id raise answered with — and if you have not raised what stopped you, raise it first: ` +
-        `a block that names nothing is a goal nothing brings back.`,
-    };
-  }
-  const block = ctx.store.obstacles.recordObstacleBlock({
-    originRef: origin.originRef,
-    obstacleId,
-    agentId,
-    taskId: task.id,
-    note,
-  });
+  const block: GoalBlock = { originRef: origin.originRef, reason, note, agentId };
   ctx.store.instructions.settleInstructions(origin.originRef);
+  ctx.events.emit('blocked', { agentId, taskId: task.id, block });
   return { ok: true, block };
 }
 
@@ -175,7 +160,7 @@ export function recordGoalMet(
         `in review would go on running underneath a goal marked delivered. Submit the amended plan ` +
         `with plan_submit — a part that turned out to be unnecessary is one you leave out, and one ` +
         `already in flight is a part whose agent closes it with conclude_part. If you believe the ` +
-        `whole goal is already met, raise it: the operator asked for this replan and it is theirs to end.`,
+        `whole goal is already met, escalate it: the operator asked for this replan and it is theirs to end.`,
     };
   }
 
@@ -187,7 +172,7 @@ export function recordGoalMet(
         `An assessment of ${origin.issueOrigin} standing right now says the goal is *not* reached — ` +
         `"${shortfall.summary}" — and it was cast against the delivered state rather than against a ` +
         `plan. Recording a delivery here would erase it. Read what it says is missing; if it is wrong, ` +
-        `raise that, and if it is right, plan the work it names.`,
+        `escalate that, and if it is right, plan the work it names.`,
     };
   }
 

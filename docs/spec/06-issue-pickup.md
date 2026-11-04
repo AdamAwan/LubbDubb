@@ -401,8 +401,7 @@ chip.
 | `delivered`     | Assessed as delivered — parked until the world or the operator says otherwise.       |
 | `appraisal`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
 | `investigation` | Held for a bug investigation: one is owed or running, or its findings wait on you.   |
-| `sitting`       | Nothing holds it but your prediction and criteria, which planning waits for.         |
-| `obstacle`      | An agent could not finish it and named what stopped it — parked until that clears.   |
+| `parked`        | An agent concluded it `blocked` — parked until you release it.                       |
 | `blocked`       | Eligible, but dispatch is paused or the cap is reached.                              |
 | `eligible`      | Would be picked up next cycle.                                                       |
 
@@ -431,11 +430,11 @@ delivered issue that somehow has an open PR is honestly `has_pr` — the PR rule
 with a live agent is honestly `active`. Saying "delivered" in either case would send the operator
 looking in the wrong place.
 
-The `obstacle` arm is asked in the same place and for the same reason as `delivered` — after
+The `parked` arm is asked in the same place and for the same reason as `delivered` — after
 `has_pr` and `active`, so a goal that somehow has an open PR or a live agent is reported honestly —
-and off the same pure `blockedGoals` the rule gates on and the ownership desk sweeps with, so the
-chip cannot promise what the next cycle refuses. Its exit is the **obstacle** and never the issue:
-nobody has to remember the goal, and `owned` still holds it, because being fixed is not fixed.
+and off the same pure `blockedGoals` (`src/escalation/blocked.ts`) the rule gates on, so the chip
+cannot promise what the next cycle refuses. Its reason line quotes the agent's own reason. Its exit is
+**you** → [blocked parks the goal for you](#blocked-parks-the-goal-for-you).
 
 The `appraisal` arm is asked **after** the intrinsic gates and **before** the plan funnel, which is
 exactly where rule `issue-appraisal` sits: an unwatched or state-parked issue is never appraised, so reporting an
@@ -444,19 +443,6 @@ the reason no planner is coming. It covers the standing hold (the
 appraiser's own words, quoted), the pending case — `awaiting a goal appraisal`, `a goal appraisal is
 running`, `goal appraisal on cooldown` — because an issue silently waiting a cycle for a verdict looks
 exactly like an idle fleet.
-
-### The sitting arm
-
-Where the [reveal gate](02-configuration.md#the-reveal-gate) is on, a goal with no
-plan row and no reveal stamp, that the appraisal does not hold, is held out of rule `issue-plan` until the
-operator closes its [intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the-planner),
-and reads `sitting` with the reason `awaiting your prediction and criteria` — or, while the
-[alignment check](08-planning.md#the-alignment-check) is out, `checking your criteria against the
-ticket`. It is asked **after** the `appraisal` arm,
-because an appraisal still running or holding the goal is the truer reason, and **before** the plan
-funnel, which is what it holds. Unlike every other hold on this page it is a person's, and it is
-reported for the reason the appraisal's pending case is: a goal silently waiting looks exactly like an
-idle fleet.
 
 ## Implementation always goes through a plan
 
@@ -468,9 +454,9 @@ part agent on `issue/<n>/<slug>`, scheduled by rule `plan-part` off a plan row
 1. `issue.state === 'open'`, and
 2. `openPrForIssue(issue, allOpenPrs) === null`, and
 3. `isIssuePickupEligible(issue, policy).eligible`, and no standing `unclear` goal appraisal holds it
-   (see below), and no obstacle block does
-   ([27](27-obstacles.md#blocked-is-an-answer) — an agent concluded `blocked` naming something that is
-   not this goal, and the goal returns on its own when that obstacle stops reaching agents).
+   (see below), and no block does
+   ([below](#blocked-parks-the-goal-for-you) — an agent concluded `blocked`, and the goal waits for
+   you to release it).
 
 Those are the filters on `eligibleIssues`, the one list rule `issue-plan` draws from, sorted by
 [priority](#priority). From there rule `issue-plan` owes the issue a planner; a planner that spends its
@@ -571,6 +557,69 @@ planner. Both are argued where the route is specified,
 Consequence worth knowing: on a provider with no work-item state machine (GitHub, the fake) a
 conclusion is recorded and displayed but changes no dispatch — there is no review state to be parked
 in, so there is no bounce-back to suppress.
+
+### Blocked parks the goal for you
+
+`conclude_work` has a third status beside `done` and `more_work`: **`blocked`**, with a required
+free-text `reason` — what stopped the agent, in its own words — beside the usual `note` of what it got
+as far as. It is for an agent stopped by something that is **not this goal**: a base branch somebody
+else broke, a service that is down, a defect in code nobody is touching. Telling that agent to carry
+on makes it spin, and sending the goal back round sends the next agent into the same wall.
+
+**It writes no conclusion**, and that is what makes it a park rather than a failure. `done` and
+`more_work` are the agent's statement about the _work_; this says the work could not be attempted, so
+there is nothing to declare about whether the goal is finished — and a `more_work` row written here
+would send the goal straight back to pickup. It is not a fifth member of the verdict matrix
+([14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix)) for the same reason: those four
+answer _is the work finished_ and clear the ones they contradict, and a block that cleared a delivery
+would hand delivered work back to the fleet. Standing instructions on the goal are settled, as any
+conclusion settles them.
+
+**Its exit is you, and only you.** The block is an **escalation**, raised by the harness rather than
+by the agent: `recordBlocked` (`src/agents/agentVerdicts.ts`) emits `blocked`, and `wireBlocks`
+(`src/escalation/blocked.ts`, threaded through the composition root) opens one escalation carrying the block in its context (`context.blocked`, a `GoalBlock`) and its
+prompt saying what the agent said. That escalation is the block's **only record**: the goal is held
+exactly while it is open, which `blockedGoals` reads off the open escalations for the pickup chip and
+for `eligibleIssues` alike. One record means the hold and the ask cannot drift apart — there is no
+block without an item in your queue, and no item whose answer leaves a block behind.
+
+It carries **no `agentId`**, deliberately. Every escalation that names an agent is dismissed when that
+agent leaves the fleet ([05](05-dispatcher.md)), and an agent that concludes `blocked` leaves it a
+moment later — so an ask that named it would be swept by the very finish it reported, releasing the
+goal with nothing read.
+
+In the queue it is an ordinary `escalation` row, titled `Blocked: <reason>` and pressed as
+**Release** ([17](17-cockpit.md#the-queue-rail--needs-you)). **Answering releases it**, and so does
+**dismissing** it: either way the item is gone, and a hold whose item had gone would be a goal parked
+for ever with nothing in front of anybody. Releasing writes one **instruction** on the goal
+([14](14-persistence.md#operator-instructions-on-a-goal)) carrying the agent's reason and, where you
+answered, your words beside it — the existing note to the next agent, appended to its prompt and
+settled when it concludes. Nothing else is written: the goal simply stops being held, and the funnel
+takes it from wherever it was.
+
+Nothing releases it on its own. An earlier design waited on a shared obstacle record clearing, and
+was removed: a block an operator never sees is a goal that never comes back with nothing red, and a
+fleet-wide board deciding when the wall is gone was the part that did not work.
+
+**One open block per goal, and a second one joins it.** An agent that concludes `blocked` on a goal
+already holding an open block — a part's agent that was running when its sibling stopped, say —
+does not open a second ask and is not dropped: `joinBlocks` appends its reason and note to the
+standing block, and the escalation is **restated** in place (`EscalationInbox.restate`, prompt and
+context rewritten, the item still open). The tool tells that agent the operator was asked, and it is
+true — the operator reads both reasons on the one item, and releasing it carries both to the next
+agent.
+
+**A block whose issue closed is settled by the harness.** The one exception to "only you": once the
+issue is no longer open there is nothing to release, and an ask left up for it is a card nobody can
+usefully answer. The pulse's `closedBlocks` pass (`EscalationInbox.tidyClosedBlocks`, `afterVerdicts`,
+`readWorld: true`) dismisses every open block whose issue — `issueSubtreeNumber` of its origin — is
+absent from the world's open issues, the same absence the issue runs read as closed. It runs only on a
+fresh read with no stale source, because a partial read that dropped the issue would settle a live
+block. The dismissal is marked `by: 'harness'`, and that release writes **no instruction**: a goal
+that is reopened later starts clean, rather than with a note claiming you released it. An issue the
+world stops listing for another reason — its watch label taken off, where the provider reads by label —
+is settled the same way, which is the right answer: taking the label off is your _no_ to the fleet
+working it, so there is nothing left for the block to hold.
 
 ## The delivery park (`delivered`)
 

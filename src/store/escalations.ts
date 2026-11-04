@@ -46,6 +46,13 @@ export class EscalationStore {
     return { ...existing, status: 'dismissed', context };
   }
 
+  restateEscalation(id: string, prompt: string, context: EscalationContext): Escalation {
+    const existing = this.getEscalation(id);
+    if (!existing) throw new Error(`Escalation ${id} not found`);
+    this.ctx.prep(`UPDATE escalations SET prompt=?, context=? WHERE id=?`).run(prompt, JSON.stringify(context), id);
+    return { ...existing, prompt, context };
+  }
+
   getEscalation(id: string): Escalation | null {
     const row = this.ctx.prep(`SELECT * FROM escalations WHERE id=?`).get(id) as EscalationRow | undefined;
     return row ? rowToEscalation(row) : null;

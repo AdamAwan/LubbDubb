@@ -36,7 +36,7 @@ const VERDICT_COPY: Record<McpQuietVerdict, { label: string; blurb: string; reme
   retired: {
     label: 'Retired, and still being called',
     blurb: 'This name was withdrawn. Something is still naming it, and every call to it spends a turn on a refusal.',
-    remedy: 'Find the prompt override that names it and say `raise` instead. The Setup reading names the file.',
+    remedy: 'Find the prompt override that names it and take it out. The Setup reading names the file.',
   },
   'never-named': {
     label: 'Nothing named it',
@@ -76,7 +76,8 @@ const NAMING_COPY: Record<McpNaming, { label: string; blurb: string }> = {
   },
   retired: {
     label: 'Retired',
-    blurb: 'A withdrawn name, answered only with a refusal naming `raise`. Any call at all is a prompt out of date.',
+    blurb:
+      'A withdrawn name, answered only with a refusal saying what replaced it. Any call at all is a prompt out of date.',
   },
   unknown: {
     label: 'Never a tool',

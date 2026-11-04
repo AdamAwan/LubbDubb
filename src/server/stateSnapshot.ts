@@ -34,7 +34,7 @@ import {
 } from './stateEnvironmentViews.js';
 import { localRunView, localRunRefFacts, localRunTargetViews } from './stateLocalRunViews.js';
 import { buildAskQueue, type AskSnapshot } from '../asks/queue.js';
-import { askInputs, descriptionFeedback, maskedInbox, undescribedParts } from './stateAsks.js';
+import { askInputs, descriptionFeedback, inbox, undescribedParts } from './stateAsks.js';
 import type { AskRow } from '../asks/askRow.js';
 import type { SetupReading } from '../setup/reading.js';
 
@@ -268,7 +268,6 @@ function goalsSection(
   | 'environmentGroups'
   | 'goalWatchWindows'
   | 'environmentArrivals'
-  | 'criteriaDrift'
   | 'remoteSheets'
   | 'stackLandings'
 > {
@@ -326,7 +325,6 @@ function goalsSection(
       .map(({ name, environments: members }) => ({ name, environments: members })),
     goalWatchWindows: buildGoalWatchWindows(store, environments, r.goalWatches),
     environmentArrivals: arrivals.slice(0, 50),
-    ...(config.goalCriteria.enabled ? { criteriaDrift: store.goalCriteria.listCriteriaDrift().slice(0, 50) } : {}),
     remoteSheets: remoteSheets(),
     stackLandings: stackLandingViews(r, prByNumber, stackRungPrs),
   };
@@ -384,13 +382,13 @@ function plansSection(
   | 'goalWatches'
   | 'stateQueries'
 > {
-  const { store, withheld, openPrNumbers } = r;
+  const { store, openPrNumbers } = r;
   return {
     plans: r.wirePlans,
     planParts: r.wirePlanParts(),
     undescribedParts: undescribedParts(store, openPrNumbers),
     descriptionFeedback: descriptionFeedback(store, openPrNumbers),
-    planAtoms: store.plans.listAllPlanAtoms().filter((atom) => !withheld(atom.planId)),
+    planAtoms: store.plans.listAllPlanAtoms(),
     planCaveatAnswers: store.plans.listAllPlanCaveatAnswers(),
     validationChecks: r.validationChecks(),
     validationPlans: r.validationPlanRecords(),
@@ -461,7 +459,7 @@ function inboxSection(r: Reads): Pick<CockpitState, 'bugFilings' | 'humanTasks' 
   return {
     bugFilings: r.bugFilings,
     humanTasks: r.humanTasks,
-    ...maskedInbox(r),
+    ...inbox(r),
   };
 }
 

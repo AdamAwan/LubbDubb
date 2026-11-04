@@ -1,7 +1,6 @@
 import { prRefStyle } from '../pr/prRef.js';
-import { configFilePath, projectConfigFilePath, revealGateOn, type Config } from '../config/config.js';
+import { configFilePath, projectConfigFilePath, type Config } from '../config/config.js';
 import { Store } from '../store/store.js';
-import type { PredictionStore } from '../store/predictions.js';
 import { CompositeConnector } from '../integrations/compositeConnector.js';
 import { PoolDesk } from '../pool/poolDesk.js';
 import type { TicketFiler } from '../tickets/filing.js';
@@ -14,13 +13,13 @@ import type { AreaPathTree } from '../intake/placement.js';
 import { TicketSweep } from '../tickets/sweep.js';
 import { WorkGraphRecorder } from '../graph/workGraphRecorder.js';
 import { AgentManager } from '../agents/agentManager.js';
-import { judgeSeam } from '../predictionJudge/seam.js';
 import { FileEventsSpool } from '../agents/fileEvents.js';
 import { AttachmentFiles } from '../jobs/attachmentFiles.js';
 import { EscalationInbox } from '../escalation/escalationInbox.js';
 import { ProposalDesk } from '../proposals/proposalDesk.js';
 import { StackLandingDesk } from '../stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from '../escalation/context.js';
+import { wireBlocks } from '../escalation/blocked.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from '../mcp/server.js';
 import type { McpDesktopServer } from '../mcp/desktop.js';
 import { buildDesktop } from './systemDesktop.js';
@@ -37,7 +36,6 @@ import { stepCapabilities } from '../validation/steps.js';
 import { configuredRemoteRunBriefs } from '../validation/remote/briefing.js';
 import { UpdateDesk } from '../selfUpdate/updateDesk.js';
 import type { McpToolDeps } from '../mcp/tools/context.js';
-import { isSealedRule } from '../mcp/names.js';
 import { applyInvestigateLabel, issueWatchContext } from '../issueWatch.js';
 import { PermissionDesk } from '../agents/permissionDesk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
@@ -133,12 +131,6 @@ export interface System {
   cloneUpkeep?: Foundation['cloneUpkeep'];
   runtimeControl: RuntimeControl;
   pets: PetKeeper;
-  /**
-   * Deliberately NOT `store.predictions`. Opened here and handed to the prediction
-   * routes and nothing else, so that nothing holding a `Store` can reach an operator's
-   * prediction. → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
-   */
-  predictions: PredictionStore;
   localRun: LocalRunner;
   localValidations: LocalValidationDesk;
   localRunWatch: LocalRunWatch;
@@ -218,7 +210,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     updates: bench.updates,
     runtimeControl: base.runtimeControl,
     pets: pulse.pets,
-    predictions: channels.predictions,
     localRun: local.localRun,
     localRunWatch: local.localRunWatch,
     localValidations: local.localValidations,
@@ -264,7 +255,6 @@ export type Channels = ReturnType<typeof buildChannels>;
 
 function buildChannels(config: Config, base: Foundation, late: LateBinding) {
   const { store, errors, sink, areaPaths, watchLabel } = base;
-  const predictions = store.openPredictions();
   const mcp: McpBridgeServer = new McpBridgeServer({
     store,
     agents: (): AgentManager => late.get().agents,
@@ -297,8 +287,6 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
       runner: late.get().localRun,
       watch: late.get().localRunWatch,
     }),
-    // The one agent that may read a prediction is handed it through this seam, never the store.
-    judge: judgeSeam(predictions, store),
     investigateLabel: (issueNumber: number): Promise<void> =>
       applyInvestigateLabel(
         issueWatchContext({ store, connector: sink, errors, config }),
@@ -321,17 +309,17 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
     }),
   );
 
-  const desktop = buildDesktop(config, base, predictions, prompts, late);
-  return { predictions, mcp, prompts, reviewCharters, desktop };
+  const desktop = buildDesktop(config, base, prompts, late);
+  return { mcp, prompts, reviewCharters, desktop };
 }
 
 function buildHarness(
   config: Config,
   opts: BuildOptions,
-  { base, channels: { predictions }, fleet, intake, envs, bench, late }: HarnessPhases,
+  { base, fleet, intake, envs, bench, late }: HarnessPhases,
 ): Harness {
   const { store, connector, areaPaths, errors, runtimeControl, ingressInbox, watchLabel } = base;
-  const reads = harnessReads(config, store, predictions, fleet.featureBoard);
+  const reads = harnessReads(config, store, fleet.featureBoard);
   return new Harness({
     store,
     connector,
@@ -376,14 +364,13 @@ function buildHarness(
         late.get().localValidations.sweep();
       },
     },
-    goalIntake: () => ({ ...reads.goalIntake(), ...discussionIntake(base.discussions) }),
+    goalIntake: () => discussionIntake(base.discussions),
     remoteRuns: reads.remoteRuns,
     landings: fleet.landings,
     recovery: fleet.recovery,
     ejections: fleet.ejections,
     escalations: fleet.escalations,
     fleet: fleet.agents,
-    obstacles: bench.obstacles,
     pool: bench.pool,
     discussionPulls: base.discussionPulls,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
@@ -402,7 +389,7 @@ function buildHarness(
   });
 }
 
-function harnessReads(config: Config, store: Store, predictions: PredictionStore, featureBoard: Fleet['featureBoard']) {
+function harnessReads(config: Config, store: Store, featureBoard: Fleet['featureBoard']) {
   let lastStanding = new Map<number, { key: string; lines: string[] }>();
   return {
     featureStandings: (): { number: number; title: string; key: string; lines: string[] }[] => {
@@ -418,11 +405,6 @@ function harnessReads(config: Config, store: Store, predictions: PredictionStore
     },
     // Computed here rather than in the rule: `src/validation/remote/` is a lens as far as the
     // dispatcher is concerned, so what reaches it is a run row and a rendered string.
-    goalIntake: () => ({
-      closedSittings: revealGateOn(config) ? new Set(predictions.listReveals().map((r) => r.originRef)) : null,
-      criteria: config.goalCriteria.enabled ? store.goalCriteria.listCurrentCriteria() : [],
-      judgeOwed: config.prediction.enabled ? predictions.listJudgeOwed() : [],
-    }),
     remoteRuns: () => configuredRemoteRunBriefs(config, store),
   };
 }
@@ -442,7 +424,7 @@ function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, esc
       context: {
         taskTitle: task?.title,
         originRef: task?.originRef ?? null,
-        recentOutput: isSealedRule(task?.rule) ? '' : recentOutputExcerpt(store.transcripts.getTranscript(agentId)),
+        recentOutput: recentOutputExcerpt(store.transcripts.getTranscript(agentId)),
         ...(ask?.options ? { options: ask.options } : {}),
         ...(ask?.detail ? { detail: ask.detail } : {}),
         ...(ask?.questions ? { questions: ask.questions } : {}),
@@ -451,6 +433,8 @@ function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, esc
       taskId,
     });
   });
+
+  wireBlocks(store, agents, escalations);
 
   agents.on('status', ({ agentId, status }) => {
     if (status === 'killed') escalations.dismissEscalationsForAgent(agentId, 'agent killed');

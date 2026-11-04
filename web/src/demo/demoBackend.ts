@@ -37,12 +37,6 @@ import type {
   FeatureSequence,
   FeatureSequenceEdge,
   FeatureSummary,
-  GoalPrediction,
-  GoalReveal,
-  Plan,
-  PredictionAggregate,
-  PredictionMark,
-  PredictionSlot,
   GoalWatch,
   GoalWatchDeclaration,
   FilingTargetProbe,
@@ -107,12 +101,11 @@ import type {
   TenantPreparation,
   PrPerson,
 } from '../types.js';
-import type { PredictionDraft, WsClient } from '../api.js';
+import type { WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, DEMO_FEATURE_SUMMARIES, demoPlanHistory } from './fixtures.js';
 import { buildAskQueue } from './askQueue.js';
 import { demoAppErrorDetail, demoAppErrors } from './demoAppErrors.js';
-import { DemoPredictions } from './predictions.js';
 import { isContainerType } from '../issueGroups.js';
 
 import { inFlight } from '../view/localValidation.js';
@@ -347,17 +340,6 @@ const TEARDOWN: readonly { phase: string; lines: readonly string[] }[] = [
   },
 ];
 
-/**
- * What stands in for a withheld plan's prose everywhere it would otherwise ship.
- * The demo's own copy of `WITHHELD_PLAN` — the fake serves the payload here, and
- * `src/wire.ts` is the only server module this directory may name.
- * → docs/spec/16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed
- */
-const WITHHELD_PLAN = 'A plan is ready for this goal. It is withheld until you reveal it, on the goal in the cockpit.';
-
-/** `predictionAggregateMinGoals`' own default, so the demo's panel is read against the real bar. */
-const DEMO_PREDICTION_THRESHOLD = 10;
-
 const DEMO_OPERATOR = 'you';
 const DEMO_PLUGIN: PluginStatusPayload = {
   state: 'current',
@@ -463,89 +445,8 @@ class DemoServer {
   private reply = MESSAGE_TURN.length;
   private deskBeats = 0;
   private seq = 1000;
-  private readonly predictions = new DemoPredictions();
   private readonly descriptions = new Map<string, PrDescriptionVersion[]>(DEMO_DESCRIPTIONS);
   private readonly drafts = new Map<string, PrDescriptionDraft>();
-  /**
-   * What the reveal hands back, per withheld plan: the approval ask's prose and the
-   * caveats that carry the plan's risks and open questions verbatim.
-   *
-   * The demo withholds them the way the routes do — the card draws the stand-in
-   * sentence, and the gate is the only way past it. What a statically hosted demo
-   * cannot honestly claim is the *containment*: the plan's own document is in the
-   * bundle, as every fixture is. What it demonstrates is the interaction.
-   * → docs/spec/17-cockpit.md#the-reveal-gate
-   */
-  private readonly withheldProse = new Map<string, { prompt: string; detail: string; caveats: PlanCaveat[] }>();
-
-  constructor() {
-    this.withholdUnrevealedPlans();
-  }
-
-  /**
-   * The redaction, applied once at boot to every plan the record has no reveal for.
-   * It is the demo's copy of `withheldAction` / `withheldEscalation`, and the copy
-   * has to exist: the fake serves the payload, so a fake that shipped the prose
-   * would be demonstrating a gate with the answer printed underneath it.
-   */
-  private withholdUnrevealedPlans(): void {
-    for (const plan of this.state.plans) {
-      const issue = Number(/^issue:(\d+)$/.exec(plan.originRef)?.[1] ?? NaN);
-      if (Number.isNaN(issue) || this.predictions.revealed(issue)) continue;
-      plan.revealed = false;
-      plan.revealedAt = null;
-      const proposal = this.state.proposals.find((p) => p.kind === 'plan' && p.action.planId === plan.id);
-      const escalation = this.state.escalations.find((e) => e.context.planId === plan.id);
-      if (!proposal || !escalation) continue;
-      this.withheldProse.set(plan.id, {
-        prompt: escalation.prompt,
-        detail: String(escalation.context.detail ?? ''),
-        caveats: planCaveatsOf(proposal),
-      });
-      escalation.prompt = WITHHELD_PLAN;
-      escalation.context = {
-        ...escalation.context,
-        detail: WITHHELD_PLAN,
-        detailFrom: 'Withheld until the plan is revealed',
-      };
-      proposal.action = { ...proposal.action, prompt: WITHHELD_PLAN, detail: WITHHELD_PLAN, caveats: [] };
-    }
-  }
-
-  /**
-   * The gate's second press, and the seal on both records. It stamps the reveal,
-   * hands the plan's body back to every surface that was drawn a stand-in, and the
-   * aggregate counts this goal from here on.
-   */
-  revealPlan(issueNumber: number): { ok: true; reveal: GoalReveal; plan: Plan | null } {
-    const reveal = this.predictions.stampReveal(issueNumber);
-    const plan = this.state.plans.find((p) => p.originRef === `issue:${issueNumber}`) ?? null;
-    if (plan !== null) {
-      plan.revealed = true;
-      plan.revealedAt = reveal.revealedAt;
-      const prose = this.withheldProse.get(plan.id);
-      const proposal = this.state.proposals.find((p) => p.kind === 'plan' && p.action.planId === plan.id);
-      const escalation = this.state.escalations.find((e) => e.context.planId === plan.id);
-      if (prose && proposal && escalation) {
-        escalation.prompt = prose.prompt;
-        escalation.context = { ...escalation.context, detail: prose.detail, detailFrom: 'What the plan says' };
-        proposal.action = { ...proposal.action, prompt: prose.prompt, detail: prose.detail, caveats: prose.caveats };
-        this.withheldProse.delete(plan.id);
-      }
-    }
-    this.dirty();
-    return { ok: true, reveal, plan };
-  }
-
-  predict(issueNumber: number, slots: Partial<Record<PredictionSlot, string>>): { ok: true } {
-    this.predictions.record(issueNumber, slots);
-    return { ok: true };
-  }
-
-  predictionReading(issueNumber: number): { prediction: GoalPrediction | null; reveal: GoalReveal | null } {
-    return this.predictions.reading(issueNumber);
-  }
-
   /**
    * The descriptions a visitor writes, and the one this world ships with already
    * written and already checked. It is seeded rather than empty because the panel's
@@ -635,23 +536,6 @@ class DemoServer {
         { ...current, dismissedAt: new Date().toISOString() },
       ]);
     return { ok: true };
-  }
-
-  markPrediction(
-    issueNumber: number,
-    marks: Partial<Record<PredictionSlot, PredictionMark | null>>,
-    moment: 'plan' | 'outcome',
-  ): { ok: true; prediction: GoalPrediction } {
-    return { ok: true, prediction: this.predictions.mark(issueNumber, marks, moment) };
-  }
-
-  /**
-   * The fold, over the plans this world holds — so the goal a visitor has just
-   * predicted on leaves `notOffered` and joins the coverage rate on the same press.
-   */
-  predictionAggregate(): { aggregate: PredictionAggregate } {
-    const planned = this.state.plans.map((plan) => plan.originRef);
-    return { aggregate: this.predictions.aggregate(planned, DEMO_PREDICTION_THRESHOLD, Date.now()) };
   }
 
   private id(prefix: string): string {
@@ -2913,7 +2797,7 @@ const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   local: { label: 'Local runs', blurb: 'Bringing a goal’s branch up on this machine to look at it' },
   obstacle: {
     label: 'Obstacles',
-    blurb: 'Repairing something in the fleet’s way — a red base, a wall three goals have hit',
+    blurb: 'Repairs the retired obstacle board dispatched — nothing spends here now, and past spend still reads',
   },
   job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
@@ -3733,7 +3617,6 @@ function buildDemoUsage(): UsagePayload {
     reach('ticket', 'operated', 55, 50, 18),
     reach('feature', 'linked-never-visited', 0, 0, 0),
     reach('agent', 'operated', 74, 71, 26),
-    reach('obstacle', 'linked-never-visited', 0, 0, 0),
     reach('local-run', 'visited-never-operated', 2, 2, 0),
     reach('job', 'operated', 8, 8, 3),
     reach('retro', 'never-linked', 0, 0, 0),
@@ -3771,14 +3654,6 @@ function buildDemoUsage(): UsagePayload {
           openPastWindow: 0,
           medianAnswerMs: 26 * 60_000,
           parkedCostUsd: 27.6,
-        }),
-        ask('obstacle-ownership', 'obstacle', 'Obstacle ownership', 'Something in the way, unowned', {
-          offered: 4,
-          settled: 1,
-          declined: null,
-          openPastWindow: 2,
-          medianAnswerMs: null,
-          parkedCostUsd: null,
         }),
         ask('validation-bench', 'validation', 'Validation bench', 'The close-out obligation on a delivered goal', {
           offered: 11,
@@ -3835,7 +3710,6 @@ const DEMO_SUBJECT_LABEL: Record<UsageSubject, string> = {
   ticket: 'Tickets',
   feature: 'The feature board',
   agent: 'Agents',
-  obstacle: 'Obstacles',
   'local-run': 'The local run',
   job: 'Jobs',
   retro: 'Retros',
@@ -3856,8 +3730,6 @@ const DEMO_SUBJECT_LABEL: Record<UsageSubject, string> = {
   priority: 'Priority',
   intake: 'Intake',
   investigation: 'Investigations',
-  criteria: 'Goal criteria',
-  prediction: 'Predictions',
   sequence: 'Story order',
   discussion: 'Discussions',
   watch: 'Watches',
@@ -3932,7 +3804,6 @@ function buildDemoMcp(): McpInsights {
     tool('knowledge_ask', 'addendum', 156, 0, 780, 18, 0),
     tool('request_permission', 'point-of-use', 149, 0, 1_400, 9, 0),
     tool('conclude_part', 'point-of-use', 121, 4, 34, 22, 24),
-    tool('raise', 'addendum', 96, 2, 28, 31, 0),
     tool('plan_submit', 'addendum', 84, 6, 96, 44, 0),
     tool('open_pr', 'addendum', 71, 5, 2_900, 51, 0),
     tool('validation_report', 'point-of-use', 58, 3, 22, 62, 12),
@@ -3979,13 +3850,14 @@ function buildDemoMcp(): McpInsights {
       verdict: 'retired',
       label: 'Retired, and still being called',
       blurb: 'This name was withdrawn. Something is still naming it, and every call to it spends a turn on a refusal.',
-      remedy: 'Find the prompt override that names it and say `raise` instead. The Setup reading names the file.',
+      remedy: 'Find the prompt override that names it and take it out. The Setup reading names the file.',
       calls: 6,
       refused: 6,
       namedInAddendum: false,
       namedInPrompts: 1,
       lastCalledAt: ago(96),
-      lastRefusal: 'report_finding has been retired. Everything it did is now one call: raise(claim, evidence)',
+      lastRefusal:
+        'report_finding has been retired, and what it reported to is gone with it: nothing records an observation for other agents any more.',
     },
     {
       tool: 'validation_amend',
@@ -4141,7 +4013,7 @@ function buildDemoMcp(): McpInsights {
       namingRow(
         'retired',
         'Retired',
-        'A withdrawn name, answered only with a refusal naming `raise`. Any call at all is a prompt out of date.',
+        'A withdrawn name, answered only with a refusal saying what replaced it. Any call at all is a prompt out of date.',
         retired,
       ),
     ],
@@ -4167,7 +4039,8 @@ function buildDemoMcp(): McpInsights {
         channel: 'fleet',
         refused: 6,
         calls: 6,
-        message: 'report_finding has been retired. Everything it did is now one call: raise(claim, evidence)',
+        message:
+          'report_finding has been retired, and what it reported to is gone with it: nothing records an observation for other agents any more.',
         at: ago(96),
       },
       {
@@ -4839,8 +4712,6 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
   };
 }
 
-const DEMO_NO_BOARD = 'the demo has no obstacle board to act on';
-
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string, from = 0) => getServer().getTranscript(agentId, from),
@@ -4863,24 +4734,6 @@ export const demoApi = {
     }),
   answerFeatureSequence: (): Promise<never> =>
     Promise.reject(new Error('the demo has no feature order, so there is nothing to answer')),
-  /* The gate and the record commit, like every other demo interaction: the reveal
-     hands the plan's body over for good, a prediction is written once, and both sets
-     of marks merge. A refusal the real routes give is given here in the same words,
-     because the gate's presses are the one place the cockpit draws a refusal inline
-     rather than throwing it. → docs/spec/17-cockpit.md#demo-mode */
-  predictGoal: (number: number, slots: PredictionDraft) =>
-    Promise.resolve().then(() => getServer().predict(number, slots)),
-  revealGoalPlan: (number: number) => Promise.resolve().then(() => getServer().revealPlan(number)),
-  getGoalPrediction: (number: number) => Promise.resolve(getServer().predictionReading(number)),
-  markGoalPrediction: (number: number, marks: Partial<Record<PredictionSlot, PredictionMark | null>>) =>
-    Promise.resolve().then(() => getServer().markPrediction(number, marks, 'plan')),
-  markGoalPredictionOutcome: (number: number, marks: Partial<Record<PredictionSlot, PredictionMark | null>>) =>
-    Promise.resolve().then(() => getServer().markPrediction(number, marks, 'outcome')),
-  getPredictionAggregate: () => Promise.resolve(getServer().predictionAggregate()),
-  getGoalCriteria: (): Promise<never> =>
-    Promise.reject(new Error('the demo holds no goal-level criteria, so there is no chain to draw')),
-  writeGoalCriteria: (): Promise<never> =>
-    Promise.reject(new Error('the demo holds no goal-level criteria, so there is nothing to append a version to')),
   getGoalDescriptions: (number: number) => Promise.resolve({ parts: getServer().goalDescriptions(number) }),
   getPrDescription: (prNumber: number) =>
     Promise.resolve().then(() => {
@@ -4947,24 +4800,6 @@ export const demoApi = {
         refUrls[goal.originRef] = tracker.replace(/\d+$/, String(goal.issueNumber));
     return { allowance, refUrls };
   },
-  getObstacles: () =>
-    Promise.resolve({
-      rows: [],
-      counts: {
-        sightings: 0,
-        goals: 0,
-        told: 0,
-        window: { since: new Date().toISOString(), calls: 0, callers: 0, agents: 0 },
-      },
-      dormantMs: 7 * 24 * 60 * 60 * 1000,
-      canFileTickets: false,
-      ticketApproval: true,
-    }),
-  muteObstacle: (_id: string, _muted: boolean) => Promise.reject(new Error(DEMO_NO_BOARD)),
-  decideObstacleTicket: (_id: string, _approved: boolean) => Promise.reject(new Error(DEMO_NO_BOARD)),
-  ownObstacle: (_id: string, _ownerRef: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
-  retireObstacle: (_id: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
-  writeDownObstacle: (_id: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
   getPoolInsights: (project: string | null) =>
     Promise.resolve({
       rollup: {

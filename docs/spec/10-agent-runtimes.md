@@ -7,12 +7,10 @@ provider, and its own MCP socket. Four keys are **stripped** from what it inheri
 `src/agents/spawnEnv.ts`, applied at both spawn seams:
 
 `LUBBDUBB_TOKEN` is the cockpit bearer, and every operator-only route answers to it. An agent holding
-it can `curl` the cockpit and read back anything the cockpit can — including, where the reveal gate is
-on, the operator's prediction, verbatim, slot by slot. That is the one thing the whole prediction
-record exists to prevent, and the escape is **over the network rather than through an import**, so
-neither the type system nor the structural containment test can see it. A deny-list at the spawn seam
-is what closes it, and `test/predictionContainment.test.ts` asserts both that the keys are stripped
-and that neither spawn site has gone back to spreading `process.env` wholesale.
+it can `curl` the cockpit and act as the operator on every route. The escape is **over the network
+rather than through an import**, so the type system cannot see it. A deny-list at the spawn seam is
+what closes it, and `test/spawnEnv.test.ts` asserts both that the keys are stripped and that neither
+spawn site has gone back to spreading `process.env` wholesale.
 
 `LUBBDUBB_INGRESS_SECRET`, `LUBBDUBB_INGRESS_BASIC` and `LUBBDUBB_DESKTOP_CREDENTIAL` are credentials
 of the same kind, which no agent has any reason to hold.
@@ -118,7 +116,6 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 (--session-id <id> | --resume <id>)
 [--settings <file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
-[--strict-mcp-config --tools ""]   (a sealed rule only)
 [--permission-mode <mode>]
 [--model <model>]
 [--effort <level>]
@@ -127,11 +124,6 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 
 Points that are load-bearing:
 
-- **A sealed rule's agent launches with no built-in tool and no server but the harness's.**
-  `--tools ""` is an empty allow-list of built-in tools — never a deny-list, which a new CLI build's
-  new tool slips past — `--strict-mcp-config` keeps the operator's own MCP servers out, the operator's
-  `agentAllowedTools` are left out of its `--settings`, and no `--permission-prompt-tool` is named.
-  → [14](14-persistence.md#the-prediction-judge)
 - The protocol prompt is **re-appended on resume**. `--resume` replays the conversation but does not
   retain the original invocation's appended system prompt, so detection would otherwise break.
 - `--session-id` and `--resume` are mutually exclusive, and the launch carries the pair (issue #318 —
@@ -216,21 +208,20 @@ variable.
 
 The appended system prompt is the protocol and, where the tool channel is wired, the tool addendum.
 There is no third part, and the two that used to be there are both gone: the lesson block, and the
-claim store's block that replaced it (`renderKnowledgeBlock`) →
-[27](27-obstacles.md#what-the-claim-store-left-behind).
+claim store's block that replaced it (`renderKnowledgeBlock`), both removed with the stores behind
+them.
 
 **The placement rule that produced them still holds, and is the reason nothing replaced them.** A
 system-prompt append is **identical across every agent in the fleet**, so it is a cached prefix paid
 once; everything `recordDispatchTask` appends is per-goal and variable, so it is fresh input tokens on
 every dispatch. Anything that churns per dispatch belongs in the task prompt — and everything the
-harness now has to tell an agent about the fleet's own experience is _keyed_, so it is per dispatch by
-construction ([09](09-execution.md#what-the-fleet-has-already-run-into-reaches-the-agent)).
+harness tells an agent about its goal's own history — the previous agent's note, an operator's
+instructions, a released block's reason — is per goal, so it is per dispatch by construction
+([09](09-execution.md#nothing-fleet-wide-is-appended)).
 
 **Blanket context was the wrong instrument, not merely the wrong place.** A block every agent reads
 before it reads any code is skimmed rather than read at the sizes this harness runs against, and each
-line added to one makes every line already in it worth less. The board that replaced the store
-delivers a row to the dispatches its keys match and to nowhere else, which is the same budget spent on
-the agents it is actually about → [27](27-obstacles.md#delivery).
+line added to one makes every line already in it worth less.
 
 **`agentProtocol.ts` reads no store, and that is structural rather than a habit.** It composes the
 protocol from its own constants; anything else an agent must read is appended by the executor, at the

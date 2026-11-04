@@ -15,20 +15,22 @@ export const concludeWork: ToolFactory = ({ deps, agent, ok }) => ({
     '"waiting on test" from "still has work in it", so if you say nothing the harness parks the ' +
     'ticket and waits for a human rather than guessing. Say "done" only if everything the issue ' +
     'asked for is delivered; say "more_work" if you did part of it or found more is needed, and the ' +
-    'issue will come back round with your note in front of the next agent. Say "blocked", naming the ' +
-    'obstacle you raised, if you could not finish because of something that is not this goal at all — the ' +
-    'goal parks until that clears rather than coming back round for the next agent to hit the same wall.',
+    'issue will come back round with your note in front of the next agent. Say "blocked", with the reason, if ' +
+    'you could not finish because of something that is not this goal at all — a base branch somebody else ' +
+    'broke, a service that is down, a defect in code nobody is touching. The goal parks and the operator is ' +
+    'asked to release it, rather than it coming back round for the next agent to hit the same wall. This is ' +
+    'the one way to say you are stuck on something that is not yours: do not go fixing it.',
   inputSchema: toolSchema(
     z.object({
       status: z
         .enum(CONCLUSION_STATUSES)
         .describe(CONCLUSION_STATUSES.map((v) => `${v}: ${CONCLUSION_VERDICT_HELP[v]}`).join('. ')),
-      obstacle: z
+      reason: z
         .string()
         .describe(
-          'Required for blocked, ignored otherwise: the id of the obstacle that stopped you, as raise ' +
-            'answered it. The goal is parked while that obstacle stands and comes back on its own when it ' +
-            'clears — so this is what makes blocked a park rather than a dead end.',
+          'Required for blocked, ignored otherwise: what stopped you, in your own words — the check, the ' +
+            'branch, the error, the service. The operator reads it to decide when to release the goal, and ' +
+            'the next agent reads it once they have.',
         )
         .optional(),
       note: z
@@ -44,16 +46,16 @@ export const concludeWork: ToolFactory = ({ deps, agent, ok }) => ({
     const parsed = validateConclusion(args);
     if (!parsed.ok) return toolError(`Conclusion rejected: ${parsed.error}`);
     if (parsed.verdict === BLOCKED_STATUS) {
-      const blocked = deps.agents.recordBlocked(agent.id, parsed.obstacleId, parsed.note);
+      const blocked = deps.agents.recordBlocked(agent.id, parsed.reason, parsed.note);
       if (!blocked.ok) return toolError(blocked.error);
       return ok({
         concluded: true,
         issue: blocked.block.originRef,
         status: BLOCKED_STATUS,
         note:
-          `Recorded. ${blocked.block.originRef} is parked behind ${blocked.block.obstacleId} and nothing ` +
-          `further will be dispatched for it until that obstacle stops reaching agents — then it comes back ` +
-          `on its own, with no one having to remember it. Stop here: do not go fixing the obstacle. ` +
+          `Recorded. ${blocked.block.originRef} is parked and the operator has been asked to release it; ` +
+          `nothing further is dispatched for it until they do, and your reason goes to whoever picks it up ` +
+          `after. Stop here: do not go fixing what stopped you. ` +
           DONE_REMINDER,
       });
     }

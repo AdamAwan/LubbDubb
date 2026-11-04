@@ -218,37 +218,6 @@ test('an ask raised on a pull request opens the goal that pull request belongs t
   assert.equal(row?.originRef, `pr:${linked.linkedPrNumber}`);
 });
 
-test('a plan ask whose plan is withheld lands on the pane the reveal gate is drawn in', () => {
-  const state = buildDemoState();
-  const plan = state.plans[0];
-  assert.ok(plan, 'the demo fixtures must carry a plan');
-  const ask = escalation({
-    id: 'plan-ask',
-    type: 'approve_change',
-    context: { originRef: plan.originRef, planId: plan.id },
-  });
-  const rowsFor = (revealed: boolean): NeedRow[] =>
-    askRows(
-      stateWith({
-        ...state,
-        plans: state.plans.map((p) => (p.id === plan.id ? { ...p, revealed } : p)),
-        escalations: [ask],
-        humanTasks: [],
-        proposals: [],
-        recovery: [],
-        tasks: [],
-      }),
-    );
-
-  const withheld = rowsFor(false).find((r) => r.id === 'plan-ask');
-  assert.equal(withheld?.opens, 'prediction', 'the gate is the only place this ask can be answered');
-  assert.match(withheld?.note ?? '', /reveal/i, 'the row says what the press will do');
-
-  const revealed = rowsFor(true).find((r) => r.id === 'plan-ask');
-  assert.equal(revealed?.opens, 'goal', 'once revealed the lifecycle rule picks the pane again');
-  assert.equal(revealed?.note, undefined);
-});
-
 test('a permission request is its own kind, not a plain escalation', () => {
   const rows = askRows(
     stateWith({
@@ -738,43 +707,6 @@ test('a checked description raises an ask only when it found something, and gaps
   assert.ok(note);
   assert.equal(note.kind, 'description_note');
   assert.equal(note.urgency, 'later', 'a gap is a note, folded away with the rest');
-});
-
-test('a goal waiting on its intake sitting is a blocking row that opens the goal', () => {
-  const base = buildDemoState();
-  const goal = base.world.issues[0]!;
-  const sitting = (status: 'sitting' | 'planning') =>
-    stateWith({
-      escalations: [],
-      humanTasks: [],
-      proposals: [],
-      recovery: [],
-      world: {
-        ...base.world,
-        pullRequests: unassignedPrs(base),
-        issues: base.world.issues.map((i) =>
-          i.number === goal.number
-            ? {
-                ...i,
-                state: 'open' as const,
-                appraisal: null,
-                pickup: { eligible: false, status, reasons: ['awaiting your prediction and criteria'] },
-              }
-            : { ...i, appraisal: null, pickup: { eligible: false, status: 'planning' as const, reasons: [] } },
-        ),
-      },
-    });
-
-  const rows = askRows(sitting('sitting')).filter((r) => r.kind === 'sitting');
-  assert.deepEqual(
-    rows.map((r) => [r.kind, r.group, r.goalRef, r.opens]),
-    [['sitting', 'blocking', `issue:${goal.number}`, 'goal']],
-  );
-  assert.deepEqual(
-    askRows(sitting('planning')).filter((r) => r.kind === 'sitting'),
-    [],
-    'a closed sitting asks nothing',
-  );
 });
 
 test('an assign ask opens where its buttons are drawn, never the pull request page', () => {

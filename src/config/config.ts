@@ -71,16 +71,6 @@ export interface Config {
   spendBurn: BurnPolicy;
   runway: RunwayPolicy;
   pets: PetPolicy;
-  prediction: PredictionConfig;
-  /**
-   * How many goals a rate's denominator needs before the prediction aggregate
-   * carries that rate at all. Below it the figure is absent from the payload rather
-   * than captioned, because a caption saying "small sample" is read by nobody and
-   * withholding it is the only way the panel can be made not to draw it. The counts
-   * are never withheld. → docs/spec/18-observability.md
-   */
-  predictionAggregateMinGoals: number;
-  goalCriteria: GoalCriteriaConfig;
   /**
    * Use every agent draft as if the operator had pressed
    * **Use the agent's** at the open. Off by default.
@@ -96,8 +86,6 @@ export interface Config {
   localValidation: LocalValidationPolicy;
   closedPrWindowMs: number;
   closedPrCatchUpMs: number;
-  obstacleDormantMs: number;
-  obstacleTicketApproval: boolean;
   environments: EnvironmentConfig[];
   environmentProbeIntervalMs: number;
   environmentHealthIntervalMs: number;
@@ -205,21 +193,6 @@ export interface AzureDevOpsConfig {
   policyChecks?: PolicyCheckModes;
 }
 
-/**
- * The reveal gate's prediction record. On by default; off means *nothing is
- * stamped* — no reveal, no decline, no offer — so that turning it on later does not
- * present a backlog of never-offered goals as declines.
- * → docs/spec/02-configuration.md#the-reveal-gate
- */
-interface PredictionConfig {
-  enabled: boolean;
-}
-
-/** Goal-level, human-authored acceptance criteria. On by default, on the same terms. */
-interface GoalCriteriaConfig {
-  enabled: boolean;
-}
-
 interface PoolConfig {
   project?: string;
   remote?: string;
@@ -271,9 +244,6 @@ const DEFAULTS: Config = {
   spendBurn: DEFAULT_BURN,
   runway: DEFAULT_RUNWAY,
   pets: { enabled: true, visible: true },
-  prediction: { enabled: true },
-  predictionAggregateMinGoals: 10,
-  goalCriteria: { enabled: true },
   autoUseAgentDescriptions: false,
   selfUpdate: {
     enabled: true,
@@ -293,8 +263,6 @@ const DEFAULTS: Config = {
   localValidation: DEFAULT_LOCAL_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   closedPrCatchUpMs: 7 * 24 * 60 * 60 * 1000,
-  obstacleDormantMs: 7 * 24 * 60 * 60 * 1000,
-  obstacleTicketApproval: true,
   environments: [],
   environmentProbeIntervalMs: 5 * 60 * 1000,
   environmentHealthIntervalMs: 5 * 60 * 1000,
@@ -371,8 +339,6 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   merged.pool = { ...DEFAULTS.pool, ...overrides.pool };
   merged.planning = { ...DEFAULTS.planning, ...overrides.planning };
   merged.pets = { ...DEFAULTS.pets, ...overrides.pets };
-  merged.prediction = { ...DEFAULTS.prediction, ...overrides.prediction };
-  merged.goalCriteria = { ...DEFAULTS.goalCriteria, ...overrides.goalCriteria };
   merged.spendBurn = { ...DEFAULTS.spendBurn, ...overrides.spendBurn };
   merged.runway = { ...DEFAULTS.runway, ...overrides.runway };
   merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...overrides.selfUpdate };
@@ -397,24 +363,10 @@ export function defaultConfig(): Config {
   return mergeConfig();
 }
 
-/**
- * Whether the reveal stamp exists on this deployment — the one fact `prediction` and
- * `goalCriteria` share, so it is one derived predicate rather than a pair of reads.
- * It is read in exactly two places: the prediction route module, which mounts no
- * route at all when it is false, and the wire payload, which then ships the plan body
- * as it always did. Everything downstream reads the presence of data, never the flag.
- * → docs/spec/02-configuration.md#the-reveal-gate
- */
-export function revealGateOn(config: Config): boolean {
-  return config.prediction.enabled || config.goalCriteria.enabled;
-}
-
 export const DEEP_MERGED_BLOCKS = [
   'integrations',
   'planning',
   'pets',
-  'prediction',
-  'goalCriteria',
   'spendBurn',
   'runway',
   'selfUpdate',

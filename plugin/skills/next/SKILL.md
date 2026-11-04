@@ -60,8 +60,7 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
 
    - **The goal** beside the ask: `goal.title` and `ask.goalRef`, then its plan — "m of n
      merged" and each part as a numbered row with its `state`, the `here` one marked
-     "this ask" in the kind's tone. `plan.withheld` → "plan not revealed yet", and
-     no parts. `goal: null` → "The fleet itself, rather than any one goal."
+     "this ask" in the kind's tone. `goal: null` → "The fleet itself, rather than any one goal."
    - **The ask:** the `symbol` and the title; `label` · goal ref · when it was raised;
      "fleet is stuck on this" where `ask.urgency` is `now`; "holding n parts" where
      `holding` is above zero; the `note`; the `question` in full where one came back;
@@ -169,8 +168,8 @@ terminal, and carry on.
 ### When the answer is not a tool here
 
 - **`answerWith.in: "cockpit"`** — this kind is answered in the cockpit, on
-  purpose: a failing setup check or another deployment setting, upgrades, the operator's own prediction, a
-  usage-limit park, a plan not yet revealed. Say
+  purpose: a failing setup check or another deployment setting, upgrades, a
+  usage-limit park. Say
   what it is and why (`why`), give them the `link` as a markdown link, and offer
   to skip it.
 - **`answerWith.in: "nowhere"`** — there is no decision to make: a pull request

@@ -11,7 +11,6 @@ import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { handleRequest, parseFrame, type McpTool, toolJson } from '../src/mcp/protocol.js';
 import {
   ALLOWED_MCP_TOOLS,
-  isSealedRule,
   MCP_SERVER_ID,
   MCP_TOOL_NAMES,
   PERMISSION_PROMPT_TOOL,
@@ -163,6 +162,8 @@ test('a retired name is no longer a tool, and no longer granted', () => {
   assert.ok(RETIRED_TOOL_NAMES.includes('knowledge_ask'));
 });
 
+const RETIRED_FEATURE_TOOLS = new Set(['criteria_alignment', 'prediction_judge']);
+
 test('a retired name is answered, so an override that still names one is not a dead channel', () => {
   const tools = retiredAwareTools();
   for (const name of RETIRED_TOOL_NAMES) {
@@ -171,7 +172,11 @@ test('a retired name is answered, so an override that still names one is not a d
     assert.equal(tool.hidden, true, `${name} must not be advertised in tools/list`);
     assert.match(
       tool.description,
-      name.startsWith('review_pack_') ? /nothing replaces them/ : /raise/,
+      name.startsWith('review_pack_')
+        ? /nothing replaces them/
+        : RETIRED_FEATURE_TOOLS.has(name)
+          ? /nothing replaces it/
+          : /conclude_work with status "blocked"/,
       'the refusal names the door that replaced it, or says there is none',
     );
   }
@@ -214,10 +219,6 @@ test('every rule subset names a live rule and real tools, and the core is in eve
   for (const [rule, extras] of Object.entries(RULE_TOOLS)) {
     assert.ok(Object.hasOwn(DISPATCH_RULES, rule), `${rule} is a live dispatch rule`);
     for (const tool of extras) assert.ok((MCP_TOOL_NAMES as readonly string[]).includes(tool), `${tool} is a tool`);
-    if (isSealedRule(rule)) {
-      assert.deepEqual([...toolsForRule(rule)], [...extras], `${rule} is sealed, so it keeps its own tools alone`);
-      continue;
-    }
     for (const core of UNIVERSAL_TOOLS) assert.ok(toolsForRule(rule).has(core), `${rule} keeps ${core}`);
   }
   for (const [name, naming] of Object.entries(TOOL_NAMING)) {
@@ -1623,7 +1624,7 @@ test('every origin fence points a refused caller at a tool that accepts it', () 
       const error = verdict.error ?? '';
       const named = Object.keys(accepts).filter((name) => name !== tool && error.includes(name));
       if (named.length === 0) {
-        assert.match(error, /escalate|raise/, `${tool} refusing ${origin} names no tool and no other remedy`);
+        assert.match(error, /escalate/, `${tool} refusing ${origin} names no tool and no other remedy`);
         continue;
       }
       for (const name of named) {

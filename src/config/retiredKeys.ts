@@ -35,10 +35,8 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   issuePickupRequireOwnLabel: 'the ownership gate is "ownWorkOnly", and who "own" means is "userId"',
   'github.defaultAssignee': 'tickets the harness files are assigned to "userId"',
   'azureDevOps.defaultAssignee': 'tickets the harness files are assigned to "userId"',
-  lessonBlockChars:
-    'nothing is injected fleet-wide any more — the claim store this bounded is gone, and everything the obstacle board holds is keyed and delivered to the dispatches it is about',
-  knowledgeBlockChars:
-    'nothing is injected fleet-wide any more — the claim store this bounded is gone, and everything the obstacle board holds is keyed and delivered to the dispatches it is about',
+  lessonBlockChars: 'nothing is injected fleet-wide any more — the claim store this bounded is gone',
+  knowledgeBlockChars: 'nothing is injected fleet-wide any more — the claim store this bounded is gone',
   knowledgeScopeStaleDays: 'the Knowledge page it was a reading for is gone with the claim store behind it',
   knowledgeColdDays: 'the Knowledge page it was a reading for is gone with the claim store behind it',
   agentIdleWaitMs:
@@ -48,6 +46,15 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'github.filters': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.prAuthor': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.workItemAssignedTo': 'work items are filtered to "userId"\'s while "ownWorkOnly" is on',
+  prediction: 'predictions were removed — nothing is asked before a plan is read, and no plan is withheld from you',
+  predictionAggregateMinGoals:
+    'predictions were removed, and the aggregate this thresholded with them — the pull request description figures it also gated now need ten checked descriptions, fixed',
+  goalCriteria:
+    "goal criteria were removed — the planner's own acceptance criteria, per part, are what a goal is checked against",
+  obstacleDormantMs:
+    'obstacles were removed — nothing keeps a board of what is in the fleet\'s way, so nothing on it goes dormant. An agent that is stopped concludes "blocked" and the goal waits for you to release it',
+  obstacleTicketApproval:
+    'obstacles were removed, and the bug the board proposed for each one with them — nothing files a ticket for something an agent hit',
   'remoteValidation.runTimeoutMs':
     "the harness no longer spawns the browser suite — the remote validation run's agent invokes the runner in its own shell, under its own stall park, so there is no invocation for the harness to kill",
 };

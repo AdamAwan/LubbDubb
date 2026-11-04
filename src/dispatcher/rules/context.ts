@@ -15,7 +15,6 @@ import type { SequenceWait } from '../../sequence/readiness.js';
 import type {
   Decision,
   FeatureSequence,
-  GoalCriteriaVersion,
   Issue,
   IssueAppraisal,
   IssueConclusion,
@@ -23,7 +22,6 @@ import type {
   IssueShortfall,
   LocalRun,
   LocalValidation,
-  ObstacleStanding,
   Plan,
   PrReview,
   PrReviewRoute,
@@ -66,9 +64,6 @@ export interface StageContext {
   partsPlanFor: (issueNumber: number) => Plan | null;
   deliveryParked: (issue: Issue) => boolean;
   appraisalParked: (issue: Issue) => boolean;
-  /** → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner */
-  sittingHolds: (issueNumber: number) => boolean;
-  criteriaFor: (issueNumber: number) => GoalCriteriaVersion | null;
   /**
    * The sequence hold, then the open-question hold; `sequence: false` for a planned part, which its own
    * dependencies hold instead. → docs/spec/40-discussions.md#an-open-question-holds-the-story
@@ -87,8 +82,6 @@ export interface StageContext {
   validationChecks: Map<string, ValidationCheck[]>;
   /** Each goal's validation plan: the plan's hint, and the planner's stamp once it has run. */
   validationPlans: ReadonlyMap<string, ValidationPlanRecord>;
-  obstacles: readonly ObstacleStanding[];
-  redBaseChecks: ReadonlySet<string>;
   appraising: Set<number>;
   investigating: Set<number>;
   investigations: InvestigationStandings;

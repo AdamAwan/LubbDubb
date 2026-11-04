@@ -34,18 +34,15 @@ function goalOf(inputs: AskInputs, row: AskRow, queue: readonly AskRow[]) {
   return {
     title: goal.issue?.title ?? null,
     url: goal.issue === undefined ? null : (issueAddress(inputs, goal.issue) ?? null),
-    plan: goal.withheld
-      ? { withheld: true as const }
-      : {
-          withheld: false as const,
-          parts: goal.parts.map((p) => ({
-            seq: p.seq,
-            title: p.title,
-            state: PART_GROUP_WORD[p.group],
-            here: p.here,
-            pr: prOf(inputs, p.prNumber),
-          })),
-        },
+    plan: {
+      parts: goal.parts.map((p) => ({
+        seq: p.seq,
+        title: p.title,
+        state: PART_GROUP_WORD[p.group],
+        here: p.here,
+        pr: prOf(inputs, p.prNumber),
+      })),
+    },
   };
 }
 

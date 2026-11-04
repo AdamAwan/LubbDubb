@@ -52,10 +52,7 @@ import { MCP_CALLS_SCHEMA } from './schema/mcpCalls.js';
 import { POOL_SCHEMA } from './schema/pool.js';
 import { LOCAL_VALIDATIONS_SCHEMA } from './schema/localValidations.js';
 import { RATE_LIMITS_SCHEMA } from './schema/rateLimits.js';
-import { OBSTACLES_SCHEMA } from './schema/obstacles.js';
 import { EJECTIONS_SCHEMA } from './schema/ejections.js';
-import { PREDICTIONS_SCHEMA } from './schema/predictions.js';
-import { GOAL_CRITERIA_SCHEMA } from './schema/goalCriteria.js';
 import { PR_DESCRIPTIONS_SCHEMA } from './schema/prDescriptions.js';
 import { BOT_PR_RISKS_SCHEMA } from './schema/botPrRisks.js';
 import { INVESTIGATIONS_SCHEMA } from './schema/investigations.js';
@@ -115,10 +112,7 @@ export const SCHEMA =
   POOL_SCHEMA +
   LOCAL_VALIDATIONS_SCHEMA +
   RATE_LIMITS_SCHEMA +
-  OBSTACLES_SCHEMA +
   EJECTIONS_SCHEMA +
-  PREDICTIONS_SCHEMA +
-  GOAL_CRITERIA_SCHEMA +
   PR_DESCRIPTIONS_SCHEMA +
   BOT_PR_RISKS_SCHEMA +
   INVESTIGATIONS_SCHEMA +

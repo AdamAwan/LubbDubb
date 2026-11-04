@@ -158,8 +158,6 @@ test('buildStateSnapshot attaches a pickup verdict to every issue', async () => 
 
 test('buildStateSnapshot pickup verdict says paused dispatch where a planner is owed', async () => {
   const config = { ...testConfig() };
-  config.prediction = { ...config.prediction, enabled: false };
-  config.goalCriteria = { ...config.goalCriteria, enabled: false };
   const system = buildSystem(config, { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 9, title: 'Bug' });
   failAppraisalOpen(system.store, 9);

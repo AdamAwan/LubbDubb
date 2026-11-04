@@ -1,5 +1,4 @@
 import { issueWatchGateReason } from '../issuePickup.js';
-import { criteriaItems } from '../../criteria/items.js';
 import { issueOrigin } from '../../plans/planning.js';
 import {
   authoringBriefing,
@@ -52,7 +51,6 @@ export function validationPlan(s: StageContext): void {
             hint: record?.hint ?? null,
             parts: (ctx.planParts ?? []).filter((p) => p.planId === plan.id),
             environments: s.validationPlanNote,
-            criteria: criteriaItems(s.criteriaFor(issue.number)?.text),
           }),
         originRef: planOrigin,
         originTitle: issue.title,

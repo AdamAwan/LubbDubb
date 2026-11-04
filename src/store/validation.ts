@@ -53,10 +53,7 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
     // whose assertion is the whole of its evidence — so nothing is backfilled, and null must never
     // be read as "evidence was demanded and none came". → docs/spec/20-validation.md#proof
     proof: 'TEXT',
-    // The goal criteria the check answers, JSON. Null reads as none, which is true of every row
-    // written before the column and needs no backfill. → docs/spec/20-validation.md#satisfies-and-the-goals-criteria
-    satisfies: 'TEXT',
-    // Why the check proves its criteria, one line. Null reads as none written, which is true of every
+    // Why the check is the right proof, one line. Null reads as none written, which is true of every
     // row from before the column and needs no backfill. → docs/spec/20-validation.md#rationale
     rationale: 'TEXT',
   },
@@ -89,7 +86,7 @@ export const VALIDATION_REBUILDS: readonly TableRebuild[] = [
     table: 'validation_checks',
     detect: (db) => {
       const columns = columnNames(db, 'validation_checks');
-      return (columns.includes('area') || columns.includes('expects')) && !columns.includes('plan_id');
+      return ['area', 'expects', 'satisfies'].some((c) => columns.includes(c)) && !columns.includes('plan_id');
     },
     copy: (old, db) => {
       const carried = new Set(columnNames(db, old));
@@ -495,16 +492,16 @@ export class ValidationStore {
         // TECHDEBT: `check_do` rather than `do`: DO is a SQLite keyword (UPSERT), and unquoted it
         // is a syntax error at prepare time. `check_expect` follows so the pair reads as one.
         `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
-           satisfies, fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
+           fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
            result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note,
            steps, capture, proof, rationale, created_at, updated_at)
          VALUES (@originRef, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
-           @satisfies, @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
+           @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
            @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote,
            @steps, @capture, @proof, @rationale, @createdAt, @updatedAt)
          ON CONFLICT(origin_ref, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
-           covers=excluded.covers, satisfies=excluded.satisfies, fleet_candidate=excluded.fleet_candidate,
+           covers=excluded.covers, fleet_candidate=excluded.fleet_candidate,
            candidate_why=excluded.candidate_why, actor=excluded.actor,
            handback_note=excluded.handback_note, claimed_by=excluded.claimed_by,
            claimed_at=excluded.claimed_at, state=excluded.state, result_note=excluded.result_note,
@@ -518,7 +515,6 @@ export class ValidationStore {
         ...check,
         uses: JSON.stringify(check.uses),
         covers: JSON.stringify(check.covers),
-        satisfies: JSON.stringify(check.satisfies ?? []),
         rationale: check.rationale ?? null,
         fleetCandidate: check.fleetCandidate ? 1 : 0,
         revision: check.revision === null ? null : JSON.stringify(check.revision),

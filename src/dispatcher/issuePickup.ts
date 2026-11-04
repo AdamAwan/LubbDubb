@@ -5,8 +5,7 @@ import type {
   IssueAppraisal,
   IssueDelivery,
   IssueRun,
-  ObstacleBlock,
-  ObstacleStanding,
+  GoalBlock,
   Plan,
   PlanPart,
   PullRequest,
@@ -14,7 +13,6 @@ import type {
   WorldEvent,
 } from '../types.js';
 import { deliveryHold } from '../delivery/delivery.js';
-import { blockedGoals } from '../obstacles/blocked.js';
 import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { appraisalHold, appraisalOrigin, hasWorkStarted, isAppraised } from '../intake/appraisal.js';
 import {
@@ -24,7 +22,6 @@ import {
   type InvestigationStandings,
 } from '../intake/investigation.js';
 import { pickupLabels } from '../watchLabels.js';
-import { ALIGNING_REASON, SITTING_REASON, sittingHolds, type ClosedSittings } from '../intake/sitting.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute, type PlanRouteVerdict } from '../plans/planning.js';
 import { liveParts, planProgress } from '../plans/parts.js';
@@ -128,8 +125,7 @@ type IssuePickupStatusKind =
   | 'delivered'
   | 'appraisal'
   | 'investigation'
-  | 'sitting'
-  | 'obstacle'
+  | 'parked'
   | 'cooldown'
   | 'escalated'
   | 'blocked'
@@ -154,9 +150,7 @@ export interface IssuePickupContext {
   deliverySignals?: WorldEvent[];
   appraisals?: IssueAppraisal[];
   investigations?: InvestigationStandings;
-  closedSittings?: ClosedSittings;
-  obstacleBlocks?: ObstacleBlock[];
-  obstacles?: ObstacleStanding[];
+  goalBlocks?: ReadonlyMap<string, GoalBlock>;
   runs?: IssueRun[];
   headroom: number;
   paused: boolean;
@@ -230,12 +224,12 @@ function standingHoldStatus(issue: Issue, origin: string, ctx: IssuePickupContex
   });
   if (held) return { eligible: false, status: 'delivered', reasons: [held] };
 
-  const block = blockedGoals(ctx.obstacleBlocks ?? [], ctx.obstacles ?? []).get(origin);
+  const block = ctx.goalBlocks?.get(origin);
   if (block) {
     return {
       eligible: false,
-      status: 'obstacle',
-      reasons: [`blocked behind ${block.obstacleId}: ${block.note}`],
+      status: 'parked',
+      reasons: [`concluded blocked — waiting on you to release it: ${block.reason}`],
     };
   }
 
@@ -254,12 +248,7 @@ function standingHoldStatus(issue: Issue, origin: string, ctx: IssuePickupContex
   return null;
 }
 
-function planningRouteStatus(
-  issue: Issue,
-  ctx: IssuePickupContext,
-  route: PlanRouteVerdict,
-  plan: Plan | null,
-): IssuePickupStatus {
+function planningRouteStatus(issue: Issue, ctx: IssuePickupContext, route: PlanRouteVerdict): IssuePickupStatus {
   if (route.route === 'parts') {
     return { eligible: false, status: 'planning', reasons: ['plan split this into parts'] };
   }
@@ -275,12 +264,6 @@ function planningRouteStatus(
     return { eligible: false, status: 'planning', reasons: ['awaiting your approval of the plan'] };
   }
   const planner = ctx.tasks.find((t) => t.originRef === planOrigin(issue.number) && isActiveTask(t));
-  if (!planner && sittingHolds(ctx.closedSittings, issue.number, plan)) {
-    const aligning = ctx.tasks.some(
-      (t) => t.originRef === issueOriginRef('criteriaAlignment', issue.number) && isActiveTask(t),
-    );
-    return { eligible: false, status: 'sitting', reasons: [aligning ? ALIGNING_REASON : SITTING_REASON] };
-  }
   if (!planner && route.planner === 'dispatch') {
     if (ctx.paused) return { eligible: false, status: 'blocked', reasons: ['dispatch paused'] };
     if (ctx.headroom <= 0) return { eligible: false, status: 'blocked', reasons: ['no agent capacity'] };
@@ -331,7 +314,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     activeStatus(origin, ctx) ??
     standingHoldStatus(issue, origin, ctx) ??
     investigationStatus(issue, ctx, investigation);
-  return held ?? planningRouteStatus(issue, ctx, planVerdict, plan);
+  return held ?? planningRouteStatus(issue, ctx, planVerdict);
 }
 
 function appraisalFor(issue: Issue, ctx: IssuePickupContext): string | null {

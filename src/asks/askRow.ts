@@ -16,7 +16,6 @@ export type AskKind =
   | 'description_note'
   | 'shortfall'
   | 'intake'
-  | 'sitting'
   | 'findings'
   | 'profile'
   | 'placement'
@@ -41,8 +40,7 @@ export type AskGroup = 'blocking' | 'yours';
 /** `now` is work the fleet cannot get past; `next` the operator's own obligation; `later` holds nothing. */
 export type AskUrgency = 'now' | 'next' | 'later';
 
-/* `prediction` is `goal` with a pane named. → docs/spec/17-cockpit.md#the-panes */
-export type AskDestination = 'goal' | 'prediction' | 'ask' | 'config' | 'build' | 'provider' | 'pr' | null;
+export type AskDestination = 'goal' | 'ask' | 'config' | 'build' | 'provider' | 'pr' | null;
 
 /**
  * The record an ask is about, which is what answers it and what says it has been answered.
@@ -53,8 +51,6 @@ export type AskSubject =
       type: 'escalation';
       escalationId: string;
       proposalId: string | null;
-      /** Present, and true, only while the plan behind it waits on the operator's reveal. */
-      planWithheld?: true;
     }
   | { type: 'human_task'; taskId: string }
   | { type: 'recovery'; taskIds: string[] }

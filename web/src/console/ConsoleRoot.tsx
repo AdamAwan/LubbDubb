@@ -21,7 +21,6 @@ import { PoolStatus } from '../components/PoolStatus.js';
 import { PetsPage } from '../components/PetsPage.js';
 import { Vivarium, openPets } from './Vivarium.js';
 import { InsightsPage } from '../components/InsightsPage.js';
-import { ObstaclesPage } from '../components/ObstaclesPage.js';
 import { BotPrsPage } from '../components/BotPrsPage.js';
 import { AppErrorsPage } from '../components/AppErrorsPage.js';
 import { Ref } from '../components/refs.js';
@@ -199,8 +198,6 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
           now={view.now}
         />
       );
-    case 'obstacles':
-      return <ObstaclesPage open={view.viewingObstacle} ended={view.obstacleEnded} now={view.now} actions={actions} />;
     case 'bots':
       return <BotPrsPage now={view.now} />;
     case 'errors':

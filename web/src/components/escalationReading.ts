@@ -32,14 +32,6 @@ export interface CardProps {
   stallExpiresAt?: string | null;
   onExtend?: (agentId: string) => Promise<unknown> | unknown;
   onViewPlan?: (planId: string) => void;
-  /**
-   * Whether this ask's plan is still withheld pending the reveal. Handed in rather
-   * than read here, because the card holds no plans — it is `PlanView.revealed`,
-   * the one fact the wire carries for exactly this.
-   */
-  withheld?: boolean;
-  /** Opens the goal on the pane the gate is drawn in. → docs/spec/17-cockpit.md#the-reveal-gate */
-  onReveal?: () => void;
 }
 
 export type Card = ReturnType<typeof readCard>;
@@ -59,7 +51,6 @@ export function readCard(props: CardProps) {
     decidable,
     caveats,
     planDecidable,
-    gated: gatedOf(planDecidable, props),
     resumed: resumedOf(props),
     expiring: escalation.agentId && stallExpiresAt ? stallExpiresAt : null,
     headline,
@@ -91,16 +82,6 @@ function planDecidableOf(decidable: Proposal | null, { onDecide, onBackOut }: Ca
 function permissionOf({ escalation, onPermission }: CardProps): NonNullable<Context['permission']> | null {
   const { permission } = escalation.context;
   return permission && onPermission ? permission : null;
-}
-
-/* While the gate stands there is exactly one thing to do here and it is not on
-   this card: approving, refusing and backing out are all refused server-side, and
-   the sheet behind "Read the full plan" answers 409 — so the verdict row and both
-   doors into the document are replaced by the one press that leads to the gate.
-   A card offering four answers that each end in a refusal is the ask telling the
-   operator to guess. → docs/spec/17-cockpit.md#the-reveal-gate */
-function gatedOf(planDecidable: Proposal | null, { withheld, onReveal }: CardProps): boolean {
-  return planDecidable !== null && withheld === true && onReveal !== undefined;
 }
 
 function resumedOf({ resumedAt, escalation }: CardProps): boolean {

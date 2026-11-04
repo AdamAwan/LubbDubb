@@ -5,6 +5,7 @@ import type {
   AgentStatus,
   AgentUsage,
   ExtraMcpServer,
+  GoalBlock,
   HumanTask,
   IssueConclusion,
   PlanPart,
@@ -37,7 +38,6 @@ export interface AgentManagerOptions {
     model: string | null;
     effort: string | null;
     permissionMode: string | null;
-    sealed: boolean;
   }) => string[];
   goalProfile?: {
     effective: (issueOrigin: string) => string | null;
@@ -78,6 +78,7 @@ export interface AgentManagerEvents {
   humanTask: [{ agentId: string; taskId: string; humanTask: HumanTask; created: boolean }];
   progress: [{ agentId: string; taskId: string; note: string; notedAt: string }];
   conclusion: [{ agentId: string; taskId: string; conclusion: IssueConclusion }];
+  blocked: [{ agentId: string; taskId: string; block: GoalBlock }];
   assessment: [{ agentId: string; taskId: string; issueOrigin: string; verdict: AssessmentVerdict }];
   appraisal: [{ agentId: string; taskId: string; issueOrigin: string; verdict: GoalAppraisalVerdictName }];
   goalMet: [{ agentId: string; taskId: string; issueOrigin: string }];

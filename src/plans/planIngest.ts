@@ -1,5 +1,4 @@
 import type { Store } from '../store/store.js';
-import { criteriaItems } from '../criteria/items.js';
 import type { Plan, PlanStatus } from '../types.js';
 import type { PlanDocument } from './planDocument.js';
 import { planAtomInputs, planNarrative, planPartInputs } from './planDocument.js';
@@ -93,7 +92,6 @@ function ingestPlanValidation(
       checks: validationCheckInputs(
         doc.validation,
         written.map((p) => p.slug),
-        criteriaItems(store.goalCriteria.currentCriteria(originRef)?.text),
       ),
       resources,
       supersededReason: SUPERSEDED_CHECK_REASON,
