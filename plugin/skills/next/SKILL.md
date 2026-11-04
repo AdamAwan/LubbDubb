@@ -1,7 +1,7 @@
 ---
 name: next
-description: Work through what LubbDubb is waiting on the operator for, one ask at a time — the same order the cockpit's Focus mode walks "Needs you". Use for "/lubbdubb:next", "/lubbdubb:next <ask id>", "what's next?", "what does LubbDubb need from me?", "let's clear my asks".
-argument-hint: '[ask id]'
+description: Work through what LubbDubb is waiting on the operator for, one ask at a time — the same order the cockpit's Focus mode walks "Needs you". Use for "/lubbdubb:next", "/lubbdubb:next <ask id>", "/lubbdubb:next <ask id> only", "what's next?", "what does LubbDubb need from me?", "let's clear my asks".
+argument-hint: '[ask id] [only]'
 ---
 
 ## Work through "Needs you", one ask at a time
@@ -18,7 +18,10 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    queue is empty, say so plainly and stop. **Started with an ask id** (the
    operator picked one from the panel), the first call is `ask_next` with that
    `id`; if it is refused as no longer standing, say so and carry on from the
-   head. Every later call is plain `ask_next`.
+   head. Every later call is plain `ask_next`. **Started with an ask id and
+   `only`**, this chat is a side thread for that one ask (see _Talking one
+   through on the side_): work it, and stop once it is answered or skipped —
+   do not call `ask_next` for the next one.
 2. **Read more only where it helps them decide.** `answerWith.readFirst` names the
    read that matters for this kind — `proposal_read` before any proposal, and
    `plan_read` for a plan,
@@ -26,6 +29,13 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
    that, `goal_read`, `agent_read` and the real diff or code in this checkout are
    there when the decision turns on them. Do not read everything for every ask; an
    operator clearing ten asks does not want ten essays.
+
+   **A heavy read goes to a subagent.** Where the `Agent` tool is available and
+   the decision turns on a diff, a stretch of code or a long record, hand the read
+   to a subagent and ask it for a few lines back — the facts the decision turns
+   on, quoted where it matters. Its file dumps stay in its context, not this
+   loop's, which has every later ask still to carry. It reads; it never answers.
+
 3. **Form your view, if you have one.** One sentence of why, then how sure you are.
    It is your opinion, from what you just read. It is **never** phrased as what
    LubbDubb wants, expects or recommends — the harness asked a question; it did not
@@ -124,6 +134,37 @@ What they can say at any point:
   still shows it, and the next session starts with it back in its place.
   `ask_skip` with `undo: true` brings one back.
 - **"stop"**, **"that's enough"** — stop. Say how many are left.
+- **"let's talk about this one"**, or a back-and-forth that is turning into a
+  discussion rather than a decision — offer to take it to a fork (below).
+  It is an offer: if they would rather talk here, talk here.
+
+### Talking one through on the side
+
+A long talk about one pull request or plan fills this loop's context with
+things no later ask needs. Where you can, put the talk in a **fork** — a thread
+under this chat that the operator opens and talks to, whose tool calls and
+conversation stay out of this one:
+
+1. **Fork it.** `Agent` with `subagent_type: "fork"`, a short `description`
+   naming the ask ("Talk through #412") and a prompt saying: this fork is for
+   ask `<id>` only; talk it through with the operator as this skill says; send
+   their answer with `answerWith` once they give one, or send nothing if they
+   leave it; end with one line — what landed, or "left open". It inherits this
+   conversation, card and all, so it needs no more than that.
+2. **`ask_skip` it here**, so `ask_next` does not hand it back while the fork
+   has it.
+3. **Tell them where it is**: in the panel under the prompt — select its row
+   and press `Enter` to talk to it, `Esc` to come back.
+4. **Carry on with `ask_next`.** When the fork's line arrives, say it in one
+   line. If it came back "left open", `ask_skip` with `undo: true` puts the ask
+   back in the queue.
+
+**Where you cannot fork** — no `Agent` tool, or forks turned off — offer the
+same in a new chat instead: `ask_skip` it, give them
+`/lubbdubb:next <id> only` as a link,
+`claude://code/new?q=<prompt>&folder=<this checkout's absolute path>` with the
+prompt URL-encoded, or as `claude "/lubbdubb:next <id> only"` for a second
+terminal, and carry on.
 
 ### When the answer is not a tool here
 
