@@ -5,16 +5,16 @@ import { inheritableEnv } from '../src/agents/spawnEnv.js';
 
 // → docs/spec/10-agent-runtimes.md#what-an-agent-does-not-inherit
 
-test('an agent does not inherit the cockpit bearer or the ingress secrets', () => {
+test('an agent does not inherit the cockpit bearer or the desktop credential', () => {
   const inherited = inheritableEnv({
     ...process.env,
     LUBBDUBB_TOKEN: 'ZZQX-BEARER-SENTINEL',
-    LUBBDUBB_INGRESS_SECRET: 'ZZQX-INGRESS-SENTINEL',
+    LUBBDUBB_DESKTOP_CREDENTIAL: 'ZZQX-DESKTOP-SENTINEL',
     PATH: process.env.PATH,
   });
 
   assert.equal(inherited.LUBBDUBB_TOKEN, undefined, 'the cockpit bearer reached an agent');
-  assert.equal(inherited.LUBBDUBB_INGRESS_SECRET, undefined, 'an ingress secret reached an agent');
+  assert.equal(inherited.LUBBDUBB_DESKTOP_CREDENTIAL, undefined, 'the desktop credential reached an agent');
   assert.equal(inherited.PATH, process.env.PATH, 'the rest of the environment still goes through');
 
   // Non-vacuous: the sentinel is findable in what we handed in, so the assertion

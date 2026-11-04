@@ -10,18 +10,13 @@
  * route. That escape is over the network rather than through an import, so the type
  * system cannot see it; this list is what closes it.
  *
- * The others are credentials of the same kind — the ingress secrets and the desktop
- * channel's credential — that no agent has any reason to hold.
+ * The other is a credential of the same kind — the desktop channel's — that no agent
+ * has any reason to hold.
  *
  * This strips them from what is *inherited*. Anything the harness deliberately hands
  * a session through its own spec still wins, because the spec is spread after.
  */
-const HARNESS_ONLY_ENV = [
-  'LUBBDUBB_TOKEN',
-  'LUBBDUBB_INGRESS_SECRET',
-  'LUBBDUBB_INGRESS_BASIC',
-  'LUBBDUBB_DESKTOP_CREDENTIAL',
-] as const;
+const HARNESS_ONLY_ENV = ['LUBBDUBB_TOKEN', 'LUBBDUBB_DESKTOP_CREDENTIAL'] as const;
 
 /** `process.env` with the harness's own credentials taken out. */
 export function inheritableEnv(from: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

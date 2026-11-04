@@ -55,6 +55,8 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
     'obstacles were removed — nothing keeps a board of what is in the fleet\'s way, so nothing on it goes dormant. An agent that is stopped concludes "blocked" and the goal waits for you to release it',
   obstacleTicketApproval:
     'obstacles were removed, and the bug the board proposed for each one with them — nothing files a ticket for something an agent hit',
+  ingress:
+    'the inbound webhook endpoint was removed — the harness hears about the world by polling alone, so there is no delivery to bound. Unset LUBBDUBB_INGRESS_SECRET and LUBBDUBB_INGRESS_BASIC, and delete the webhook or service hook pointed at /ingress/',
   'remoteValidation.runTimeoutMs':
     "the harness no longer spawns the browser suite — the remote validation run's agent invokes the runner in its own shell, under its own stall park, so there is no invocation for the harness to kill",
 };

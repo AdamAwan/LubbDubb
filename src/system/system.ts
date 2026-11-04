@@ -52,7 +52,6 @@ import { standingMoves } from '../featureSummaries/featureSummary.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 import { Harness } from '../harness.js';
 import { CycleTrigger } from '../cycleTrigger.js';
-import { Ingress, resolveIngressSecrets } from '../ingress/ingress.js';
 import { RuntimeControl } from '../runtimeControl.js';
 import { PetKeeper } from '../pets/keeper.js';
 import { LocalRunner } from '../localRun/runner.js';
@@ -106,8 +105,6 @@ export interface System {
   dispatcher: Dispatcher;
   harness: Harness;
   localCycles: CycleTrigger;
-  ingress: Ingress;
-  ingressCycles: CycleTrigger;
   graph: WorkGraphRecorder;
   tickets: TicketSweep;
   pool?: PoolDesk;
@@ -166,7 +163,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     graph: new WorkGraphRecorder({ store: base.store, errors: base.errors }),
   };
   const harness = buildHarness(config, opts, { base, channels, fleet, intake, envs, bench, late });
-  const pulse = wirePulse(config, opts, base, fleet, harness);
+  const pulse = wirePulse(config, base, fleet, harness);
   const local = buildLocalRuns(config, opts, base, runtime);
   const system: System = {
     config,
@@ -187,8 +184,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     dispatcher: fleet.dispatcher,
     harness,
     localCycles: pulse.localCycles,
-    ingress: pulse.ingress,
-    ingressCycles: pulse.ingressCycles,
     graph: bench.graph,
     tickets: bench.tickets,
     pool: bench.pool,
@@ -318,7 +313,7 @@ function buildHarness(
   opts: BuildOptions,
   { base, fleet, intake, envs, bench, late }: HarnessPhases,
 ): Harness {
-  const { store, connector, areaPaths, errors, runtimeControl, ingressInbox, watchLabel } = base;
+  const { store, connector, areaPaths, errors, runtimeControl, watchLabel } = base;
   const reads = harnessReads(config, store, fleet.featureBoard);
   return new Harness({
     store,
@@ -385,7 +380,6 @@ function buildHarness(
         ? { labelPrefix: config.labelPrefix, models: config.agentModels }
         : undefined,
     upNextOverrideTtlMs: config.upNextOverrideTtlMs,
-    freshReads: ingressInbox,
   });
 }
 
@@ -463,8 +457,8 @@ function wireAgentEvents({ store, errors, worktrees }: Foundation, { agents, esc
   });
 }
 
-function wirePulse(config: Config, opts: BuildOptions, base: Foundation, fleet: Fleet, harness: Harness) {
-  const { store, errors, worktrees, runtimeControl, ingressInbox } = base;
+function wirePulse(config: Config, base: Foundation, fleet: Fleet, harness: Harness) {
+  const { store, errors, worktrees, runtimeControl } = base;
   const { agents } = fleet;
   wireAgentEvents(base, fleet);
 
@@ -475,20 +469,6 @@ function wirePulse(config: Config, opts: BuildOptions, base: Foundation, fleet: 
   });
   agents.on('done', () => localCycles.request());
   agents.on('reaped', () => localCycles.request());
-
-  const ingressCycles = new CycleTrigger({
-    run: () => harness.runCycle('ingress'),
-    ready: () => store.open,
-    errors,
-    debounceMs: config.ingress.debounceMs,
-    minGapMs: config.ingress.minCycleGapMs,
-  });
-  const ingress = new Ingress({
-    secrets: opts.ingressSecrets ?? resolveIngressSecrets(),
-    inbox: ingressInbox,
-    trigger: ingressCycles,
-    errors,
-  });
 
   const pets = new PetKeeper(store, config.pets);
   const prewarm = new PrewarmDesk({
@@ -507,5 +487,5 @@ function wirePulse(config: Config, opts: BuildOptions, base: Foundation, fleet: 
     // exists to remove back onto the critical path. → docs/spec/09-execution.md
     prewarm.run();
   });
-  return { localCycles, ingressCycles, ingress, pets };
+  return { localCycles, pets };
 }

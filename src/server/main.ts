@@ -128,7 +128,6 @@ async function main(): Promise<void> {
     );
     system.harness.stop();
     system.localCycles.stop();
-    system.ingressCycles.stop();
     stopConfigWatch();
     stopProjectConfigWatch();
     system.agents.interruptAll();

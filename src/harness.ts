@@ -56,10 +56,9 @@ interface HarnessDeps extends PulseDeps {
   /** → docs/spec/40-discussions.md */
   goalIntake?: () => GoalIntake;
   recovery?: { pendingCount(): number };
-  freshReads?: { drain(): string[] };
 }
 
-type CycleSource = 'timer' | 'manual' | 'boot' | 'local' | 'ingress';
+type CycleSource = 'timer' | 'manual' | 'boot' | 'local';
 
 export interface CycleReport {
   cycleId: string;
@@ -294,7 +293,6 @@ export class Harness extends EventEmitter {
           events: store.world.listWorldEvents(READ_PLAN_EVENTS),
           now: Date.now(),
           lanes: this.deps.readLanes,
-          fresh: this.deps.freshReads?.drain(),
         })
       : undefined;
     this.at('reading the world');
