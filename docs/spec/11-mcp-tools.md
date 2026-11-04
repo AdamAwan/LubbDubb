@@ -1498,16 +1498,17 @@ An empty queue says so in a sentence, and one emptied only by skips says that in
 press on one ask opens the loop at it (`/lubbdubb:next <id>`); an id not standing is refused, as
 `ask_skip` refuses one.
 
-**A discussion goes to a side chat, not this one.** The loop carries every later ask, so a long talk
-about one pull request is context none of them need. A subagent cannot converse with the operator,
-and no tool opens a thread for them, so the skill offers one they open: in the desktop app a **side
-chat** (`Cmd/Ctrl+;` or `/btw`), which reads this conversation and adds nothing back — the operator
-returns with a decision and the loop sends it. Elsewhere it offers a **new chat**: it `ask_skip`s the
-ask and hands over `/lubbdubb:next <id> only`, as a `claude://code/new` link or a `claude "…"`
-command. `only` makes that chat open at the ask, answer it, and stop rather than walk on. Nothing here
-is server state — `only` is read by the skill, and `ask_next` is unchanged. A heavy read (a diff, a
-long record) goes to a subagent for the same reason, which hands back the facts the decision turns
-on.
+**A discussion goes to a fork, not this one.** The loop carries every later ask, so a long talk
+about one pull request is context none of them need. The skill starts a Claude Code **fork** for it
+(`Agent` with `subagent_type: "fork"`): a thread under the main chat that inherits the conversation,
+which the operator opens from the panel below the prompt and talks to, and whose own calls stay out of
+the loop — only its last line, what landed, comes back. The loop `ask_skip`s the ask while the fork
+holds it, so `ask_next` does not hand it out twice, and un-skips it if the fork comes back with it
+left open. Where a fork cannot be started it offers a **new chat** instead: `/lubbdubb:next <id> only`,
+as a `claude://code/new` link or a `claude "…"` command; `only` makes that chat open at the ask,
+answer it, and stop rather than walk on. Nothing here is server state — `only` is read by the skill,
+and `ask_next` is unchanged. A heavy read (a diff, a long record) goes to a subagent for the same
+reason, which hands back the facts the decision turns on.
 
 **It reads the setup reading the cockpit reads.** The config rows come off the last reading
 `/api/setup` took, and that holder is `System.setupReading` — the route writes it and both
