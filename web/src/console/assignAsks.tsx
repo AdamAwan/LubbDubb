@@ -178,10 +178,8 @@ function AssigneeSearch({
   const [typed, setTyped] = useState('');
   const [found, setFound] = useState<PrPerson[]>([]);
   useEffect(() => {
-    if (!open || typed.trim() === '') {
-      setFound([]);
-      return;
-    }
+    setFound([]);
+    if (!open || typed.trim() === '') return;
     let live = true;
     const timer = setTimeout(() => {
       api.searchAssignees(typed).then(

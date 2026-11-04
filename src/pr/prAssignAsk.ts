@@ -128,14 +128,20 @@ export class PrAssignDesk {
 
   /** Anyone the tracker would take on a pull request, beyond the shortlist, whose id or name a search names. */
   async search(query: string): Promise<PrPerson[]> {
-    const { sink, errors } = this.opts;
+    return (await this.lookup(query)) ?? [];
+  }
+
+  /** Null is "the tracker could not say", never "nobody". The operator is never offered to themselves. */
+  private async lookup(query: string): Promise<PrPerson[] | null> {
+    const { sink, errors, operator } = this.opts;
     const wanted = query.trim();
     if (wanted === '' || this.assigner() === undefined || sink.findAssignees === undefined) return [];
     try {
-      return await sink.findAssignees(wanted);
+      const found = await sink.findAssignees(wanted);
+      return found.filter((p) => !sameIdentity(operator ?? '', p.id) && !sameIdentity(operator ?? '', p.name));
     } catch (err) {
       errors.record({ source: 'provider', message: `searching for PR assignees failed: ${(err as Error).message}` });
-      return [];
+      return null;
     }
   }
 
@@ -143,10 +149,11 @@ export class PrAssignDesk {
     personId: string,
     searchedAs: string | undefined,
     open: readonly PullRequest[],
-  ): Promise<PrPerson | undefined> {
+  ): Promise<PrPerson | undefined | null> {
     const listed = this.offered(open).find((p) => p.id === personId);
     if (listed !== undefined) return listed;
-    return (await this.search(searchedAs ?? personId)).find((p) => p.id === personId);
+    const found = await this.lookup(searchedAs?.trim() || personId);
+    return found === null ? null : found.find((p) => p.id === personId);
   }
 
   /** The shortlist: a hint, never the limit on whom `assign` takes. */
@@ -176,6 +183,7 @@ export class PrAssignDesk {
     this.inFlight.add(prNumber);
     try {
       const person = await this.person(personId, searchedAs, open);
+      if (person === null) return { ok: false, refusal: 'the tracker could not be searched for that person' };
       if (person === undefined) return { ok: false, refusal: 'the tracker knows nobody by that id' };
       const sent = await assignPr({ prNumber, personId });
       if (!sent.ok) {

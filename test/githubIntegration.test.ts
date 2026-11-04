@@ -545,7 +545,7 @@ test('findAssignees offers any assignable login the search names, exact then pre
   const ids = (people: { id: string }[]) => people.map((p) => p.id);
   assert.deepEqual(ids(await sc.findAssignees('ad')), ['adam', 'madison']);
   assert.deepEqual(ids(await sc.findAssignees('dave')), ['dave']);
-  assert.deepEqual(ids(await sc.findAssignees('')), ['adam', 'dave', 'madison', 'zed']);
+  assert.deepEqual(ids(await sc.findAssignees('  ')), [], 'a blank search asks for nobody');
 });
 
 test('snapshot maps a PR with its CI / approval / mergeability / comments', async () => {

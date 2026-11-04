@@ -26,7 +26,7 @@ export function loginPeople(logins: readonly string[]): PrPerson[] {
 
 /** Logins a search names, as people: a login is both a GitHub user's id and their name. */
 export function searchLogins(logins: readonly string[], query: string): PrPerson[] {
-  return loginPeople(matchingPeople(logins, query));
+  return query.trim() === '' ? [] : loginPeople(matchingPeople(logins, query));
 }
 
 /** One list for every search for a while: a list of logins is a paginated read, and a search is a keystroke. */
@@ -36,7 +36,9 @@ export function cachedLogins(load: () => Promise<string[]>, now: () => number = 
     if (held === null || now() - held.at > LOGINS_TTL_MS) {
       const logins = load();
       held = { at: now(), logins };
-      logins.then(undefined, () => (held = null));
+      logins.then(undefined, () => {
+        if (held?.logins === logins) held = null;
+      });
     }
     return held.logins;
   };

@@ -63,6 +63,12 @@ async function assign(
 ): Promise<ToolCallResult> {
   const listed = pick(shortlist, person);
   const found = listed === undefined ? await desk.search(person) : [];
+  const byName = found.filter((p) => p.name.toLowerCase() === person.trim().toLowerCase());
+  if (listed === undefined && !found.some((p) => p.id === person.trim()) && byName.length > 1)
+    return toolError(
+      `More than one person is called "${person}": ${byName.map((p) => `${p.name} (${p.id})`).join(', ')}. ` +
+        'Ask the operator which, and call again with their id.',
+    );
   const chosen = listed ?? pick(found, person);
   if (chosen === undefined)
     return toolError(

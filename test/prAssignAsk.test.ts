@@ -249,3 +249,19 @@ test('the assignable logins are read once for a run of searches, and again once 
   assert.deepEqual(await logins(), ['erin']);
   assert.equal(reads, 3, 'a failed read is not held');
 });
+
+test('the search never offers the operator, and a failed search refuses as unsearchable, not as nobody', async () => {
+  const { sink, assigned } = recordingSink();
+  let down = false;
+  (sink as { findAssignees: PrAssignSink['findAssignees'] }).findAssignees = async () => {
+    if (down) throw new Error('rate limited');
+    return [me, { id: 'erin', name: 'Erin' }];
+  };
+  const system = build(sink);
+  seed(system, [pr(7)]);
+  assert.deepEqual(await system.prAssign.search('e'), [{ id: 'erin', name: 'Erin' }]);
+  down = true;
+  const refused = await system.prAssign.assign(7, 'erin', system.store.world.getWorldBaseline()!.pullRequests);
+  assert.deepEqual(refused, { ok: false, refusal: 'the tracker could not be searched for that person' });
+  assert.deepEqual(assigned, []);
+});

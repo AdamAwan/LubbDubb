@@ -1270,8 +1270,11 @@ shortlist — and still gets the ask, answered through the search.
 on GitHub every login the repository lists as assignable, filtered by the query (exact, then prefix,
 then anywhere; `matchingPeople` in `src/pr/assigneeSearch.ts`), the login list held five minutes (`cachedLogins`)
 because a search is a keystroke and the list is a paginated read; on Azure the organisation's identity
-picker, so the id is the identity a reviewer is added by. A blank search asks the tracker nothing. A failed search is recorded to the error log
-and reads as nobody found. Somebody assigned this way is one `pr_assign_asks` row like any other, so
+picker, so the id is the identity a reviewer is added by. A blank search asks the tracker nothing, and the operator is never among the hits — an answer naming
+them would join every later shortlist. A failed search is recorded to the error log; it reads as
+nobody found in the picker, but an assignment it was checking is refused as _could not be searched_,
+never as _nobody by that id_. The desktop tool refuses a display name two people share, and lists
+both ids. Somebody assigned this way is one `pr_assign_asks` row like any other, so
 they join the shortlist from then on.
 
 **Answering it.** A name goes through `PrAssignSink.assignPr` ([15](15-integrations.md)): a GitHub
