@@ -135,26 +135,36 @@ What they can say at any point:
   `ask_skip` with `undo: true` brings one back.
 - **"stop"**, **"that's enough"** — stop. Say how many are left.
 - **"let's talk about this one"**, or a back-and-forth that is turning into a
-  discussion rather than a decision — offer to take it to a side thread (below).
+  discussion rather than a decision — offer to take it to a fork (below).
   It is an offer: if they would rather talk here, talk here.
 
 ### Talking one through on the side
 
 A long talk about one pull request or plan fills this loop's context with
-things no later ask needs. A subagent cannot talk to the operator, and nothing
-here can open a thread for them, so offer them one they open themselves:
+things no later ask needs. Where you can, put the talk in a **fork** — a thread
+under this chat that the operator opens and talks to, whose tool calls and
+conversation stay out of this one:
 
-- **In the Claude desktop app, a side chat** — `Cmd+;` / `Ctrl+;`, or `/btw`.
-  It sees this conversation up to now, card included, and adds nothing back to
-  it. They talk it through there, then come back here with their decision, and
-  you send it as in step 6. Wait for them: the ask stays in front until they do.
-- **Anywhere else, a new chat on that one ask.** `ask_skip` it here, give them
-  `/lubbdubb:next <id> only` — as a link,
-  `claude://code/new?q=<prompt>&folder=<this checkout's absolute path>` with the
-  prompt URL-encoded, or as `claude "/lubbdubb:next <id> only"` for a second
-  terminal — and carry on with `ask_next`. That chat answers the ask and stops;
-  if they come back without answering, `ask_skip` with `undo: true` brings it
-  back here.
+1. **Fork it.** `Agent` with `subagent_type: "fork"`, a short `description`
+   naming the ask ("Talk through #412") and a prompt saying: this fork is for
+   ask `<id>` only; talk it through with the operator as this skill says; send
+   their answer with `answerWith` once they give one, or send nothing if they
+   leave it; end with one line — what landed, or "left open". It inherits this
+   conversation, card and all, so it needs no more than that.
+2. **`ask_skip` it here**, so `ask_next` does not hand it back while the fork
+   has it.
+3. **Tell them where it is**: in the panel under the prompt — select its row
+   and press `Enter` to talk to it, `Esc` to come back.
+4. **Carry on with `ask_next`.** When the fork's line arrives, say it in one
+   line. If it came back "left open", `ask_skip` with `undo: true` puts the ask
+   back in the queue.
+
+**Where you cannot fork** — no `Agent` tool, or forks turned off — offer the
+same in a new chat instead: `ask_skip` it, give them
+`/lubbdubb:next <id> only` as a link,
+`claude://code/new?q=<prompt>&folder=<this checkout's absolute path>` with the
+prompt URL-encoded, or as `claude "/lubbdubb:next <id> only"` for a second
+terminal, and carry on.
 
 ### When the answer is not a tool here
 
