@@ -62,9 +62,9 @@ function quoted(text: string): string {
 
 export function wireBlocks(store: Store, agents: AgentManager, escalations: EscalationInbox): void {
   agents.on('blocked', ({ taskId, block }) => {
-    const standing = store.escalations.listOpenEscalations().find((e) => blockOf(e)?.originRef === block.originRef);
-    const prior = standing === undefined ? null : blockOf(standing);
-    if (standing !== undefined && prior !== null) {
+    for (const standing of store.escalations.listOpenEscalations()) {
+      const prior = blockOf(standing);
+      if (prior?.originRef !== block.originRef) continue;
       const joined = joinBlocks(prior, block);
       escalations.restate(standing.id, blockPrompt(joined), { ...standing.context, blocked: joined });
       return;

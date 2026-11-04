@@ -616,7 +616,10 @@ usefully answer. The pulse's `closedBlocks` pass (`EscalationInbox.tidyClosedBlo
 absent from the world's open issues, the same absence the issue runs read as closed. It runs only on a
 fresh read with no stale source, because a partial read that dropped the issue would settle a live
 block. The dismissal is marked `by: 'harness'`, and that release writes **no instruction**: a goal
-that is reopened later starts clean, rather than with a note claiming you released it.
+that is reopened later starts clean, rather than with a note claiming you released it. An issue the
+world stops listing for another reason — its watch label taken off, where the provider reads by label —
+is settled the same way, which is the right answer: taking the label off is your _no_ to the fleet
+working it, so there is nothing left for the block to hold.
 
 ## The delivery park (`delivered`)
 
