@@ -1239,7 +1239,8 @@ cannot give.
 The other direction. A colleague who assigns the operator in the tracker lands on their rail
 ([above](#a-pull-request-a-person-put-on-you)); a colleague asked on chat never does. So once the
 fleet is finished with one of **its own** pull requests, the rail asks the operator _"want to assign
-this to someone?"_. The shortlist is drawn from people they already assign, and "Nah" sits beside it,
+this to someone?"_. The shortlist is drawn from people they already assign — a **hint, never the
+limit**: a search beside it reaches anyone the tracker would take — and "Nah" sits beside it,
 drawn the same size, so saying no is as cheap as picking. The habit spreads by example. Nothing is
 posted to anybody, and nothing is asked twice.
 
@@ -1254,7 +1255,7 @@ posted to anybody, and nothing is asked twice.
 | Every `unresolvedComments` entry `handled`                                                                                | The operator asked for "comments resolved". `handled` (answered or resolved) is the reading the merge gate already uses. A literal `resolved` would never arrive on the threads a reviewer answers without clicking resolve, and the ask would silently never come. |
 | The fleet review is done                                                                                                  | `clear`, `skipped` or `elsewhere`, or `findings` that are `addressed`. With the fleet review off there is no review to wait for.                                                                                                                                    |
 | No [`describe` ask](#the-rail-asks-for-it-and-nothing-waits-on-the-answer) standing for it                                | A reviewer is sent to a pull request that says what it is. The same anti-join as the ask (`undescribedOpenParts`), so a part's PR waits for a description or a pushed agent's draft; a PR that is no part's has no description to wait for.                         |
-| The sink `canAssignPr()`, and the shortlist is not empty                                                                  | An ask with no way to answer it, or nobody to offer, is noise.                                                                                                                                                                                                      |
+| The sink `canAssignPr()`                                                                                                  | An ask with no way to answer it is noise. An empty shortlist still asks: the search offers anyone.                                                                                                                                                                  |
 
 **The shortlist** — `assignShortlist`: everybody the tracker has on the operator's own pull requests,
 open and the last 100 archived, plus the people assigned through this ask. The closed-PR read carries
@@ -1263,12 +1264,20 @@ the archive holds who each merged pull request went to. Each person is counted
 once per pull request. The operator and each PR's author are left out. People are ranked by how many
 pull requests they were on, then by the most recent one, and the top four are offered. It is learnt
 from what the operator already does, so a deployment whose PRs have never had anyone on them has no
-shortlist and gets no ask.
+shortlist — and still gets the ask, answered through the search.
+
+**Searching past it** — `PrAssignDesk.search`, through `PrAssignSink.findAssignees` ([15](15-integrations.md)):
+on GitHub every login the repository lists as assignable, filtered by the query (exact, then prefix,
+then anywhere; `matchingPeople` in `src/pr/assigneeSearch.ts`); on Azure the organisation's identity
+picker, so the id is the identity a reviewer is added by. A failed search is recorded to the error log
+and reads as nobody found. Somebody assigned this way is one `pr_assign_asks` row like any other, so
+they join the shortlist from then on.
 
 **Answering it.** A name goes through `PrAssignSink.assignPr` ([15](15-integrations.md)): a GitHub
 assignee, or an Azure reviewer (individual, optional). These are the same fields a colleague's harness
-reads as `viewerAssignment`, so the pull request lands on _their_ rail. Only a shortlisted person,
-on the fleet's own pull request, with no answer yet, is accepted. A second tab pressing a stale row
+reads as `viewerAssignment`, so the pull request lands on _their_ rail. A shortlisted person, or one
+the tracker's search returns by that exact id (the answer may carry the `name` it was found under, to
+search by), on the fleet's own pull request, with no answer yet, is accepted; anybody else is refused. A second tab pressing a stale row
 cannot assign somebody in the tracker behind an answer already recorded. An assignment still waiting on the
 tracker holds the ask as answered too (in memory, on the desk), so a "Nah" pressed in the meantime
 is refused rather than recorded against a person the tracker is about to have. Merged pull requests
@@ -1277,7 +1286,7 @@ is the name the reviewer shortlist carries — so a self-assigned PR never offer
 answer is one `pr_assign_asks` row ([14](14-persistence.md)).
 
 The operator's own Claude Code answers it too: `pr_assign` on the desktop channel reaches the same
-`PrAssignDesk` — `offered` for the shortlist, `assign` and `decline` for the two answers — so every
+`PrAssignDesk` — `offered` for the shortlist, `search` for anyone else, `assign` and `decline` for the two answers — so every
 refusal above is the tool's as well ([11](11-mcp-tools.md#every-ask-in-needs-you-and-what-answers-it-here)).
 
 ### How long it has been waiting on a reviewer

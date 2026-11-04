@@ -27,6 +27,7 @@ function recordingSink(canAssign = true): { sink: ActionSink & PrAssignSink; ass
       assigned.push(input);
       return { ok: true };
     },
+    findAssignees: async (query) => [{ id: 'erin', name: 'Erin' }].filter((p) => p.id.includes(query.toLowerCase())),
   };
   const sink = new Proxy(own, {
     get: (target, key) => target[key as keyof typeof target] ?? (() => false),
@@ -118,14 +119,14 @@ test('a part’s pull request is not asked about until its description is writte
   assert.deepEqual(askOf(system, 7), [carol, dave]);
 });
 
-test('it is not asked when the tracker cannot assign, or when there is nobody to offer', () => {
+test('it is not asked when the tracker cannot assign, and is asked with no shortlist at all', () => {
   const unable = build(recordingSink(false).sink);
   seed(unable, [pr(7)]);
   assert.equal(askOf(unable, 7), undefined);
 
   const fresh = build(recordingSink().sink);
   fresh.store.world.setWorldBaseline({ takenAt: new Date().toISOString(), pullRequests: [pr(7)], issues: [] });
-  assert.equal(askOf(fresh, 7), undefined);
+  assert.deepEqual(askOf(fresh, 7), [], 'the search still offers anyone the tracker knows');
 });
 
 test('picking a person assigns them in the tracker and ends the ask', async () => {
@@ -135,12 +136,37 @@ test('picking a person assigns them in the tracker and ends the ask', async () =
   const { app } = await buildApp(system);
 
   const stranger = await app.inject({ method: 'POST', url: '/api/prs/7/assign', payload: { personId: 'mallory' } });
-  assert.equal(stranger.statusCode, 409, 'only the shortlist is offered, so only the shortlist is accepted');
+  assert.equal(stranger.statusCode, 409, 'somebody the tracker does not know is refused');
+  assert.deepEqual(assigned, []);
 
   const done = await app.inject({ method: 'POST', url: '/api/prs/7/assign', payload: { personId: 'dave' } });
   assert.equal(done.statusCode, 200);
   assert.deepEqual(assigned, [{ prNumber: 7, personId: 'dave' }]);
   assert.equal(askOf(system, 7), undefined);
+});
+
+test('the shortlist is a hint: anyone the tracker finds can be searched for and assigned', async () => {
+  const { sink, assigned } = recordingSink();
+  const system = build(sink);
+  seed(system, [pr(7)]);
+  const { app } = await buildApp(system);
+
+  const found = await app.inject({ method: 'GET', url: '/api/prs/assignees?q=er' });
+  assert.equal(found.statusCode, 200);
+  assert.deepEqual(found.json(), [{ id: 'erin', name: 'Erin' }]);
+
+  const done = await app.inject({
+    method: 'POST',
+    url: '/api/prs/7/assign',
+    payload: { personId: 'erin', name: 'Erin' },
+  });
+  assert.equal(done.statusCode, 200, done.body);
+  assert.deepEqual(assigned, [{ prNumber: 7, personId: 'erin' }]);
+  assert.equal(askOf(system, 7), undefined);
+  assert.ok(
+    system.prAssign.offered([]).some((p) => p.id === 'erin'),
+    'and they join the shortlist after',
+  );
 });
 
 test('"nah" ends the ask for good, and assigns nobody', async () => {

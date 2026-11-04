@@ -14,19 +14,12 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type {
-  CiCheck,
-  CiStatus,
-  MergeableState,
-  PrApproval,
-  PrPerson,
-  PrReviewThread,
-  PullRequest,
-} from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrApproval, PrReviewThread, PullRequest } from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import { claimGitHubBotPr, listGitHubBotPulls, readGitHubBotPrDetail, readGitHubReleaseNotes } from './botPulls.js';
 import { stripLogTimestamp } from '../ciLogLines.js';
+import { loginPeople, searchLogins } from '../../pr/assigneeSearch.js';
 import type {
   BotPrClaimable,
   BotPrDetailReadable,
@@ -359,6 +352,8 @@ export class GitHubSourceControlIntegration
     return { ok: true, ref: input.personId };
   }
 
+  findAssignees: PrAssignCapable['findAssignees'] = async (q) => searchLogins(await this.opts.api.listAssignees(), q);
+
   async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
     await this.opts.api.updatePullBranch(input.prNumber);
     return { ok: true, ref: input.base };
@@ -436,10 +431,6 @@ export function mapClosedPull(p: GhClosedPull): PullRequest {
     ...(p.assigneeLogins === undefined ? {} : { assignees: loginPeople(p.assigneeLogins) }),
     url: p.url,
   };
-}
-
-function loginPeople(logins: readonly string[]): PrPerson[] {
-  return logins.map((login) => ({ id: login, name: login }));
 }
 
 function normalizeMergeState(state: string | null): MergeableState {

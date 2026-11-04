@@ -2578,8 +2578,10 @@ So on the goal page's row form (`NeedsBand` with `line`), `quickAnswer`
 - **Change…**, a list of the other profiles or area paths that writes the one picked — drawn only
   when there is another to pick.
 
-The assign ask is answered on its row too, with no proposal: every shortlisted name and **Nah**,
-the same buttons as its body (`AssignButtons`). Both go through one row shell, `AnswerLine`.
+The assign ask is answered on its row too, with no proposal: every shortlisted name, **Someone
+else…** and **Nah**, the same buttons as its body (`AssignButtons`). **Someone else…** opens a search
+box (`GET /api/prs/assignees`) whose hits are drawn as more name buttons, so the shortlist is a hint
+and never the limit; with no shortlist it reads **Pick someone…**. Both go through one row shell, `AnswerLine`.
 
 The parent ask is not among them: it is never a row on the goal page (the band leading the Ask
 pane draws it). The answers the panel alone offers ("Leave it unpinned", "Not applicable") stay in the panel:

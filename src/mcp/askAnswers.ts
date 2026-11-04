@@ -278,7 +278,8 @@ const assign: Answerer = (row, ctx) => {
     tool: 'pr_assign',
     args: { pr },
     choose: {
-      person: 'Somebody from the shortlist, by id or name — they are assigned on the tracker and told.',
+      person:
+        'Anybody the tracker knows, by id or name — the shortlist is a hint. They are assigned on the tracker and told.',
       decline: 'true answers "nobody"; nothing is written.',
     },
     readFirst: [{ tool: 'pr_assign', args: { pr } }],

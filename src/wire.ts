@@ -1096,6 +1096,7 @@ export type {
   EnvironmentGateRelease,
   EnvironmentHealthReading,
   Escalation,
+  PrPerson,
   GoalArrival,
   CriterionCoverage,
   CriteriaAlignmentPoint,

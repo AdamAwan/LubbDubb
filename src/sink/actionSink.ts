@@ -1,3 +1,5 @@
+import type { PrPerson } from '../types.js';
+
 // → docs/spec/15-integrations.md
 
 export interface PrReplyInput {
@@ -186,6 +188,8 @@ export interface PrAssignInput {
 export interface PrAssignSink {
   canAssignPr(): boolean;
   assignPr(input: PrAssignInput): Promise<SendResult>;
+  /** Anyone the tracker would accept on a pull request whose id or name matches `query`. */
+  findAssignees(query: string): Promise<PrPerson[]>;
 }
 
 export interface FilingTarget {

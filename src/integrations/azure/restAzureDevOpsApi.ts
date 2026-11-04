@@ -44,6 +44,7 @@ import { mergeStrategyFor } from './sourceControl.js';
 import { parseTags } from './workItems.js';
 import { workItemBodyField } from './workItemBody.js';
 import { buildOpenWorkItemQuery, buildTagsQuery, buildWorkItemHistoryQuery } from './wiql.js';
+import { searchIdentities } from './restIdentities.js';
 
 // → docs/spec/15-integrations.md
 
@@ -534,6 +535,10 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   async addPullReviewer(pullRequestId: number, reviewerId: string): Promise<void> {
     const body = JSON.stringify({ id: reviewerId, vote: 0 });
     await this.http.request(pullReviewerUrl(this.repoUrl, pullRequestId, reviewerId), { method: 'PUT', body });
+  }
+
+  searchIdentities(query: string): Promise<{ id: string; name: string }[]> {
+    return searchIdentities(this.http, this.orgUrl, query);
   }
 
   async removePullReviewer(pullRequestId: number, reviewerId: string): Promise<void> {

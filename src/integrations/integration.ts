@@ -32,7 +32,7 @@ import type {
 import type { BodyFormat } from '../sink/signOff.js';
 import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
-import type { BotPrDetail, BotPullRequest, TrackerComment, TrackerItem, WorldSnapshot } from '../types.js';
+import type { BotPrDetail, BotPullRequest, PrPerson, TrackerComment, TrackerItem, WorldSnapshot } from '../types.js';
 import type { ReadPlan } from '../world/readPlan.js';
 
 // → docs/spec/15-integrations.md
@@ -182,6 +182,7 @@ export function isPrBaseCapable(x: Integration): x is Integration & PrBaseCapabl
 
 export interface PrAssignCapable {
   assignPr(input: PrAssignInput): Promise<SendResult>;
+  findAssignees(query: string): Promise<PrPerson[]>;
 }
 
 export function isPrAssignCapable(x: Integration): x is Integration & PrAssignCapable {

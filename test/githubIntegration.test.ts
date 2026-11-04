@@ -165,6 +165,9 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
       recorded.assigned.push({ number, login });
     },
     async removePullAssignee() {},
+    async listAssignees() {
+      return ['dave', 'adam', 'madison', 'zed'];
+    },
     async listPullFiles() {
       return [];
     },
@@ -534,6 +537,15 @@ test('a PR reports who is assigned to it, and assignPr adds an assignee', async 
   assert.deepEqual((await sc.snapshot()).pullRequests![0]!.assignees, [{ id: 'carol', name: 'carol' }]);
   assert.deepEqual(await sc.assignPr({ prNumber: 7, personId: 'dave' }), { ok: true, ref: 'dave' });
   assert.deepEqual(recorded.assigned, [{ number: 7, login: 'dave' }]);
+});
+
+test('findAssignees offers any assignable login the search names, exact then prefix then anywhere', async () => {
+  const { api } = fakeApi({ viewer: 'lubbdubb-bot', pulls: [] });
+  const sc = new GitHubSourceControlIntegration({ api });
+  const ids = (people: { id: string }[]) => people.map((p) => p.id);
+  assert.deepEqual(ids(await sc.findAssignees('ad')), ['adam', 'madison']);
+  assert.deepEqual(ids(await sc.findAssignees('dave')), ['dave']);
+  assert.deepEqual(ids(await sc.findAssignees('')), ['adam', 'dave', 'madison', 'zed']);
 });
 
 test('snapshot maps a PR with its CI / approval / mergeability / comments', async () => {

@@ -34,12 +34,20 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 }
 
 const AssignBody = z.object({
-  personId: requiredText('personId is required — the shortlisted person to put on the pull request'),
+  personId: requiredText('personId is required — the person to put on the pull request'),
+  name: z.string().optional(),
 });
+
+const AssigneeQuery = z.object({ q: z.string().default('') });
 
 function registerAssignRoutes(app: FastifyInstance, { system, hub }: Pick<RouteContext, 'system' | 'hub'>): void {
   const { store, prAssign } = system;
   const openPrs = () => store.world.getWorldBaseline()?.pullRequests ?? [];
+
+  app.get(
+    '/api/prs/assignees',
+    checked({ query: AssigneeQuery }, async ({ query }) => prAssign.search(query.q)),
+  );
 
   app.post(
     '/api/prs/:number/assign',
@@ -47,7 +55,7 @@ function registerAssignRoutes(app: FastifyInstance, { system, hub }: Pick<RouteC
       const open = openPrs();
       if (!open.some((p) => p.number === params.number))
         return reply.code(404).send({ error: 'no open pull request with that number' });
-      const outcome = await prAssign.assign(params.number, body.personId, open);
+      const outcome = await prAssign.assign(params.number, body.personId, open, body.name);
       if (!outcome.ok) return reply.code(409).send({ error: outcome.refusal });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true };

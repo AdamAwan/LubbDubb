@@ -105,6 +105,7 @@ import type {
   PlanCaveat,
   TenantCommandOutput,
   TenantPreparation,
+  PrPerson,
 } from '../types.js';
 import type { PredictionDraft, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
@@ -113,6 +114,13 @@ import { buildAskQueue } from './askQueue.js';
 import { demoAppErrorDetail, demoAppErrors } from './demoAppErrors.js';
 import { DemoPredictions } from './predictions.js';
 import { isContainerType } from '../issueGroups.js';
+
+const DEMO_ASSIGNEES: PrPerson[] = [
+  { id: 'priya', name: 'Priya Natarajan' },
+  { id: 'marcus', name: 'Marcus Webb' },
+  { id: 'lena', name: 'Lena Okafor' },
+  { id: 'tomasz', name: 'Tomasz Nowak' },
+];
 import { inFlight } from '../view/localValidation.js';
 import { planCaveatsOf } from '../planCaveats.js';
 import { buildGoalPage } from '../view/goalPage.js';
@@ -941,9 +949,14 @@ class DemoServer {
     return { ok: true };
   }
 
+  async searchAssignees(query: string): Promise<PrPerson[]> {
+    const wanted = query.trim().toLowerCase();
+    return DEMO_ASSIGNEES.filter((p) => p.id.includes(wanted) || p.name.toLowerCase().includes(wanted));
+  }
+
   async assignPr(prNumber: number, personId: string): Promise<{ ok: true }> {
     const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
-    const person = pr?.assignAsk?.find((p) => p.id === personId);
+    const person = pr?.assignAsk?.find((p) => p.id === personId) ?? DEMO_ASSIGNEES.find((p) => p.id === personId);
     if (pr && person) {
       pr.assignees = [...(pr.assignees ?? []), person];
       delete pr.assignAsk;
@@ -5121,6 +5134,7 @@ export const demoApi = {
   reopenPrThread: (prNumber: number, threadId: string, reopened: boolean) =>
     getServer().reopenPrThread(prNumber, threadId, reopened),
   assignPr: (prNumber: number, personId: string) => getServer().assignPr(prNumber, personId),
+  searchAssignees: (query: string) => getServer().searchAssignees(query),
   declineAssignPr: (prNumber: number) => getServer().declineAssignPr(prNumber),
   dismissRun: (issueNumber: number, note?: string) => getServer().dismissRun(issueNumber, note),
   replan: (planId: string) => getServer().replan(planId),

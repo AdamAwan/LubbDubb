@@ -333,6 +333,7 @@ function relationApi(
     setPullBody: unused,
     setPullBase: unused,
     addPullReviewer: unused,
+    searchIdentities: unused,
     removePullReviewer: unused,
     listPullChanges: unused,
     getFileAtCommit: unused,

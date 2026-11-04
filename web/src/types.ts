@@ -87,6 +87,7 @@ export type {
   PluginStatusPayload,
   PoolFleetReading,
   OpenPullRequest,
+  PrPerson,
   OrphanedWork,
   AcceptanceCriterion,
   Plan,

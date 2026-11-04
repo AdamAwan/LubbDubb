@@ -116,7 +116,7 @@ export class PrAssignDesk {
     const due = candidates.filter((pr) => !answered.has(pr.number) && !undescribed.has(pr.number));
     if (due.length === 0) return new Map();
     const shortlist = this.shortlist(open, archived);
-    return shortlist.length === 0 ? new Map() : new Map(due.map((pr) => [pr.number, shortlist]));
+    return new Map(due.map((pr) => [pr.number, shortlist]));
   }
 
   private candidate(pr: PullRequest, facts: AssignAskFacts): boolean {
@@ -126,7 +126,29 @@ export class PrAssignDesk {
     return allCommentsHandled(pr) && reviewDone(facts.review);
   }
 
-  /** The people an assignment may name — the same list `assign` checks a pick against. */
+  /** Anyone the tracker would take on a pull request, beyond the shortlist, whose id or name a search names. */
+  async search(query: string): Promise<PrPerson[]> {
+    const { sink, errors } = this.opts;
+    if (this.assigner() === undefined || sink.findAssignees === undefined) return [];
+    try {
+      return await sink.findAssignees(query);
+    } catch (err) {
+      errors.record({ source: 'provider', message: `searching for PR assignees failed: ${(err as Error).message}` });
+      return [];
+    }
+  }
+
+  private async person(
+    personId: string,
+    searchedAs: string | undefined,
+    open: readonly PullRequest[],
+  ): Promise<PrPerson | undefined> {
+    const listed = this.offered(open).find((p) => p.id === personId);
+    if (listed !== undefined) return listed;
+    return (await this.search(searchedAs ?? personId)).find((p) => p.id === personId);
+  }
+
+  /** The shortlist: a hint, never the limit on whom `assign` takes. */
   offered(open: readonly PullRequest[]): PrPerson[] {
     return this.shortlist(open, this.opts.store.prArchive.listArchivedPrs(HISTORY_DEPTH));
   }
@@ -136,7 +158,12 @@ export class PrAssignDesk {
     return this.settled(prNumber);
   }
 
-  async assign(prNumber: number, personId: string, open: readonly PullRequest[]): Promise<AssignOutcome> {
+  async assign(
+    prNumber: number,
+    personId: string,
+    open: readonly PullRequest[],
+    searchedAs?: string,
+  ): Promise<AssignOutcome> {
     const { store, errors } = this.opts;
     const assignPr = this.assigner();
     if (assignPr === undefined)
@@ -145,23 +172,23 @@ export class PrAssignDesk {
     if (pr === undefined || !this.ours(pr))
       return { ok: false, refusal: 'the ask is only for the fleet’s own pull requests' };
     if (this.settled(prNumber)) return ALREADY_ANSWERED;
-    const person = this.offered(open).find((p) => p.id === personId);
-    if (person === undefined) return { ok: false, refusal: 'that person is not on the shortlist' };
     this.inFlight.add(prNumber);
     try {
+      const person = await this.person(personId, searchedAs, open);
+      if (person === undefined) return { ok: false, refusal: 'the tracker knows nobody by that id' };
       const sent = await assignPr({ prNumber, personId });
       if (!sent.ok) {
         errors.record({ source: 'provider', message: `assigning PR #${prNumber} was refused by the tracker` });
         return { ok: false, refusal: 'the tracker did not take the assignment' };
       }
+      store.prAssignAsks.recordAssignAnswer(prNumber, { answer: 'assigned', person });
+      return { ok: true };
     } catch (err) {
       errors.record({ source: 'provider', message: `assigning PR #${prNumber} failed: ${(err as Error).message}` });
       return { ok: false, refusal: `the tracker refused: ${(err as Error).message}` };
     } finally {
       this.inFlight.delete(prNumber);
     }
-    store.prAssignAsks.recordAssignAnswer(prNumber, { answer: 'assigned', person });
-    return { ok: true };
   }
 
   decline(prNumber: number): AssignOutcome {

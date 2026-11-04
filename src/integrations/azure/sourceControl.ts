@@ -17,7 +17,7 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest } from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrPerson, PrReviewThread, PullRequest } from '../../types.js';
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import { azAuthorName, claimAzureBotPr, listAzureBotPulls, readAzureBotPrDetail } from './botPulls.js';
@@ -312,6 +312,11 @@ export class AzureDevOpsSourceControlIntegration
   async assignPr(input: PrAssignInput): Promise<SendResult> {
     await this.opts.api.addPullReviewer(input.prNumber, input.personId);
     return { ok: true, ref: input.personId };
+  }
+
+  async findAssignees(query: string): Promise<PrPerson[]> {
+    const wanted = query.trim();
+    return wanted === '' ? [] : this.opts.api.searchIdentities(wanted);
   }
 
   async requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult> {

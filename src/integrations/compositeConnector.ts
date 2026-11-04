@@ -30,7 +30,7 @@ import type {
   WorkItemParentInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
-import type { BotPrDetail, BotPullRequest, TrackerComment, TrackerItem, WorldSnapshot } from '../types.js';
+import type { BotPrDetail, BotPullRequest, PrPerson, TrackerComment, TrackerItem, WorldSnapshot } from '../types.js';
 import { DEFAULT_READ_LANES, type ReadLanes, type ReadPlan } from '../world/readPlan.js';
 import { signOff, type SignOffKind } from '../sink/signOff.js';
 import { markdownToHtml } from '../sink/markdownToHtml.js';
@@ -234,6 +234,10 @@ export class CompositeConnector
     const handler = this.integrations.find(isPrAssignCapable);
     if (!handler) throw new Error('no integration can assign PRs (no sourceControl provider is PrAssignCapable)');
     return handler.assignPr(input);
+  }
+
+  async findAssignees(query: string): Promise<PrPerson[]> {
+    return (await this.integrations.find(isPrAssignCapable)?.findAssignees(query)) ?? [];
   }
 
   async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {

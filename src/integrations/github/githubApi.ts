@@ -42,6 +42,8 @@ export interface GitHubApi {
   setPullBody(number: number, body: string): Promise<void>;
   setPullBase(number: number, base: string): Promise<void>;
   addPullAssignee(number: number, login: string): Promise<void>;
+  /** Every login the repository accepts as an assignee. */
+  listAssignees(): Promise<string[]>;
   removePullAssignee(number: number, login: string): Promise<void>;
   listPullFiles(number: number): Promise<GhPullFile[]>;
   /** Another repository's release, by tag: a dependency's own notes. Null when there is none. */
