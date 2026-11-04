@@ -1498,6 +1498,15 @@ An empty queue says so in a sentence, and one emptied only by skips says that in
 press on one ask opens the loop at it (`/lubbdubb:next <id>`); an id not standing is refused, as
 `ask_skip` refuses one.
 
+**A discussion goes to a side chat, not this one.** The loop carries every later ask, so a long talk
+about one pull request is context none of them need. A subagent cannot converse with the operator, so
+the skill offers a **new chat** instead: it `ask_skip`s the ask, hands over `/lubbdubb:next <id> only`
+— as a `claude://code/new` link in the app, or a `claude "…"` command in a terminal — and moves on.
+`only` makes that chat a side thread: it opens at the ask, answers it, and stops rather than walking
+on. Nothing here is server state — `only` is read by the skill, and `ask_next` is unchanged. A heavy
+read (a diff, a long record) goes to a subagent for the same reason, which hands back the facts the
+decision turns on.
+
 **It reads the setup reading the cockpit reads.** The config rows come off the last reading
 `/api/setup` took, and that holder is `System.setupReading` — the route writes it and both
 `/api/state` and `askQueue` read it — so the head `ask_next` hands back is the head the board above
