@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import type { Store } from '../store/store.js';
 import type { Agent, Task } from '../types.js';
-import { extraMcpGrants, isSealedRule } from '../mcp/names.js';
+import { extraMcpGrants } from '../mcp/names.js';
 import type { AgentSession } from './session.js';
 import { classifyArtifact, type FileEventRecord } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
@@ -51,7 +51,6 @@ export class AgentChannels {
         model: task.model ?? null,
         effort: task.effort ?? null,
         permissionMode: task.permissionMode ?? null,
-        sealed: isSealedRule(task.rule),
       }),
       cwd,
       env: {

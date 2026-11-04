@@ -1,6 +1,5 @@
 import type { AgentAsk, StallPark, Task, Agent } from '../types.js';
 import type { Store } from '../store/store.js';
-import { isSealedRule } from '../mcp/names.js';
 import type { AgentSession } from './session.js';
 import { STALL_NUDGE, silenceReason, stallReason } from './agentProtocol.js';
 import type { RateLimitPark } from './streamJsonSession.js';
@@ -26,9 +25,6 @@ interface ParkHost {
   respond(agentId: string, text: string): boolean;
   shedSession(agentId: string): void;
 }
-
-const SEALED_WAITING =
-  'This sealed agent stopped and is waiting. What it said is kept from every other reader — read its transcript in the cockpit.';
 
 export class AgentParks {
   private readonly parked = new Set<string>();
@@ -144,7 +140,7 @@ export class AgentParks {
         // The session went away between the turn ending and the nudge; fall through.
       }
     }
-    this.handleWaiting(agentId, task, stallReason(isSealedRule(task.rule) ? '' : lastWords));
+    this.handleWaiting(agentId, task, stallReason(lastWords));
     this.armStallClock(agentId, this.opts.stallParkMs ?? 0, 'stall');
   }
 
@@ -161,12 +157,8 @@ export class AgentParks {
     debugLog('agent', `${kind} park armed agent=${agentId} window=${window}ms grace=${grace}ms`);
   }
 
-  handleWaiting(agentId: string, task: Task, said: string, asked?: AgentAsk): void {
+  handleWaiting(agentId: string, task: Task, reason: string, ask?: AgentAsk): void {
     if (this.parked.has(agentId)) return;
-    // A sealed agent's own words reach no other reader. → docs/spec/14-persistence.md#the-prediction-judge
-    const sealed = isSealedRule(task.rule);
-    const reason = sealed ? SEALED_WAITING : said;
-    const ask = sealed ? undefined : asked;
     this.channels.drainFileEvents(agentId);
     const rule = this.opts.whitelistedApprovals.find((r) => reason.includes(r.match));
     if (rule) {

@@ -4,7 +4,6 @@ import type { AppliedFix } from '../view/needsYou.js';
 import { goalMove, homeTab, POOL_VIEWS } from './place.js';
 import type { CockpitActions } from './actions.js';
 import type { useNavigation } from './useNavigation.js';
-import { PREDICTION_PANE } from '../view/goalPage.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
 
@@ -244,7 +243,6 @@ function placeActions(go: Go) {
         return scope === 'pool' && !POOL_VIEWS.includes(view) ? { ...next, insightsView: 'economics' } : next;
       }),
     selectGoal: (ref) => go((current) => goalMove(current, ref)),
-    openGoalPrediction: (ref) => go((current) => ({ ...goalMove(current, ref), goalTab: PREDICTION_PANE })),
     openGoalPane: (ref, pane) => go((current) => ({ ...goalMove(current, ref), goalTab: pane })),
     selectPr: (prNumber) =>
       go((current) => (prNumber === null ? { pr: null } : { pr: prNumber, tab: homeTab(current.tab) })),

@@ -806,8 +806,8 @@ whose current investigation has no resolution — keyed on the hold the standing
 reason string nor on the pickup status, which a higher-ranked status (`blocked`) would hide — so the
 row stands exactly while the findings are what holds the goal. Take
 the investigate label off and the hold goes, and the row with it: an ask for an answer that no longer
-gates anything would be a chore. It is `blocking` and `now` on the `sitting` row's terms — planning is
-waiting on the answer — and stage `plan` on the goal's track.
+gates anything would be a chore. It is `blocking` and `now` — planning is waiting on the answer — and
+stage `plan` on the goal's track.
 
 The band draws the findings whole — reproduction, root cause with its confidence, where, blast radius —
 and names the agent's recommendation. Under them are the three resolutions (**Plan it**, **Close**,
@@ -949,7 +949,7 @@ _complete_ and, past about a dozen rows, that was the whole of its cost.
 
 `KIND_URGENCY` (`src/asks/queue.ts`) is total over `AskKind`, so a new kind is placed deliberately rather than inheriting
 the last one's. `now` is what the fleet cannot get past — `recovery`, `escalation`, `permission`,
-`dispatch`, `config`, the two proposals that gate work, `plan` and `merge`, and the two asks planning waits on, `sitting` and `findings`. `next` is an
+`dispatch`, `config`, the two proposals that gate work, `plan` and `merge`, and the ask planning waits on, `findings`. `next` is an
 obligation of the operator's that gates something: `reply`, `shortfall`, `intake`, `profile`,
 `close_out`, `validate`, `bench`, `config_gap`, `supply`, `describe`, `description_wrong`, `bot_pr`. `later` is an ask holding nothing at all —
 `description_note`, `watch`, `burn`, `placement`, `assigned`, `upgrade`, `project_pull`, and `limit`.
@@ -1580,7 +1580,7 @@ still owed`, so it grows every time a plan decomposes further — a bar against 
   (`3 landings owed`) with `done: null` until an environment holds every landing, and only then draws
   a meter — over the **environments**, which are configuration and fixed. Plan and Validate may draw
   one, because an approved plan's parts and a settled check plan are both closed sets. Ask's meter is
-  over **readiness checks**, never over the criteria, which are append-only (`askStage`,
+  over **readiness checks** (`askStage`,
   `web/src/view/goalStages.ts`): the appraisal found the ask `workable`, and — only where the tracker
   places work items (`canPlaceWorkItem`) — the item has a feature (a parent) and an area path. A
   placement the operator declined (`Not applicable`, or settled with no parent) counts as met, and so
@@ -1654,7 +1654,7 @@ final whatever the checks say. Without this, every merged plan opened on Close w
 still to run.
 
 **A press that knows its pane beats every arm of this table.** The rule answers for an arrival at a
-goal, not for an arrival at a question: `openGoalPrediction` and `openGoalForAsk` both put the pane on
+goal, not for an arrival at a question: `openGoalForAsk` and `openGoalPane` both put the pane on
 `Place`, and a pick on `Place` is never re-answered here.
 
 **A `describe` ask does not open the goal at all.** Its destination is `pr`, the cockpit's own page
@@ -1770,20 +1770,6 @@ it knows that, so a heading drawn outside it would either carry no count or carr
 also keeps "fetched on open, never polled" true now the card no longer opens with the page: folded
 away it issues no request at all.
 
-**A card whose reading only it holds narrows its own default, and only while the operator has not
-said.** `goalSectionsOpen` answers off the goal page, and two cards — [the criteria](#goal-criteria-and-drift)
-and [the prediction](#where-the-prediction-is-drawn) — are drawn off a read the page does not carry:
-whether anybody has written what "done" means, and whether the prediction has been marked. So the
-page gives the widest default it can honestly give and the card narrows it once its own reading
-lands. A `Fold` therefore says whether it is `settled` — `?open=` or `?shut=` naming it — and a
-settled fold is passed through untouched: a card that reasoned its way over the operator's own press
-is a disclosure that does not work.
-
-**The narrowing is latched at the first reading, never read live.** It is a decision about how the
-page _arrives_. Taken again on every answer, the criteria card would fold itself shut the moment the
-operator appended a version and the prediction panel the moment they marked the last slot — the page
-taking the work away at the press that finished it.
-
 ### The header
 
 **Three rows with fixed roles**, rather than one row of everything with the controls floated off its
@@ -1886,7 +1872,7 @@ open, or what they would fold — and nothing the repo runs can see that.
   down open, the label, and a quiet `show` / `hide` after it. The word is always there, because the
   chevron alone answers _which way_ but not _is this a control_. It is bare, so a card heading can
   carry its count, its links and its actions beside it — every goal-page card heading (`Disclosure` in
-  `web/src/console/goalFold.tsx` is now only `FoldToggle`), the criteria and prediction headings, the
+  `web/src/console/goalFold.tsx` is now only `FoldToggle`), the
   rail's `6 holding nothing`, the fleet card's ended shifts, the tickets tab's feature chevron (the one
   place `hint={false}`: it sits in a column of its own beside the feature's name).
 - **`Collapsible` is a fold that owns its body**, in one of two looks. **`panel`** is a bordered box
@@ -2513,8 +2499,8 @@ and `splitGoalAsks` decides which:
   `NeedKind` — where a faint "Open" used to be. **The verb is not decoration and not an afterthought
   for the kinds with no pane.** `config`, `profile`, `intake`, `placement`, `limit` and the rest are
   about the goal as a whole or the fleet carrying it, so they have no pane to be drawn in and can
-  only ever be a row; a row that says _open_ on a page whose panes say _Write the criteria_ is the
-  one ask on the page wearing no verb.
+  only ever be a row; a row that says _open_ on a page whose panes carry verbs is the one ask on the
+  page wearing no verb.
   Pressed, a row whose answer does not fit on it opens the whole ask **underneath itself**
   ([a row opens in place](#a-row-opens-in-place)); the ask panel is one press further, on the card's
   own **Open**.
@@ -2527,13 +2513,10 @@ names the ones drawn below in `below`, with the anchor each scrolls to: `PANE_AS
 pane's own card, `GOAL_ANCHOR.plan` for the plan card's ask.
 
 **Two rows are never in the pane's set.** The parent ask is drawn by the band that leads the Ask pane. And the
-plan's own ask belongs to the plan card in **both** of its states — the gate while the plan is
-withheld, the verdict card once it is revealed
-([the verdict, where the plan was read](#the-verdict-where-the-plan-was-read)) — so `planCardAsk`,
-not `planVerdictAsk`, is what the split takes out, and only on the pane that card is drawn in: on
-every other pane it stays a row, because there the card is not in front of the operator. Cut on the verdict alone, a withheld plan drew the
-ask twice: a card at the top of the pane saying reveal it, and the gate a few hundred pixels below,
-which is the guess the gate exists to prevent.
+plan's own ask belongs to the plan card
+([the verdict, where the plan was read](#the-verdict-where-the-plan-was-read)) — so `planVerdictAsk`
+is what the split takes out, and only on the pane that card is drawn in: on every other pane it stays
+a row, because there the card is not in front of the operator.
 
 **The pane's card does not replace the dot or the rail.** What needs the operator has not moved: the
 tab still carries its dot, and the rail still carries the row. What changed is only that the ask is
@@ -3124,310 +3107,25 @@ The overview's segment track is folded by `buildGoalTrack` off **the page's own 
 `status` a second time, so a row and the page it opens cannot disagree about whether a part is held or
 merely not started.
 
-### The reveal gate
-
-**The sitting is drawn first, on the goal page, before any plan exists.** Where the gate is on and the
-goal's pickup verdict reads `sitting`, the work pane opens with a **Before planning** card
-(`IntakeSitting`) above where the plan will be. It offers **Write these down** and **Skip, just plan
-it** at equal weight, for the gate's own reason. Writing draws the same composer — the four slots, the
-containment sentence, and the criteria half behind its rule, each asked only where it is still owed —
-and **Record these** writes both. Where criteria were written **and** the ticket carries its own
-(`ticketHasCriteria`), it keeps the card up rather than closing the sitting, because the alignment
-check has to have its chance first. Otherwise there is no check coming, and **Record these** closes
-the sitting itself: a card that only reads back what was just typed, over a second **Start
-planning**, is a confirmation of nothing. The card then shows what was recorded; while the pickup
-reason says the check is out it says so, and once a reading lands it draws the verdict and every point
-with its tag, a contradiction in red. **Start planning** — **Plan it anyway** over a `conflicting`
-reading — is the press that stamps the sitting closed; **Revise criteria** appends a version restated in
-full, which is a new question for the check. The goal-page criteria card is not drawn while the sitting
-is open: it asks the same question, and asked twice the operator answers one.
-
-**The rail carries the ask.** A goal whose verdict reads `sitting` is a `sitting` row, `blocking` and
-urgent now, because planning is waiting on the answer; it opens the goal, where the card is.
-
-What follows describes the reveal gate, which remains the path for a plan written before its sitting
-([08](08-planning.md#the-reveal-gate-on-a-plan-written-before-its-sitting)).
-
-Where the [reveal gate](02-configuration.md#the-reveal-gate) is on and a plan has arrived
-`awaiting_approval` on a goal nobody has revealed it on, the plan card draws the gate in place of the
-waves: a blurred stand-in for the document, and over it _"A plan is ready. Predict first?"_ with
-**Predict** and **Show me the plan** beside each other.
-
-Where the goal's criteria can also be written here the offer names both — _"A plan is ready. Anything
-to write down first?"_, over **Write these down** — because the reveal is the last moment at which
-either record is independent of the plan, and two interstitials over one instant is a gate the
-operator meets twice and declines the second time. → [the criteria half](#the-criteria-half-of-the-gate)
-
-**The two presses are of equal weight, and this is load-bearing rather than taste.** A gate that is
-awkward to decline is a gate that gets resented and then disabled outright, so **Show me the plan** is
-never a small grey link — both are primary buttons, in one row, at the same size. The gate never
-re-prompts on a goal it has been declined on: the stamp ends the offer for good.
-
-**There is nothing to blur, and that is the point.** The plan's body is not on the wire at all while
-it is withheld — no narrative, no parts, no atoms
-([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)) — so the card draws a stand-in
-rather than blurring an empty body, which would read as _no plan_ instead of _withheld_. The blur is a
-picture of a withheld thing, not a cover over a thing that is present.
-
-The card's other door to the document, "open the full plan", is suppressed while the gate stands. A
-second ungated way into the sheet would make the gate a suggestion.
-
-**The ask on the rail leads to the gate, and says so.** While the plan is withheld the approval ask is
-the one ask on the rail that cannot be answered where it is drawn: approving, refusing and backing out
-are all refused server-side, and the plan sheet answers 409
-([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)). So the row opens the goal **on
-the pane the gate is drawn in** rather than leaving the landing to the lifecycle rule, and carries a
-note saying the plan is withheld and the prediction is asked first — "Plan ready" alone reads as a
-verdict being asked for. In the band, the four answers and both doors into the document are replaced
-by one press that leads to the gate — and _leads_ is both halves: it carries the pane and then scrolls
-to the card. Pressed from the goal page the ask is already drawn on, the navigation alone is a no-op
-and the press reads as a control that does nothing, with the gate sitting further down the same page. A card offering four answers that each end in a refusal is the
-ask telling the operator to guess, and the guess it invites is the one the gate exists to prevent.
-
-**The offer is made where the plan is met, which is the ask.** The card draws the gate's own argument
-for predicting — one sentence on why, one on what it costs — in place of the stand-in, because the
-stand-in is the same sentence as the prompt above it: a withheld plan was saying _it is withheld_
-twice and making no case at all for the press underneath. The words are the gate's, exported from it
-rather than written again here, since two spellings of one argument is how a gate comes to be resented
-on one surface and welcomed on the other.
-
-**Predict** swaps the two presses for the composer: the four slots — `locus`, `cause`, `split`,
-`avoid` — each a free-text field labelled with the question it asks, each individually skippable,
-and one press that records the prediction and reveals the plan in the same breath. That is deliberate:
-moment one is one continuous interaction rather than a second visit, because predict → reveal → look
-is the sitting the operator was already having. A draft with nothing in it is caught before it is sent;
-every refusal the routes can give is drawn inline in the operator's own words rather than thrown.
-
-Under the slots, once, a sentence saying what containment does and does not cover: what is written
-here reaches no agent but the sealed [judge](08-planning.md#the-prediction-judge), after the operator
-has marked it, but pasting it into the goal's standing instructions would leak it, because
-standing instructions are delivered to agents by design. That is the one hole nothing can close, and
-the operator is told about it at the moment they could fall into it.
-
-#### The criteria half of the gate
-
-Below the slots and the containment sentence, where `goalCriteria.enabled` is on and the goal has no
-criteria yet, the composer asks one more thing: **what "done" means for this goal**, written into the
-same sitting and recorded before the reveal.
-
-**It is asked here because nowhere else can ask it independently.** Criteria first offered on the goal
-page are criteria written after the plan has been read, and a `post-reveal` oracle cannot catch the one
-failure part acceptance also cannot — the goal understood wrongly and then built, reviewed and
-validated consistently with the wrong understanding ([08](08-planning.md#goal-criteria-beside-the-planners-acceptance)).
-Written at the gate, the version's `authoredAt` precedes the reveal stamp and its standing derives as
-`pre-reveal` for good.
-
-**Whether it is asked is keyed off the reading, never a flag.** The gate reads the chain; a read that
-does not answer is a deployment where the criteria routes are not mounted, and the field is not drawn.
-A goal that already has criteria is not asked again either — revising them is the goal page's job, and
-a revision is a version with a standing of its own.
-
-**The field is fenced off from the four slots above it, and the fence is load-bearing.** The two
-records share this instant and have opposite postures: a prediction is withheld from every agent, and
-criteria are written for the fleet to read. Drawn as a fifth slot under one containment sentence, the
-operator carries whichever posture they read first across to the other field — which either leaks the
-prediction or buries the criteria. So the criteria sit behind a rule, under a note of their own saying
-they are meant to be read and are the authority where they and a part's acceptance disagree.
-
-**Each half is sent once, and a retry sends only what has not landed.** The two writes are once-only in
-opposite ways — a second prediction is refused outright, a second criteria version is silently v2 — so
-a press that resent both after one had failed would either dead-end the gate or mint a version nobody
-asked for. The gate remembers which landed and the reveal goes last, because the stamp is what ends
-their independence.
-
-**No `Place` state.** Whether the composer is open, and whether the gate has lifted on this render, are
-not "where am I": the gate is a one-shot that ends the moment the server stamps the reveal, so a deep
-link to a half-typed composer would be a link to something that no longer exists, and a reload
-correctly re-reads the server's fact rather than the page's memory of it.
-
-### Moment one — the prediction beside the plan
-
-Once the judge has read it, the
-[prediction judge](08-planning.md#the-prediction-judge)'s mark is drawn under the operator's on each
-slot, in the same words, and a disagreement is called out rather than left to be spotted. Never before the operator's mark — the
-judge is not dispatched until then, so there is nothing to anchor on.
-
-Where the plan has been revealed on a goal that **has** a prediction, the plan card draws the two side
-by side: the four slots on one side with a three-way mark each, the plan's narrative and its parts on
-the other. Reading one against the other is the whole of the interaction, so at narrow widths they
-stack with the plan **first** — it is what the marks are made against.
-
-It sits where the gate stood, so predict → reveal → mark reads as one sitting rather than a second
-visit to a different surface. But it is drawn off the record — a prediction exists and the goal is
-revealed — not off the moments after the press, so an operator who closed the tab comes back to it.
-
-#### Where the prediction is drawn
-
-The panel's **position in the plan card is read off the plan's status**, and it carries its own
-disclosure:
-
-- **While the plan is at its gate** (`planning`, `awaiting_approval`) it is drawn **above the parts**
-  and **open**. Marking the prediction against what the plan says is what the pane is for at that
-  moment, and nothing below it can move until the plan is approved anyway.
-- **Once the plan is approved and the work is under way**, it leaves the plan card altogether and is
-  drawn **last on the pane**, below the parts, the description in front, what "done" means and the
-  pull requests — folded away. Everything above it is the work; the prediction is a record of a
-  moment that has passed, and at the foot of the plan card it was still sitting above three cards an
-  operator reads first.
-- **And only while something in it is unanswered.** An operator who has marked every slot they wrote
-  has a record, not a question, so the panel arrives
-  folded even where the plan is still at its gate. It is the panel's own narrowing of the page's
-  default, latched at the first reading and dropped the moment the operator works the disclosure
-  themselves. → [Folding what is not relevant yet](#folding-what-is-not-relevant-yet)
-
-Folded, the header still says how much of it is unanswered — `2/3 marked` — because what a folded record owes its reader is whether anything in it is
-still theirs to do. The disclosure is the panel's **own**, as [the work record's](#the-record-on-the-goal-it-belongs-to) is:
-only it knows whether the goal carries a prediction at all, and a header drawn outside it would be an
-empty card on every goal nobody predicted.
-
-The fold is a `prediction` section like any other, so it is [in the query string](#the-address-bar)
-and survives a reload. What is _not_ in the query string is the position: that is read off the plan,
-which is what is true rather than where the operator is.
-
-**Unmarked is a fourth state and is drawn as one.** Nothing is pre-selected, and an unmarked slot is a
-dashed edge and the words "Not marked yet" in faint ink — visibly not the solid red edge and filled
-button of a `missed`. The two must not look alike anywhere, because the aggregate reads them as
-different things and drawing them the same is how an operator comes to believe the record says
-something it does not. Pressing the selected mark again takes it off.
-
-A **skipped** slot draws no buttons at all, and says why: nothing was written there, so there is
-nothing to mark. The third option is labelled **"Plan is silent"** rather than anything that reads as
-_I would rather not say_ — it means the plan did not speak to this, which is a fact about the plan and
-a real answer, not a way of declining to give one.
-
-#### A slot that asks for a thing that should not happen
-
-`avoid` asks the operator to name something they expect **not** to see, and the other three ask for
-something they expect to see. Read against a prohibition, the default wording of the marks — "The plan
-says what you said it would" — runs both ways at once: did the plan do the named thing, or did it
-honour the ban? An operator who reads it the second way files the exact opposite of what they mean, in
-the one record that cannot be corrected by asking them again later, because asking later is asking
-somebody who has read the plan.
-
-So the slot carries **its own words, on both moments at once**: _Stayed clear_ / _The plan does it_ /
-_Plan is silent_ at moment one, and _Stayed clear_ / _It happened anyway_ / _Never came up_ at moment
-two. Both, never one — a slot drawn with one moment's own wording and the other's default leaves a
-record whose two halves were answered to two different questions, which is the failure the two moments
-are named apart to avoid in the first place.
-
-The **stored value is the same three-valued mark**, and `matched` keeps its one meaning throughout:
-the operator's reading borne out. On `avoid` that is the plan staying clear. The aggregate reads the
-four slots as one vocabulary, and a slot whose wording quietly inverted the stored value would make
-every figure on the panel a blend of two opposite claims.
-
-**What `avoid` is not is an instruction.** It is the slot an operator is most likely to mistake for
-one, so the composer's containment sentence says it outright: what is written there is a prediction
-the plan is marked against, never something the fleet is told. Where the operator wants the fleet to
-honour it, that is what the goal's criteria are, and they are asked in the same sitting a rule further
-down. → [the criteria half](#the-criteria-half-of-the-gate)
-
 ### The verdict, where the plan was read
 
-Predict → reveal → mark ends in a decision, and the decision is what lets the fleet start. So while
-the plan has been revealed and is still `awaiting_approval`, **the plan card draws the plan's own
-approval ask in full**, directly under the prediction panel and above the waves: the summary the ask
-carries, the caveats it holds, the way into the full sheet, and **Approve** and **Refuse** beside
-them. Without it the sitting the gate opened ended with nothing to press — the verdict was a line at
-the top of the page, and the operator who had just marked four slots against the plan had to scroll
-back past everything they had read to give one.
+While the plan is `awaiting_approval`, **the plan card draws the plan's own approval ask in full**,
+above the waves: the summary the ask carries, the caveats it holds, the way into the full sheet, and
+**Approve** and **Refuse** beside them. Without it the verdict was a line at the top of the page, and
+the operator who had just read the plan had to scroll back past everything they had read to give one.
 
 **It is the ask itself, not a second spelling of it.** The card is the same `NeedsBand` body the rail
 and the ask panel draw, so the caveat acknowledgements, a `validation_plan`'s rows and every refusal
 the routes can give are the ask's own. A verdict control written again on the plan card is a second
 implementation of the one decision on this page that cannot be taken twice.
 
-**It is drawn only on a plan that has been revealed.** Under the gate the verdict routes refuse
-approving, refusing and backing out alike ([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)),
-so a card drawn there would be four answers that each end in a refusal, sitting directly beneath the
-one press that leads to the gate. It is the ask for **this plan** — read off the escalation's
-`planId` and the plan's status, never off the row's kind, which a change to a running plan is raised
-under too.
+It is the ask for **this plan** — read off the escalation's `planId` and the plan's status, never off
+the row's kind, which a change to a running plan is raised under too (`planVerdictAsk`).
 
-**The plan card owns that ask, in both of the plan's states.** While the plan is withheld the gate is
-what asks it; once revealed, this card is. Either way the ask is not also drawn among this pane's
-own asks — a row saying go and find an ask, above the card already asking it, is the same ask twice
+**The plan card owns that ask.** It is not also drawn among this pane's own asks — a row saying go
+and find an ask, above the card already asking it, is the same ask twice
 ([an ask is the loudest thing on its page](#an-ask-is-the-loudest-thing-on-its-page)). The pane's own
 dot and the rail's row are unchanged, because what needs the operator has not moved.
-
-### Moment two, beside moment one
-
-Moment two is no longer asked ([24](24-environments.md#the-plan-verdict-row-is-retired)), so this
-card is drawn only on a record that answered it while it was. There, each filled slot draws **both** marks, and the card's whole job is
-that an operator cannot mistake which question they are answering. The two share no words: moment one
-asks _"Did you call it?"_ — about your reading of the system — and answers Matched / Missed / Plan is
-silent; moment two asks _"Was the plan right?"_ — about the plan, not about you — and answers Held up
-/ Did not hold / Never came up. Two identical-looking three-way rows would make the record
-meaningless, so they are not drawn alike.
-
-Where both are set, the pair is restated as one sentence, and the two pairs in which **the plan did
-not hold** are tinted apart, because those are the rows the record exists for: matched-and-wrong is
-the operator and the fleet wrong together, and missed-and-wrong is the operator having been right. It
-is a lookup over the two stored marks, not a new verdict the page computes — the cockpit does not
-score what the server did not.
-
-An unanswered moment two draws as not-yet-answered, in the same dashed chip moment one uses, with
-nothing pre-selected. It is skippable by design and absent is absent.
-
-### Goal criteria, and drift
-
-Below the plan — criteria are read against the shape that was proposed — the goal page draws the
-current criteria version prominently, with the chain behind it collapsed, newest first.
-
-**The card is not drawn while the plan is at its gate.** The gate asks what "done" means in the same
-sitting as the prediction ([the criteria half](#the-criteria-half-of-the-gate)); a second field asking
-the same thing lower on the same pane is a question the operator meets twice, and whichever one they
-answer, the other reads as still owed. The card arrives once the plan is revealed — and, for the same
-reason, not while the goal's [intake sitting](#the-reveal-gate) is open either.
-
-**Once the goal has a check set, each criterion is drawn with its reading** under the current version —
-met, not met, waived, not yet read, or **no check names it**, the last drawn in red beside a failure,
-because an absent check looks exactly like one that passed until someone counts. The letters of the
-checks that name it follow. → [20](20-validation.md#satisfies-and-the-goals-criteria)
-
-**Once anybody has written a version the card arrives folded**, because what is in it is then a
-record and the pane below it is the work. The heading still carries the version count and the drift
-tag, which is what a folded card owes its reader. Nothing written is the other way round: the card
-is open, and the press that writes the first version is the one primary button on it. The fold is a
-`criteria` section like any other, in the query string beside the rest — but the _default_ is the
-card's own, because whether a version exists is a read only the card makes.
-→ [Folding what is not relevant yet](#folding-what-is-not-relevant-yet)
-
-**Revising is not drawn as the act the page is asking for.** `Write the criteria` wears the primary
-tone on a goal with none; `Revise the criteria` on a card that already says what it says does not.
-A blue button under a filled card reads as work owed, on every goal, for ever — the same reason
-`Rewrite it` on [a written description](#it-is-written-where-the-change-is-read) does not wear it either. Each version
-carries its derived standing, its author, when it was written, and for a `post-work` version the
-**reason**, which is the whole point of having required one.
-
-**A goal whose criteria changed after work started is marked on the card itself**, beside the version
-count, not buried in the chain. Drift that is only discoverable by expanding a history is drift nobody
-finds.
-
-**The reason is asked for before the press, not after the refusal.** Where the next version would be
-`post-work` the form puts the reason field above the text box and says why. The route refuses a
-post-work append without one, and an append-only chain cannot take a row back — so being told after
-writing the text would cost the operator the draft for a requirement that was knowable beforehand. If
-the standing moves underneath anyway, the draft is kept and the field appears.
-
-A version is the **whole text restated**, not a patch, and the form says so and names the version it
-will append. The page also states plainly that where both exist the goal set is the authority and a
-part acceptance that contradicts it is a plan defect — because the page draws both, and a reader with
-two lists and no rule between them will pick whichever suits.
-
-**None of the prediction card's containment language appears here, and that is deliberate.** Criteria
-are an oracle the work is judged against; they are written **for** the fleet to read. A sentence
-promising they are kept from every agent would be false, and a reader who conflates the two features
-will either leak predictions or hide criteria.
-
-#### Drift in the feed
-
-`criteriaDrift` is its own wire list and the cockpit merges it **at the feed's door**, exactly as
-environment arrivals are merged — same signal shape, same window, sorted together.
-
-The merge is what keeps the feed complete without the record being a `WorldEvent`, and it must stay
-that way: `deliveryHold` expires a standing delivery verdict on any world event matching the goal's
-issue ref, so drift written as one would un-park the goal it has just reported on.
-→ [14](14-persistence.md#drift-has-its-own-table)
 
 ### The pull requests and the tail
 
@@ -3692,39 +3390,6 @@ list is a handful of dispatches at best and empty for any goal not touched in th
 design's stated arm was that this becomes its own route, and this takes that arm: **deferred, not
 half-built.** A per-goal activity list is a route away, and the derivation is already here to draw it
 from.
-
-## The prediction reading
-
-An Insights tab of its own — _"Did you see the plan coming, and was the plan right?"_ — drawn only
-where the reveal gate is on, and read off `GET /api/predictions/aggregate` rather than the state
-payload, because it is a whole-history fold nothing needs per pulse.
-
-**Counts lead; rates follow underneath, smaller.** How many goals were offered the gate, how many
-carried a prediction, how many were marked at each moment, how many goals drifted: those are facts at
-any n and they are the figures that matter first.
-
-**A withheld rate is drawn as the count toward the threshold, and never as a number.** Where the
-payload carries null the panel says _"21 goals offered the gate; rates appear at 10"_ — its own
-denominator, and the threshold it is short of. There is **no branch anywhere that renders a null as
-0%, as a dash, or as anything a reader could mistake for a measurement**; the rate is absent from the
-payload precisely so the panel cannot draw it
-([18](18-observability.md#a-rate-nobody-should-read-is-not-shipped)). A rate that does exist is never
-drawn bare — always beside the n it is over.
-
-**_Not offered_ is drawn apart from _declined_**, in its own line rather than as a third figure in the
-row, saying what it is: the goals from before the switch, permanently, in neither rate below. Drawn
-beside the other two it would read as a kind of decline, which is the one misreading the three-outcome
-split exists to prevent.
-
-**An absent slot says it is absent.** The per-slot list is sparse, so the panel looks up each of the
-four and, finding nothing, says no prediction has ever filled it — absent, not nought. Same for a
-filled slot nobody has marked at one of the two moments.
-
-The two moments are labelled as the goal card labels them, side by side per slot: moment one about
-the operator's reading of the system, moment two about the plan.
-
-**Nothing is keyed on a person** — no filter, no legend, no column — and the panel's lede says so.
-→ [18](18-observability.md#nothing-is-grouped-by-author-and-nothing-could-be)
 
 ## The pull request page
 
@@ -9225,29 +8890,6 @@ show. Worse, they were alerts about the demo's own fixture: `agentMode is raw`, 
 `userId is unset` are true of the mock and false of anything a visitor would run, so the first thing the
 cockpit said to a new reader was that it was broken. The fake reports a harness that is configured and
 healthy, and the rail opens on the fleet.
-
-**The demo meets the reveal gate, and the record it writes into is a deployment's, not a session's.**
-Issue #333's plan is served withheld — `demoBackend` applies the redaction the routes apply, so the
-approval ask draws the stand-in sentence, its caveats are empty and the doors into the document are
-the gate. Both presses commit: predicting writes the record and stamps the reveal, declining stamps
-it alone, and the prose and the caveats are handed back on the spot. The marking card then draws on
-that goal like any other, and the goal's own figures reach the Prediction panel.
-
-What the demo seeds beside it is **fourteen reveals over three plans**, which is not an inconsistency:
-a snapshot carries the plans of work that is live, and the record is over everything the gate was ever
-put to. The seed is shaped so the panel is worth reading rather than merely populated — three slots
-clear the ten-goal threshold and draw a rate, `avoid` does not and draws the count toward it,
-moment two lags moment one everywhere because it is asked at delivery, and two goals were offered the
-gate and declined it, which is the third outcome the aggregate exists to keep apart from _never
-offered_. Issue #395 carries both moments answered, so the pair sentences are reachable.
-
-**What the static demo cannot claim is the containment, and it does not.** A withheld plan's document
-is in the bundle, as every fixture is; what is demonstrated here is the gate's interaction and its
-record, not the server-side withholding that makes the ordering a fact
-([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)). Goal criteria stay unbuilt in
-the demo, and both criteria routes go on refusing — so the gate reads as a deployment with
-`prediction.enabled` on and `goalCriteria.enabled` off, which is a configuration somebody actually
-runs rather than a half-drawn feature.
 
 **Schedules are real in the demo, and never fire there.** Writing a recurrence, editing it, pausing it
 and deleting it all work against the fixture state, and "run now" queues the job exactly as the launch

@@ -71,8 +71,6 @@ import { BugFilingStore } from './bugFilings.js';
 import { adoptFloorCompletions, RunStore, RUN_COLUMNS } from './runs.js';
 import { TicketStore, TICKET_COLUMNS } from './tickets.js';
 import { SequenceStore, SEQUENCE_COLUMNS } from './sequences.js';
-import { GoalCriteriaStore } from './goalCriteria.js';
-import { PredictionStore, PREDICTION_COLUMNS, PREDICTION_REBUILDS } from './predictions.js';
 import { PrDescriptionStore, PR_DESCRIPTION_COLUMNS } from './prDescriptions.js';
 import { consumeIntentsForExistingSheets, RemoteIntentStore, REMOTE_INTENT_COLUMNS } from './remoteIntents.js';
 import type { Job, CostDelta } from '../types.js';
@@ -81,11 +79,25 @@ import type { Job, CostDelta } from '../types.js';
 
 const REVIEW_PACK_RETIRED_TABLES: readonly string[] = ['review_packs', 'review_marks', 'review_pack_shares'];
 
+const PREDICTION_RETIRED_TABLES: readonly string[] = ['goal_predictions', 'goal_reveals'];
+
+const GOAL_CRITERIA_RETIRED_TABLES: readonly string[] = [
+  'goal_criteria',
+  'goal_criteria_alignments',
+  'goal_criteria_drift',
+];
+
 function migrate(db: Database.Database, clock: Clock): void {
   renameTables(db, ISSUE_VERDICT_RENAMES);
-  dropRetiredTables(db, [...POOL_RETIRED_TABLES, ...REMOTE_VALIDATION_RETIRED_TABLES, ...REVIEW_PACK_RETIRED_TABLES]);
+  dropRetiredTables(db, [
+    ...POOL_RETIRED_TABLES,
+    ...REMOTE_VALIDATION_RETIRED_TABLES,
+    ...REVIEW_PACK_RETIRED_TABLES,
+    ...PREDICTION_RETIRED_TABLES,
+    ...GOAL_CRITERIA_RETIRED_TABLES,
+  ]);
   const intentsAreNew = !tableExists(db, 'remote_run_intents');
-  rebuildTables(db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS, ...PREDICTION_REBUILDS], () => db.exec(SCHEMA));
+  rebuildTables(db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS], () => db.exec(SCHEMA));
   const addedColumns: string[] = [];
   for (const columns of [
     TASK_COLUMNS,
@@ -113,7 +125,6 @@ function migrate(db: Database.Database, clock: Clock): void {
     OBSTACLE_COLUMNS,
     SEQUENCE_COLUMNS,
     EJECTION_COLUMNS,
-    PREDICTION_COLUMNS,
     PR_DESCRIPTION_COLUMNS,
     APP_ERROR_COLUMNS,
   ]) {
@@ -202,12 +213,10 @@ export class Store {
   readonly runs: RunStore;
   readonly tickets: TicketStore;
   readonly sequences: SequenceStore;
-  readonly goalCriteria: GoalCriteriaStore;
   readonly prDescriptions: PrDescriptionStore;
   readonly upgrades: UpgradeStore;
   readonly pets: PetStore;
   readonly pool: PoolStore;
-  private readonly ctx: StoreContext;
 
   constructor(dbPath: string, clock: Clock = systemClock) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
@@ -273,24 +282,9 @@ export class Store {
     this.runs = new RunStore(ctx);
     this.tickets = new TicketStore(ctx);
     this.sequences = new SequenceStore(ctx);
-    this.goalCriteria = new GoalCriteriaStore(ctx);
     this.prDescriptions = new PrDescriptionStore(ctx);
     this.upgrades = new UpgradeStore(ctx);
     this.pets = new PetStore(ctx);
-    this.ctx = ctx;
-  }
-
-  /**
-   * The one store `Store` does not forward. A prediction is a measurement of the
-   * fleet, so nothing the fleet is handed may be able to name it: there is no
-   * `store.predictions`, and the composition root opens the store here and hands it
-   * to the prediction routes alone. `test/predictionContainment.test.ts` is what
-   * makes reaching for this from a dispatcher, agent, MCP, retro, briefing, scratch
-   * or sink module a failing build rather than a review comment.
-   * → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
-   */
-  openPredictions(): PredictionStore {
-    return new PredictionStore(this.ctx);
   }
 
   get open(): boolean {

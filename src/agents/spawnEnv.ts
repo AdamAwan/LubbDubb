@@ -6,11 +6,9 @@
  * An agent is launched with the harness's own environment, which is what lets it
  * reach `gh`, the provider and its own MCP socket. `LUBBDUBB_TOKEN` is a different
  * kind of thing: it is the **cockpit bearer**, and every operator-only route answers
- * to it. An agent that has it can `curl` the cockpit — which on a deployment with
- * the reveal gate on means reading the operator's prediction back verbatim, the one
- * thing the whole prediction record is built to prevent. That escape is over the
- * network rather than through an import, so neither the type system nor the
- * structural containment test can see it; this list is what closes it.
+ * to it. An agent that has it can `curl` the cockpit and act as the operator on every
+ * route. That escape is over the network rather than through an import, so the type
+ * system cannot see it; this list is what closes it.
  *
  * The others are credentials of the same kind — the ingress secrets and the desktop
  * channel's credential — that no agent has any reason to hold.

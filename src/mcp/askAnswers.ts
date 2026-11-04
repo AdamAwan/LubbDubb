@@ -116,15 +116,6 @@ const EXTRA_CHOICES: Partial<Record<AskKind, Record<string, string>>> = {
 const proposal: Answerer = (row, ctx) => {
   const subject = subjectOf(row, 'escalation');
   if (subject === null) return unanswerable(ctx);
-  if (subject.planWithheld === true) {
-    return {
-      in: 'cockpit',
-      why:
-        'The plan is withheld until the operator reveals it on the goal in the cockpit, where their prediction is ' +
-        'asked first. It can be neither read nor decided here until then.',
-      link: ctx.link,
-    };
-  }
   if (subject.proposalId === null) return escalation(row, ctx);
   return {
     in: 'claude-code',
@@ -357,10 +348,6 @@ const ANSWER_WITH: Record<AskKind, Answerer> = {
   findings: cockpit(
     'An investigation’s findings, settled on the goal in the cockpit where the reproduction, root cause and ' +
       'recommendation are drawn beside the three answers.',
-  ),
-  sitting: cockpit(
-    'The operator’s own prediction and criteria, asked before the planner. A prediction typed through an ' +
-      'assistant is not the blind guess it exists to be, so it is never taken here.',
   ),
   describe,
   assigned: nowhere(

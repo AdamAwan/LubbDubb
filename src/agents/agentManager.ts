@@ -4,7 +4,6 @@ import { existsSync } from 'node:fs';
 import { recentOutputExcerpt } from '../escalation/context.js';
 import type { Agent, AgentStatus, AgentUsage, AccountRateLimits, ApiErrorReading, StallPark, Task } from '../types.js';
 import type { Store } from '../store/store.js';
-import { isSealedRule } from '../mcp/names.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
 import type { ParsedFlag } from './sentinels.js';
 import type { AgentSession } from './session.js';
@@ -507,9 +506,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         message:
           `Agent ${agentId} failed (task ${taskId})` +
           `${exitCode !== undefined ? `, exit code ${exitCode}` : ''}${failureNote ? `, ${failureNote}` : ''}`,
-        detail: isSealedRule(this.store.tasks.getTask(taskId)?.rule)
-          ? null
-          : recentOutputExcerpt(this.store.transcripts.getTranscript(agentId)) || null,
+        detail: recentOutputExcerpt(this.store.transcripts.getTranscript(agentId)) || null,
       });
     }
     this.reflectStatus(agentId, taskId, status);

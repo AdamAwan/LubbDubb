@@ -1,9 +1,6 @@
 import { existsSync } from 'node:fs';
 import { issueOriginRef } from '../issueOrigins.js';
 import type { System } from '../system/system.js';
-import type { Config } from '../config/config.js';
-import { revealGateOn } from '../config/config.js';
-import { planIsWithheld, withheldAction, WITHHELD_PLAN } from './planReveal.js';
 import type { Decision, IssueInstruction, Plan, PlanPart, WorldSnapshot } from '../types.js';
 import type { Store } from '../store/store.js';
 import type { EjectionView, PlanPartView, PlanView, ValidationCheckView, ValidationResourceView } from '../wire.js';
@@ -114,7 +111,7 @@ export function baseReads(system: System, opts: SnapshotOpts | undefined) {
   };
 }
 
-export function planReads({ system, store, config, world, tasks }: BaseReads) {
+export function planReads({ store, world, tasks }: BaseReads) {
   const plans = store.plans.listPlans();
   const planParts = once(() => store.plans.listAllPlanParts());
   const partsByPlan = once(() => {
@@ -141,8 +138,11 @@ export function planReads({ system, store, config, world, tasks }: BaseReads) {
   const landings = once(() =>
     store.landings.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped'),
   );
-  const { withheld, wirePlans } = planReveals(system, config, plans);
-  const wirePlanParts = planPartViews(store, tasks, plans, planParts, partsOfPlan, withheld);
+  const wirePlans: PlanView[] = plans.map((p) => ({
+    ...p,
+    statusCommentRef: issueCommentRef(p.originRef, p.statusCommentRef),
+  }));
+  const wirePlanParts = planPartViews(store, tasks, plans, planParts, partsOfPlan);
   return {
     plans,
     planParts,
@@ -151,44 +151,9 @@ export function planReads({ system, store, config, world, tasks }: BaseReads) {
     openPrNumbers,
     mergedPrs,
     landings,
-    withheld,
     wirePlans,
     wirePlanParts,
   };
-}
-
-function planReveals(system: System, config: Config, plans: Plan[]) {
-  const reveals = once(() => {
-    const byPlan = new Map<string, { revealed: boolean; revealedAt: string | null }>();
-    for (const plan of plans) {
-      byPlan.set(plan.id, {
-        revealed: !planIsWithheld(system, plan),
-        revealedAt: revealGateOn(config) ? (system.predictions.getReveal(plan.originRef)?.revealedAt ?? null) : null,
-      });
-    }
-    return byPlan;
-  });
-  const withheld = (planId: unknown): boolean =>
-    typeof planId === 'string' && reveals().get(planId)?.revealed === false;
-  const wirePlans: PlanView[] = plans.map((p) => {
-    const stamp = reveals().get(p.id) ?? { revealed: true, revealedAt: null };
-    const view = { ...p, statusCommentRef: issueCommentRef(p.originRef, p.statusCommentRef), ...stamp };
-    if (stamp.revealed) return view;
-    return {
-      ...view,
-      diagnosis: null,
-      approach: null,
-      reason: null,
-      risks: null,
-      outOfScope: null,
-      alternatives: null,
-      openQuestions: null,
-      verification: null,
-      document: null,
-      evidence: [],
-    };
-  });
-  return { withheld, wirePlans };
 }
 
 function planPartViews(
@@ -197,7 +162,6 @@ function planPartViews(
   plans: Plan[],
   planParts: () => PlanPart[],
   partsOfPlan: (planId: string) => PlanPart[],
-  withheld: (planId: unknown) => boolean,
 ) {
   const drift = once(() => {
     const partOrigins = new Set(
@@ -227,14 +191,12 @@ function planPartViews(
   const wirePlanParts = once((): PlanPartView[] => {
     const partIndexes = new Map(plans.map((plan) => [plan.id, bySlug(partsOfPlan(plan.id))]));
     const drifted = drift();
-    return planParts()
-      .filter((part) => !withheld(part.planId))
-      .map((part) => ({
-        ...part,
-        depth: partDepth(part, partIndexes.get(part.planId) ?? bySlug([part])),
-        acceptanceCriteria: acceptanceCriteria(part),
-        outsideScope: drifted.get(part.id) ?? [],
-      }));
+    return planParts().map((part) => ({
+      ...part,
+      depth: partDepth(part, partIndexes.get(part.planId) ?? bySlug([part])),
+      acceptanceCriteria: acceptanceCriteria(part),
+      outsideScope: drifted.get(part.id) ?? [],
+    }));
   });
   return wirePlanParts;
 }
@@ -309,7 +271,7 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
 }
 
 export function contextReads(r: VerdictReadsOn) {
-  const { system, store, config, world, tasks, control, plans, planParts } = r;
+  const { system, store, world, tasks, control, plans, planParts } = r;
   const { deliveries, deliverySignals, appraisals, investigations, issueRuns } = r;
   const recentDecisions = once(() => store.decisions.listDecisions(200));
   const pickupCtx = once((): IssuePickupContext => ({
@@ -328,7 +290,6 @@ export function contextReads(r: VerdictReadsOn) {
     deliverySignals: deliverySignals(),
     appraisals,
     investigations: investigationStandings(world.issues, investigations(), system.issuePickup),
-    closedSittings: revealGateOn(config) ? new Set(system.predictions.listReveals().map((r) => r.originRef)) : null,
     obstacleBlocks: store.obstacles.listObstacleBlocks(),
     obstacles: store.obstacles.obstacleBoard(),
     runs: issueRuns,
@@ -344,20 +305,12 @@ export function contextReads(r: VerdictReadsOn) {
 }
 
 function activityReads(r: VerdictReadsOn, recentDecisions: () => Decision[]) {
-  const { store, connector, world, tasks, proposals, appraisals, issueRuns, withheld, bugFilings, humanTasks } = r;
+  const { store, connector, world, tasks, proposals, appraisals, issueRuns, bugFilings, humanTasks } = r;
   const { wirePlans } = r;
   const worldEvents = store.world.listWorldEvents(100);
-  // The Decision log persists the whole action, and a `propose_plan` action carries
-  // the plan's narrative in its prompt and its diagnosis and approach in its detail.
-  // The inbox redacts the escalation and the proposal built from that same action, so
-  // an unredacted shift log would be the body arriving by the one door left open.
   const shiftLog = recentDecisions()
     .slice(0, 100)
-    .map((d) => {
-      const row = { ...d, subjectRef: decisionSubjectRef(d.action) };
-      if (!withheld((d.action as { planId?: unknown }).planId)) return row;
-      return { ...row, detail: WITHHELD_PLAN, action: withheldAction(d.action) };
-    });
+    .map((d) => ({ ...d, subjectRef: decisionSubjectRef(d.action) }));
   const refUrls = buildRefUrls({
     pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? []), ...r.archivedPullRequests],
     issues: world.issues,

@@ -59,3 +59,28 @@ test("review packs' tables are dropped on the next boot, rows and all", () => {
   for (const table of ['review_packs', 'review_marks', 'review_pack_shares']) assert.ok(!names.includes(table), table);
   assert.ok(names.includes('scratch_entries'), 'the pad the forks live on is not one of them');
 });
+
+test("predictions' and goal criteria's tables are dropped on the next boot", () => {
+  const path = join(mkdtempSync(join(tmpdir(), 'lubbdubb-retired-predictions-')), 'old.db');
+  const db = new Database(path);
+  db.exec(`CREATE TABLE goal_predictions (id TEXT PRIMARY KEY, origin_ref TEXT NOT NULL UNIQUE)`);
+  db.exec(`CREATE TABLE goal_reveals (origin_ref TEXT PRIMARY KEY, revealed_at TEXT NOT NULL, predicted INTEGER)`);
+  db.exec(`CREATE TABLE goal_criteria (id TEXT PRIMARY KEY, origin_ref TEXT NOT NULL, version INTEGER NOT NULL)`);
+  db.exec(`CREATE TABLE goal_criteria_alignments (id TEXT PRIMARY KEY, origin_ref TEXT NOT NULL)`);
+  db.exec(`CREATE TABLE goal_criteria_drift (id TEXT PRIMARY KEY, origin_ref TEXT NOT NULL)`);
+  db.prepare(`INSERT INTO goal_reveals VALUES ('issue:12', '2026-01-01', 0)`).run();
+  db.close();
+
+  new Store(path).close();
+
+  const names = tables(path);
+  for (const table of [
+    'goal_predictions',
+    'goal_reveals',
+    'goal_criteria',
+    'goal_criteria_alignments',
+    'goal_criteria_drift',
+  ])
+    assert.ok(!names.includes(table), table);
+  assert.ok(names.includes('plans'), 'the plans the gate stood in front of are not one of them');
+});

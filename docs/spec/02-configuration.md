@@ -95,7 +95,13 @@ down at boot over one stale line. `lessonBlockChars`, `agentIdleWaitMs` and `ses
 are entries of a second kind: each named a thing that is gone rather than a switch that went
 unconditional — a block that no longer renders, and two keys the removed `pty` runtime alone read.
 `remoteValidation.runTimeoutMs` is the same kind: the kill for a browser suite the harness no longer
-spawns ([36](36-remote-validation.md#configuration)).
+spawns ([36](36-remote-validation.md#configuration)). So are `prediction`, `goalCriteria` and
+`predictionAggregateMinGoals`: the switches for two features that were removed whole — the prediction
+an operator wrote before reading a plan, its judge and its aggregate, and the goal-level criteria
+written beside the planner's — rather than made unconditional. A deployment that had them on boots
+with nothing asked before planning, and the pull request description figures that also read the
+aggregate's threshold now hold to a fixed ten
+([18](18-observability.md#how-a-description-stood)).
 They warn rather than refusing for the same reason and the first two carry a real cost — a deployment
 that had tuned the figure boots on the replacement's default until somebody sets it — which is why
 their warnings name what replaced them, or say that nothing did (`agentSilenceParkMs`).
@@ -127,6 +133,8 @@ rather than the field inside it. The list:
 | `agentIdleWaitMs`                                                      | the removed `pty` runtime's silence watch; `agentSilenceParkMs` reads the same silence off the stream ([10](10-agent-runtimes.md)) |
 | `sessionTranscriptRoot`                                                | only `pty` tailed a transcript file; the stream transport carries it in structure ([10](10-agent-runtimes.md))                     |
 | `remoteValidation.runTimeoutMs`                                        | the harness spawns no browser suite to kill; the run agent invokes it ([36](36-remote-validation.md#configuration))                |
+| `prediction`, `prediction.enabled`, `predictionAggregateMinGoals`      | predictions, their judge and their aggregate were removed                                                                          |
+| `goalCriteria`, `goalCriteria.enabled`                                 | goal criteria were removed; a part's `acceptance` is what work is checked against ([08](08-planning.md#plan-parts))                |
 
 Both lists are permanent — a config written before a removal outlives the release that made it.
 
@@ -854,56 +862,6 @@ dollars or steps is a property of the deployment. A policy that would file const
 at or below 1, a `minimumRuns` of 0, a negative floor — is refused at load, naming the key. **The mock
 runtime reports no usage and counts no steps**, so only the runtime axis can see a `raw` run: a null
 is never read as a zero. → [18](18-observability.md#the-burn-watch)
-
-### The reveal gate
-
-| Key                           | Type      | Default | Behaviour                                                                                                                                                                              |
-| ----------------------------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prediction.enabled`          | `boolean` | `true`  | The reveal gate offers a prediction; the record, the marks and the prediction columns of the aggregate exist.                                                                          |
-| `goalCriteria.enabled`        | `boolean` | `true`  | Goal-level acceptance criteria can be authored and versioned; drift is derived, recorded and surfaced.                                                                                 |
-| `predictionAggregateMinGoals` | `number`  | `10`    | How many marked goals a rate needs before the aggregate will report it. Below it the **rate is withheld from the payload** and the count toward the threshold is shipped in its place. |
-
-**Either key on holds planning.** With either on, rule `issue-plan` waits for the
-goal's [intake sitting](08-planning.md#the-intake-sitting-stands-in-front-of-the-planner) — the
-prediction and the criteria, written before the planner runs — and a goal nobody sits for is not
-planned. That hold is what the keys are the switch for; there is no separate one, and turning both off
-releases every held goal on the next pulse. The sitting is closed through `POST
-/api/goals/:number/reveal` ([16](16-http-api.md#post-apigoalsnumberreveal)), which the goal page's
-**Before planning** card presses ([17](17-cockpit.md#the-reveal-gate)).
-
-Two keys rather than one because the two halves are independently worth being unhappy with, and the
-point of a switch is that it can be thrown for one thing at a time. They are genuinely independent:
-neither reads the other's rows. They share exactly one fact — the reveal stamp — and nothing else.
-
-**Off means nothing is stamped.** Not a reveal, not a decline, not an offer. This is the difference
-the harness has already paid for one subsystem over, where a
-[`RemoteValidationDesk` pass that stamps an arrival it did not assemble](36-remote-validation.md#the-desk)
-burns the guard that makes turning that feature on next month safe. The trap here is the same shape.
-If the harness stamped reveals while the gate was off, the day an operator turned it on they would
-inherit a backlog of goals that had been revealed and not predicted on — which is the database's way
-of spelling _declined_ — when the truth is that those goals were **never offered**. The aggregate
-would open on a fabricated decline rate in the one week it has to earn any trust at all.
-
-So the record distinguishes **three** outcomes and not two: predicted, declined, and **not offered**.
-The third is what every goal from before the switch reads as, permanently, and it is what makes
-turning the key on safe.
-
-**The schema is not behind the flag.** Both tables and their migrations run at boot whichever way the
-keys are set. Gating schema on a flag would make the operator's first flip a migration on a live boot
-— a schema event rather than a behaviour change, which is a far worse thing to do on a Tuesday than
-to carry two empty tables.
-
-**Flipping it back** deletes nothing. Recorded predictions and every criteria version survive
-untouched — the criteria half is append-only, so that is guaranteed rather than promised — and the
-surfaces simply stop. Turning it back on resumes against the same rows, with the goals in between
-reading as `not offered`, because they were.
-
-Both keys are scaffolding and the exit is part of the design: `planning.enabled`,
-`validation.enabled`, `assessment.enabled`, `appraisal.enabled` and `retrospective.enabled` are all in
-[Retired keys](#retired-keys) now. The retirement condition here is the one the feature is actually
-for — **the key comes off when the aggregate has said something the operator acted on at least
-once**, which is a higher bar than "it works" and deliberately so. Until then the key stays and
-`false` stays the default.
 
 ### Agent launch
 

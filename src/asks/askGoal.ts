@@ -18,8 +18,6 @@ export interface AskGoalPart {
 interface AskGoal {
   ref: string;
   issue: Issue | undefined;
-  /** True while the plan waits on the operator's reveal: its parts are not on the wire. */
-  withheld: boolean;
   parts: AskGoalPart[];
   otherAsks: number;
 }
@@ -59,7 +57,6 @@ export function askGoal(
   return {
     ref,
     issue: goalIssue(state, ref),
-    withheld: plan !== undefined && !plan.revealed,
     parts,
     otherAsks: asks.filter((a) => a.goalRef === ref && a.id !== row.id).length,
   };

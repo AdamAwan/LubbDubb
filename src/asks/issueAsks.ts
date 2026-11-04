@@ -40,26 +40,6 @@ export function intakeRows(state: AskInputs): AskDraft[] {
   return rows;
 }
 
-// Planning waits on the operator here, so the ask blocks: nothing is planned for the goal
-// until the sitting is closed. → docs/spec/08-planning.md#the-intake-sitting-stands-in-front-of-the-planner
-export function sittingRows(state: AskInputs): AskDraft[] {
-  const rows: AskDraft[] = [];
-  for (const issue of state.world.issues) {
-    if (issue.state !== 'open' || issue.pickup.status !== 'sitting') continue;
-    const base = issueRow(issue.number);
-    rows.push({
-      ...base,
-      id: `sitting:${base.goalRef}`,
-      kind: 'sitting',
-      group: 'blocking',
-      title: askLine('Planning waits on your prediction and criteria', base.goalRef, state),
-      opens: opensAt(base.goalRef, state),
-      raisedAt: issue.appraisal?.decidedAt ?? state.world.takenAt,
-    });
-  }
-  return rows;
-}
-
 // The findings hold planning and pickup, so the ask blocks. It stands exactly while the findings
 // are unanswered and hold the goal. → docs/spec/06-issue-pickup.md
 export function findingsRows(state: AskInputs): AskDraft[] {

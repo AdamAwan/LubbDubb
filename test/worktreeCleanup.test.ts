@@ -16,8 +16,6 @@ const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)
 function build() {
   const dir = tmpDir();
   const config = loadConfig({
-    prediction: { enabled: false },
-    goalCriteria: { enabled: false },
     selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
@@ -52,8 +50,6 @@ class FakeStreamChild extends EventEmitter implements StreamChild {
 function buildStream() {
   const dir = tmpDir();
   const config = loadConfig({
-    prediction: { enabled: false },
-    goalCriteria: { enabled: false },
     selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',

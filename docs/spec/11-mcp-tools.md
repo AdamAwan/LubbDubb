@@ -30,8 +30,6 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `conclude_work`             | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `appraise_issue`            | The gate in front of the work: say whether the issue an appraiser was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:appraisal` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `report_investigation`      | The investigator's findings on a bug before it is planned: reproduction, root cause and confidence, locations, blast radius, and a recommendation an operator resolves. Fenced to `issue:<n>:investigate` origins. → [38](38-bug-investigation.md#the-findings)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `criteria_alignment`        | The alignment check's reading: how the operator's criteria for a goal line up with the ticket's own, point by point, under one verdict. Fenced to `issue:<n>:criteria-alignment` origins. → [08](08-planning.md#the-alignment-check)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `prediction_judge`          | The sealed judge's one tool: `read` hands it the goal's prediction and plan, `mark` takes its moment-one reading. Fenced to `issue:<n>:prediction-judge`. → [14](14-persistence.md#the-prediction-judge)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `assess_issue`              | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins. On `delivered` its answer asks for the goal's check set as well, where one is still owed — the half of the fold an operator's prompt override cannot drop. → [20](20-validation.md#one-agent-two-outputs)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `conclude_part`             | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `scratch_append`            | Leave a note on the shared scratchpad for the issue — or the pull request — this agent is working. Append-only, attributed from the credential. Refused outside an issue's or a pull request's subtree. Takes `note` and an optional `topic` only — it no longer accepts a `decision` ([below](#forks-on-the-pad)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -321,6 +319,8 @@ back on the silent failure the list exists to end — which is `PromptId`'s `ret
 decision rather than an omission → [27](27-obstacles.md#reporting-is-the-lookup).
 `review_pack_submit` and `review_pack_check` joined it when review packs were removed; nothing replaced
 them, so `retiredToolMessage` answers those two with that instead of pointing at `raise`.
+`criteria_alignment` and `prediction_judge` joined it the same way when goal criteria and predictions
+were removed: nothing replaced either, and each is answered with which feature went.
 
 **A withdrawn word _inside_ a live tool is answered the same way, in the module that owns it rather
 than on this list.** `validation_report`'s third verdict was `handback` until the three validation
@@ -549,26 +549,6 @@ resolved from the credential.
 
 It routes through `AgentManager.recordAssessment` for the `assessment` event, so the cockpit
 repaints on the verdict rather than on the next pulse.
-
-### `prediction_judge`
-
-Arguments `{action: 'read'|'mark', locus?, cause?, split?, avoid?}`. The one tool of the sealed rule
-`prediction-judge`, fenced to its origin. `read` answers with the goal's prediction and its plan — the
-only route by which prediction text reaches a model, through the `judge` seam the composition root hands
-the server. `mark` takes one mark per filled slot, `matched`, `missed` or `not-applicable`, written
-once, beside the operator's; a mark on a skipped slot, a second reading, or a reading before the
-operator has marked is refused, and a refusal names a slot and never its text.
-→ [14](14-persistence.md#the-prediction-judge)
-
-### `criteria_alignment`
-
-Arguments `{version, verdict: 'aligned'|'partial'|'conflicting', summary, points: {tag, point, note?}[]}`.
-Rule `criteria-alignment`'s agent records its reading here, fenced to `issue:<n>:criteria-alignment`
-origins and refused to every other. `version` is the criteria version the prompt named, so a reading
-lands on the text it read even when the operator revised meanwhile, and one naming a version the chain
-does not hold is refused. The verdict and the tags must agree: `conflicting` needs a point tagged
-`contradicts`, and a `contradicts` point makes the verdict `conflicting`. The first reading of a
-version stands. → [08](08-planning.md#the-alignment-check)
 
 ### `appraise_issue`
 
@@ -993,7 +973,7 @@ load-bearing both ways:
 
 ## The desktop channel
 
-### A withheld plan is withheld here too
+### What this channel must not carry
 
 **`description_read` and `description_check`** are on this channel and must never be on the fleet's.
 They are how the operator's own Claude Code checks a pull-request description the operator wrote
@@ -1005,24 +985,6 @@ of its own change is the conflict of interest the feature exists to remove, so t
 omission: a session that hands back a rewritten description gets it accepted, and the pull request
 then carries an account that reads as the operator's and is not.
 → [07](07-pull-requests.md#it-contradicts-it-never-drafts)
-
-`plan_read`, `proposal_read` and `proposal_decide` refuse while a plan is withheld pending the operator's reveal
-([16](16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed)). This channel is the operator's
-**own** assistant, so it can read a plan aloud to them — which defeats the reveal gate exactly as
-reading it in the cockpit would, and leaves no stamp behind saying they looked. It was the eighth path
-past that gate and the easiest to miss, because the gate's other seven are all in `src/server/` and
-this one is not. **Deciding is refused as well as reading**, every verdict of it, as the cockpit's
-accept, reject and back-out routes refuse it: a plan decided sight-unseen settles the goal with
-`revealed_at` never stamped, which reads as _never offered_ when the operator in truth acted on it.
-
-It is handed the **answer** rather than the means: `DesktopToolDeps.planWithheld` is a predicate the
-composition root supplies, computed from the one `planIsWithheld`. Nothing under `src/mcp/` may reach
-the prediction store — `test/predictionContainment.test.ts` fails the build if it tries — so the
-question has to be asked somewhere that may, and the answer passed in.
-
-This is the sharp edge `CLAUDE.md` names about the two channels, in its other direction: there, the
-risk is editing the fleet's tool and leaving the operator's on the old behaviour. Here a gate was
-built across the fleet's surfaces and the operator's channel kept the door open.
 
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
 spawned agent. Seven jobs go there — four about one goal, two about a Feature, and
@@ -1077,7 +1039,7 @@ and [the run](20-validation.md#getting-the-application-up);
 | `goal_placement`         | The two placement questions: `parent` and `areaPath`. Either sent with no value answers "this goal wants no such thing" and settles it.                                                                                                                                                                                                               |
 | `goal_instruct`          | Say what you want on a goal, in your own words — it stands in front of every later dispatch and restarts the goal. `withdraw` takes one back.                                                                                                                                                                                                         |
 | `proposal_read`          | One proposed act in full: its kind, what accepting it would actually do, and the caveats that gate it. Records nothing.                                                                                                                                                                                                                               |
-| `proposal_decide`        | `accept` performs the act; `reject` performs nothing; `close_ticket` / `hold_ticket` are a plan's two verdicts about the **ticket**. `declined` strikes rows from a validation check set being accepted. Refused on a withheld plan.                                                                                                                  |
+| `proposal_decide`        | `accept` performs the act; `reject` performs nothing; `close_ticket` / `hold_ticket` are a plan's two verdicts about the **ticket**. `declined` strikes rows from a validation check set being accepted.                                                                                                                                              |
 | `pr_assign`              | Answer the assign ask on a ready pull request: no argument reads the shortlist, `person` assigns anyone the tracker knows **on the tracker** (the shortlist is a hint; off it, the tracker's search resolves the name), `decline` answers "nobody". Through `PrAssignDesk`, the routes' own.                                                          |
 | `description_dismiss`    | **Leave it as is** on the findings a check raised about the operator's pull-request description — the stamp `POST /api/prs/:number/description/dismiss` writes. Takes no text.                                                                                                                                                                        |
 | `description_write`      | A pull-request description the operator typed in the conversation, saved verbatim as a new version (`written_via: claude-code`) — the same act as `POST /api/prs/:number/description`. Carries their words and never the session's; answers with `checkNow` so the session checks it at once. → [07](07-pull-requests.md#relayed-through-claude-code) |
@@ -1464,9 +1426,6 @@ a stated reason it does not:
   where the setup page can show what they change. `burn`'s row settles through `human_task_settle`;
   lifting the run to a deeper profile is the cockpit's. A `limit` park is resumable through
   `agent_control` `resume`, but the decision it asks for is the account's allowance.
-- **`sitting`** — the operator's own prediction and criteria, asked before the planner. Nothing under
-  `src/mcp/` may reach the prediction store ([above](#a-withheld-plan-is-withheld-here-too)), and a
-  prediction typed through an assistant is not the blind guess it exists to be.
 - **`assigned`, `dispatch`** — not decisions. Somebody put a pull request on the operator where the
   fleet cannot see it, or a dispatch is being refused for a reason the row names; nothing in the
   harness acts on either, and the answer is the work itself.
@@ -1492,7 +1451,7 @@ same derivation `/api/state` ships, so "the next ask" here is the ask Focus mode
 skipped) and `skipped`. For an agent's own question — an escalation or a permission request with no
 proposal behind it — the full `question` rides beside the row, because the row's `title` is one line
 of it and the answer is typed straight into the agent. A proposal's body is not quoted: it is read
-with `proposal_read`, which applies the reveal gate ([above](#a-withheld-plan-is-withheld-here-too)).
+with `proposal_read`.
 An empty queue says so in a sentence, and one emptied only by skips says that instead. Handed an
 `id`, it returns that standing ask instead of the head — skipped or not — which is how the panel's
 press on one ask opens the loop at it (`/lubbdubb:next <id>`); an id not standing is refused, as
@@ -1536,10 +1495,7 @@ made executable, and has three shapes:
   tool also settles it (`goal_gate` `overrule` for a shortfall asked as a plain question,
   `goal_control` `watched` for `unwatched` and `supply`).
 - **`in: "cockpit"`** — the kinds the [table above](#every-ask-in-needs-you-and-what-answers-it-here)
-  keeps there, each with its `why`, and a plan still withheld behind the reveal gate. That is read off
-  the withheld fact itself — the escalation subject's `planWithheld`, set where the row is derived —
-  and never off the page the row opens, which is null for a goal with no page and would hand a
-  withheld plan to `proposal_decide` to be refused. A row whose `subject` is not the record its kind is answered on gets
+  keeps there, each with its `why`. A row whose `subject` is not the record its kind is answered on gets
   the same, rather than a call built from the wrong id.
 - **`in: "nowhere"`** — `assigned` and `dispatch`, which ask for no decision.
 
@@ -1591,13 +1547,7 @@ the function Focus mode draws its goal column with ([17](17-cockpit.md#the-setti
 run over the very `AskInputs` the queue was derived from, which is why `DesktopToolDeps.asks()` hands
 back the inputs beside the rows (`askSnapshot`, `src/server/stateSnapshot.ts`). Read off the store
 instead, the card was a second derivation already disagreeing with the first: it missed a goal that had
-left the world for the retained runs, and asked the reveal gate itself where the wire had already
-answered it.
-
-**A withheld plan is withheld here too.** Where the goal's plan waits on the operator's reveal
-([above](#a-withheld-plan-is-withheld-here-too)), `plan` is `{withheld: true}` with no parts: a part's
-name is the plan, read aloud. It is read off the wire plan's `revealed`, the answer every cockpit
-surface already draws from.
+left the world for the retained runs.
 
 ##### The operator decides, and Claude's view is labelled
 
@@ -1819,9 +1769,7 @@ asks in order and points at `/lubbdubb:next`.
   server's one queue ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)); the board
   keeps its standing rows and sorts by `focusRank`, so `/board` lists them in the order
   `/lubbdubb:next` would walk them. It used to count escalations, pending proposals and open human
-  tasks itself, which was a third account of what the operator owes, missing every other kind. Plan
-  text a withheld plan would show never reaches it, because the queue's titles are drawn off the
-  masked inbox.
+  tasks itself, which was a third account of what the operator owes, missing every other kind.
 - **A pull request's state is the board's own first cut, not `prAttentionStatus`.** The first of
   conflicts, CI failing, unresolved threads, CI running, ready to merge (approved and not blocked),
   behind base, in review. It does not weigh the operator's assignment or approval the way the
@@ -1943,7 +1891,7 @@ So every tool is named in one of two places, and which one is a decision, not a 
   a point somebody predicted.
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
-  `appraise_issue`, `report_investigation`, `criteria_alignment`, `plan_submit`, `plan_not_needed`, `retro_submit`,
+  `appraise_issue`, `report_investigation`, `plan_submit`, `plan_not_needed`, `retro_submit`,
   `feature_summary`, `link_ticket`,
   the scratch pair, the validation pair. The planner's **two verdicts** sit here together, and that is the
   rule doing its work rather than an exception to it: `plan_submit` is fenced to `issue:<n>:plan` and
@@ -1998,12 +1946,6 @@ it scopes, for the reason the naming classification lives there:
   whole set: its prompt is written by an operator and may name anything.
 - `toolsForRule(rule)` — the core plus the extras, and **the whole set for `null`, or for a rule string
   no release ever had**.
-- **A sealed rule is the one exception to all of the above** (`isSealedRule`; today `prediction-judge`
-  alone). Its agent is advertised its own row and **no** core, and `buildTools` builds nothing else for
-  it — the other tools are not hidden but absent, so a call to one is an unknown tool. Advertising is a
-  context question for every other agent; for a sealed one it is an authority question, because what it
-  reads must reach no other agent and every core tool is a way for it to. →
-  [14](14-persistence.md#the-prediction-judge)
 
 **The fail-open default is the load-bearing half.** A task carries no rule when nothing in the pipeline
 dispatched it — rows from before the column existed are backfilled from `dispatchReason` and may stay

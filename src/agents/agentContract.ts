@@ -37,7 +37,6 @@ export interface AgentManagerOptions {
     model: string | null;
     effort: string | null;
     permissionMode: string | null;
-    sealed: boolean;
   }) => string[];
   goalProfile?: {
     effective: (issueOrigin: string) => string | null;

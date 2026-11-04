@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { issueOriginRef } from '../../issueOrigins.js';
-import { buildDescriptionAggregate } from '../../insights/descriptionAggregate.js';
+import { buildDescriptionAggregate, DESCRIPTION_AGGREGATE_THRESHOLD } from '../../insights/descriptionAggregate.js';
 import { descriptionRefusal } from '../../pr/prDescription.js';
 import { checked, IssueNumberParams, PrNumberParams, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -140,7 +140,7 @@ function registerPullRequestRoutes(app: FastifyInstance, { system, hub }: RouteC
 }
 
 function registerGoalReadRoutes(app: FastifyInstance, { system }: RouteContext): void {
-  const { store, config } = system;
+  const { store } = system;
 
   /* One read for the goal, because the plan draws every part and the page badges
      each with whether it has been described. A panel per part would be five reads
@@ -153,13 +153,12 @@ function registerGoalReadRoutes(app: FastifyInstance, { system }: RouteContext):
     })),
   );
 
-  // Beside the prediction figures, and under their two rules: never keyed by author,
-  // and never a bare percentage below the threshold that makes one mean anything.
+  // Never keyed by author, and never a bare percentage below the threshold that makes one mean anything.
   // → docs/spec/18-observability.md#how-a-description-stood
   app.get('/api/insights/descriptions', async () => ({
     aggregate: buildDescriptionAggregate(
       store.prDescriptions.listCheckedDescriptions(),
-      config.predictionAggregateMinGoals,
+      DESCRIPTION_AGGREGATE_THRESHOLD,
     ),
   }));
 }

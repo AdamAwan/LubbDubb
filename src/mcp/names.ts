@@ -19,8 +19,6 @@ export const MCP_TOOL_NAMES = [
   'conclude_part',
   'appraise_issue',
   'report_investigation',
-  'criteria_alignment',
-  'prediction_judge',
   'scratch_append',
   'scratch_read',
   'discussion_add',
@@ -69,8 +67,6 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   assess_issue: 'point-of-use',
   appraise_issue: 'point-of-use',
   report_investigation: 'point-of-use',
-  criteria_alignment: 'point-of-use',
-  prediction_judge: 'point-of-use',
   retro_submit: 'point-of-use',
   feature_summary: 'point-of-use',
   bot_pr_risk: 'point-of-use',
@@ -135,13 +131,13 @@ export const RULE_TOOLS: Record<DispatchRuleId, readonly McpToolName[]> = {
   'work-item-back-to-pickup': [],
   'issue-appraisal': ['appraise_issue'],
   'issue-investigate': ['report_investigation'],
-  'criteria-alignment': ['criteria_alignment'],
+  'criteria-alignment': [],
   'issue-plan': ['plan_submit', 'plan_not_needed'],
   'issue-assess': ['assess_issue', 'validation_plan'],
   'issue-shortfall': [],
   'issue-retro': ['retro_submit'],
   'plan-approval': [],
-  'prediction-judge': ['prediction_judge'],
+  'prediction-judge': [],
   'plan-amendment': [],
   'plan-blocked': [],
   'plan-part': ['conclude_part', 'watch_declare', 'state_declare'],
@@ -159,20 +155,8 @@ export const RULE_TOOLS: Record<DispatchRuleId, readonly McpToolName[]> = {
   idle: [],
 };
 
-/**
- * Rules whose agent is handed its own tools and nothing else: no universal tool, no
- * hidden tool it could still call, and no built-in tool at launch. Its output must
- * reach no other agent. → docs/spec/14-persistence.md#the-prediction-judge
- */
-const SEALED_RULES: ReadonlySet<string> = new Set<DispatchRuleId>(['prediction-judge']);
-
-export function isSealedRule(rule: string | null | undefined): boolean {
-  return rule !== null && rule !== undefined && SEALED_RULES.has(rule);
-}
-
 export function toolsForRule(rule: string | null): ReadonlySet<McpToolName> {
   if (rule === null || !Object.hasOwn(RULE_TOOLS, rule)) return new Set(MCP_TOOL_NAMES);
-  if (isSealedRule(rule)) return new Set(RULE_TOOLS[rule as DispatchRuleId]);
   return new Set([...UNIVERSAL_TOOLS, ...RULE_TOOLS[rule as DispatchRuleId]]);
 }
 
@@ -184,11 +168,25 @@ export const RETIRED_TOOL_NAMES: readonly string[] = [
   'knowledge_ask',
   'review_pack_submit',
   'review_pack_check',
+  'criteria_alignment',
+  'prediction_judge',
 ];
 
 const REVIEW_PACK_TOOLS: readonly string[] = ['review_pack_submit', 'review_pack_check'];
 
+const REMOVED_FEATURE_TOOLS: Readonly<Record<string, string>> = {
+  criteria_alignment: 'goal criteria were removed from the harness',
+  prediction_judge: 'predictions were removed from the harness, and the prediction judge with them',
+};
+
 export function retiredToolMessage(name: string): string {
+  const removed = REMOVED_FEATURE_TOOLS[name];
+  if (removed !== undefined) {
+    return (
+      `${name} has been retired: ${removed}, and nothing replaces it. There is nothing to hand back. If you ` +
+      'reached this from a prompt that named it, that prompt is out of date.'
+    );
+  }
   if (REVIEW_PACK_TOOLS.includes(name)) {
     return (
       `${name} has been retired: review packs were removed from the harness, and nothing replaces them. ` +

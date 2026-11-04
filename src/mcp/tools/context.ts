@@ -182,12 +182,6 @@ export interface McpToolDeps {
    */
   stepCapabilities?: StepCapabilities;
   /**
-   * The judge's one door to what it judges: the brief, and where its marks go. Handed in
-   * by the composition root so nothing here names the record it reads.
-   * → docs/spec/14-persistence.md#the-prediction-judge
-   */
-  judge?: JudgeChannel;
-  /**
    * Puts the investigate label on an issue, once ever, and folds it onto the stored world. The
    * appraisal awaits it before recording its verdict, so the label is in the world before the
    * verdict can release the planner. → docs/spec/38-bug-investigation.md#the-label
@@ -199,16 +193,6 @@ export interface McpToolDeps {
     subject: (issueNumber: number) => DiscussionSubject;
   };
   errors?: ErrorRecorder;
-}
-
-type JudgeSlot = 'locus' | 'cause' | 'split' | 'avoid';
-
-interface JudgeChannel {
-  brief(originRef: string): string | null;
-  record(
-    originRef: string,
-    marks: Partial<Record<JudgeSlot, 'matched' | 'missed' | 'not-applicable' | null>>,
-  ): { ok: true } | { ok: false; error: string };
 }
 
 interface PrReplyDesk {

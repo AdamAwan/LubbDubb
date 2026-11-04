@@ -1069,12 +1069,7 @@ export interface ValidationCheck {
   proof: string | null;
   uses: string[];
   covers: string[];
-  /**
-   * The goal criteria this check answers, each a criterion's text as the current version states it.
-   * Absent is none. → docs/spec/20-validation.md#satisfies-and-the-goals-criteria
-   */
-  satisfies?: string[];
-  /** One line: why this check proves the criteria it satisfies. Absent or null is none written. → docs/spec/20-validation.md#rationale */
+  /** One line: why this check is the right proof of what it checks. Absent or null is none written. → docs/spec/20-validation.md#rationale */
   rationale?: string | null;
   fleetCandidate: boolean;
   candidateWhy: string | null;
@@ -1134,7 +1129,6 @@ export interface ValidationCheckInput {
   proof: string | null;
   uses: string[];
   covers: string[];
-  satisfies?: string[];
   rationale?: string | null;
   fleetCandidate: boolean;
   candidateWhy: string | null;
@@ -2489,146 +2483,6 @@ export interface ObstacleDeskReading {
 }
 
 export type ObstaclePurpose = 'ticket' | 'docs';
-
-/**
- * An operator's prediction about a goal, recorded before they first saw its plan.
- * Contained from the fleet by construction — → docs/spec/14-persistence.md#the-prediction-store-is-not-on-store
- */
-export interface GoalPrediction {
-  id: string;
-  originRef: string;
-  author: string | null;
-  slots: Readonly<Record<PredictionSlot, string | null>>;
-  planMarks: PredictionPlanMarks;
-  planMarkedAt: string | null;
-  outcomeMarks: PredictionOutcomeMarks;
-  outcomeMarkedAt: string | null;
-  /**
-   * The prediction judge's reading of moment one, beside the operator's and never
-   * folded into it. → docs/spec/14-persistence.md#the-prediction-judge
-   */
-  judgeMarks: PredictionPlanMarks;
-  judgeMarkedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type PredictionSlot = 'locus' | 'cause' | 'split' | 'avoid';
-
-/**
- * How one filled slot stood against what it was predicting. Named for the moment it
- * answers rather than for marking in general, because there are two: this one is
- * moment one, "did I predict the plan?", and delivery asks a second question of the
- * same slots.
- */
-export type PredictionMark = 'matched' | 'missed' | 'not-applicable';
-
-/**
- * Moment one's marks. A slot's mark is null when it has not been marked, which is a
- * fourth value and never a miss: the aggregate counts marks, and folding an unmarked
- * slot into `missed` files an unanswered question as a wrong prediction. A skipped
- * slot has no text to mark and stays null for good.
- */
-export type PredictionPlanMarks = Readonly<Record<PredictionSlot, PredictionMark | null>>;
-
-/**
- * Moment two's marks — "was the plan right?", asked at delivery. The same
- * three-valued mark over the same slots, and null carries the same weight it does
- * at moment one and for the same reason: a goal whose moment one was marked and
- * whose moment two was skipped belongs in moment one's aggregate column and in
- * neither of moment two's. Folding a skip into `missed` files a question nobody
- * answered as a plan that turned out wrong.
- *
- * The two are separate records because either alone misleads. A prediction that
- * missed the plan and a plan that then turned out wrong is the operator having been
- * right; a prediction that matched a plan that turned out wrong is the operator and
- * the fleet wrong together.
- */
-export type PredictionOutcomeMarks = Readonly<Record<PredictionSlot, PredictionMark | null>>;
-
-/**
- * The reveal gate's record: the goal was offered, and the operator answered. A goal
- * with no row was never offered, which is a third outcome and not a decline.
- */
-export interface GoalReveal {
-  originRef: string;
-  revealedAt: string;
-  predicted: boolean;
-}
-
-/**
- * Where a criteria version sits relative to the plan's reveal and the first part
- * dispatch. Derived from those timestamps on every read, never stored.
- * → docs/spec/08-planning.md
- */
-export type CriteriaStanding = 'pre-reveal' | 'post-reveal' | 'post-work';
-
-/**
- * A goal whose criteria changed after work had started. Its own record and its own
- * wire list, because a drift record must never be a `WorldEvent`: `deliveryHold`
- * expires a standing delivery verdict on any world event matching the goal's issue
- * ref, so a drift record written as one would un-park the goal it just reported on.
- */
-export interface GoalCriteriaDrift {
-  id: string;
-  originRef: string;
-  criteriaId: string;
-  version: number;
-  author: string | null;
-  reason: string | null;
-  recordedAt: string;
-}
-
-export type CriteriaAlignmentVerdict = 'aligned' | 'partial' | 'conflicting';
-
-type CriteriaPointTag = 'matches' | 'extra' | 'uncovered' | 'contradicts';
-
-export interface CriteriaAlignmentPoint {
-  tag: CriteriaPointTag;
-  point: string;
-  note: string | null;
-}
-
-/**
- * The alignment check's reading of one criteria version against the ticket's own
- * criteria. `pressedOnAt` is when the operator closed the sitting over a
- * `conflicting` verdict. → docs/spec/08-planning.md#the-alignment-check
- */
-export interface GoalCriteriaAlignment {
-  id: string;
-  originRef: string;
-  version: number;
-  criteriaId: string;
-  verdict: CriteriaAlignmentVerdict;
-  summary: string;
-  points: CriteriaAlignmentPoint[];
-  agentId: string | null;
-  decidedAt: string;
-  pressedOnAt: string | null;
-}
-
-/**
- * How one of a goal's criteria stands at delivery, read off the live checks that name it in
- * `satisfies`. → docs/spec/20-validation.md#satisfies-and-the-goals-criteria
- */
-export interface CriterionCoverage {
-  criterion: string;
-  reading: 'met' | 'not-met' | 'waived' | 'unread' | 'gap';
-  /** The letters of the live checks that name it, in the order the sheet draws them. */
-  checks: string[];
-}
-
-/** One version in a goal's append-only acceptance-criteria chain. */
-export interface GoalCriteriaVersion {
-  id: string;
-  originRef: string;
-  version: number;
-  supersedes: string | null;
-  text: string;
-  author: string | null;
-  reason: string | null;
-  authoredAt: string;
-}
 
 /**
  * The four things a reviewer has to be able to answer, as the questions the

@@ -2,19 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isRecoveryVerdict, type RecoveryVerdict } from '../../agents/crashRecovery.js';
 import { formatAnswers } from '../../escalation/questionnaire.js';
-import { withheldPlanRefusal } from '../planReveal.js';
 import { checked, IdParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { System } from '../../system/system.js';
 import type { Escalation } from '../../types.js';
 import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
-
-/** → docs/spec/16-http-api.md#the-plan-body-is-withheld-until-it-is-revealed */
-function refuseUnrevealed(system: System, proposalId: string): string | null {
-  const proposal = system.store.escalations.listProposals().find((p) => p.id === proposalId);
-  return withheldPlanRefusal(system, proposal?.action.planId);
-}
 
 function answerRefusal({ store, recovery }: System, id: string, item: Escalation | null): string | null {
   const pending = store.escalations.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
@@ -152,8 +145,6 @@ function registerEscalationDecisions(app: FastifyInstance, { system, hub }: Rout
 
       const pending = store.escalations.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
       if (pending) {
-        const unrevealed = refuseUnrevealed(system, pending.id);
-        if (unrevealed !== null) return reply.code(409).send({ error: unrevealed });
         const result = proposals.reject(pending.id, reason);
         if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
         hub.broadcast({ type: 'dirty' });
@@ -194,8 +185,6 @@ function registerProposalDecisions(app: FastifyInstance, { system, hub }: RouteC
   app.post(
     '/api/proposals/:id/accept',
     checked({ params: IdParams, body: AcceptBody }, async ({ params, body, reply }) => {
-      const unrevealed = refuseUnrevealed(system, params.id);
-      if (unrevealed !== null) return reply.code(409).send({ error: unrevealed });
       const result = await proposals.accept(
         params.id,
         body.note,
@@ -217,8 +206,6 @@ function registerProposalDecisions(app: FastifyInstance, { system, hub }: RouteC
   app.post(
     '/api/proposals/:id/reject',
     checked({ params: IdParams, body: NoteBody }, async ({ params, body, reply }) => {
-      const unrevealed = refuseUnrevealed(system, params.id);
-      if (unrevealed !== null) return reply.code(409).send({ error: unrevealed });
       const result = proposals.reject(params.id, body.note);
       if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
       hub.broadcast({ type: 'dirty' });
@@ -229,8 +216,6 @@ function registerProposalDecisions(app: FastifyInstance, { system, hub }: RouteC
   app.post(
     '/api/proposals/:id/back-out',
     checked({ params: IdParams, body: BackOutBody }, async ({ params, body, reply }) => {
-      const unrevealed = refuseUnrevealed(system, params.id);
-      if (unrevealed !== null) return reply.code(409).send({ error: unrevealed });
       const result = await proposals.backOut(params.id, body.verdict, body.note);
       if (!result)
         return reply.code(409).send({

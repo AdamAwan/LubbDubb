@@ -9,13 +9,6 @@ import { FoldToggle, type FoldSubject } from '../components/collapsible.js';
 
 export interface Fold {
   open: boolean;
-  /**
-   * Whether `open` is the operator's own answer rather than the page's default. A
-   * card whose reading only it holds — the criteria, the prediction — narrows the
-   * default it was handed, and must not narrow a fold somebody opened on purpose.
-   * → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet
-   */
-  settled: boolean;
   onToggle: (open: boolean) => void;
   reveal: () => void;
 }
@@ -23,13 +16,11 @@ export interface Fold {
 export function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActions): Record<GoalSection, Fold> {
   const byDefault = goalSectionsOpen(page);
   const entries = GOAL_SECTIONS.map((section): [GoalSection, Fold] => {
-    const settled = view.goalOpen.has(section) || view.goalShut.has(section);
     const open = view.goalOpen.has(section) ? true : view.goalShut.has(section) ? false : byDefault[section];
     return [
       section,
       {
         open,
-        settled,
         onToggle: (next) => actions.openGoalSection(section, next),
         reveal: () => {
           if (!open) actions.openGoalSection(section, true);

@@ -271,8 +271,6 @@ export function reachCount(env: GoalEnvironmentReachView): string {
 }
 
 export const GOAL_SECTIONS = [
-  'prediction',
-  'criteria',
   'validation',
   'localValidation',
   'remoteValidation',
@@ -288,17 +286,6 @@ export type GoalSection = (typeof GOAL_SECTIONS)[number];
 export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolean> {
   const live = livePageChecks(page);
   return {
-    /* Open while the prediction is the live question — the plan is at its gate and
-       marking it against what the plan says is the whole of what this pane is for.
-       After that it is a record of a moment that has passed, and an operator
-       watching the work is reading past it to reach the parts. */
-    prediction: !planUnderWay(page),
-    /* The page cannot answer this one: whether anybody has written criteria is the
-       card's own read, not anything on the goal. So the default here is the widest
-       the page can honestly give, and the card narrows it once its reading lands —
-       which it may do only while the operator has not said, or it would be shutting
-       a card they opened. → docs/spec/17-cockpit.md#goal-criteria-and-drift */
-    criteria: true,
     /* `live`, never `page.checks`: a superseded row is one the plan has already
        moved past, so a goal whose only started check was superseded has nothing
        live to show and the card opening on it reports work nobody can act on. */
@@ -316,9 +303,9 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
 /**
  * Whether the plan has been approved and the work is under way. `planning` and
  * `awaiting_approval` are the two states in which nothing has been agreed yet, so
- * the prediction is still about a plan the operator is deciding on.
+ * the plan is still one the operator is deciding on.
  *
- * @public the seam the goal page reads to place the prediction panel
+ * @public the seam the goal page reads to place the plan card
  */
 export function planUnderWay(page: GoalPageView): boolean {
   const status = page.plan?.status ?? null;
@@ -326,36 +313,18 @@ export function planUnderWay(page: GoalPageView): boolean {
 }
 
 /**
- * The ask carrying this goal's plan verdict, while the plan has been read and is
- * still waiting on one — or null wherever there is nothing to decide here.
+ * The ask carrying this goal's plan verdict, while the plan is still waiting on one —
+ * or null wherever there is nothing to decide here.
  *
  * It is read off the plan's own status and the escalation's `planId` rather than
  * off the row's kind alone, because a `plan` ask is also what a *change* to a
- * running plan is raised as, and that one is not the end of this sitting.
- *
- * `revealed` is a condition and not decoration: the verdict routes refuse a plan
- * nobody has revealed, so drawing the ask under the gate would put four answers
- * that each end in a refusal directly beneath the press that leads to the gate.
- * → docs/spec/17-cockpit.md#the-verdict-where-the-plan-was-read
+ * running plan is raised as, and that one is not this verdict. The plan
+ * card answers it, so this is also what the page takes out of the asks it draws
+ * elsewhere. → docs/spec/17-cockpit.md#the-verdict-where-the-plan-was-read
  *
  * @public the seam the goal page reads to draw the verdict beside the plan
  */
 export function planVerdictAsk(page: GoalPageView, escalations: readonly Escalation[]): NeedRow | null {
-  return page.plan?.revealed === true ? planCardAsk(page, escalations) : null;
-}
-
-/**
- * The same ask while the plan card is answering it *in either way* — the gate
- * under a withheld plan, the verdict card under a revealed one.
- *
- * The two are one row and the card is where it is answered, so this is what the
- * page takes out of the asks it draws elsewhere. Read off `planVerdictAsk` alone
- * it would be dropped only after the reveal, and a withheld plan drew the ask
- * twice: a card at the top of the pane saying reveal it, and the gate itself a
- * few hundred pixels below, which is the guess the gate exists to prevent.
- * → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page
- */
-function planCardAsk(page: GoalPageView, escalations: readonly Escalation[]): NeedRow | null {
   const plan = page.plan;
   if (plan === null || plan.status !== 'awaiting_approval') return null;
   return (
@@ -378,7 +347,7 @@ function planCardAsk(page: GoalPageView, escalations: readonly Escalation[]): Ne
  * first.
  *
  * Three rows are never in that set. The parent ask is drawn by the band at the
- * top of the Ask pane; the plan's verdict is drawn by the plan card, under the prediction; and an
+ * top of the Ask pane; the plan's verdict is drawn by the plan card; and an
  * ask about the goal as a whole — a profile answer, an intake, the fleet's own
  * config — belongs to no pane at all and can only be a row. The last two keep the
  * line, which is why the line has to carry its own weight wherever it is drawn;
@@ -392,7 +361,7 @@ export function splitGoalAsks(
   escalations: readonly Escalation[],
   tab: GoalTab,
 ): { inPane: NeedRow[]; lines: NeedRow[]; below: Map<string, string> } {
-  const onPlanCard = tab === 'plan' ? planCardAsk(page, escalations) : null;
+  const onPlanCard = tab === 'plan' ? planVerdictAsk(page, escalations) : null;
   const inPane: NeedRow[] = [];
   const lines: NeedRow[] = [];
   const below = new Map<string, string>();
@@ -465,8 +434,6 @@ const GOAL_TAB_LABEL: Record<GoalTab, string> = {
  */
 export const GOAL_TAB_OF: Record<GoalSection, GoalTab> = {
   sequence: 'ask',
-  prediction: 'plan',
-  criteria: 'plan',
   /* All three are the same obligation seen at three distances: the set of checks,
      the local run that answers some of them by hand, and the sheet an environment's
      run answers the rest from — a sheet row carries a check's `sourceId` and writes
@@ -510,25 +477,16 @@ export function goalPaneOf(page: GoalPageView, section: GoalSection): GoalTab {
 }
 
 /**
- * The pane the prediction card is drawn in — and with it the reveal gate, which
- * stands in the same card and asks the same record one moment earlier. Named once,
- * here beside the map the tabs read, so that a press that must land
- * on that card cannot end up naming a pane the card moved off.
- * → docs/spec/17-cockpit.md#the-panes
- */
-export const PREDICTION_PANE: GoalTab = 'plan';
-
-/**
  * The element id each jumpable card carries, beside the pane map for the same reason
  * that map is here: a press that names a card and a press that names the pane the card
  * is drawn in must not be able to disagree.
  *
  * Keyed on the **card**, never on the tab: a pane holds several of these — `close` draws
  * the environments, the tail and the record — and an anchor keyed on the pane could only
- * name one of them. `plan` is the card the reveal gate stands in, which is why an ask on
- * the rail can name it: the ask is answered there and nowhere else.
+ * name one of them. `plan` is the card the plan's verdict is drawn on, which is why an ask
+ * on the rail can name it.
  *
- * @public read by the goal page's own jumps and by the ask that leads to the gate
+ * @public read by the goal page's own jumps and by the asks that lead to a card
  */
 export const GOAL_ANCHOR: Record<'plan' | 'validation' | 'environments' | 'tail', string> = {
   plan: 'cn-plan',
@@ -653,7 +611,6 @@ export const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   config_gap: null,
   dispatch: null,
   intake: null,
-  sitting: 'plan',
   findings: 'plan',
   limit: null,
   placement: null,

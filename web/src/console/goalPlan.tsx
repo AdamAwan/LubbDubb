@@ -1,18 +1,15 @@
-import { useState, type JSX } from 'react';
+import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView } from '../view/goalPage.js';
 import type { PartGroup } from '../types.js';
-import { planUnderWay, planVerdictAsk, GOAL_ANCHOR } from '../view/goalPage.js';
+import { planVerdictAsk, GOAL_ANCHOR } from '../view/goalPage.js';
 import type { OpenPullRequest, PlanPart, PullRequest } from '../types.js';
 import { PartDescriptionTag } from '../components/partDescriptions.js';
-import { PlanRevealGate } from '../components/PlanRevealGate.js';
-import { PredictionReview } from '../components/PredictionReview.js';
 import { PanelRows, type PanelRowModel } from './PanelRow.js';
 import { closedPrRow, prRow } from './prRow.js';
 import { NeedsBand } from './NeedsBand.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
-import type { Fold } from './goalFold.js';
 import { BareButton } from '../components/button.js';
 
 // → docs/spec/17-cockpit.md
@@ -59,83 +56,31 @@ export function PlanWaves({
   page,
   view,
   actions,
-  fold,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
-  fold: Fold;
 }): JSX.Element {
-  const plan = page.plan;
-  // The gate lifts here the moment the reveal returns, rather than waiting on the
-  // payload the refresh behind it brings. `revealed` is the server's fact and this
-  // is only the page catching up to it, so the flag is never read the other way:
-  // once the payload says revealed, this is dead weight and the gate is gone for
-  // good. → docs/proposals/prediction-record-and-criteria-integrity.md
-  const [lifted, setLifted] = useState(false);
-  const gated = plan !== null && !plan.revealed && !lifted;
-  const underWay = planUnderWay(page);
   const verdict = planVerdictAsk(page, view.state.escalations);
 
   return (
     <section className="cn-card" id={GOAL_ANCHOR.plan}>
-      <PlanHeading page={page} gated={gated} actions={actions} />
-      {gated && (
-        <PlanRevealGate
-          issueNumber={page.issue.number}
-          onRevealed={async () => {
-            try {
-              await actions.refresh();
-            } finally {
-              setLifted(true);
-            }
-          }}
-        />
-      )}
-      {/* Above the parts, and only while the plan is still at its gate: marking the
-          prediction against what the plan says is what this pane is *for* at that
-          moment, and the parts below it are not going anywhere until it is approved.
-          Once the plan is approved the prediction leaves this card altogether —
-          `WorkPaneBody` draws it at the foot of the pane.
-          → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
-      {!gated && !underWay && (
-        <PredictionReview
-          issueNumber={page.issue.number}
-          revealed={plan !== null && (plan.revealed || lifted)}
-          plan={plan}
-          parts={page.parts.map((p) => p.part)}
-          open={fold.open}
-          settled={fold.settled}
-          onToggle={fold.onToggle}
-          now={view.now}
-        />
-      )}
-      {/* Under the prediction, and only while the plan is read and undecided: the
-          sitting the gate opened ends in a verdict, and an operator who has just
-          marked their prediction against the plan had to go back up the page to
-          give one. The ask itself is drawn — not a second spelling of it — so the
-          caveats, the check set and every refusal the routes can give are the
-          rail's own.
+      <PlanHeading page={page} actions={actions} />
+      {/* Above the parts, and only while the plan is undecided: the ask itself is
+          drawn — not a second spelling of it — so the caveats, the check set and
+          every refusal the routes can give are the rail's own.
           → docs/spec/17-cockpit.md#the-verdict-where-the-plan-was-read */}
-      {!gated && verdict !== null && (
+      {verdict !== null && (
         <div className="cn-plan-verdict">
           <NeedsBand row={verdict} view={view} actions={actions} />
         </div>
       )}
-      <PlanBoard page={page} board={planBoard(page, view, actions)} gated={gated} view={view} actions={actions} />
+      <PlanBoard page={page} board={planBoard(page, view, actions)} view={view} actions={actions} />
     </section>
   );
 }
 
-function PlanHeading({
-  page,
-  gated,
-  actions,
-}: {
-  page: GoalPageView;
-  gated: boolean;
-  actions: CockpitActions;
-}): JSX.Element {
+function PlanHeading({ page, actions }: { page: GoalPageView; actions: CockpitActions }): JSX.Element {
   const plan = page.plan;
   const retired = page.retiredParts;
   return (
@@ -150,7 +95,7 @@ function PlanHeading({
             acceptance and what was decided are the sheet's, and it was reachable
             from here only through the validation card's aside about amending the
             checks — a door nobody looking for the plan would think to try. */}
-        {plan !== null && !gated && (
+        {plan !== null && (
           <BareButton
             usage={{ counted: 'plan.view' }}
             className="cn-linkish"
@@ -200,13 +145,11 @@ function emptyBoard(page: GoalPageView): string {
 function PlanBoard({
   page,
   board,
-  gated,
   view,
   actions,
 }: {
   page: GoalPageView;
   board: Board;
-  gated: boolean;
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
@@ -217,7 +160,7 @@ function PlanBoard({
   const retired = page.retiredParts;
   const { prs, loose, rail: prRail } = board;
   return (
-    <div className="cn-waves" hidden={gated}>
+    <div className="cn-waves">
       {groups.length === 0 && <p className="cn-empty">{emptyBoard(page)}</p>}
       {groups.map(({ group, parts }) => (
         <div className="cn-col" key={group}>

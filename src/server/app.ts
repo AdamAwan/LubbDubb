@@ -27,7 +27,6 @@ import { register as registerEjections } from './routes/ejections.js';
 import { register as registerDiscussions } from './routes/discussions.js';
 import { register as registerEscalations } from './routes/escalations.js';
 import { register as registerFeatures } from './routes/features.js';
-import { register as registerGoalCriteria } from './routes/goalCriteria.js';
 import { register as registerHumanTasks } from './routes/humanTasks.js';
 import { register as registerIngress } from './routes/ingress.js';
 import { register as registerIssues } from './routes/issues.js';
@@ -41,7 +40,6 @@ import { register as registerPets } from './routes/pets.js';
 import { register as registerPool } from './routes/pool.js';
 import { register as registerPlans } from './routes/plans.js';
 import { register as registerPrDescriptions } from './routes/prDescriptions.js';
-import { register as registerPredictions } from './routes/predictions.js';
 import { register as registerPrs } from './routes/prs.js';
 import { register as registerReadings } from './routes/readings.js';
 import { register as registerRemoteValidation } from './routes/remoteValidation.js';
@@ -78,7 +76,6 @@ const ROUTE_MODULES: RouteModule[] = [
   registerEjections,
   registerEscalations,
   registerFeatures,
-  registerGoalCriteria,
   registerHumanTasks,
   registerIngress,
   registerIssues,
@@ -92,7 +89,6 @@ const ROUTE_MODULES: RouteModule[] = [
   registerPool,
   registerPlans,
   registerPrDescriptions,
-  registerPredictions,
   registerPrs,
   registerReadings,
   registerRemoteValidation,

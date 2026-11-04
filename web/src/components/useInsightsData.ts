@@ -4,7 +4,6 @@ import type {
   InsightsWindow,
   McpInsights,
   PoolInsightsPayload,
-  PredictionAggregate,
   UsagePayload,
   ReliabilityInsights,
   ReviewLabelInsights,
@@ -69,14 +68,13 @@ export function useInsightsData(
   const mcp = useLazyRead(view === 'mcp', windowKey, loadMcp);
   const allowance = useLazyRead(view === 'allowance', windowKey, loadAllowance);
   const usage = useLazyRead(view === 'usage', windowKey, loadUsage);
-  const prediction = usePrediction(mine && view === 'prediction');
   const pool = usePool(scope === 'pool', poolProject);
 
   useEffect(() => {
     if (scope === 'pool') logUsage('pool.view');
   }, [scope]);
 
-  return { spend, reliability, remedies, reviewLabels, trend, throughput, mcp, allowance, usage, prediction, pool };
+  return { spend, reliability, remedies, reviewLabels, trend, throughput, mcp, allowance, usage, pool };
 }
 
 /** A read made only while its tab is open, once per window, and forgotten whenever the window or scope moves. A null key is the pool's scope. */
@@ -101,31 +99,6 @@ function useLazyRead<T>(open: boolean, key: InsightsWindow | null, load: Load<T>
     };
   }, [open, key, load]);
   return fetched;
-}
-
-/* No window in the dependency list, and no reset when the bar moves: the
-   aggregate is a fold over the whole record. → docs/spec/17-cockpit.md
-   It is read again on every arrival at the tab rather than once per mount,
-   because marking a slot on a goal page moves these figures — and a once-only
-   ref would have to be cleared somewhere, which under the double-invoked effects
-   of a development build leaves the panel reading "Reading the prediction
-   record…" for good: the first pass is cancelled and the second bails on the
-   ref the first one set. */
-function usePrediction(open: boolean): Fetched<PredictionAggregate> {
-  const [prediction, setPrediction] = useState<Fetched<PredictionAggregate>>(PENDING);
-  useEffect(() => {
-    if (!open) return;
-    let live = true;
-    setPrediction(PENDING);
-    api
-      .getPredictionAggregate()
-      .then((res) => live && setPrediction({ state: 'ready', data: res.aggregate }))
-      .catch(() => live && setPrediction({ state: 'failed', data: null }));
-    return () => {
-      live = false;
-    };
-  }, [open]);
-  return prediction;
 }
 
 function usePool(open: boolean, poolProject: string | null): Fetched<PoolInsightsPayload> {

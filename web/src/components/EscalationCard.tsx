@@ -6,7 +6,6 @@ import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatCheckli
 import { useCheckDeclines } from './CheckSetAsk.js';
 import { PlanAnswers } from './PlanAnswers.js';
 import { Panel } from './panel.js';
-import { Button } from './button.js';
 import { readCard, type Card, type CardProps } from './escalationReading.js';
 import {
   AgentActions,
@@ -105,7 +104,7 @@ interface AnswerProps {
 
 function CardAnswer(answer: AnswerProps): JSX.Element {
   const { props, card, text, setText, send, onAsk } = answer;
-  const { escalation, onPermission, onReveal, onAnswer } = props;
+  const { escalation, onPermission, onAnswer } = props;
   if (card.permission)
     return (
       <div className="esc-decide">
@@ -131,15 +130,6 @@ function CardAnswer(answer: AnswerProps): JSX.Element {
           Deny
         </AsyncButton>
       </div>
-    );
-  if (card.gated)
-    return (
-      <Button className="esc-plan-open" usage="plan.expand" onClick={onReveal}>
-        <span className="esc-plan-open-label">Reveal the plan</span>
-        <span className="esc-plan-open-hint">
-          the prediction and what “done” means are asked first, on the goal — then it is yours to read →
-        </span>
-      </Button>
     );
   if (card.decidable) return <DecisionAnswer {...answer} decidable={card.decidable} />;
   if (card.questions)

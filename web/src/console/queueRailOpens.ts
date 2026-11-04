@@ -19,9 +19,6 @@ export function rowDestination(row: NeedRow, dest: NeedRow['opens'], actions: Co
   if (dest === 'pr') {
     return row.prNumber === undefined ? null : { go: () => actions.selectPr(prOf(row)), usage: { counted: 'pr.view' } };
   }
-  if (dest === 'prediction') {
-    return ref === null ? null : { go: () => actions.openGoalPrediction(ref), usage: { counted: 'goal.view' } };
-  }
   if (dest === 'ask') return askDestination(row, actions);
   return null;
 }

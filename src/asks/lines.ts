@@ -90,10 +90,6 @@ export function opensAt(goalRef: string | null, state: AskInputs): AskDestinatio
   return goalRef !== null && goalIssue(state, goalRef) !== undefined ? 'goal' : 'ask';
 }
 
-export function predictionOpensAt(goalRef: string | null, state: AskInputs): AskDestination {
-  return opensAt(goalRef, state) === 'goal' ? 'prediction' : 'ask';
-}
-
 export function prAddress(state: Pick<AskInputs, 'refUrls'>, number: number): string | undefined {
   return state.refUrls[`pr:${number}`] ?? state.refUrls[`#${number}`];
 }

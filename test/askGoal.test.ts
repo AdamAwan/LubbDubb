@@ -25,7 +25,7 @@ const part = (planId: string, slug: string, seq: number, status: PlanPartView['s
   status,
 });
 
-const plan = (id: string, originRef: string, revealed: boolean): PlanView => ({ ...basePlan, id, originRef, revealed });
+const plan = (id: string, originRef: string): PlanView => ({ ...basePlan, id, originRef });
 
 type Inputs = Parameters<typeof askGoal>[0];
 
@@ -33,7 +33,7 @@ test('the goal beside an ask: its parts in order, retired ones left out, the ask
   const state: Inputs = {
     world: { issues: [issue(12, 'Ship the export')] },
     retainedRuns: [],
-    plans: [plan('p1', 'issue:12', true)],
+    plans: [plan('p1', 'issue:12')],
     planParts: [part('p1', 'export', 2, 'ready'), part('p1', 'schema', 1, 'merged'), part('p1', 'old', 3, 'retired')],
   };
   const row = { id: 'a', goalRef: 'issue:12', originRef: 'issue:12:part:export' };
@@ -50,15 +50,14 @@ test('the goal beside an ask: its parts in order, retired ones left out, the ask
   assert.equal(askGoal(state, { id: 'x', goalRef: null, originRef: null }, []), null);
 });
 
-test('a goal that has left the world is read off the retained runs, and a withheld plan says so', () => {
+test('a goal that has left the world is read off the retained runs', () => {
   const state: Inputs = {
     world: { issues: [] },
     retainedRuns: [issue(7, 'Retained')],
-    plans: [plan('p7', 'issue:7', false)],
+    plans: [plan('p7', 'issue:7')],
     planParts: [],
   };
   const goal = askGoal(state, { id: 'a', goalRef: 'issue:7', originRef: 'issue:7' }, []);
   assert.equal(goal?.issue?.title, 'Retained');
-  assert.equal(goal?.withheld, true);
   assert.deepEqual(goal?.parts, []);
 });

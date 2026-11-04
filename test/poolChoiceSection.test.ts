@@ -21,9 +21,6 @@ function input(over: Partial<ChoiceInput>): ChoiceInput {
     conclusions: [],
     deliveries: [],
     shortfalls: [],
-    choicesOff: [],
-    firstCriteria: [],
-    plans: [],
     watches: [],
     queries: [],
     sequences: [],
@@ -65,20 +62,6 @@ test('a check reading and a goal verdict are a person’s only when the operator
     'goal-verdict/person': 2,
     'goal-verdict/agent': 1,
   });
-});
-
-test('criteria are a person’s when written before the goal was first planned, and absent when the gate is off', () => {
-  const plans = [
-    { originRef: 'issue:1', createdAt: AT },
-    { originRef: 'issue:2', createdAt: AT },
-    { originRef: 'issue:3', createdAt: AT },
-  ] as never[];
-  const firstCriteria = [
-    { originRef: 'issue:1', at: '2026-08-19T00:00:00.000Z' },
-    { originRef: 'issue:2', at: '2026-08-21T00:00:00.000Z' },
-  ];
-  assert.deepEqual(tally(input({ plans, firstCriteria })), { 'goal-criteria/person': 1, 'goal-criteria/agent': 2 });
-  assert.deepEqual(tally(input({ plans, firstCriteria, choicesOff: ['goal-criteria'] })), {});
 });
 
 test('watches, queries and story orders split on who wrote or answered them', () => {

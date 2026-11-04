@@ -13,15 +13,10 @@ import type { PendingPlanAmendment, PlanHistory } from '../../wire.js';
 import type { PlanAmendment, PlanNarrative, PlanPartInput } from '../../types.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { Store } from '../../store/store.js';
-import { planIsWithheld } from '../planReveal.js';
 import { AcceptanceBody, checked, IdParams, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 // → docs/spec/16-http-api.md
-
-const WITHHELD =
-  'this plan has not been revealed yet, so its contents are withheld — ' +
-  'reveal it first (POST /api/goals/:number/reveal)';
 
 const PartProfileBody = z.object({
   slug: requiredText('slug is required — the part being pinned'),
@@ -63,7 +58,6 @@ function registerPlanRoutes(app: FastifyInstance, { system, hub }: RouteContext)
       const { id } = params;
       const plan = store.plans.getPlan(id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      if (planIsWithheld(system, plan)) return reply.code(409).send({ error: WITHHELD });
       const revisions = store.plans.listPlanRevisions(id);
       const pending = store.plans.listPlanAmendments(id).find((a) => a.status === 'pending') ?? null;
       return {
@@ -80,7 +74,6 @@ function registerPlanRoutes(app: FastifyInstance, { system, hub }: RouteContext)
       const { id } = params;
       const plan = store.plans.getPlan(id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      if (planIsWithheld(system, plan)) return reply.code(409).send({ error: WITHHELD });
       const next = store.plans.setPlanStatus(id, 'planning');
       const ref = planProposalRef(plan.originRef);
       const pending = store.escalations
@@ -111,7 +104,6 @@ function registerPartEdits(app: FastifyInstance, { system, hub }: RouteContext):
     checked({ params: IdParams, body: AcceptanceBody }, async ({ params, body, reply }) => {
       const plan = store.plans.getPlan(params.id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      if (planIsWithheld(system, plan)) return reply.code(409).send({ error: WITHHELD });
       const part = store.plans.listPlanParts(plan.id).find((p) => p.slug === body.slug);
       if (!part) return reply.code(404).send({ error: `plan ${params.id} has no part "${body.slug}"` });
       const criteria = acceptanceCriteria(part);
@@ -131,7 +123,6 @@ function registerPartEdits(app: FastifyInstance, { system, hub }: RouteContext):
     checked({ params: IdParams, body: PartProfileBody }, async ({ params, body, reply }) => {
       const plan = store.plans.getPlan(params.id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      if (planIsWithheld(system, plan)) return reply.code(409).send({ error: WITHHELD });
       const part = store.plans.listPlanParts(plan.id).find((p) => p.slug === body.slug);
       if (!part) return reply.code(404).send({ error: `plan ${params.id} has no part "${body.slug}"` });
       const wanted = body.profile ?? null;
@@ -159,8 +150,6 @@ function registerRegroup(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IdParams, body: RegroupBody }, async ({ params, body, reply }) => {
       const plan = store.plans.getPlan(params.id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      // Regrouping supersedes the plan, and its refusals quote atom text back.
-      if (planIsWithheld(system, plan)) return reply.code(409).send({ error: WITHHELD });
       const regrouped = regroupedDocument({
         plan,
         parts: store.plans.listPlanParts(plan.id),
@@ -196,7 +185,6 @@ function registerRestartPart(app: FastifyInstance, { system, hub }: RouteContext
     checked({ params: IdParams, body: RestartPartBody }, async ({ params, body, reply }) => {
       const plan = store.plans.getPlan(params.id);
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      if (planIsWithheld(system, plan)) return reply.code(409).send({ error: WITHHELD });
       const part = store.plans.listPlanParts(plan.id).find((p) => p.slug === body.slug);
       if (!part) return reply.code(404).send({ error: `plan ${params.id} has no part "${body.slug}"` });
       const issueNumber = planIssueNumber(plan.originRef);

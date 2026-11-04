@@ -16,7 +16,6 @@ import type { PartGroup } from '../web/src/types.js';
 import {
   buildGoalPage,
   buildGoalNav,
-  GOAL_TAB_OF,
   goalSectionsOpen,
   planVerdictAsk,
   splitGoalAsks,
@@ -80,8 +79,6 @@ function plan(originRef: string): PlanView {
     evidence: [],
     document: null,
     statusCommentRef: null,
-    revealed: true,
-    revealedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
@@ -727,19 +724,6 @@ test('validation and signals stay folded until the work is somewhere', () => {
   );
 });
 
-test('the criteria fold is the page at its widest, for the card to narrow', () => {
-  const state = buildDemoState().state;
-  const issue = state.world.issues[0]!;
-  const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
-
-  /* Whether anybody has written what "done" means is a read the goal page does not
-     carry, so the default here can only be the widest honest answer — and the card
-     narrows it off its own reading, while the operator has not said otherwise.
-     → docs/spec/17-cockpit.md#goal-criteria-and-drift */
-  assert.equal(goalSectionsOpen(page).criteria, true);
-  assert.equal(GOAL_TAB_OF.criteria, 'plan', 'the criteria card is drawn beside the plan it is read against');
-});
-
 test('a check anyone has ruled on opens validation wherever the work is', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues.find((i) =>
@@ -874,26 +858,19 @@ function planEscalation(id: string, planId: string): Escalation {
   };
 }
 
-test('the plan’s verdict is asked beside the plan once it is revealed and still undecided', () => {
+test('the plan’s verdict is asked beside the plan while it is still undecided', () => {
   const state = buildDemoState().state;
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const base = buildGoalPage({ ...state, plans: [plan(ref)] }, ref, [])!;
   const waiting: GoalPageView = {
     ...base,
-    plan: { ...base.plan!, status: 'awaiting_approval', revealed: true },
+    plan: { ...base.plan!, status: 'awaiting_approval' },
     needs: [planAsk({})],
   };
   const escalations = [planEscalation('e:1', 'p')];
 
   assert.equal(planVerdictAsk(waiting, escalations)?.id, 'e:1');
-
-  const withheld: GoalPageView = { ...waiting, plan: { ...waiting.plan!, revealed: false } };
-  assert.equal(
-    planVerdictAsk(withheld, escalations),
-    null,
-    'under the gate every verdict is refused server-side, so the ask is not drawn there',
-  );
 
   const approved: GoalPageView = { ...waiting, plan: { ...waiting.plan!, status: 'active' } };
   assert.equal(planVerdictAsk(approved, escalations), null, 'a plan under way is not waiting on a verdict');
@@ -913,7 +890,7 @@ test('an ask is drawn in the pane it is about, and keeps its row everywhere, dim
   const base = buildGoalPage({ ...state, plans: [plan(ref)] }, ref, [])!;
   const page: GoalPageView = {
     ...base,
-    plan: { ...base.plan!, status: 'awaiting_approval', revealed: true },
+    plan: { ...base.plan!, status: 'awaiting_approval' },
     needs: [
       planAsk({}),
       /* About the goal as a whole — no pane owns it, so it can only ever be a row. */
@@ -928,7 +905,7 @@ test('an ask is drawn in the pane it is about, and keeps its row everywhere, dim
   assert.deepEqual(
     onPlan.inPane.map((row) => row.id),
     [],
-    'the plan ask is the plan card’s in both states, and the parent ask is the foot band’s',
+    'the plan ask is the plan card’s, and the parent ask is the foot band’s',
   );
   assert.deepEqual(
     onPlan.lines.map((row) => row.id),
@@ -952,29 +929,6 @@ test('an ask is drawn in the pane it is about, and keeps its row everywhere, dim
     ['e:1', 'profile:1', 'task:check'],
   );
   assert.deepEqual([...onValidate.below], [['task:check', PANE_ASKS_ANCHOR]], 'only the pane’s own ask is dimmed');
-});
-
-test('a withheld plan’s ask is the gate’s, never a card above it as well', () => {
-  const state = buildDemoState().state;
-  const issue = state.world.issues[0]!;
-  const ref = `issue:${issue.number}`;
-  const base = buildGoalPage({ ...state, plans: [plan(ref)] }, ref, [])!;
-  const gated: GoalPageView = {
-    ...base,
-    plan: { ...base.plan!, status: 'awaiting_approval', revealed: false },
-    needs: [planAsk({})],
-  };
-  const escalations = [planEscalation('e:1', 'p')];
-
-  const split = splitGoalAsks(gated, escalations, 'plan');
-  assert.deepEqual(split.inPane, [], 'the gate is what asks it — a card saying reveal it is the ask twice');
-  assert.deepEqual(
-    split.lines.map((row) => row.id),
-    ['e:1'],
-    'the row stays, so the tab row does not jump when the pane opens',
-  );
-  assert.deepEqual([...split.below], [['e:1', GOAL_ANCHOR.plan]], 'and it is drawn as the way down to the gate');
-  assert.equal(planVerdictAsk(gated, escalations), null, 'no verdict is asked under the gate');
 });
 
 test('the Ask tab meters readiness: workable, and on a placing tracker a feature and a path', () => {

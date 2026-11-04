@@ -20,7 +20,7 @@ import {
   throughputMeasureOf,
 } from '../insights/throughputInsights.js';
 import { VERBS_BY_SUBJECT } from '../usage/events.js';
-import { choiceKey, choiceSightings, type DecisionChoice } from '../insights/choiceInsights.js';
+import { choiceKey, choiceSightings } from '../insights/choiceInsights.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
 import { isDispatchRule } from '../insights/taskTypeSpend.js';
 import { utcDay } from '../primitives.js';
@@ -37,7 +37,6 @@ export function buildDigestDocument(
     harnessVersion: string;
     now: string;
     scope: WorldScope;
-    choicesOff?: readonly DecisionChoice[];
   },
 ): PoolDigestDocument {
   const since = retentionStart(context.now);
@@ -78,7 +77,7 @@ export function buildDigestDocument(
       today,
     ),
     byFault: byFault(store.errors.listErrorsSince(since), today),
-    byChoice: byChoice(store, since, context.choicesOff ?? [], today),
+    byChoice: byChoice(store, since, today),
     byRule: perRun(usage, agents, ruleOfAgent, since, today),
     byVersion: byVersion(store.pool.listHarnessDaysSince(utcDay(since)), today),
   };
@@ -176,8 +175,7 @@ function byUsage(reach: readonly SurfaceReach[], today: string): PoolDigestRow[]
   return rows.rows(today);
 }
 
-function byChoice(store: Store, since: string, choicesOff: readonly DecisionChoice[], today: string): PoolDigestRow[] {
-  const criteria = !choicesOff.includes('goal-criteria');
+function byChoice(store: Store, since: string, today: string): PoolDigestRow[] {
   const rows = new Bucket();
   const sightings = choiceSightings({
     since,
@@ -188,9 +186,6 @@ function byChoice(store: Store, since: string, choicesOff: readonly DecisionChoi
     conclusions: store.verdicts.listIssueConclusions(),
     deliveries: store.verdicts.listDeliveries(),
     shortfalls: store.verdicts.listShortfalls(),
-    choicesOff,
-    firstCriteria: criteria ? store.goalCriteria.listFirstCriteria() : [],
-    plans: criteria ? store.plans.listPlans() : [],
     watches: store.watches.listWatchAuthorship(),
     queries: store.remoteValidation.listQueryAuthorship(),
     sequences: store.sequences.listFeatureSequences(),

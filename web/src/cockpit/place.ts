@@ -176,7 +176,6 @@ const INSIGHTS_VIEWS: readonly InsightsView[] = [
   'causes',
   'trend',
   'mcp',
-  'prediction',
   'usage',
 ];
 const INSIGHTS_SCOPES: readonly InsightsScope[] = ['mine', 'pool'];

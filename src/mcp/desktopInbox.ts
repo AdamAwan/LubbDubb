@@ -33,16 +33,6 @@ function readDeclines(raw: unknown): CheckDecline[] {
   return declined;
 }
 
-function withheldRefusal(deps: DesktopToolDeps, proposal: Proposal): string | null {
-  const planId: unknown = (proposal.action as { planId?: unknown }).planId;
-  if (typeof planId !== 'string' || !deps.planWithheld(deps.store.plans.getPlan(planId))) return null;
-  return (
-    'The plan behind this proposal has not been revealed yet, so it can be neither read nor decided here. ' +
-    'Ask the operator to open the goal in the cockpit and press through the gate there first — a plan ' +
-    'decided sight-unseen would read as never offered.'
-  );
-}
-
 function readAnswers(raw: unknown): CaveatAnswerInput[] {
   if (!Array.isArray(raw)) return [];
   const answers: CaveatAnswerInput[] = [];
@@ -66,11 +56,6 @@ export const proposalRead: DesktopToolFactory = (deps) => ({
     if (!id) return toolError('id required — take it from attention_read.');
     const proposal = deps.store.escalations.getProposal(id);
     if (!proposal) return toolError(`No proposal "${id}". Call attention_read for what is actually pending.`);
-    // The proposal's action carries the plan's prompt, its detail and its caveats, so
-    // reading one here is reading the plan — and this channel is the operator's own
-    // assistant, where that defeats the reveal gate exactly as the cockpit would.
-    const withheld = withheldRefusal(deps, proposal);
-    if (withheld !== null) return toolError(withheld);
     const caveats = proposedCaveats(proposal);
     return toolJson({
       id: proposal.id,
@@ -183,7 +168,7 @@ function decidable(deps: DesktopToolDeps, id: string): Proposal | string {
       `Proposal ${id} is already ${standing.status}${standing.note ? ` — "${standing.note}"` : ''}. ` +
       'Somebody has decided it; nothing more is needed on it.'
     );
-  return withheldRefusal(deps, standing) ?? standing;
+  return standing;
 }
 
 function declineRefusal(declined: CheckDecline[], verdict: string, kind: Proposal['kind']): string | null {

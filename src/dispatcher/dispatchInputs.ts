@@ -29,9 +29,6 @@ type PulseReadings = Pick<
   | 'remoteRuns'
   | 'modelPins'
   | 'agentHeadroom'
-  | 'closedSittings'
-  | 'goalCriteria'
-  | 'judgeOwed'
   | 'discussion'
 >;
 
@@ -88,7 +85,6 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
     prReviewedElsewhere: store.prReviewExternals.prsReviewedElsewhere(),
     obstacles: store.obstacles.obstacleBoard(),
     obstacleBlocks: store.obstacles.listObstacleBlocks(),
-    criteriaAlignments: store.goalCriteria.listAlignments(),
     investigations: store.investigations.list(),
   };
 }

@@ -264,7 +264,6 @@ type ArgsBuilder = (opts: {
   model: string | null;
   effort: string | null;
   permissionMode: string | null;
-  sealed: boolean;
 }) => string[];
 
 export type AgentRuntime = ReturnType<typeof buildAgentRuntime>;
@@ -302,19 +301,18 @@ export function buildAgentRuntime(config: Config, opts: BuildOptions, { backend,
 
   const agentSetup = {
     stream: {
-      buildArgs: (({ sessionId, resume, mcpConfigPath, extraAllowedTools, model, effort, permissionMode, sealed }) =>
+      buildArgs: (({ sessionId, resume, mcpConfigPath, extraAllowedTools, model, effort, permissionMode }) =>
         buildClaudeStreamArgs({
           permissionMode: permissionMode ?? perm,
           extraArgs,
-          allowedTools: sealed ? [] : allowedTools,
+          allowedTools,
           additionalDirectories,
           sessionId,
           resume,
           fileEvents: true,
           mcpConfigPath,
           extraAllowedTools,
-          permissionPromptTool: sealed ? undefined : permissionPromptTool,
-          sealed,
+          permissionPromptTool,
           model: model ?? undefined,
           effort: effort ?? undefined,
         })) as ArgsBuilder,

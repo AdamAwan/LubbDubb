@@ -7,12 +7,10 @@ provider, and its own MCP socket. Four keys are **stripped** from what it inheri
 `src/agents/spawnEnv.ts`, applied at both spawn seams:
 
 `LUBBDUBB_TOKEN` is the cockpit bearer, and every operator-only route answers to it. An agent holding
-it can `curl` the cockpit and read back anything the cockpit can — including, where the reveal gate is
-on, the operator's prediction, verbatim, slot by slot. That is the one thing the whole prediction
-record exists to prevent, and the escape is **over the network rather than through an import**, so
-neither the type system nor the structural containment test can see it. A deny-list at the spawn seam
-is what closes it, and `test/predictionContainment.test.ts` asserts both that the keys are stripped
-and that neither spawn site has gone back to spreading `process.env` wholesale.
+it can `curl` the cockpit and act as the operator on every route. The escape is **over the network
+rather than through an import**, so the type system cannot see it. A deny-list at the spawn seam is
+what closes it, and `test/spawnEnv.test.ts` asserts both that the keys are stripped and that neither
+spawn site has gone back to spreading `process.env` wholesale.
 
 `LUBBDUBB_INGRESS_SECRET`, `LUBBDUBB_INGRESS_BASIC` and `LUBBDUBB_DESKTOP_CREDENTIAL` are credentials
 of the same kind, which no agent has any reason to hold.
@@ -118,7 +116,6 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 (--session-id <id> | --resume <id>)
 [--settings <file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
-[--strict-mcp-config --tools ""]   (a sealed rule only)
 [--permission-mode <mode>]
 [--model <model>]
 [--effort <level>]
@@ -127,11 +124,6 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 
 Points that are load-bearing:
 
-- **A sealed rule's agent launches with no built-in tool and no server but the harness's.**
-  `--tools ""` is an empty allow-list of built-in tools — never a deny-list, which a new CLI build's
-  new tool slips past — `--strict-mcp-config` keeps the operator's own MCP servers out, the operator's
-  `agentAllowedTools` are left out of its `--settings`, and no `--permission-prompt-tool` is named.
-  → [14](14-persistence.md#the-prediction-judge)
 - The protocol prompt is **re-appended on resume**. `--resume` replays the conversation but does not
   retain the original invocation's appended system prompt, so detection would otherwise break.
 - `--session-id` and `--resume` are mutually exclusive, and the launch carries the pair (issue #318 —

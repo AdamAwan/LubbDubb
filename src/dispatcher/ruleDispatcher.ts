@@ -19,7 +19,6 @@ import { prReadRef, refsFinishedSince } from '../world/readPlan.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from '../validation/policy.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import { DEFAULT_PLANNING, issueOrigin, type PlanningPolicy } from '../plans/planning.js';
-import { sittingHolds } from '../intake/sitting.js';
 import { LIFTABLE_HOLDS } from './admission.js';
 import { type Candidate, type RawAction, type StageContext } from './rules/context.js';
 import {
@@ -48,8 +47,6 @@ import { workItemInProgress } from './rules/workItemInProgress.js';
 import { issueAppraisal } from './rules/issueAppraisal.js';
 import { issueInvestigate } from './rules/issueInvestigate.js';
 import { issuePlan } from './rules/issuePlan.js';
-import { criteriaAlignment } from './rules/criteriaAlignment.js';
-import { predictionJudge } from './rules/predictionJudge.js';
 import { issueAssess } from './rules/issueAssess.js';
 import { issueShortfall } from './rules/issueShortfall.js';
 import { issueRetro } from './rules/issueRetro.js';
@@ -84,13 +81,11 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'work-item-back-to-pickup': workItemBackToPickup,
   'issue-appraisal': issueAppraisal,
   'issue-investigate': issueInvestigate,
-  'criteria-alignment': criteriaAlignment,
   'issue-plan': issuePlan,
   'issue-assess': issueAssess,
   'issue-shortfall': issueShortfall,
   'issue-retro': issueRetro,
   'plan-approval': planApproval,
-  'prediction-judge': predictionJudge,
   'plan-amendment': planAmendment,
   'plan-blocked': planBlocked,
   'plan-part': planPart,
@@ -281,7 +276,6 @@ export class RuleDispatcher implements Dispatcher {
     const gates = issueGates(ctx, pickup, openPrs);
     const { retained } = gates;
 
-    const criteriaByOrigin = new Map((ctx.goalCriteria ?? []).map((c) => [c.originRef, c]));
     const investigations = investigationView(ctx, pickup);
     const issueByNumber = new Map(ctx.world.issues.map((i) => [i.number, i]));
     const sequencing = sequencingView(ctx, pickup);
@@ -307,9 +301,6 @@ export class RuleDispatcher implements Dispatcher {
         if (!plan || (plan.status !== 'active' && plan.status !== 'complete')) return null;
         return plan;
       },
-      sittingHolds: (issueNumber: number) =>
-        sittingHolds(ctx.closedSittings, issueNumber, plansByOrigin.get(issueOrigin(issueNumber)) ?? null),
-      criteriaFor: (issueNumber: number) => criteriaByOrigin.get(issueOrigin(issueNumber)) ?? null,
       profileOverrides,
       pinFor: pinResolver(ctx, plansByOrigin, profileOverrides),
       parentCandidates: candidateParents(ctx.world.issues, pickup.containerTypes),

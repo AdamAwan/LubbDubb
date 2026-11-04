@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { criteriaItems } from '../../criteria/items.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
 import {
@@ -71,17 +70,7 @@ const ValidationPlanInput = z.object({
           .describe('Names of declared resources this check needs. Names, never paths.')
           .optional(),
         covers: z.array(z.string()).describe('Part slugs this check exercises.').optional(),
-        satisfies: z
-          .array(z.string())
-          .describe(
-            'The goal criteria this check answers, each copied exactly as your prompt lists them. Every ' +
-              'criterion needs at least one check naming it.',
-          )
-          .optional(),
-        rationale: z
-          .string()
-          .describe('One line: why this check is the right proof of the criteria it satisfies.')
-          .optional(),
+        rationale: z.string().describe('One line: why this check is the right proof of what it checks.').optional(),
         fleetCandidate: z
           .boolean()
           .describe(
@@ -169,13 +158,7 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
       resources.filter((r) => !r.provided).map((r) => r.name),
     );
     const written = deps.store.validation.ingestValidation(origin, {
-      checks: validationCheckSetInputs(
-        set.checks,
-        set.resources,
-        slugs,
-        deps.stepCapabilities ?? NO_STEP_CAPABILITIES,
-        criteriaItems(deps.store.goalCriteria.currentCriteria(origin)?.text),
-      ),
+      checks: validationCheckSetInputs(set.checks, set.resources, slugs, deps.stepCapabilities ?? NO_STEP_CAPABILITIES),
       resources,
       supersededReason: AUTHORED_SUPERSEDED_REASON,
       amendNote: AUTHORED_AMEND_NOTE,

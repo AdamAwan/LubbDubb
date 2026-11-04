@@ -2469,8 +2469,6 @@ export function buildDemoState(): DemoSeed {
           'Each part is independently reviewable and each one leaves the shop taking money — the client alone is ' +
           'unreferenced; the payment part alone changes who takes the charge without touching what comes back.',
         statusCommentRef: 'issue:390:comment:8391',
-        revealed: true,
-        revealedAt: null,
         createdAt: ago(300),
         updatedAt: ago(6),
       },
@@ -2529,8 +2527,6 @@ export function buildDemoState(): DemoSeed {
           'An edition that goes out of print leaves a saved row pointing at nothing buyable. I keep it and draw ' +
           'it as unavailable; dropping it silently is the other reading.',
         statusCommentRef: 'issue:333:comment:8471',
-        revealed: true,
-        revealedAt: null,
         createdAt: ago(14),
         updatedAt: ago(14),
       },
@@ -2550,8 +2546,6 @@ export function buildDemoState(): DemoSeed {
         evidence: [],
         document: null,
         statusCommentRef: null,
-        revealed: true,
-        revealedAt: null,
         createdAt: ago(40),
         updatedAt: ago(30),
       },
@@ -2614,8 +2608,6 @@ export function buildDemoState(): DemoSeed {
           'A refund the provider reverses days later leaves an entry with nothing behind it, and without a ' +
           'webhook there is no way to hear about it.',
         statusCommentRef: 'issue:395:comment:8455',
-        revealed: true,
-        revealedAt: null,
         createdAt: ago(4320),
         updatedAt: ago(200),
       },

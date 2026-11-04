@@ -96,10 +96,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   callers folded rows into the claim store and went with it, so the mechanism comes back with the next migration that
   needs it. → [22](docs/spec/22-pets.md#clearing-the-vivarium),
   [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
-- **The prediction store is deliberately NOT forwarded on `Store`, and tidying it on removes the guarantee.** There is
-  no `store.predictions`: `Store.openPredictions()` is handed to the prediction routes and `judgeSeam` alone. The judge
-  that reads one is a **sealed** rule (`isSealedRule`): a new path quoting an agent's output back must drop it for a
-  sealed agent. → [14](docs/spec/14-persistence.md#the-prediction-store-is-not-on-store)
 - **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the aggregate as
   another fleet's, and looks exactly like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
 - **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.** Which
@@ -352,10 +348,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   over: `deliveryHold` expires a standing delivery verdict on any world event matching the goal's issue ref, so a
   reading written as one un-parks the goal it just reported on. →
   [36](docs/spec/36-remote-validation.md#what-a-finding-does-and-what-it-must-never-do)
-- **A criteria-drift record is never a `WorldEvent`.** Same trap as an arrival and a sheet reading: `deliveryHold`
-  expires a standing delivery verdict on any world event matching the goal's issue ref, so drift written as one un-parks
-  the goal it just reported on and hands delivered work back to the fleet. Own table, own wire list, merged at the
-  feed's door. → [14](docs/spec/14-persistence.md#goal-criteria-are-append-only)
 - **An arrival must never be written as a `WorldEvent`.** `deliveryHold` expires a standing delivery
   verdict on **any** world event matching the goal's issue ref, so an arrival written as one un-parks
   the goal it just announced and hands delivered work back to the fleet. Arrivals have their own

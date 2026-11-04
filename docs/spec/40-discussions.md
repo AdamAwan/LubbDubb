@@ -26,7 +26,6 @@ tools and an agent is handed on every dispatch.
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A table in the store         | The operator owns the file. They edit it in Obsidian or any editor; a database copy would drift from it. The file is the record, and the harness keeps no second one. → [the file](#the-file) |
 | The tracker's comment thread | The tracker gets a _refined_ version, only when published. Working notes, dead ideas and half-thoughts stay local. → [publishing](#publishing)                                                |
-| Goal criteria                | Criteria say what "done" means and are versioned and append-only. A decision here may inform the criteria; it does not change them. → [08](08-planning.md#what-the-fleet-is-handed)           |
 | An escalation                | An open question holds _new_ work on its story; it never kills a running agent or files anything. → [the hold](#an-open-question-holds-the-story)                                             |
 
 ## Where the files live

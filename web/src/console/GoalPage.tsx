@@ -13,7 +13,6 @@ import type { NeedRow } from '../view/needsYou.js';
 import {
   buildGoalNav,
   obligationEnvironment,
-  planUnderWay,
   splitGoalAsks,
   PANE_ASKS_ANCHOR,
   GOAL_ANCHOR,
@@ -21,11 +20,8 @@ import {
   goalPaneOf,
   goalPanes,
 } from '../view/goalPage.js';
-import { GoalCriteria } from '../components/GoalCriteria.js';
 import { DiscussionPane } from '../components/DiscussionPane.js';
 import { PartDescriptionsProvider } from '../components/partDescriptions.js';
-import { IntakeSitting } from '../components/IntakeSitting.js';
-import { PredictionReview } from '../components/PredictionReview.js';
 import { Tag } from '../components/tag.js';
 import { localRunPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from '../components/DesktopLink.js';
@@ -104,7 +100,7 @@ export function GoalPage({
         )}
         {tab === 'ask' && <TicketPane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'discussion' && <DiscussionPane number={page.issue.number} view={view} actions={actions} />}
-        {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} folds={folds} />}
+        {tab === 'plan' && <WorkPane page={page} view={view} actions={actions} />}
         {tab === 'validate' && <ValidatePane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'close' && <ClosePane page={page} view={view} actions={actions} folds={folds} />}
         {tab === 'watch' && <WatchPane page={page} view={view} actions={actions} folds={folds} />}
@@ -239,90 +235,17 @@ function WorkPane({
   page,
   view,
   actions,
-  folds,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
-  folds: Record<GoalSection, Fold>;
 }): JSX.Element {
-  /* One read for the whole board rather than one per card, and a component cannot
-     read a context it renders itself, which is why the body is its own.
+  /* One read for the whole board rather than one per card.
      → docs/spec/07-pull-requests.md#the-pull-requests-own-page-is-where-it-is-written */
   return (
     <PartDescriptionsProvider issueNumber={page.issue.number}>
-      <WorkPaneBody page={page} view={view} actions={actions} folds={folds} />
+      <PlanWaves page={page} view={view} actions={actions} />
     </PartDescriptionsProvider>
-  );
-}
-
-function WorkPaneBody({
-  page,
-  view,
-  actions,
-  folds,
-}: {
-  page: GoalPageView;
-  view: CockpitView;
-  actions: CockpitActions;
-  folds: Record<GoalSection, Fold>;
-}): JSX.Element {
-  const underWay = planUnderWay(page);
-  const gatedPlan = page.plan !== null && !page.plan.revealed;
-  /* Planning waits on the operator here, so the sitting is drawn first and the criteria
-     card is not: it asks the same question, and asked twice the operator answers one.
-     → docs/spec/17-cockpit.md#the-reveal-gate */
-  const sitting = page.plan === null && page.issue.pickup.status === 'sitting';
-  return (
-    <>
-      {sitting && (
-        <section className="cn-card">
-          <h3>Before planning</h3>
-          <IntakeSitting
-            issueNumber={page.issue.number}
-            aligning={page.issue.pickup.reasons.some((r) => r.startsWith('checking your criteria'))}
-            onClosed={() => actions.refresh()}
-          />
-        </section>
-      )}
-      <PlanWaves page={page} view={view} actions={actions} fold={folds.prediction} />
-      {/* Below the plan rather than above it: what "done" means is read against the
-          shape the fleet proposed, and the card draws nothing at all where the
-          criteria routes are not mounted. A part with a task behind it is what
-          makes the next version drift, which is the one thing the form has to know
-          before the operator starts typing. Not while the plan is at its gate: the
-          gate asks the same question, and asked twice the operator answers one.
-          → docs/spec/17-cockpit.md#goal-criteria-and-drift */}
-      {!gatedPlan && !sitting && (
-        <GoalCriteria
-          issueNumber={page.issue.number}
-          workStarted={[...page.parts.map((p) => p.part), ...page.retiredParts].some((part) => part.taskId !== null)}
-          hasChecks={page.checks.length > 0}
-          open={folds.criteria.open}
-          settled={folds.criteria.settled}
-          onToggle={folds.criteria.onToggle}
-          now={view.now}
-        />
-      )}
-      {/* Last on the pane, once the plan is approved and the work is under way: it is
-          a record of a moment that has passed, and everything above it — the parts,
-          the description in front, what "done" means, the pull requests — is the work
-          itself. At the plan's gate it is the opposite way round and the plan card
-          draws it above the parts.
-          → docs/spec/17-cockpit.md#where-the-prediction-is-drawn */}
-      {underWay && (
-        <PredictionReview
-          issueNumber={page.issue.number}
-          revealed={page.plan?.revealed ?? false}
-          plan={page.plan}
-          parts={page.parts.map((p) => p.part)}
-          open={folds.prediction.open}
-          settled={folds.prediction.settled}
-          onToggle={folds.prediction.onToggle}
-          now={view.now}
-        />
-      )}
-    </>
   );
 }
 

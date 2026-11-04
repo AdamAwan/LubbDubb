@@ -21,7 +21,6 @@ export interface ValidationCheckRow {
   rationale: string | null | undefined;
   uses: string;
   covers: string;
-  satisfies: string | null | undefined;
   fleet_candidate: number;
   candidate_why: string | null;
   actor: string | null | undefined;
@@ -66,7 +65,6 @@ export function rowToCheck(r: ValidationCheckRow): ValidationCheck {
     rationale: r.rationale ?? null,
     uses: parseStringArray(r.uses),
     covers: parseStringArray(r.covers),
-    satisfies: parseStringArray(r.satisfies ?? null),
     fleetCandidate: r.fleet_candidate === 1,
     candidateWhy: r.candidate_why,
     actor: r.actor === 'fleet' ? 'fleet' : 'human',

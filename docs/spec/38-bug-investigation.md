@@ -83,7 +83,7 @@ refusal and returns; `appraise_issue` adds no catch of its own, so the failure i
 ## The rule — `issue-investigate`
 
 Unconditional, registered in `DISPATCH_PIPELINE` directly after `issue-appraisal` and before
-`criteria-alignment` and `issue-plan`. For each eligible issue it proposes one investigator when all
+`issue-plan`. For each eligible issue it proposes one investigator when all
 of these hold:
 
 - the issue carries the label;

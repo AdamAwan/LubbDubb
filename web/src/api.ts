@@ -18,17 +18,8 @@ import type {
   SnoozeTarget,
   CaveatAnswerInput,
   CheckDecline,
-  Plan,
-  CriteriaStanding,
-  CriterionCoverage,
-  GoalCriteriaAlignment,
-  GoalCriteriaVersion,
   PrDescriptionDraft,
   PrDescriptionVersion,
-  GoalPrediction,
-  GoalReveal,
-  PredictionMark,
-  PredictionSlot,
 } from './types.js';
 import type {
   AgentFilesPayload,
@@ -53,7 +44,6 @@ import type {
   ObstacleBoardPayload,
   PoolInsightsPayload,
   PoolStatePayload,
-  PredictionAggregatePayload,
   PromptsPayload,
   RetrospectivePayload,
   RunClearOut,
@@ -83,49 +73,6 @@ export { UnauthorizedError } from './apiTransport.js';
 export type { WsClient } from './apiSocket.js';
 
 // → docs/spec/16-http-api.md
-
-/**
- * What the gate's composer holds: the four slots, each free text and each
- * skippable. A slot the operator left alone is absent rather than empty, because
- * the route counts filled slots to refuse a prediction that says nothing.
- */
-export interface PredictionDraft {
-  locus?: string;
-  cause?: string;
-  split?: string;
-  avoid?: string;
-}
-
-/**
- * What the goal page reads to draw moment one: the operator's prediction and the
- * reveal that opened onto it. Either may be null — a goal that was never predicted
- * on, or one whose gate has not been answered — and the card is drawn only when
- * both are present. The route answers with an anonymous pair, so the shape is named
- * here rather than in `src/wire.ts`.
- */
-export interface GoalPredictionReading {
-  prediction: GoalPrediction | null;
-  reveal: GoalReveal | null;
-}
-
-/**
- * One version of a goal's acceptance criteria as the route hands it over: the row
- * plus the standing derived against the reveal stamp and the first part dispatch.
- * The standing is never stored, so it rides the reading rather than the row.
- */
-export type CriteriaVersionReading = GoalCriteriaVersion & { standing: CriteriaStanding };
-
-/** A goal's whole criteria chain, oldest first, and the version that stands now. */
-export interface GoalCriteriaReading {
-  current: CriteriaVersionReading | null;
-  versions: CriteriaVersionReading[];
-  /** The alignment check's reading of the current version, where one has been taken. */
-  alignment: GoalCriteriaAlignment | null;
-  /** Whether the ticket carries acceptance criteria of its own — the only case the alignment check runs. */
-  ticketHasCriteria: boolean;
-  /** One reading per criterion of the current version, off the checks that name it. */
-  coverage: CriterionCoverage[];
-}
 
 const realApi = {
   getState: (sections?: ReadonlySet<StateSection> | null) =>
@@ -166,33 +113,6 @@ const realApi = {
   getDiscussion: (number: number) => authFetch(`/api/discussions/${number}`).then((r) => json<DiscussionReading>(r)),
   answerFeatureSequence: (number: number, answer: 'accepted' | 'declined', by: string) =>
     post<FeatureSequence>(`/api/features/${number}/sequence`, { answer, by }),
-  // The gate's two presses. The reveal's response is the only copy of the plan
-  // the page has until the next payload lands, so it is read rather than thrown
-  // away — which is why neither of these goes through the action layer.
-  // → docs/spec/16-http-api.md
-  predictGoal: (number: number, slots: PredictionDraft) => post<{ ok: true }>(`/api/goals/${number}/prediction`, slots),
-  revealGoalPlan: (number: number) => post<{ ok: true; plan: Plan | null }>(`/api/goals/${number}/reveal`),
-  // Moment one: the record behind the goal page's marking card, and the press that
-  // writes one mark. The marks route merges what it is given, so a press names its
-  // own slot and leaves the other three as they stand — and a mark of null takes a
-  // slot back to unmarked, which is a state and not a miss.
-  getGoalPrediction: (number: number) =>
-    authFetch(`/api/goals/${number}/prediction`).then((r) => json<GoalPredictionReading>(r)),
-  markGoalPrediction: (number: number, marks: Partial<Record<PredictionSlot, PredictionMark | null>>) =>
-    post<{ ok: true; prediction: GoalPrediction }>(`/api/goals/${number}/prediction/marks`, marks),
-  // Moment two, the same slots asked a different question: not "did I predict the
-  // plan" but "was the plan right". It is its own route because it is its own
-  // record — writing one says nothing about the other, and either arriving alone
-  // must read as the other being unanswered.
-  markGoalPredictionOutcome: (number: number, marks: Partial<Record<PredictionSlot, PredictionMark | null>>) =>
-    post<{ ok: true; prediction: GoalPrediction }>(`/api/goals/${number}/prediction/outcome`, marks),
-  // The goal's acceptance criteria. Both routes are mounted only where the key is
-  // on, so a rejected read is how the card learns there is nothing to draw — the
-  // presence of the data decides, never a flag on the payload.
-  getGoalCriteria: (number: number) =>
-    authFetch(`/api/goals/${number}/criteria`).then((r) => json<GoalCriteriaReading>(r)),
-  writeGoalCriteria: (number: number, body: { text: string; reason?: string }) =>
-    post<{ ok: true; version: GoalCriteriaVersion; standing: CriteriaStanding }>(`/api/goals/${number}/criteria`, body),
   /* The pull-request descriptions of one goal: the newest of each described part, by
      slug, and one read for the whole board. */
   getGoalDescriptions: (number: number) =>
@@ -224,10 +144,6 @@ const realApi = {
     authFetch(`/api/retrospectives/${encodeURIComponent(ref)}`).then((r) => json<RetrospectivePayload>(r)),
   getScratchpad: (ref: string) =>
     authFetch(`/api/scratchpads/${encodeURIComponent(ref)}`).then((r) => json<ScratchpadPayload>(r)),
-  /* The aggregate takes no window: it is a fold over the whole record, because a
-     prediction is written once and marked once. → docs/spec/17-cockpit.md */
-  getPredictionAggregate: () =>
-    authFetch('/api/predictions/aggregate').then((r) => json<PredictionAggregatePayload>(r)),
   getSpend: (window: InsightsWindow) => authFetch(`/api/spend?window=${window}`).then((r) => json<SpendPayload>(r)),
   getSpendTrend: (window: InsightsWindow) =>
     authFetch(`/api/spend/trend?window=${window}`).then((r) => json<SpendTrendPayload>(r)),

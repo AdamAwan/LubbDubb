@@ -46,7 +46,6 @@ interface McpBridgeServerOptions {
   remoteReadings?: McpToolDeps['remoteReadings'];
   remoteListings?: McpToolDeps['remoteListings'];
   localRun?: McpToolDeps['localRun'];
-  judge?: McpToolDeps['judge'];
   investigateLabel?: McpToolDeps['investigateLabel'];
   discussions?: McpToolDeps['discussions'];
   repoRoot?: string;
@@ -220,7 +219,6 @@ export class McpBridgeServer {
         remoteReadings: this.opts.remoteReadings,
         remoteListings: this.opts.remoteListings,
         localRun: this.opts.localRun,
-        judge: this.opts.judge,
         investigateLabel: this.opts.investigateLabel,
         discussions: this.opts.discussions,
         repoRoot: this.opts.repoRoot,

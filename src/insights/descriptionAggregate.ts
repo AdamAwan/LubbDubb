@@ -8,8 +8,7 @@ import type { DescriptionQuestion, PrDescriptionVersion } from '../types.js';
  * the four questions its findings happened to name. **Never the text, never a
  * finding's note, and never the author.**
  *
- * The author column is dropped for the reason `predictionAggregate` drops it —
- * scoring people is out of scope, so the author-grouped filter a later change would
+ * The author column is dropped because scoring people is out of scope, so the author-grouped filter a later change would
  * reach for has nothing here to group by. The prose is dropped so that no panel
  * downstream can quote either the operator or the session that checked them back at
  * anybody; the aggregate is a count of how often the account and the code agreed,
@@ -51,12 +50,15 @@ interface DescriptionAggregate {
    */
   questionsRaised: { question: DescriptionQuestion; count: number }[];
   /**
-   * Below `threshold` the counts are withheld and this carries the n instead, the
-   * shape `PredictionRate` already uses — a rate over four descriptions is noise
-   * wearing a percentage, and the panel's whole posture is not to draw one.
+   * Below `threshold` the counts are withheld and this carries the n instead — a rate
+   * over four descriptions is noise wearing a percentage, and the panel's whole
+   * posture is not to draw one.
    */
   belowThreshold: boolean;
 }
+
+/** How many checked descriptions the aggregate needs before it carries any count. */
+export const DESCRIPTION_AGGREGATE_THRESHOLD = 10;
 
 /**
  * The fold. Every version handed in carries a check; `listCheckedDescriptions` is

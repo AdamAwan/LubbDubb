@@ -805,18 +805,16 @@ than past it.
 ### The plan-verdict row is retired
 
 The bench used to file a third row behind the close-out on a goal whose prediction carried moment-one
-marks: _"Say whether the plan for #N turned out right"_ — prediction moment two
-([14](14-persistence.md#moment-two--was-the-plan-right)). It was taken out because answering it did
-not change how far an operator trusted the fleet's plans, and a row that informs no decision is a row
-the operator learns to clear without reading.
+marks: _"Say whether the plan for #N turned out right"_ — the prediction's second moment. It was taken
+out because answering it did not change how far an operator trusted the fleet's plans, and a row that
+informs no decision is a row the operator learns to clear without reading. Predictions themselves have
+since been removed.
 
 `DeliveryCloseOutDesk` files no `outcome` row now. The kind stays in `HumanTaskKind` because rows of
 it exist on deployed databases; opening the store **declines** every one still open
 (`declineRetiredOutcomeRows`, [14](14-persistence.md#migrations)), never marks it done, because declining
-is what records moment two as unanswered rather than as an answer. It is a plain idempotent `UPDATE`
+is what records the question as unanswered rather than as an answer. It is a plain idempotent `UPDATE`
 rather than a one-shot pass: nothing files the kind any more, so a second run finds nothing.
-`POST /api/goals/:number/prediction/outcome` still writes moment two's marks, but nothing asks for
-them, and the route no longer runs a cycle — the cycle only existed to settle the row.
 
 This is why `ValidationReadyDesk` runs **above** `DeliveryCloseOutDesk` in the pulse. Below it, the
 close-out would read a bench the validate row had not been filed onto yet and ask for the close on the

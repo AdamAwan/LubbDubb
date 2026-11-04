@@ -158,7 +158,7 @@ test('every section a deployment draws is behind a pane that deployment draws', 
   for (const environments of [[], [TEST], [TEST, PROD]]) {
     const built = await page(environments);
     const drawn = goalPanes(built);
-    for (const section of ['prediction', 'validation', 'signals', 'environments', 'tail', 'record'] as const) {
+    for (const section of ['validation', 'signals', 'environments', 'tail', 'record'] as const) {
       assert.ok(
         drawn.includes(goalPaneOf(built, section)),
         `${section} is behind a pane this deployment does not draw — a card nothing draws is a card nobody reads`,

@@ -38,7 +38,6 @@ import type { ApiErrorInsights } from './insights/apiErrorInsights.js';
 import type { OperatorInsights } from './insights/operatorInsights.js';
 import type { SurfaceReachInsights } from './insights/surfaceReachInsights.js';
 import type { SpendTrend } from './insights/spendTrend.js';
-import type { PredictionAggregate } from './insights/predictionAggregate.js';
 import type { Stack } from './stacks/stack.js';
 import type { LocalRunOption } from './localRun/ref.js';
 import type {
@@ -70,7 +69,6 @@ import type {
   GoalArrival,
   NoSheet,
   GoalAppraisalVerdict,
-  GoalCriteriaDrift,
   GoalPause,
   GoalPriority,
   GoalEnvironmentReach,
@@ -321,18 +319,8 @@ export interface PlanPartView extends PlanPart {
   outsideScope: string[];
 }
 
-/**
- * A plan, plus whether its body is in the payload at all. While the reveal gate is on, a plan
- * `awaiting_approval` that has no reveal stamp ships with every narrative field null, no evidence,
- * no parts and no atoms — the ordering the record rests on is a server fact, not a blur the page
- * draws over a body that is already on the wire. `revealed` false is the cockpit's cue to draw the
- * gate rather than an empty plan; with the gate off it is true on every plan and nothing branches.
- * → docs/spec/16-http-api.md
- */
-export interface PlanView extends Plan {
-  revealed: boolean;
-  revealedAt: string | null;
-}
+/** A plan as the cockpit is sent it. → docs/spec/16-http-api.md */
+export type PlanView = Plan;
 
 export interface ValidationResourceView extends ValidationResource {
   path: string;
@@ -504,15 +492,6 @@ export interface CockpitState {
   goalWatchWindows: GoalWatchView[];
   featureSequences: FeatureSequence[];
   environmentArrivals: GoalArrival[];
-  /**
-   * Goals whose criteria changed after work had started. Its own list, never a
-   * `WorldEvent` — `deliveryHold` expires a standing delivery verdict on any world
-   * event matching the goal's issue ref, so drift written as one would un-park the
-   * goal it just reported on. The cockpit merges these at the feed's door, exactly
-   * as it merges `environmentArrivals`. Absent when `goalCriteria.enabled` is off:
-   * that flag is read here and in `src/system/system.ts`, and nowhere downstream.
-   */
-  criteriaDrift?: GoalCriteriaDrift[];
   remoteSheets: RemoteSheetView[];
   stackLandings: StackLandingView[];
   tasks: TaskSummary[];
@@ -955,10 +934,6 @@ export interface SpendTrendPayload {
   trend: SpendTrend;
 }
 
-export interface PredictionAggregatePayload {
-  aggregate: PredictionAggregate;
-}
-
 /** → docs/spec/39-app-errors.md#on-the-wire */
 export interface AppErrorGroupView extends AppErrorGroup {
   key: string;
@@ -1098,17 +1073,9 @@ export type {
   Escalation,
   PrPerson,
   GoalArrival,
-  CriterionCoverage,
-  CriteriaAlignmentPoint,
-  GoalCriteriaAlignment,
-  GoalCriteriaDrift,
-  GoalCriteriaVersion,
-  CriteriaStanding,
   GoalGroupReach,
   GoalLandingReach,
-  GoalPrediction,
   GoalReachStatus,
-  GoalReveal,
   HumanTask,
   InvestigationResolution,
   IssueInvestigation,
@@ -1121,8 +1088,6 @@ export type {
   DescriptionQuestion,
   PrDescriptionDraft,
   PrDescriptionVersion,
-  PredictionMark,
-  PredictionSlot,
   LocalValidationFinding,
   LocalValidationStatus,
   ObstacleKey,
@@ -1267,8 +1232,6 @@ export type {
   SpendTrendBucket,
 } from './insights/spendTrend.js';
 // → docs/spec/16-http-api.md
-
-export type { PredictionAggregate } from './insights/predictionAggregate.js';
 
 export type { ChecksSpend, TaskTypeSpend } from './insights/taskTypeSpend.js';
 export type { PlanDiff } from './plans/planDiff.js';

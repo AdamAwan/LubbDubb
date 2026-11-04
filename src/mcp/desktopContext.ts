@@ -6,7 +6,7 @@ import type { EjectionDesk } from '../ejection/desk.js';
 import type { Config } from '../config/config.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { ErrorRecorder } from '../errorLog.js';
-import type { Plan, RemoteRun } from '../types.js';
+import type { RemoteRun } from '../types.js';
 import type { CycleStanding } from '../harness.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { LocalRunner } from '../localRun/runner.js';
@@ -48,14 +48,6 @@ export interface DesktopRemoteValidation {
 
 export interface DesktopToolDeps {
   store: Store;
-  /**
-   * Whether this plan's body is withheld pending the operator's reveal. Handed in as
-   * an answer by the composition root: this channel is the operator's own assistant,
-   * so reading a plan aloud here defeats the reveal gate exactly as reading it in the
-   * cockpit would — but nothing under `src/mcp/` may reach the prediction store to
-   * find out. → docs/spec/11-mcp-tools.md#the-desktop-channel
-   */
-  planWithheld(plan: Plan | null): boolean;
   claimMinutes: number;
   validationRoot: string;
   environments: EnvironmentConfig[];

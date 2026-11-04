@@ -3,7 +3,6 @@ import type {
   IssueConclusion,
   IssueDelivery,
   IssueShortfall,
-  Plan,
   Proposal,
   ValidationCheck,
 } from '../types.js';
@@ -11,14 +10,7 @@ import type {
 // → docs/spec/34-usage-metrics.md#who-decided
 
 export type DecisionChoice =
-  | 'pr-description'
-  | 'plan'
-  | 'validation-check'
-  | 'goal-verdict'
-  | 'goal-criteria'
-  | 'watch-check'
-  | 'state-query'
-  | 'story-order';
+  'pr-description' | 'plan' | 'validation-check' | 'goal-verdict' | 'watch-check' | 'state-query' | 'story-order';
 
 type ChoiceSide = 'person' | 'agent';
 
@@ -27,7 +19,6 @@ const CHOICE_COPY: Record<DecisionChoice, { label: string; person: string; agent
   plan: { label: 'Plan', person: 'sent back or closed', agent: 'the planner’s approved' },
   'validation-check': { label: 'Validation check', person: 'settled by a person', agent: 'settled by the fleet' },
   'goal-verdict': { label: 'Goal verdict', person: 'a person’s', agent: 'an agent’s' },
-  'goal-criteria': { label: 'Goal criteria', person: 'written by a person', agent: 'the planner’s alone' },
   'watch-check': { label: 'Post-deploy watch', person: 'written by a person', agent: 'the plan’s' },
   'state-query': { label: 'State query', person: 'written by a person', agent: 'an agent’s, approved' },
   'story-order': { label: 'Story order', person: 'declined', agent: 'the sequencer’s accepted' },
@@ -70,9 +61,6 @@ export interface ChoiceInput {
   conclusions: readonly IssueConclusion[];
   deliveries: readonly IssueDelivery[];
   shortfalls: readonly IssueShortfall[];
-  choicesOff: readonly DecisionChoice[];
-  firstCriteria: readonly { originRef: string; at: string }[];
-  plans: readonly Plan[];
   watches: readonly Authored[];
   queries: readonly Authored[];
   sequences: readonly FeatureSequence[];
@@ -100,7 +88,6 @@ const SWEEPS: Record<DecisionChoice, (input: ChoiceInput) => Sighted[]> = {
     ...i.deliveries.map((d): Sighted => [by(d.by), d.updatedAt]),
     ...i.shortfalls.map((s): Sighted => [by(s.by), s.updatedAt]),
   ],
-  'goal-criteria': criteriaSightings,
   'watch-check': (i) => i.watches.map((w) => [by(w.authored), w.createdAt]),
   'state-query': (i) => i.queries.map((q) => [by(q.authored), q.createdAt]),
   'story-order': (i) =>
@@ -110,22 +97,9 @@ const SWEEPS: Record<DecisionChoice, (input: ChoiceInput) => Sighted[]> = {
 };
 
 export function choiceSightings(input: ChoiceInput): ChoiceSighting[] {
-  return CHOICES.filter((choice) => !input.choicesOff.includes(choice)).flatMap((choice) =>
+  return CHOICES.flatMap((choice) =>
     SWEEPS[choice](input)
       .filter((s): s is readonly [ChoiceSide, string] => s[1] !== null && s[1] >= input.since)
       .map(([side, at]) => ({ choice, side, at })),
   );
-}
-
-function criteriaSightings(input: ChoiceInput): Sighted[] {
-  const written = new Map(input.firstCriteria.map((c) => [c.originRef, c.at]));
-  const firstPlan = new Map<string, string>();
-  for (const plan of input.plans) {
-    const seen = firstPlan.get(plan.originRef);
-    if (seen === undefined || plan.createdAt < seen) firstPlan.set(plan.originRef, plan.createdAt);
-  }
-  return [...firstPlan].map(([goal, plannedAt]) => {
-    const at = written.get(goal);
-    return [at !== undefined && at <= plannedAt ? 'person' : 'agent', plannedAt];
-  });
 }

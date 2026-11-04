@@ -280,7 +280,7 @@ const CTX = {
 };
 
 test('answerWith sends the cockpit-only kinds to the cockpit, with a link and a reason', () => {
-  for (const kind of ['sitting', 'config', 'upgrade', 'limit'] as const) {
+  for (const kind of ['config', 'upgrade', 'limit'] as const) {
     const answer = answerWith(row({ kind }), CTX);
     assert.equal(answer.in, 'cockpit', kind);
     assert.equal(answer.in === 'cockpit' ? answer.link : null, CTX.link);
@@ -331,17 +331,6 @@ test('answerWith fills the ids each kind is answered by', () => {
 
   const mismatched = answerWith(row({ kind: 'bench', subject: { type: 'issue', issueNumber: 284 } }), CTX);
   assert.equal(mismatched.in, 'cockpit', 'a row whose record no tool here answers goes to its panel');
-});
-
-test('a withheld plan goes to the cockpit on the withheld fact, whatever page the row opens', () => {
-  const subject = { type: 'escalation' as const, escalationId: 'e1', proposalId: 'p1' };
-  for (const opens of ['prediction', 'goal', null] as const) {
-    const withheld = answerWith(row({ kind: 'plan', opens, subject: { ...subject, planWithheld: true } }), CTX);
-    assert.equal(withheld.in, 'cockpit', `withheld, opening ${opens}`);
-    assert.match(withheld.in === 'cockpit' ? withheld.why : '', /reveals it/);
-  }
-  const revealed = answerWith(row({ kind: 'plan', opens: 'prediction', subject }), CTX);
-  assert.ok(revealed.in === 'claude-code' && revealed.tool === 'proposal_decide', 'a revealed plan is decided here');
 });
 
 test('a plan amendment is offered only the verdicts an amendment takes', () => {
@@ -485,7 +474,6 @@ test("ask_next carries a card like Focus mode's: kind, queue, the goal plan with
       title: 'Ship the export',
       url: 'https://github.com/o/r/issues/12',
       plan: {
-        withheld: false,
         parts: [
           {
             seq: 1,

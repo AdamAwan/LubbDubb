@@ -48,6 +48,13 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'github.filters': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.prAuthor': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.workItemAssignedTo': 'work items are filtered to "userId"\'s while "ownWorkOnly" is on',
+  prediction: 'predictions were removed — nothing is asked before a plan is read, and no plan is withheld from you',
+  'prediction.enabled': 'predictions were removed',
+  predictionAggregateMinGoals:
+    'predictions were removed, and the aggregate this thresholded with them — the pull request description figures it also gated now need ten checked descriptions, fixed',
+  goalCriteria:
+    "goal criteria were removed — the planner's own acceptance criteria, per part, are what a goal is checked against",
+  'goalCriteria.enabled': 'goal criteria were removed',
   'remoteValidation.runTimeoutMs':
     "the harness no longer spawns the browser suite — the remote validation run's agent invokes the runner in its own shell, under its own stall park, so there is no invocation for the harness to kill",
 };
