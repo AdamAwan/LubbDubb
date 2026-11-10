@@ -158,31 +158,21 @@ function recordedNote(
 
 const LABEL_DEADLINE_MS = 30_000;
 
-async function labelForInvestigation(deps: McpToolDeps, originRef: string | null): Promise<void> {
+async function beforeVerdict(
+  deps: McpToolDeps,
+  originRef: string | null,
+  what: string,
+  write: ((issueNumber: number) => Promise<unknown>) | undefined,
+): Promise<void> {
   const origin = appraiserOrigin(originRef);
   const issueNumber = origin.ok ? issueSubtreeNumber(origin.issueOrigin) : null;
-  if (issueNumber === null || deps.investigateLabel === undefined) return;
+  if (issueNumber === null || write === undefined) return;
   try {
-    await withDeadline(deps.investigateLabel(issueNumber), LABEL_DEADLINE_MS, `labelling #${issueNumber} timed out`);
+    await withDeadline(write(issueNumber), LABEL_DEADLINE_MS, `${what} on #${issueNumber} timed out`);
   } catch (err) {
     deps.errors?.record({
       source: 'provider',
-      message: `Investigate label for #${issueNumber} did not land before the verdict`,
-      detail: err instanceof Error ? err.message : String(err),
-    });
-  }
-}
-
-async function takeCheaperProfile(deps: McpToolDeps, originRef: string | null, profile: string | null): Promise<void> {
-  const origin = appraiserOrigin(originRef);
-  const issueNumber = origin.ok ? issueSubtreeNumber(origin.issueOrigin) : null;
-  if (issueNumber === null || profile === null || deps.lowerProfile === undefined) return;
-  try {
-    await withDeadline(deps.lowerProfile(issueNumber, profile), LABEL_DEADLINE_MS, `pinning #${issueNumber} timed out`);
-  } catch (err) {
-    deps.errors?.record({
-      source: 'provider',
-      message: `Cheaper profile for #${issueNumber} did not land before the verdict`,
+      message: `${what} for #${issueNumber} did not land before the verdict`,
       detail: err instanceof Error ? err.message : String(err),
     });
   }
@@ -199,8 +189,11 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, task, ok }) => {
     handler: async (args) => {
       const parsed = validateGoalAppraisal(args, names, areas.paths);
       if (!parsed.ok) return toolError(`Appraisal rejected: ${parsed.error}`);
-      if (parsed.investigate) await labelForInvestigation(deps, task.originRef);
-      if (parsed.verdict === 'workable') await takeCheaperProfile(deps, task.originRef, parsed.profile);
+      if (parsed.investigate) await beforeVerdict(deps, task.originRef, 'Investigate label', deps.investigateLabel);
+      const { lowerProfile } = deps;
+      const profile = parsed.profile;
+      if (parsed.verdict === 'workable' && profile !== null && lowerProfile !== undefined)
+        await beforeVerdict(deps, task.originRef, 'Cheaper profile', (n) => lowerProfile(n, profile));
       const result = deps.agents.recordAppraisal(agent.id, parsed.verdict, parsed.summary, parsed.profile, {
         missing: parsed.missing,
         parent: parsed.parent,

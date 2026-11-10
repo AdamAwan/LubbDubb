@@ -290,13 +290,12 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
         issueNumber,
         'after the goal appraisal asked for an investigation',
       ),
-    lowerProfile: async (issueNumber: number, profile: string): Promise<void> => {
-      await lowerProfilePin(
+    lowerProfile: (issueNumber: number, profile: string): Promise<boolean> =>
+      lowerProfilePin(
         { store, sink, errors, labelPrefix: config.labelPrefix, agentModels: config.agentModels },
         issueNumber,
         profile,
-      );
-    },
+      ),
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
     discussions: fleetDiscussions(base.discussions, store, config.issueContainerTypes),
     errors,

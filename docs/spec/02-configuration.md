@@ -1127,17 +1127,18 @@ first arm safe:
 The gate asks only about proposals that would **spend more**. A proposal whose `rank` is below the
 standing profile's — the ticket's tag, else `default` — is applied by the harness itself: the
 `appraise_issue` handler awaits the `lowerProfile` seam (`lowerProfilePin`, `src/intake/profilePin.ts`)
-**before** recording the verdict. It writes the tag through `applyProfilePin` and folds it onto the
-stored world and tickets, so `recordAppraisal` then reads the proposal as agreement and stores it
+**before** recording the verdict. It writes the tag through `applyProfilePin`, which — for every pin,
+the operator's included — folds each label that lands onto the stored world and tickets, so `recordAppraisal` then reads the proposal as agreement and stores it
 already answered — the gate itself is untouched.
 
 - **The person is kept for the direction that costs money.** A deeper or equal-rank proposal, or one
   measured against nothing (no tag and no `default`, so no rank to compare), holds exactly as above.
-- **It fails safe.** A tag write that fails or times out leaves the standing profile in the world, so
-  the proposal reads as divergent and waits for the operator, as it did before.
+- **It fails safe.** `applyProfilePin` removes the other model tags before adding the wanted one, so
+  a write that fails part-way leaves no stray cheaper tag behind; the standing profile is still in the
+  world, the proposal reads as divergent, and it waits for the operator as it did before.
 - **Only with `workable`.** An `unclear` verdict carries no proposal to apply.
-- Who decided stays answerable the same way: the appraisal row keeps the proposal, and the tag
-  matching it with no operator click is the harness having lowered it.
+- The appraisal row keeps the proposal, so the tag can always be traced to it; what the row does not
+  record is whether the tag was lowered by the harness or already stood there.
 
 The tag therefore holds the **resolved answer**, not an operator override sitting beside an inferred
 one — which is what collapses the precedence chain to one lookup at dispatch. Who decided is still
