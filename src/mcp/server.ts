@@ -47,6 +47,7 @@ interface McpBridgeServerOptions {
   remoteListings?: McpToolDeps['remoteListings'];
   localRun?: McpToolDeps['localRun'];
   investigateLabel?: McpToolDeps['investigateLabel'];
+  lowerProfile?: McpToolDeps['lowerProfile'];
   discussions?: McpToolDeps['discussions'];
   repoRoot?: string;
   argsRetentionDays?: number;
@@ -220,6 +221,7 @@ export class McpBridgeServer {
         remoteListings: this.opts.remoteListings,
         localRun: this.opts.localRun,
         investigateLabel: this.opts.investigateLabel,
+        lowerProfile: this.opts.lowerProfile,
         discussions: this.opts.discussions,
         repoRoot: this.opts.repoRoot,
         errors: this.opts.errors,

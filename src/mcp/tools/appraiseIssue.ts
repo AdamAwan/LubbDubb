@@ -45,8 +45,8 @@ function appraisalDescription(profiles: Profiles, areas: Areas): string {
         'This deployment has, cheapest first — ' +
         profiles.map((p) => `"${p.name}": ${p.description}`).join('; ') +
         '. Judge what the ticket would actually take against this repository, not how long the ' +
-        'ticket is. If your answer differs from what is already set for this issue, a human is ' +
-        'asked to confirm it before anything is dispatched, so say what you think rather than ' +
+        'ticket is. A cheaper profile than what is set for this issue is applied straight away; a ' +
+        'deeper one is confirmed by a human before anything is dispatched, so say what you think rather than ' +
         'what you expect to be agreed with.'
       : '') +
     ' You also say where this item belongs on the backlog, if it is not already filed. Both are optional' +
@@ -147,7 +147,7 @@ function recordedNote(
             'nothing further for you to do about them.'
           : '') +
         (result.profileHeld === true
-          ? ' Your profile differs from what is set for this issue, so nothing is dispatched for it ' +
+          ? ' Your profile is deeper than what is set for this issue, so nothing is dispatched for it ' +
             'until a human confirms which to use. That is one click and it is not a rejection.'
           : '')
     : 'Recorded. Nothing is dispatched for this issue while the verdict stands. It ends by ' +
@@ -173,6 +173,21 @@ async function labelForInvestigation(deps: McpToolDeps, originRef: string | null
   }
 }
 
+async function takeCheaperProfile(deps: McpToolDeps, originRef: string | null, profile: string | null): Promise<void> {
+  const origin = appraiserOrigin(originRef);
+  const issueNumber = origin.ok ? issueSubtreeNumber(origin.issueOrigin) : null;
+  if (issueNumber === null || profile === null || deps.lowerProfile === undefined) return;
+  try {
+    await withDeadline(deps.lowerProfile(issueNumber, profile), LABEL_DEADLINE_MS, `pinning #${issueNumber} timed out`);
+  } catch (err) {
+    deps.errors?.record({
+      source: 'provider',
+      message: `Cheaper profile for #${issueNumber} did not land before the verdict`,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 export const appraiseIssue: ToolFactory = ({ deps, agent, task, ok }) => {
   const profiles = deps.profiles ?? [];
   const names = profiles.map((p) => p.name);
@@ -185,6 +200,7 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, task, ok }) => {
       const parsed = validateGoalAppraisal(args, names, areas.paths);
       if (!parsed.ok) return toolError(`Appraisal rejected: ${parsed.error}`);
       if (parsed.investigate) await labelForInvestigation(deps, task.originRef);
+      if (parsed.verdict === 'workable') await takeCheaperProfile(deps, task.originRef, parsed.profile);
       const result = deps.agents.recordAppraisal(agent.id, parsed.verdict, parsed.summary, parsed.profile, {
         missing: parsed.missing,
         parent: parsed.parent,

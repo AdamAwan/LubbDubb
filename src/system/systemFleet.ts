@@ -22,7 +22,7 @@ import type { Dispatcher } from '../dispatcher/dispatcher.js';
 import { issueWatchGateReason, type IssuePickupPolicy } from '../dispatcher/issuePickup.js';
 import { featureSummariesOn } from '../features/featureBoard.js';
 import { featureRecords, type FeatureBoardFacts } from '../featureSummaries/featureRecord.js';
-import { resolveModelTag } from '../modelLabels.js';
+import { standingProfile } from '../intake/profilePin.js';
 import { investigateLabelFor } from '../watchLabels.js';
 import { sequenceableFeatures } from '../sequence/sequence.js';
 import { LiveConfig } from '../config/configApply.js';
@@ -70,7 +70,7 @@ export function buildAgentManager(
               const number = issueOriginNumber('root', issueOrigin);
               const issue =
                 number === null ? undefined : store.world.getWorldBaseline()?.issues.find((i) => i.number === number);
-              return resolveModelTag(issue?.labels, config.labelPrefix, models).profile ?? models?.default ?? null;
+              return standingProfile(issue?.labels, config.labelPrefix, models);
             },
           }
         : undefined,
