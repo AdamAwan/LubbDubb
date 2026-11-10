@@ -191,7 +191,7 @@ export interface McpToolDeps {
    * Pins the issue to the appraiser's proposed profile when it is cheaper than what is standing, so
    * the proposal agrees on record and holds nothing. → docs/spec/02-configuration.md#a-cheaper-proposal-is-taken-without-asking
    */
-  lowerProfile?: (issueNumber: number, profile: string) => Promise<void>;
+  lowerProfile?: (issueNumber: number, profile: string) => Promise<boolean>;
   /** → docs/spec/40-discussions.md#what-fleet-agents-write */
   discussions?: {
     files: Pick<DiscussionFiles, 'enabled' | 'add'>;

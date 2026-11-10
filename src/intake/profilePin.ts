@@ -9,7 +9,7 @@ import type { Store } from '../store/store.js';
 // → docs/spec/06-issue-pickup.md
 
 interface ProfilePinContext {
-  store: Pick<Store, 'verdicts'>;
+  store: Pick<Store, 'verdicts' | 'world' | 'tickets'>;
   sink: { setIssueLabel(input: IssueLabelInput): Promise<SendResult> };
   errors?: ErrorRecorder;
   labelPrefix: string;
@@ -39,9 +39,13 @@ export async function applyProfilePin(
     };
 
   let wrote = false;
-  for (const { profile, label } of labels) {
+  const removalsFirst = [...labels.filter((l) => l.profile !== wanted), ...labels.filter((l) => l.profile === wanted)];
+  for (const { profile, label } of removalsFirst) {
     try {
-      await ctx.sink.setIssueLabel({ number: issueNumber, label, present: profile === wanted });
+      const present = profile === wanted;
+      await ctx.sink.setIssueLabel({ number: issueNumber, label, present });
+      ctx.store.world.patchWorldLabels({ issues: [issueNumber], label, present });
+      ctx.store.tickets.patchTicketLabels({ numbers: [issueNumber], label, present });
       wrote = true;
     } catch (err) {
       const message = (err as Error).message;
@@ -69,24 +73,13 @@ export function standingProfile(
   return resolveModelTag(labels, labelPrefix, models).profile ?? models?.default ?? null;
 }
 
-export async function lowerProfilePin(
-  ctx: ProfilePinContext & { store: Pick<Store, 'verdicts' | 'world' | 'tickets'> },
-  issueNumber: number,
-  proposed: string,
-): Promise<boolean> {
+export async function lowerProfilePin(ctx: ProfilePinContext, issueNumber: number, proposed: string): Promise<boolean> {
   const issue = ctx.store.world.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
   const standing = standingProfile(issue?.labels, ctx.labelPrefix, ctx.agentModels);
   const from = profileRank(ctx.agentModels, standing);
   const to = profileRank(ctx.agentModels, proposed);
   if (from === null || to === null || to >= from) return false;
-  const outcome = await applyProfilePin(ctx, issueNumber, proposed);
-  if (!outcome.ok) return false;
-  for (const { profile, label } of modelLabelsFor(ctx.labelPrefix, ctx.agentModels)) {
-    const present = profile === proposed;
-    ctx.store.world.patchWorldLabels({ issues: [issueNumber], label, present });
-    ctx.store.tickets.patchTicketLabels({ numbers: [issueNumber], label, present });
-  }
-  return true;
+  return (await applyProfilePin(ctx, issueNumber, proposed)).ok;
 }
 
 // → docs/spec/02-configuration.md#pinning-one-goal-to-a-profile
