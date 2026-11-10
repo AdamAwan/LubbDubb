@@ -1,8 +1,8 @@
-import type { AgentModels } from '../agents/modelPolicy.js';
+import { profileRank, type AgentModels } from '../agents/modelPolicy.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
 import { inIssueOriginFamily, issueOriginHead, issueOriginRole, parseIssueOrigin } from '../issueOrigins.js';
-import { modelLabelsFor } from '../modelLabels.js';
+import { modelLabelsFor, resolveModelTag } from '../modelLabels.js';
 import type { IssueLabelInput, SendResult } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 
@@ -57,6 +57,36 @@ export async function applyProfilePin(
   const appraisal = ctx.store.verdicts.getAppraisal(origin);
   const answered = appraisal !== null && ctx.store.verdicts.answerAppraisalProfile(origin, appraisal.goalRef);
   return { ok: true, profile: wanted, answered };
+}
+
+// → docs/spec/02-configuration.md#a-cheaper-proposal-is-taken-without-asking
+
+export function standingProfile(
+  labels: string[] | undefined,
+  labelPrefix: string,
+  models: AgentModels | undefined,
+): string | null {
+  return resolveModelTag(labels, labelPrefix, models).profile ?? models?.default ?? null;
+}
+
+export async function lowerProfilePin(
+  ctx: ProfilePinContext & { store: Pick<Store, 'verdicts' | 'world' | 'tickets'> },
+  issueNumber: number,
+  proposed: string,
+): Promise<boolean> {
+  const issue = ctx.store.world.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
+  const standing = standingProfile(issue?.labels, ctx.labelPrefix, ctx.agentModels);
+  const from = profileRank(ctx.agentModels, standing);
+  const to = profileRank(ctx.agentModels, proposed);
+  if (from === null || to === null || to >= from) return false;
+  const outcome = await applyProfilePin(ctx, issueNumber, proposed);
+  if (!outcome.ok) return false;
+  for (const { profile, label } of modelLabelsFor(ctx.labelPrefix, ctx.agentModels)) {
+    const present = profile === proposed;
+    ctx.store.world.patchWorldLabels({ issues: [issueNumber], label, present });
+    ctx.store.tickets.patchTicketLabels({ numbers: [issueNumber], label, present });
+  }
+  return true;
 }
 
 // → docs/spec/02-configuration.md#pinning-one-goal-to-a-profile
