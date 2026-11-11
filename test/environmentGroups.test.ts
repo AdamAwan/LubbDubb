@@ -27,7 +27,7 @@ function arrival(over: Partial<GoalArrival> & { environment: string }): GoalArri
 }
 
 function landing(over: Partial<GoalLanding> & { prNumber: number; sha: string }): GoalLanding {
-  return { goalRef: 'issue:12', recordedAt: '2026-01-01T00:00:00.000Z', onIntegration: true, ...over };
+  return { goalRef: 'issue:12', recordedAt: '2026-01-01T00:00:00.000Z', onIntegration: true, mergedAt: null, ...over };
 }
 
 function reading(over: Partial<EnvironmentReading> & { sha: string; environment: string }): EnvironmentReading {

@@ -110,7 +110,6 @@ test('after the merge, the dry run reads the window that ends at it', async () =
   const [asked] = observer.asked;
   assert.equal(asked?.until, merged, 'the merge, not the moment the dry run happened to be taken');
   assert.equal(asked?.since, new Date(Date.parse(merged) - HOUR).toISOString(), 'one window before it');
-  assert.equal(asked?.untilIsPast, true);
   const check = system.store.watches.listGoalWatches()[0]!;
   assert.equal(check.baselineValue, 8400, 'and that reading is the baseline');
   system.store.close();
@@ -129,7 +128,6 @@ test('before anything has merged, the dry run falls back to the window before no
   const until = Date.parse(asked.until);
   assert.ok(until >= before && until <= Date.now(), 'now');
   assert.equal(Date.parse(asked.since), until - HOUR);
-  assert.equal(asked.untilIsPast, false);
   system.store.close();
 });
 
@@ -151,14 +149,25 @@ test('a measure declared before {until} existed reads unknown on its dry run, ne
   assert.equal(check.baselineValue, null, 'no baseline rather than one read on past the merge');
   assert.match(check.dryRunDetail!, /\{until\}/, 'and it says what is missing');
   assert.equal(refusals.length, 1);
+  assert.deepEqual(observer.asked, [], 'refused by the dry run itself, before anything is put to the environment');
+  system.store.close();
+});
 
+test('before the merge, a measure without {until} still takes its baseline over the window ending now', async () => {
+  const observer = new FakeEnvironmentObserver(ANSWERS);
+  const system = build(observer);
+  system.store.watches.ingestGoalWatch('issue:12', [measure(OPEN_ENDED)]);
+
+  await system.watch.run('issue:12');
+
+  assert.equal(system.store.watches.listGoalWatches()[0]!.baselineValue, 8400, '{until} would be now anyway');
   const window = preparedQuery(
     OPEN_ENDED,
-    { since: '2026-01-01T00:00:00.000Z', until: '2026-01-02T00:00:00.000Z', untilIsPast: false },
+    { since: '2026-01-01T00:00:00.000Z', until: '2026-01-02T00:00:00.000Z' },
     'orders-p95',
     'measure',
   );
-  assert.ok(window.query !== null, 'its window readings are unchanged: {until} would be now anyway');
+  assert.ok(window.query !== null, 'and its window readings are unchanged');
   system.store.close();
 });
 
@@ -178,7 +187,6 @@ test('the observe command is handed LUBBDUBB_WATCH_UNTIL, and the query arrives 
       kind: 'signal',
       since: '2026-01-01T00:00:00.000Z',
       until: '2026-01-02T00:00:00.000Z',
-      untilIsPast: true,
     });
     assert.equal(result.verdict, 'answered');
     assert.equal(result.rows![0]!['until'], '2026-01-02T00:00:00.000Z');

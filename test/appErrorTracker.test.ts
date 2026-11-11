@@ -144,7 +144,7 @@ test('a press files from the row the tab drew, link included: the bug is related
   const git = new FakeGitObserver().setChangedFiles(landed, ['src/Orders/OrderService.cs']);
   const soon = new Date(Date.now() + 60_000).toISOString();
   const { system } = build({ gitObserver: git, errors: errorsOn('Orders.Submit', 5, soon, soon) });
-  system.store.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:412', sha: landed });
+  system.store.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:412', sha: landed, mergedAt: null });
   system.store.environments.recordEnvironmentReach({
     sha: landed,
     environment: 'test',
@@ -167,7 +167,7 @@ test('a link made by a route hint alone is not a relation: the bug is filed rela
   const git = new FakeGitObserver().setChangedFiles(landed, ['docs/readme.md']);
   const soon = new Date(Date.now() + 60_000).toISOString();
   const { system } = build({ gitObserver: git, errors: errorsOn('Orders.Submit', 5, soon, soon) });
-  system.store.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:412', sha: landed });
+  system.store.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:412', sha: landed, mergedAt: null });
   system.store.environments.recordEnvironmentReach({
     sha: landed,
     environment: 'test',

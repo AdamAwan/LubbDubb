@@ -107,7 +107,7 @@ function seeded() {
   });
   store.graph.recordWorkGraph([{ ref: goalRef, kind: 'issue', title: 'A goal', status: 'open', terminal: false }]);
   store.verdicts.recordDelivery({ originRef: goalRef, summary: 'shipped', by: 'assessor' });
-  store.environments.recordGoalLanding({ prNumber: 11, goalRef, sha: 'a'.repeat(40) });
+  store.environments.recordGoalLanding({ prNumber: 11, goalRef, sha: 'a'.repeat(40), mergedAt: null });
   store.environments.recordGoalArrival({ goalRef, environment: 'testUk', arrivedAt: new Date().toISOString() });
   store.environments.recordEnvironmentHealth({
     environment: 'testUk',

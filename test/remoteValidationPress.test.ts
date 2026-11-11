@@ -143,7 +143,7 @@ function seed(
   });
   store.remoteValidation.saveStateQueries('issue:12', [QUERY], 'agent');
   store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-  store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
+  store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED, mergedAt: null });
   if (opts.approve !== false)
     store.remoteValidation.approveStateQuery({
       digest: queryDigest(QUERY.query, QUERY.presence),

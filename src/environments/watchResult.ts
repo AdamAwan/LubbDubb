@@ -1,12 +1,6 @@
 // → docs/spec/24-environments.md
 
-import {
-  carriesSince,
-  carriesUntil,
-  missingSinceRefusal,
-  missingUntilRefusal,
-  withPeriod,
-} from '../validation/watchQueryShape.js';
+import { carriesSince, missingSinceRefusal, withPeriod } from '../validation/watchQueryShape.js';
 
 export type WatchQueryKind = 'signal' | 'presence' | 'measure';
 
@@ -29,19 +23,17 @@ export function idProjection(query: string, checkId: string): string {
   return `${query}\n| extend ${WATCH_ID_COLUMN} = "${checkId}"`;
 }
 
-/** What `{since}` and `{until}` are replaced with. `untilIsPast` is a dry run's after the merge. */
+/** What `{since}` and `{until}` are replaced with. */
 export interface WatchPeriod {
   since: string;
   until: string;
-  untilIsPast: boolean;
 }
 
 /**
  * The query as it is put to the environment, or **a refusal where it carries no
  * `{since}`** — which is every check declared before the token existed. A reading
  * that cannot be bounded to the window is not an answer: it counts what happened
- * before the work arrived, which reads as the defect the work fixed. A measure
- * with no `{until}` is refused the same way where the period ends before now.
+ * before the work arrived, which reads as the defect the work fixed.
  *
  * Both observers route through it rather than their callers, so a query reaches
  * a shell substituted or not at all.
@@ -56,8 +48,6 @@ export function preparedQuery(
 ): { query: string; refusal: null } | { query: null; refusal: string } {
   if (!carriesSince(query))
     return { query: null, refusal: missingSinceRefusal(kind === 'presence' ? 'presence' : 'query') };
-  if (kind === 'measure' && period.untilIsPast && !carriesUntil(query))
-    return { query: null, refusal: missingUntilRefusal() };
   return { query: idProjection(withPeriod(query, period.since, period.until), checkId), refusal: null };
 }
 

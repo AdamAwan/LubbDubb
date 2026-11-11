@@ -184,14 +184,18 @@ defect was real and that the query sees it.
 `LUBBDUBB_WATCH_UNTIL` is passed beside `LUBBDUBB_WATCH_SINCE`, for the wrapper that assembles its
 own query. A check declared before the token existed carries no `{until}`. Its window readings are
 unchanged, because `{until}` would be now anyway. A **measure's** dry run after the merge is refused by
-`preparedQuery` like a query with no `{since}` — the request says its period ends in the past
-(`untilIsPast`), and a measure that cannot be ended there would read the change into its own
-baseline — so it reads `unknown` with that reason, never a baseline taken over the wrong period. A
+the dry run itself (`WatchDryRun`, `src/environments/watchDryRun.ts`) before anything is put to the
+environment — a measure that cannot be ended at the merge would read the change into its own
+baseline — so it reads `unknown` with `missingUntilRefusal` as its reason, never a baseline taken over
+the wrong period. Only the dry run knows its period ends in the past, so the refusal is its own rather
+than `preparedQuery`'s. A
 signal without `{until}` keeps working: its dry run proves the query resolves and the defect fires, and
 reading on past the merge widens that question without turning it into a false one.
 
-A finding's bench row draws the query as it was put, with `{until}` at the reading that regressed
-(`watchWindowReadings`, `src/environments/watchFinding.ts`).
+A window's period is `watchPeriod` (`src/environments/exposure.ts`), taken once per window per pass,
+so every check read in that pass shares one `{until}`. A finding's bench row draws the query through
+the same helper, with `{until}` at the reading that regressed (`watchWindowReadings`,
+`src/environments/watchFinding.ts`).
 
 ### A signal query returns rows, never a count
 
@@ -896,7 +900,7 @@ The window **opens on arrival and is clocked from exposure**. It opens as any wi
 freshness guard and the arrival stamp are unchanged — but on an environment declaring an exposure its
 first end is `arrival + waitMs` rather than `arrival + forMs`. The first reading that clears the floor
 stamps `watch_windows.exposed_at` and moves the end to `exposed_at + forMs`, once; and from then on
-`{since}` is `exposed_at`, not the arrival (`watchSince`), so the hours the change spent reaching
+`{since}` is `exposed_at`, not the arrival (`watchPeriod`), so the hours the change spent reaching
 tenants are outside every query, the bench row's query included. A window that never reaches the floor
 settles at `waitMs` with every check `unknown`, which is what happened, and an operator can extend it.
 

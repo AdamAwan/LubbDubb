@@ -88,7 +88,7 @@ function plannedGoal(): WorkNode[] {
 }
 
 function landing(over: Partial<GoalLanding> & { prNumber: number; sha: string }): GoalLanding {
-  return { goalRef: 'issue:12', recordedAt: '2026-01-01T00:00:00.000Z', onIntegration: null, ...over };
+  return { goalRef: 'issue:12', recordedAt: '2026-01-01T00:00:00.000Z', onIntegration: null, mergedAt: null, ...over };
 }
 
 function reading(over: Partial<EnvironmentReading> & { sha: string; environment: string }): EnvironmentReading {
@@ -102,7 +102,7 @@ test('a merged pull request is attributed to its goal through the work graph', (
     integrationBranch: 'main',
     landed: new Set(),
   });
-  assert.deepEqual(found, [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' }]);
+  assert.deepEqual(found, [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1', mergedAt: null }]);
 });
 
 test('a merge already recorded is not swept up again', () => {
@@ -145,7 +145,7 @@ test('a merge the graph has not folded yet falls back to the world’s own issue
     integrationBranch: 'main',
     landed: new Set(),
   });
-  assert.deepEqual(found, [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' }]);
+  assert.deepEqual(found, [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1', mergedAt: null }]);
 });
 
 test('a merged pull request belonging to no goal is skipped, not attributed to a guess', () => {
@@ -172,7 +172,7 @@ test('a merge onto another pull request’s branch is not a landing', () => {
   });
   assert.deepEqual(
     found,
-    [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' }],
+    [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1', mergedAt: null }],
     'a stacked squash lands on a branch that is deleted and is an ancestor of nothing',
   );
 });
@@ -195,8 +195,8 @@ test('a stacked merge rides its carrier’s landing once that is placed on the i
   assert.deepEqual(
     carried([landing({ prNumber: 1, sha: 'sha1', onIntegration: true })]),
     [
-      { prNumber: 2, goalRef: 'issue:12', sha: 'sha1', onIntegration: true },
-      { prNumber: 3, goalRef: 'issue:12', sha: 'sha1', onIntegration: true },
+      { prNumber: 2, goalRef: 'issue:12', sha: 'sha1', onIntegration: true, mergedAt: null },
+      { prNumber: 3, goalRef: 'issue:12', sha: 'sha1', onIntegration: true, mergedAt: null },
     ],
     'the graph keeps the stack after the closed window forgets it, however tall',
   );
@@ -206,7 +206,7 @@ test('a stacked merge rides its carrier’s landing once that is placed on the i
       landing({ prNumber: 2, sha: 'sha2', onIntegration: false }),
       landing({ prNumber: 3, sha: 'sha1', onIntegration: true }),
     ]),
-    [{ prNumber: 2, goalRef: 'issue:12', sha: 'sha1', onIntegration: true }],
+    [{ prNumber: 2, goalRef: 'issue:12', sha: 'sha1', onIntegration: true, mergedAt: null }],
     'a row recorded as its own squash is re-pointed; one already carried is left alone',
   );
 });
@@ -233,7 +233,11 @@ test('a merge whose provider reported no base branch is still a landing', () => 
     integrationBranch: 'main',
     landed: new Set(),
   });
-  assert.deepEqual(found, [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1' }], 'the clone reconciles what it cannot');
+  assert.deepEqual(
+    found,
+    [{ prNumber: 1, goalRef: 'issue:12', sha: 'sha1', mergedAt: null }],
+    'the clone reconciles what it cannot',
+  );
 });
 
 test('a stacked merge is not counted as unattributed either', () => {
@@ -259,8 +263,8 @@ test('a part’s merge is attributed to the goal, not to the part it hung off', 
     landed: new Set(),
   });
   assert.deepEqual(found, [
-    { prNumber: 1, goalRef: 'issue:12', sha: 'sha1' },
-    { prNumber: 2, goalRef: 'issue:12', sha: 'sha2' },
+    { prNumber: 1, goalRef: 'issue:12', sha: 'sha1', mergedAt: null },
+    { prNumber: 2, goalRef: 'issue:12', sha: 'sha2', mergedAt: null },
   ]);
 });
 
@@ -1005,7 +1009,7 @@ const TESTUK: EnvironmentConfig[] = [{ name: 'testUk', at: 'unused', arrival: { 
 test('an arrival the harness watched happen is said on the ticket, once', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk, comments } = announcingDesk(TESTUK, () => now);
-  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc', mergedAt: null });
   store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'testUk',
@@ -1052,7 +1056,7 @@ function establishedDeployment(environments: EnvironmentConfig[], now: number) {
   let clock = new Date(now - 7 * 24 * 60 * 60_000).toISOString();
   const store = new Store(':memory:', () => clock);
   for (let n = 1; n <= 12; n += 1) {
-    store.environments.recordGoalLanding({ prNumber: n, goalRef: `issue:${n}`, sha: `sha${n}` });
+    store.environments.recordGoalLanding({ prNumber: n, goalRef: `issue:${n}`, sha: `sha${n}`, mergedAt: null });
     for (const env of environments) {
       store.environments.recordEnvironmentReach({
         sha: `sha${n}`,
@@ -1112,7 +1116,7 @@ test('a name with no history still speaks for work that lands after it', async (
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, comments, desk } = establishedDeployment(TESTUK, now);
   const added: EnvironmentConfig[] = [...TESTUK, { name: 'liveEu', at: 'unused', arrival: { comment: true } }];
-  store.environments.recordGoalLanding({ prNumber: 99, goalRef: 'issue:99', sha: 'sha99' });
+  store.environments.recordGoalLanding({ prNumber: 99, goalRef: 'issue:99', sha: 'sha99', mergedAt: null });
   store.environments.recordEnvironmentReach({ sha: 'sha99', environment: 'liveEu', status: 'reached', detail: null });
   store.environments.recordGoalArrival({
     goalRef: 'issue:99',
@@ -1140,7 +1144,7 @@ const HALLWAY: EnvironmentConfig[] = [{ name: 'hallway', at: 'unused', arrival: 
 test('an arrival the harness watched happen moves the work item on, once', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk, moves } = announcingDesk(HALLWAY, () => now);
-  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc', mergedAt: null });
   store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'hallway',
@@ -1177,7 +1181,7 @@ const STAGED: EnvironmentConfig[] = [
 test('an environment never moves a work item back behind one further down the line', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk, moves } = announcingDesk(STAGED, () => now);
-  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc', mergedAt: null });
   store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'prod',
@@ -1198,7 +1202,7 @@ test('an environment never moves a work item back behind one further down the li
 test('an arrival never moves a work item that is already closed', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk, moves } = announcingDesk(HALLWAY, () => now);
-  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc', mergedAt: null });
   store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'hallway',
@@ -1218,7 +1222,7 @@ test('an arrival never moves a work item that is already closed', async () => {
 test('a work item the provider refuses to move is left for the next pulse', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk } = announcingDesk(HALLWAY, () => now);
-  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
+  store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc', mergedAt: null });
   store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'hallway',
@@ -1392,9 +1396,9 @@ test('the rows a part ref was already filed under are repaired on the next boot'
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-partref-'));
   const path = join(dir, 'landings.db');
   const before = new Store(path);
-  before.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12:part:api', sha: 'sha1' });
-  before.environments.recordGoalLanding({ prNumber: 2, goalRef: 'issue:12:part:ui', sha: 'sha2' });
-  before.environments.recordGoalLanding({ prNumber: 3, goalRef: 'issue:99', sha: 'sha3' });
+  before.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12:part:api', sha: 'sha1', mergedAt: null });
+  before.environments.recordGoalLanding({ prNumber: 2, goalRef: 'issue:12:part:ui', sha: 'sha2', mergedAt: null });
+  before.environments.recordGoalLanding({ prNumber: 3, goalRef: 'issue:99', sha: 'sha3', mergedAt: null });
   before.environments.recordGoalArrival({
     goalRef: 'issue:12:part:api',
     environment: 'testUk',

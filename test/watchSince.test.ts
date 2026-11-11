@@ -99,7 +99,7 @@ test('a window’s reading is bounded to the arrival that opened it', async () =
   );
   const put = preparedQuery(
     SIGNAL.query,
-    { since: window.openedAt, until: new Date().toISOString(), untilIsPast: false },
+    { since: window.openedAt, until: new Date().toISOString() },
     SIGNAL.id,
     'signal',
   );

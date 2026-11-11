@@ -803,7 +803,7 @@ test('goal_read passes an environment verdict through three-valued', async () =>
     { name: 'production', at: 'echo nothing' },
   ]);
   try {
-    system.store.environments.recordGoalLanding({ prNumber: 31, goalRef: goal, sha: 'sha-31' });
+    system.store.environments.recordGoalLanding({ prNumber: 31, goalRef: goal, sha: 'sha-31', mergedAt: null });
     system.store.environments.recordEnvironmentReach({
       sha: 'sha-31',
       environment: 'hallway',

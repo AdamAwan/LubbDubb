@@ -10,7 +10,7 @@ interface LandingToRecord {
   prNumber: number;
   goalRef: string;
   sha: string;
-  mergedAt?: string;
+  mergedAt: string | null;
 }
 
 interface LandingSweepInput {
@@ -29,12 +29,7 @@ export function unrecordedLandings(input: LandingSweepInput): LandingToRecord[] 
     if (pr.baseBranch !== undefined && pr.baseBranch !== input.integrationBranch) continue;
     const goalRef = goals.get(pr.number) ?? issueRefFor(pr, input.world);
     if (goalRef === null) continue;
-    out.push({
-      prNumber: pr.number,
-      goalRef,
-      sha: pr.mergeCommitSha,
-      ...(pr.closedAt === undefined ? {} : { mergedAt: pr.closedAt }),
-    });
+    out.push({ prNumber: pr.number, goalRef, sha: pr.mergeCommitSha, mergedAt: pr.closedAt ?? null });
   }
   return out;
 }
@@ -71,7 +66,7 @@ export function carriedLandings(input: CarrySweepInput): CarriedLanding[] {
       goalRef,
       sha: carrier.sha,
       onIntegration: carrier.onIntegration,
-      ...(carrier.mergedAt == null ? {} : { mergedAt: carrier.mergedAt }),
+      mergedAt: carrier.mergedAt,
     });
   }
   return out;

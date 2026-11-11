@@ -156,7 +156,7 @@ function seedSheet(store: Store, environment = 'acceptance'): void {
     amendNote: '',
   });
   store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-  store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
+  store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED, mergedAt: null });
   store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment });
   store.remoteValidation.saveRemoteSheetRows('issue:12', environment, [
     {

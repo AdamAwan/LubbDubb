@@ -2,7 +2,8 @@ import type { Store } from '../store/store.js';
 import type { GoalWatch, WatchReadingVerdict } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 import type { EnvironmentObserver } from './observer.js';
-import { scalarShaped, type WatchPeriod, type WatchResult } from './watchResult.js';
+import { scalarShaped, unanswered, type WatchPeriod, type WatchResult } from './watchResult.js';
+import { carriesUntil, missingUntilRefusal } from '../validation/watchQueryShape.js';
 import { watchWindowMs } from './watchWindow.js';
 import { goalMergedAt } from './landings.js';
 
@@ -31,24 +32,23 @@ export class WatchDryRun implements WatchDryRunner {
     const environment = dryRunEnvironment(this.deps.environments);
     if (environment === null) return [];
     const checks = this.deps.store.watches.listGoalWatches().filter((c) => c.originRef === originRef);
-    const period = this.period(environment, originRef);
+    const merged = goalMergedAt(this.deps.store.environments.listGoalLandings(), originRef);
+    const period = this.period(environment, merged);
     const refusals: string[] = [];
     for (const check of checks) {
-      const reading = await this.read(environment, check, period);
+      const reading =
+        merged !== null && check.kind === 'measure' && !carriesUntil(check.query)
+          ? readingOf(environment, check, unanswered(missingUntilRefusal()))
+          : await this.read(environment, check, period);
       this.deps.store.watches.recordWatchDryRun(originRef, check.id, { environment: environment.name, ...reading });
       if (reading.detail !== null) refusals.push(`${check.id}: ${reading.detail}`);
     }
     return refusals;
   }
 
-  private period(environment: EnvironmentConfig, originRef: string): WatchPeriod {
-    const merged = goalMergedAt(this.deps.store.environments.listGoalLandings(), originRef);
+  private period(environment: EnvironmentConfig, merged: number | null): WatchPeriod {
     const until = merged ?? this.now();
-    return {
-      since: new Date(until - watchWindowMs(environment)).toISOString(),
-      until: new Date(until).toISOString(),
-      untilIsPast: merged !== null,
-    };
+    return { since: new Date(until - watchWindowMs(environment)).toISOString(), until: new Date(until).toISOString() };
   }
 
   private async read(environment: EnvironmentConfig, check: GoalWatch, period: WatchPeriod): Promise<DryRunReading> {

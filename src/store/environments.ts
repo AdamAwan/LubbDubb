@@ -33,13 +33,13 @@ export function repairPartRefGoals(db: Database.Database): void {
 export class EnvironmentStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  recordGoalLanding(input: { prNumber: number; goalRef: string; sha: string; mergedAt?: string | null }): void {
+  recordGoalLanding(input: { prNumber: number; goalRef: string; sha: string; mergedAt: string | null }): void {
     this.ctx
       .prep(
         `INSERT OR IGNORE INTO goal_landings (pr_number, goal_ref, sha, recorded_at, merged_at)
          VALUES (@prNumber, @goalRef, @sha, @recordedAt, @mergedAt)`,
       )
-      .run({ ...input, mergedAt: input.mergedAt ?? null, recordedAt: this.ctx.now() });
+      .run({ ...input, recordedAt: this.ctx.now() });
   }
 
   listGoalLandings(): GoalLanding[] {
@@ -65,7 +65,7 @@ export class EnvironmentStore {
     goalRef: string;
     sha: string;
     onIntegration: boolean | null;
-    mergedAt?: string | null;
+    mergedAt: string | null;
   }): void {
     this.ctx
       .prep(
@@ -80,7 +80,7 @@ export class EnvironmentStore {
         sha: input.sha,
         recordedAt: this.ctx.now(),
         onIntegration: input.onIntegration === null ? null : yesNo(input.onIntegration),
-        mergedAt: input.mergedAt ?? null,
+        mergedAt: input.mergedAt,
       });
   }
 

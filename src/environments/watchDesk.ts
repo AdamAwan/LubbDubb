@@ -2,11 +2,12 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { GoalWatch, WatchWindow } from '../types.js';
 import type { EnvironmentObserver } from './observer.js';
+import type { WatchPeriod } from './watchResult.js';
 import type { EnvironmentConfig } from './policy.js';
 import { watchFindings, watchWindowReadings } from './watchFinding.js';
 import { watchCheckVerdict } from './watchVerdict.js';
 import { dueWindows, openableArrivals, settlingWindows, watchWindowMs } from './watchWindow.js';
-import { exposureFloor, exposureShortfall, watchSince } from './exposure.js';
+import { exposureFloor, exposureShortfall, watchPeriod } from './exposure.js';
 import { landedCommits } from './landings.js';
 
 // → docs/spec/24-environments.md
@@ -136,9 +137,10 @@ export class WatchDesk {
         continue;
       }
       if (window === null) continue;
+      const period = watchPeriod(window, new Date(this.now()).toISOString());
       for (const check of mine) {
         try {
-          await this.readCheck(environment, window, check, commits);
+          await this.readCheck(environment, window, check, period, commits);
         } catch (err) {
           errors?.record({
             source: 'cycle',
@@ -192,10 +194,10 @@ export class WatchDesk {
     environment: EnvironmentConfig,
     window: WatchWindow,
     check: GoalWatch,
+    period: WatchPeriod,
     commits: readonly string[],
   ): Promise<void> {
     const command = environment.watch!.observe;
-    const period = { since: watchSince(window), until: new Date(this.now()).toISOString(), untilIsPast: false };
     const presence =
       check.presence === null
         ? null

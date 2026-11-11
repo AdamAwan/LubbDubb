@@ -78,12 +78,14 @@ export function missingSinceRefusal(field: 'query' | 'presence'): string {
   );
 }
 
+/** The one account of `{until}` every server-side text gives: the refusal, `watch_declare` and both planning notes. */
+export const UNTIL_EXPLAINED =
+  `A measure's query ends its period with "${UNTIL_TOKEN}" — "| where timestamp > datetime(${SINCE_TOKEN}) and ` +
+  `timestamp <= datetime(${UNTIL_TOKEN})" — which the harness replaces with now for a watch reading and with the ` +
+  'moment the goal merged for the dry run that takes the baseline, so the number the work has to beat is read ' +
+  'over the window before the change and never over the change itself. A measure without it is refused; a ' +
+  'signal may carry it too.';
+
 export function missingUntilRefusal(): string {
-  return (
-    `the query carries no "${UNTIL_TOKEN}", so nothing ends the period a measure is read over. A measure's baseline ` +
-    'is read over the window before the merge; taken once the change has deployed, a query that runs on to ' +
-    'now reads the change into the number it is compared against — the change measured against itself, which ' +
-    `passes on any regression. Bound both ends — "| where timestamp > datetime(${SINCE_TOKEN}) and timestamp <= ` +
-    `datetime(${UNTIL_TOKEN})" — and the harness substitutes now for a watch reading and the merge for the baseline.`
-  );
+  return `the query carries no "${UNTIL_TOKEN}", so nothing ends the period a measure is read over. ${UNTIL_EXPLAINED}`;
 }

@@ -305,7 +305,7 @@ test('and one environment declaring permits: ["state"] with a state.run turns al
 
     // And the press is reachable on the same run: it opens a run row, pins it to the commit the
     // environment stands at now, and re-reads the confirmed row through it.
-    system.store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
+    system.store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED, mergedAt: null });
     const pressed = await system.remoteRuns.press('issue:12', 'acceptance');
     assert.equal(pressed.ok, true);
     assert.equal(system.store.remoteValidation.listRemoteRuns().length, 1);

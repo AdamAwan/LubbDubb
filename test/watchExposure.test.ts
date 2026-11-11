@@ -74,8 +74,8 @@ function build(observer: FakeEnvironmentObserver): System {
 
 function arrived(system: System): void {
   system.store.watches.ingestGoalWatch('issue:12', [SIGNAL]);
-  system.store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
-  system.store.environments.recordGoalLanding({ prNumber: 5, goalRef: 'issue:12', sha: 'def' });
+  system.store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc', mergedAt: null });
+  system.store.environments.recordGoalLanding({ prNumber: 5, goalRef: 'issue:12', sha: 'def', mergedAt: null });
   system.store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'liveUk',

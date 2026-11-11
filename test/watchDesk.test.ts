@@ -128,7 +128,7 @@ test('presence answering zero reads unknown on the glass, in the goal page’s o
     git: new FakeGitObserver().setContains('head-testUk', 'abc', true),
   });
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Job X keeps timing out' });
-  system.store.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12', sha: 'abc' });
+  system.store.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12', sha: 'abc', mergedAt: null });
   system.store.watches.ingestGoalWatch('issue:12', [SIGNAL]);
 
   await system.harness.runCycle();
