@@ -2,7 +2,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { BranchPresence, GitObserver } from '../git/gitObserver.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Plan, PlanPart, PlanPartBlocker, PullRequest, TaskSummary, WorldSnapshot } from '../types.js';
+import type { Plan, PlanPart, PlanPartBlocker, PullRequest, WorldSnapshot } from '../types.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { renderPlanComment } from './planComment.js';
 import { type PrRefStyle } from '../pr/prRef.js';
@@ -45,9 +45,8 @@ export class PlanReconciler {
     if (plans.length === 0) return;
 
     await this.maybeFetch();
-    const tasks = this.deps.store.tasks.listTasks();
     for (const plan of plans) {
-      await this.reconcilePlan(plan, world.pullRequests, world.closedPullRequests ?? [], tasks);
+      await this.reconcilePlan(plan, world.pullRequests, world.closedPullRequests ?? []);
     }
   }
 
@@ -68,20 +67,13 @@ export class PlanReconciler {
     }
   }
 
-  private async reconcilePlan(
-    plan: Plan,
-    prs: PullRequest[],
-    closedPrs: PullRequest[],
-    tasks: TaskSummary[],
-  ): Promise<void> {
+  private async reconcilePlan(plan: Plan, prs: PullRequest[], closedPrs: PullRequest[]): Promise<void> {
     const { store } = this.deps;
     const issueNumber = planIssueNumber(plan.originRef);
     if (issueNumber === null) return;
     const parts = store.plans.listPlanParts(plan.id);
 
     const flat = issueBranch(issueNumber);
-    const presence = await this.deps.git.presence(flat);
-    const flatTaken = presence.local || presence.remote;
 
     const declined = new Set(
       this.deps.store.humanTasks
@@ -90,9 +82,12 @@ export class PlanReconciler {
         .map((t) => t.partId),
     );
 
-    const next = this.foldObservations(parts, issueNumber, prs, closedPrs, tasks);
+    const next = this.foldObservations(parts, issueNumber, prs, closedPrs);
     const observed = parts.map((p) => ({ ...p, ...next.get(p.slug) }) as PlanPart);
     const index = bySlug(observed);
+
+    const presence = observed.some(awaitsGate) ? await this.deps.git.presence(flat) : NO_PRESENCE;
+    const flatTaken = presence.local || presence.remote;
 
     const collidesWith = (part: PlanPart): boolean =>
       flatTaken && !partIsHuman(part) && (part.branch ?? partBranch(issueNumber, part.slug)) !== flat;
@@ -126,13 +121,12 @@ export class PlanReconciler {
     issueNumber: number,
     prs: PullRequest[],
     closedPrs: PullRequest[],
-    tasks: TaskSummary[],
   ): Map<string, Partial<PlanPart>> {
     const next = new Map<string, Partial<PlanPart>>();
     for (const part of parts) {
       if (partIsHuman(part)) continue;
       if (part.status === 'retired' || part.status === 'concluded') continue;
-      const patch = this.foldPr(part, issueNumber, prs, closedPrs) ?? this.foldStalled(part, tasks);
+      const patch = this.foldPr(part, issueNumber, prs, closedPrs) ?? this.foldStalled(part);
       if (patch) next.set(part.slug, patch);
     }
     return next;
@@ -167,9 +161,9 @@ export class PlanReconciler {
     return observePartPr(part, part.branch ?? partBranch(issueNumber, part.slug), prs, closedPrs);
   }
 
-  private foldStalled(part: PlanPart, tasks: TaskSummary[]): Partial<PlanPart> | null {
+  private foldStalled(part: PlanPart): Partial<PlanPart> | null {
     if (part.status !== 'dispatched') return null;
-    const task = tasks.find((t) => t.id === part.taskId);
+    const task = part.taskId ? this.deps.store.tasks.getTask(part.taskId) : null;
     const live = task && (task.status === 'queued' || task.status === 'running' || task.status === 'waiting');
     return live ? null : { status: 'ready' };
   }
@@ -220,6 +214,8 @@ export class PlanReconciler {
     }
   }
 }
+
+const NO_PRESENCE: BranchPresence = { local: false, remote: false };
 
 function awaitsGate(part: PlanPart): boolean {
   return part.status === 'pending' || part.status === 'ready' || part.status === 'blocked';

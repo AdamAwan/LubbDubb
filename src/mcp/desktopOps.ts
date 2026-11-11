@@ -110,7 +110,7 @@ export const fleetStatus: DesktopToolFactory = (deps) => ({
             },
       attention: {
         escalations: deps.store.escalations.listOpenEscalations().length,
-        proposals: deps.store.escalations.listProposals().filter((p) => p.status === 'pending').length,
+        proposals: deps.store.escalations.listPendingProposals().length,
         orphanedRuns: deps.recovery().pending().length,
       },
       errors: errors.map((e) => ({ at: e.createdAt, source: e.source, message: e.message })),

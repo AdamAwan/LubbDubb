@@ -144,6 +144,31 @@ export class EscalationStore {
     return row ? rowToProposal(row) : null;
   }
 
+  listPendingProposals(): Proposal[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM proposals WHERE status='pending' ORDER BY created_at DESC, rowid DESC`)
+      .all() as ProposalRow[];
+    return rows.map(rowToProposal);
+  }
+
+  pendingProposalFor(kind: Proposal['kind'], ref: string): Proposal | null {
+    const row = this.ctx
+      .prep(
+        `SELECT * FROM proposals WHERE ref=? AND kind=? AND status='pending' ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+      )
+      .get(ref, kind) as ProposalRow | undefined;
+    return row ? rowToProposal(row) : null;
+  }
+
+  pendingProposalForEscalation(escalationId: string): Proposal | null {
+    const row = this.ctx
+      .prep(
+        `SELECT * FROM proposals WHERE escalation_id=? AND status='pending' ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+      )
+      .get(escalationId) as ProposalRow | undefined;
+    return row ? rowToProposal(row) : null;
+  }
+
   listProposals(): Proposal[] {
     const rows = this.ctx.prep(`SELECT * FROM proposals ORDER BY created_at DESC, rowid DESC`).all() as ProposalRow[];
     return rows.map(rowToProposal);

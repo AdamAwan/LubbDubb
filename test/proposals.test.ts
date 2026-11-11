@@ -537,3 +537,21 @@ test('a database created before proposals existed opens and works after them', (
   assert.equal(store.escalations.decideProposal(proposal.id, 'accepted', null, 'human')!.status, 'accepted');
   store.close();
 });
+
+test('the pending proposal readers answer in SQL what filtering listProposals did', () => {
+  const store = new Store(':memory:');
+  const action = { type: 'merge_pr', reason: 'test', prNumber: 1, method: 'squash' } as const;
+  const decided = store.escalations.createProposal({ kind: 'merge', ref: 'pr:1:merge', action, escalationId: 'esc_a' });
+  store.escalations.decideProposal(decided.id, 'rejected', null, 'human');
+  const open = store.escalations.createProposal({ kind: 'merge', ref: 'pr:1:merge', action, escalationId: 'esc_b' });
+
+  assert.equal(store.escalations.pendingProposalFor('merge', 'pr:1:merge')?.id, open.id);
+  assert.equal(store.escalations.pendingProposalFor('reply_draft', 'pr:1:merge'), null);
+  assert.equal(store.escalations.pendingProposalForEscalation('esc_b')?.id, open.id);
+  assert.equal(store.escalations.pendingProposalForEscalation('esc_a'), null);
+  assert.deepEqual(
+    store.escalations.listPendingProposals().map((p) => p.id),
+    [open.id],
+  );
+  store.close();
+});

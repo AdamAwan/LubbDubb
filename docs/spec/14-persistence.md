@@ -1331,6 +1331,13 @@ same compare-and-set for a proposal the world settled rather than a person
 ([07](07-pull-requests.md#a-merge-ask-outlives-its-pull-request)). A withdrawal records no
 `decided_by`: nobody decided it.
 
+A caller that wants only the **pending** proposal reads it in SQL, never by filtering
+`listProposals` in JS: `pendingProposalFor(kind, ref)`, `pendingProposalForEscalation(id)` and
+`listPendingProposals()`, each newest first like the full list. `listProposals` reads every proposal
+ever written, so on a long-lived deployment a hot path that filters it blocks the event loop for the
+whole table ([#1159](https://github.com/AdamAwan/LubbDubb/issues/1159)). It stays for the readers
+that genuinely need history — rejection signals, holds, retros, insights.
+
 `listEscalations` is newest first, tied on `rowid` like the proposal, decision and world-event reads.
 Several escalations in one millisecond are ordinary — one pulse answering a plan and a shortfall — and
 without the tiebreak which of them a capped reader keeps is arbitrary run to run.
