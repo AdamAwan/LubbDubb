@@ -14,7 +14,7 @@ import type {
 import type { RemoteValidationDesk } from './desk.js';
 import type { RemoteRunDesk } from './run.js';
 import type { ProposalDesk } from '../../proposals/proposalDesk.js';
-import { checkSetStanding, pendingValidationPlanProposal, validationPlanProposalRef } from '../planApproval.js';
+import { checkSetStanding, validationPlanProposalRef } from '../planApproval.js';
 import { checkTerms } from '../checkMerge.js';
 import { noSheetAssembled, onSheet, remoteRunIsLive } from './sheet.js';
 import { groupBy } from '../../primitives.js';
@@ -95,7 +95,7 @@ export class RemoteIntentDesk {
     const pending =
       number === null
         ? null
-        : pendingValidationPlanProposal(validationPlanProposalRef(number), store.escalations.listProposals());
+        : store.escalations.pendingProposalFor('validation_plan', validationPlanProposalRef(number));
     if (pending === null) store.validation.releaseValidationPlan(goalRef);
     else await this.deps.proposals.accept(pending.id, `Accepted with the OK on ${environmentName}.`);
     return standing().accepted;

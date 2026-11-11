@@ -12,9 +12,7 @@ import { toolError, toolJson, type ToolCallResult } from './protocol.js';
 type InboxKind = 'question' | 'permission' | 'proposal' | 'orphaned';
 
 function inboxKind(deps: DesktopToolDeps, item: Escalation): { kind: InboxKind; detail: string | null } {
-  const pending = deps.store.escalations
-    .listProposals()
-    .find((p) => p.escalationId === item.id && p.status === 'pending');
+  const pending = deps.store.escalations.pendingProposalForEscalation(item.id);
   if (pending) return { kind: 'proposal', detail: pending.id };
   if (item.context?.permission) return { kind: 'permission', detail: null };
   const orphaned = item.agentId ? deps.recovery().pendingForAgent(item.agentId) : null;

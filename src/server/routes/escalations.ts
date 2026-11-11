@@ -10,7 +10,7 @@ import type { RouteContext } from './context.js';
 // → docs/spec/16-http-api.md
 
 function answerRefusal({ store, recovery }: System, id: string, item: Escalation | null): string | null {
-  const pending = store.escalations.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
+  const pending = store.escalations.pendingProposalForEscalation(id);
   if (pending)
     return `this item is a proposal (${pending.id}) — accept or reject it via /api/proposals/${pending.id}/accept|reject`;
   if (item?.context?.permission)
@@ -143,7 +143,7 @@ function registerEscalationDecisions(app: FastifyInstance, { system, hub }: Rout
       const { id } = params;
       const reason = body.note;
 
-      const pending = store.escalations.listProposals().find((p) => p.escalationId === id && p.status === 'pending');
+      const pending = store.escalations.pendingProposalForEscalation(id);
       if (pending) {
         const result = proposals.reject(pending.id, reason);
         if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });

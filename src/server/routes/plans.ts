@@ -76,17 +76,13 @@ function registerPlanRoutes(app: FastifyInstance, { system, hub }: RouteContext)
       if (!plan) return reply.code(404).send({ error: 'plan not found' });
       const next = store.plans.setPlanStatus(id, 'planning');
       const ref = planProposalRef(plan.originRef);
-      const pending = store.escalations
-        .listProposals()
-        .find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
+      const pending = store.escalations.pendingProposalFor('plan', ref);
       if (pending) proposals.reject(pending.id, 'superseded by a replan');
       const pendingAmendments = store.plans.listPlanAmendments(plan.id).filter((a) => a.status === 'pending');
       supersedePlanAmendments(store, plan.id, 'A replan replaced the plan this amendment was written against.');
       for (const amendment of pendingAmendments) {
         const amendmentRef = planAmendmentProposalRef(amendment.id);
-        const card = store.escalations
-          .listProposals()
-          .find((p) => p.kind === 'plan_amendment' && p.ref === amendmentRef && p.status === 'pending');
+        const card = store.escalations.pendingProposalFor('plan_amendment', amendmentRef);
         if (card) proposals.reject(card.id, 'superseded by a replan');
       }
       hub.broadcast({ type: 'world:changed' });

@@ -14,7 +14,7 @@ export function validationPlanProposalRef(issueNumber: number): string {
 }
 
 /** The card a goal's check set is waiting on, if one is pending. */
-export function pendingValidationPlanProposal(ref: string, proposals: readonly Proposal[]): Proposal | null {
+function pendingValidationPlanProposal(ref: string, proposals: readonly Proposal[]): Proposal | null {
   return proposals.find((p) => p.kind === 'validation_plan' && p.ref === ref && p.status === 'pending') ?? null;
 }
 

@@ -28,9 +28,7 @@ export function amendPlanInPlace(
   doc: PlanDocument,
   supersedes: string,
 ): { status: string; retired: string[] } {
-  const pending = deps.store.escalations
-    .listProposals()
-    .find((p) => p.kind === 'plan' && p.ref === planProposalRef(plan.originRef) && p.status === 'pending');
+  const pending = deps.store.escalations.pendingProposalFor('plan', planProposalRef(plan.originRef));
   if (pending) {
     deps.store.plans.setPlanStatus(plan.id, 'planning');
     deps.proposals.reject(pending.id, supersedes);

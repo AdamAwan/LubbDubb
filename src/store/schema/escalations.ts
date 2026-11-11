@@ -33,4 +33,5 @@ CREATE TABLE IF NOT EXISTS proposals (
 );
 
 CREATE INDEX IF NOT EXISTS idx_proposals_ref ON proposals(ref);
+CREATE INDEX IF NOT EXISTS idx_proposals_pending ON proposals(status, escalation_id);
 `;

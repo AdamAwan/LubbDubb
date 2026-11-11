@@ -697,3 +697,17 @@ test('a rejoin waits on every dependency, not just the ones that have settled', 
   assert.equal(statusOf(h, 'wire'), 'ready');
   h.store.close();
 });
+
+test('a plan with no part awaiting a gate spawns no git presence probe', async () => {
+  const h = setup();
+  for (const part of h.store.plans.listPlanParts(h.planId)) h.store.plans.updatePlanPart(part.id, { status: 'merged' });
+  h.git.setPresence('issue/12', { remote: true });
+  await h.reconciler.reconcile(world());
+  await h.reconciler.reconcile(world());
+  assert.equal(h.store.plans.getPlanByOrigin('issue:12')?.status, 'complete');
+  assert.deepEqual(
+    h.git.calls.filter((c) => c.startsWith('presence:')),
+    [],
+  );
+  assert.equal(h.errors.length, 0);
+});

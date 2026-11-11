@@ -1266,7 +1266,8 @@ Per part, in order, first non-null wins:
      retention window would read as un-merged and reopen days of finished work. The observed signals
      replace the inference only _inside_ the window.
 2. **`foldStalled`** — a `dispatched` part whose task is no longer active goes back to `ready`, and is
-   re-dispatched through the per-part origin's cooldown and attempt cap.
+   re-dispatched through the per-part origin's cooldown and attempt cap. The task is read by id
+   (`getTask`), never by scanning `listTasks`, which grows with every task the deployment ever ran.
 
 Then readiness: for parts in `pending`/`ready`/`blocked`, `ready` once every dependency has pushed a
 branch worth stacking on **and at most one of them is still unsettled**, else `pending` — see
@@ -1289,7 +1290,10 @@ is exactly what a stray push or a PR opened on its branch would otherwise achiev
 `refs/heads/issue/12` and `refs/heads/issue/12/<slug>` cannot coexist. An issue picked up **unplanned**
 first — the funnel's old fail-open arm, retired, though its branches outlive it — and planned afterwards has exactly that branch, and every part
 branch would fail to create with a git error nobody can act on. The reconciler checks
-`git presence(issue/<n>)`; if the flat branch exists locally or remotely, every uncut **code** part is
+`git presence(issue/<n>)` — **only when some part of the plan awaits a gate** (`pending`/`ready`/`blocked`),
+because those are the only parts the guard can park. A `complete` plan, or one whose parts are all
+cut, spawns no git at all; probing every plan ever completed on every pulse was what made the pass
+grow with history. If the flat branch exists locally or remotely, every uncut **code** part is
 parked `blocked` and **one** clear error is recorded naming the branch to delete or rename.
 
 **A human part is outside the guard, because it is outside the branch namespace entirely.** It is
