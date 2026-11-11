@@ -15,6 +15,20 @@ The one-line version, because it is the thing most easily got wrong: **the harne
 what to watch for, and never judges a reading.** Both are declared, up front, by parties who already
 know — and everything from the declaration onwards is a scripted pass with no model in it.
 
+> **Partly built.** The windows, the readings, the verdict, the bench row and the Signals card are
+> built. **Not yet built**, and each section that describes them says so:
+> [the watch hint and its tick at approval](#the-planner-at-plan-time-writes-a-hint);
+> [authoring the watch on `delivered`](#the-assessor-on-delivered-writes-the-checks) and
+> [the accept that releases it](#the-operator-accepts-the-set); [a stated `none`](#declaring-nothing-is-a-legitimate-answer);
+> [`{until}` and the baseline that ends at the merge](#until-and-the-baseline-that-ends-at-the-merge);
+> [sources](#sources) and [the source only the operator can run](#a-source-only-the-operator-can-run);
+> [the outcome](#the-outcome) and [discussing it in Claude](#discussing-an-outcome).
+> **What runs today instead:** the planner writes executable checks into the plan document and they are
+> dry-run at submission; the working agent amends them with `watch_declare` at conclude time; each
+> environment has one `observe` command; a baseline is read over one window before the moment it is
+> taken; and the goal page draws every check's verdict with no headline. Remove each item from this
+> list in the change that builds it.
+
 ## What it is not
 
 | Not                    | Because                                                                                                                                                                                                                                                          |
@@ -121,6 +135,39 @@ this refusal exists to stop, and not `clean` — `unknown` never folds to clean
 the two lifetimes apart: a state row is one reading taken at a moment somebody chose, about the shape
 of data rather than about a period.
 
+### `{until}`, and the baseline that ends at the merge
+
+**Not yet built.** A second token, `{until}`, bounds the other end. A **measure's query must carry
+it**, refused at ingestion by a `carriesUntil` beside `carriesSince`, through the same
+`refuseQueryShape`. A signal's query and its `presence` query may carry it, and should.
+
+| Reading                  | `{since}`                            | `{until}` |
+| ------------------------ | ------------------------------------ | --------- |
+| A window's reading       | The arrival on that environment      | Now       |
+| The dry run and baseline | One window's length before the merge | The merge |
+
+**The merge** is the instant the goal's last pull request merged, the commit its delivery was
+assessed on. That is the last moment the change is known not to be running anywhere, and it does not
+move afterwards.
+
+That is the one decision this section makes, and it exists because checks are now written after the
+merge. A baseline read over _one window before now_ was right when it was taken at plan time, weeks
+before anything shipped. Taken on `delivered`, "now" can already be after a fast deployment, and a
+baseline that includes the change is the change compared with itself, which reads `clean` on any
+regression. Ending it at the merge makes it the same reading whenever it is taken, by the harness on
+`delivered` or by a person [days later](#a-source-only-the-operator-can-run), as long as the source
+still holds that period.
+
+It also gives back what plan-time checks used to prove. A signal's dry run over the window before the
+merge reads the defect while it was still running, so `fires` there is still the evidence that the
+defect was real and that the query sees it.
+
+`LUBBDUBB_WATCH_UNTIL` is passed beside `LUBBDUBB_WATCH_SINCE`, for the wrapper that assembles its
+own query. A check declared before the token existed carries no `{until}`. Its window readings are
+unchanged, because `{until}` would be now anyway. Its dry run is refused by `preparedQuery` like a
+query with no `{since}`, and reads `unknown` with that reason, never a baseline taken over the wrong
+period.
+
 ### A signal query returns rows, never a count
 
 **A signal's `query` and its `presence` query each answer one row per occurrence, and the harness
@@ -184,48 +231,192 @@ declared no validation checks is not a goal whose checks all passed
 ([20](20-validation.md#the-flag)). Nothing counts watches, nothing rewards a longer list, and a
 surface that folded null into clean would report the whole fleet as verified.
 
+**Not yet built: declaring nothing is said, never left unsaid.** Where some environment declares a
+`watch`, null is no longer what an author gets by writing nothing. The plan's hint is either intents
+or `none` with a reason, and the authoring agent's `watch_plan` call either declares checks or carries
+an `emptyReason` — each refused without one. The reason is drawn on the plan sheet, ticked at approval
+and shown as the goal's [outcome](#the-outcome).
+
+This is what the feature was missing, and the reason it rarely fired. Both prompts said that declaring
+nothing was a legitimate answer, and nothing asked why, so the cheapest reply to a prompt with a
+schema, a dry run and three refusals in it was the one that wrote nothing. That reply still exists. It
+just has to say why, and an operator reads the reason before any work is released. A refactor is
+still allowed its `none`: forcing a check onto a change with nothing running to watch gets you a
+query that can only ever read clean, which is worse than null, because it reports a verification
+that never happened.
+
 ## Who writes it, and when
 
-Three writers, at the three moments each knows something the others do not. This is the same
-arrangement as the validation sheet, for the same reason: a plan's author, its implementer and its
-operator hold different facts and none of them holds all three.
+> **Not yet built**, apart from [the operator's own edits](#the-operator-at-any-point), which run
+> today. What runs instead of the rest is in the marker at the top of this document.
 
-### The planner, at plan time
+Three moments, and the shape is validation's check set exactly
+([20](20-validation.md#when-the-check-set-is-written)), for its reason. **A watch written at plan
+time is a guess about code that does not exist yet.** It was written there first, and it went wrong
+the way validation's checks went wrong: the work started, a reviewer asked for a retry on deadlock,
+the fix stopped producing the timeout the plan's signal counted, and the check described a change
+nobody had shipped. The `watch_declare` tool was the apparatus built to survive that, and it only
+reached the agent that wrote the first part — never the one fixing a review comment, which is where
+the design actually moved.
 
-Writes the `watch` block into the plan document, beside `validation`
-([08](08-planning.md), `src/plans/planDocument.ts`). It knows the goal, the ticket and the
-repository, so it can name a code path, an operation, a role, a feature flag.
+So the checks arrive late instead, and the plan carries what is honestly knowable before any code
+exists: what _worked_ would look like, in words.
 
-**For a defect this is the strong case, and it is worth stating on its own: the watch is knowable
-before the fix is, because the bug report _is_ the signal.** A ticket reading _"job X keeps timing
-out in proc Y"_ contains its own post-deploy check — job X stops timing out — and that check can be
-written, and proven to fire, before a line of the fix exists.
+|            | **The hint** (plan time)            | **The checks** (after `delivered`)    |
+| ---------- | ----------------------------------- | ------------------------------------- |
+| Written by | The planner, in the plan document   | The assessor, in the turn it delivers |
+| Against    | Code that does not exist yet        | Merged code                           |
+| Shape      | Intents in prose, or `none` and why | Queries, each on a named source       |
+| Read by    | An operator, who **ticks** it       | The operator, who **accepts** it      |
+| Binds      | Nothing                             | The windows, once accepted            |
+
+### The planner, at plan time, writes a hint
+
+**Not yet built.** The plan document's `watch` block is replaced by **`watchHint`**
+([08](08-planning.md#the-plan-document), `src/plans/planDocument.ts`), and it is **required** wherever
+`watchNote` is appended — that is, wherever some environment declares a `watch`. It is one of two
+shapes, and a document carrying both or neither is refused:
+
+```jsonc
+"watchHint": {
+  "intents": [
+    {
+      "kind": "signal",          // or "measure"
+      "source": "logs",          // a source name some environment declares — a guess, binding nothing
+      "says": "The statement job stops timing out",
+      "why": "~37 timeouts a day in traces today; the ticket is about exactly these"
+    }
+  ]
+}
+// or
+"watchHint": { "none": "Docs-only change: nothing running behaves differently" }
+```
+
+It carries no query, no `tolerate`, no threshold and no `presence`. Those are facts about code, and the
+planner is writing before the code exists. `kind` and `source` are there so the operator can see what
+_sort_ of evidence is coming, and so the planner has to think about where it would be read. The assessor
+is free to change both.
+
+**For a defect this is still the strong case: the bug report _is_ the signal.** A ticket reading _"job
+X keeps timing out in proc Y"_ contains its own intent — job X stops timing out — and the planner can
+write it before a line of the fix exists. What used to be proved at plan time, that the defect is real
+and the query sees it, is now proved by the authoring dry run, which reads
+[the period before the merge](#until-and-the-baseline-that-ends-at-the-merge), when the defect was
+still running. The proof comes later than it did, but it is the same proof.
+
+### The operator ticks the hint
+
+**Not yet built.** The hint is a caveat on the approval card ([08](08-planning.md#what-the-plan-raises-is-acknowledged-not-merely-rendered)),
+`kind: 'watch'`, labelled **How we'll know it worked**, with the intents, or the `none` and its
+reason, as its detail. Approve is held until it is ticked, exactly as it is held for the planner's
+risks.
+
+It is the one caveat raised on **every** plan where a hint is required, and that departs on purpose
+from the rule that a gate firing on every plan gets ticked blind. A tick there is not a warning being
+acknowledged. It is the operator agreeing, before anything is built, what _worked_ is going to mean,
+and that is the agreement the whole outcome is measured against. The detail is different on every
+plan, which is what stops it becoming a reflex. A tick can carry words like any caveat's, and they
+reach the assessor with the hint.
+
+On a deployment where no environment declares a `watch`, no hint is asked for and no box is drawn.
+
+### While the work happens, nothing is asked
+
+**Not yet built.** No working agent is asked about the watch. `watchDeclareNote` is no longer appended
+to `plan-part`, and **`watch_declare` is retired** into `RETIRED_TOOL_NAMES`
+([11](11-mcp-tools.md#retired-tools)), answering with a refusal that points at the assessor. The hint
+binds nothing, so an agent fixing a review comment or a red build has no earlier assessment to keep
+true, and can make the fix the code needs. Being bound by the watch is exactly what this stage must
+not do to it.
+
+One sentence stays, appended to `plan-part` and the pull-request fix prompts and never interpolated:
+_if you added a log line, a metric or an exception that says whether this is behaving, say so in the
+pull request description_. The assessor reads the merged pull requests, and the message template is
+in the diff either way. The sentence just makes it findable. It is still the second-order reason this
+subsystem exists: an agent with a reason to instrument its own work instruments it.
 
 ### The working agent, at conclude time
 
-Amends through the `watch_declare` tool (`src/mcp/tools/watchDeclare.ts`), which merges on a check's
-slug exactly as `validation_amend` does ([20](20-validation.md#validation_amend)) and refuses exactly
-what a plan document refuses, because it parses with `WatchSchema` rather than a second copy of it.
-The instruction that names it is appended to the two prompts that dispatch work (`watchDeclareNote`,
-`src/plans/planning.ts`), never interpolated into one.
+**Built, and retired by the section above when it lands.** Today the agent working a part amends the
+plan's checks through `watch_declare` (`src/mcp/tools/watchDeclare.ts`), named by `watchDeclareNote`
+(`src/plans/planning.ts`), which is appended to `plan-part` and never interpolated. It merges on a
+check's slug as `validation_amend` does, parses with `WatchSchema`, adds and amends and withdraws
+nothing, and lands as a pending change an operator accepts or declines
+([the plan sheet](#in-the-cockpit)). It is the only party that can see the message template it
+just wrote, which is why the assessor now writes the checks: the assessor can see it too, and so can
+every agent that changed the code after this one did.
 
-It is the only party in the system that knows what the code actually emits. A planner cannot guess
-the message template of a log line that did not exist when it wrote the plan, and nothing downstream
-can recover it. That is also the second-order reason this tool exists at all: an agent told _"if you
-added a log line or a metric for this, declare the watch that reads it"_ has a reason to add one.
-The declaration makes the fleet instrument its own work.
+### The assessor, on `delivered`, writes the checks
 
-It also amends the **planner's** checks where the fix changed what the right question is. A timeout
-fixed by adding a retry does not stop producing timeouts; the honest signal becomes "the job fails
-after retries", and only the agent holding the diff knows that.
+**Not yet built.** The assessor already casts the verdict and, on `delivered`, authors the validation
+check set ([20](20-validation.md#one-agent-two-outputs)). It writes the watch third, with
+**`watch_plan`** (_src/mcp/tools/watchPlan.ts_), because it is the one agent standing in the merged
+code with every part settled — the only point at which the message template, the operation name and
+the shape of the fix are all known and none of them will move.
 
-**It adds and amends, and withdraws nothing.** An agent holding one part's diff knows about one check
-and nothing about the others, and a withdrawal from it would need a pending-delete state to be honest
-about. A check that should go is the operator's to delete or a planner's to stop declaring.
+The order is the safety, as it is for the check set, and the fallback is the same shape:
 
-The planner's own guidance is appended too (`watchNote`, `src/plans/planning.ts`), and both notes
-reach the dispatch rules as **rendered strings** rather than as an import: `src/dispatcher/` still
-names nothing under `src/environments/`, which is the lens boundary this subsystem is built inside.
+| The turn ends                     | What stands             | What happens next                                   |
+| --------------------------------- | ----------------------- | --------------------------------------------------- |
+| Before the verdict                | Nothing decided         | Unchanged                                           |
+| After the check set, before watch | Goal parked, watch owed | Rule `watch-plan` fires on the next pulse           |
+| After all three                   | Parked, both authored   | `watch-plan` sees an authored watch and stands down |
+
+Rule `watch-plan` (_src/dispatcher/rules/watchPlan.ts_, a `DISPATCH_PIPELINE` entry registered in
+`STAGES`, ranked directly below `validation-plan`) is the catch-up, on the origin
+`issue:<n>:watch-plan` declared in `src/issueOrigins.ts`. It dispatches a code agent into a read-only
+checkout of the default branch, and it is gated on four things: the goal is parked as delivered, it
+has a plan, its watch has not been authored, and some environment declares a `watch`.
+
+`watch_plan` declares the **whole** watch: omission is withdrawal, as with `validation_plan`. It is
+parsed with `WatchSchema`, so every refusal below — `{since}`, a scalar tail, a signal with no
+`presence`, a measure with nothing that could fail — holds the assessor exactly as it held the
+planner. It requires a **`note`** on every call, saying where the checks departed from the hint and
+why. _The plan said "stops timing out"; part 2 added a retry, so a timeout no longer means a failure,
+and the honest check is "fails after all retries"._ An operator who ticked an intent is entitled to
+see what became of it. It requires **`emptyReason`** on a call declaring no checks. It refuses a goal
+with no standing delivery, so `more_work` writes nothing, and the code a check would be written
+against cannot move under it.
+
+The hint and the operator's words on its tick are appended to the assessor's prompt as an **input,
+not an instruction**, in `authoringBriefing`'s words: check what the hint names where the merged code
+says it still matters, drop what the code no longer does, add what the hint could not have known to
+ask for, and say so in the `note`. What is refused is departing silently, never departing.
+
+Each check is [dry-run](#the-dry-run) as `watch_plan` records it, and a measure's
+[baseline](#until-and-the-baseline-that-ends-at-the-merge) is taken in the same spawn. A dry run that
+hands a query back is answered to the assessor in the tool's reply, so it can fix the query in the
+same turn.
+
+### The operator accepts the set
+
+**Not yet built.** What `watch_plan` writes lands **proposed**, not live: the `goal_watches.live` and
+`proposal` columns that held `watch_declare`'s pending changes now hold the assessor's set, and
+`listGoalWatches` stays live-only. Nothing a model wrote is put to an environment on a schedule until
+a person has read it. The dry run is the one exception, and it always was.
+
+The goal page's Signals card draws the set with the `note` above it, each check with its source, its
+query, what its dry run read and — where it changed from the hint — a **changed from plan** chip.
+Three answers:
+
+- **Accept** — the checks go live, together. This is the second click of the flow, and it is the one
+  that authorises a query to run against the operator's telemetry with the operator's credential, on
+  a schedule, for days.
+- **Edit** — the operator's own edit on one check ([below](#the-operator-at-any-point)), which leaves
+  the rest proposed.
+- **Send back**, with words — the watch is un-authored and `watch-plan` dispatches again with those
+  words appended. This is the check set's
+  [send-back](20-validation.md#when-an-operator-sends-a-check-set-back), on the same record.
+
+**An arrival that lands before the accept is held, not lost.** A fast deployment can arrive before the
+assessor has written anything, and the rule that a window opens only for a fresh arrival would
+otherwise mean the watch never ran on the one environment it was for. So the arrival pass
+**cuts staleness first** and then defers an arrival whose goal's watch is owed or proposed, leaving it
+unstamped — `sheetableArrivals`' arrangement exactly
+([20](20-validation.md#one-agent-two-outputs)). When the set is accepted, the window opens sized from
+the **arrival**, and its first reading's `{since}` is that arrival. A reading taken late still covers
+every minute the change has been running. An empty or sent-back-and-abandoned watch stamps the arrival
+and opens nothing.
 
 ### The operator, at any point
 
@@ -266,11 +457,22 @@ An accepted `watch_declare` proposal does **not** make a check the operator's. I
 row that already has an author, and a replan is still entitled to replace it — which is the behaviour
 that was there before `authored` existed, kept.
 
+**Not yet built:** with checks authored on `delivered`, a replan no longer writes checks, so it no
+longer has anything to sweep. The assessor's `watch_plan` is what speaks for the whole watch, and a
+check the operator wrote or edited is still left alone by it, on exactly this argument. A
+`watch_plan` call that omits an `authored: 'operator'` check does not withdraw it. An accepted set is
+`authored: 'assessor'`.
+
 ## The dry run
 
 **A declared check is run once, immediately, against the environment it will watch** — at plan
 submission, and again on each amendment. The reading is stored on the check and drawn on the plan
 sheet.
+
+**Not yet built:** with checks authored on `delivered`, the dry run is taken when `watch_plan`
+records them and when an operator writes or edits one, and it is drawn on the Signals card beside the
+accept rather than on the plan sheet. A plan carries a hint and no queries, so nothing is dry-run at
+plan submission. What a dry run proves, and the three readings below, are unchanged.
 
 Three outcomes, and each is worth something different:
 
@@ -328,6 +530,10 @@ traffic arrives. Everything there answers zero. Without presence, every goal is 
 environment where nothing happened, and the card says so in the operator's own words.
 
 ### The baseline, and why a measure is not trusted without one
+
+**Not yet built:** the baseline's period becomes the window before the merge rather than the window
+before the moment it is taken, as set out in
+[`{until}`](#until-and-the-baseline-that-ends-at-the-merge). The rest of this section is unchanged.
 
 A measure declared with `noWorseThan: "baseline"` has its query run at **declaration time**, days
 before the arrival, and that reading is stored on the check (`goal_watches.baseline_value`). It is
@@ -443,6 +649,124 @@ and the dry run is the backstop that means none of them has to be complete:
   for it is the repository's own documentation, written down once rather than rediscovered at full
   price by every agent.
 
+## Sources
+
+**Not yet built.** Everything above says _the_ `observe` command, and today an environment has one.
+Real telemetry is not one thing. On the deployment this was built for, App Insights is reachable with
+the `az` login the harness already runs under, and the SQL database behind it is not, because its
+credential is a person's. So an environment declares **sources**, and a check names the one it reads.
+
+```jsonc
+"watch": {
+  "sources": {
+    "logs": {
+      "language": "kql",
+      "runBy": "harness",
+      "observe": "./scripts/ai-query.sh liveUk",        // wraps `az monitor app-insights query`
+      "queryUrl": "https://portal.azure.com/#…/{queryGzip}"
+    },
+    "sql": {
+      "language": "sql",
+      "runBy": "operator",
+      "queryUrl": "…"                                      // optional: where a person runs it
+    }
+  },
+  "schema": "…", "describe": "…", "forMs": 172800000
+}
+```
+
+**The harness still holds no opinion about telemetry, and none about auth.** A source is a name, a
+language and who can run it. Which credential a command uses, which workspace it reads and how it
+signs in are the operator's command's business, as `observe` always was. A source that gains a
+managed identity next quarter changes `runBy` from `operator` to `harness`, gains an `observe`, and
+nothing else in the subsystem moves.
+
+**`observe` alone is the shorthand for one source**: `{ "logs": { "language": "kql", "runBy":
+"harness", "observe": … } }`. Every configuration written before sources keeps working, and a check
+with no `source` reads the environment's only one. `validateEnvironments` refuses an environment
+declaring both `observe` and `sources`, a `harness` source with no `observe`, an `operator` source
+with one, and a language not in the list below.
+
+**A check names a source by name, and each environment maps names to its own commands.** `logs` on
+`testUk` and on `liveUk` are different commands against different workspaces, and that is the point:
+the check is the question and the source says where to ask it. An environment that does not declare
+the source a check names does not read that check. On that environment the check is `unknown`, with
+the reason _liveEu has no `sql` source_. That is never a clean reading and never a refusal of the
+whole watch.
+
+### What a language changes
+
+The language is what the refusals at ingestion read. Every one of them is about query shape, and
+shape depends on the language:
+
+| Language | `{since}` / `{until}` | Scalar-tail refusal                                 | Id echo                    | Kinds               |
+| -------- | --------------------- | --------------------------------------------------- | -------------------------- | ------------------- |
+| `kql`    | Required              | `aggregatingTail`, as today                         | `\| extend` projection     | `signal`, `measure` |
+| `sql`    | Required              | `aggregatingTail`'s `select count(…)` arm, as today | The wrapper, or the person | `signal`, `measure` |
+| `promql` | Required              | None can be written                                 | The wrapper                | `measure` only      |
+| `other`  | Required              | None can be written                                 | The wrapper                | `measure` only      |
+
+**A source whose aggregation the harness cannot see takes measures only.** An aggregating signal
+query is the one mistake that defeats every guard ([above](#a-signal-query-returns-rows-never-a-count)),
+and the refusal only works where the harness can read the query's tail. A metrics query aggregates by
+nature, so in PromQL a signal's "count of occurrences" is a measure with an `under` anyway, and it
+should be written as one.
+
+**The id projection is appended only to `kql`.** It is a pipeline segment and means nothing to
+another language, so every other harness-run source relies on the wrapper echoing
+`LUBBDUBB_WATCH_ID` into each row. That was the escape hatch for a non-pipeline language before
+sources existed, and verification is identical either way. `LUBBDUBB_WATCH_SOURCE` is passed beside
+the query, so one wrapper can serve several sources.
+
+The fence on the bench row and the Signals card takes the source's language as its info string,
+` ```sql `, so the copy control and the wrap follow the language.
+
+**The authoring prompt lists each environment's sources with their language and who runs them**, and
+says plainly that a `harness` source costs nothing and an `operator` source costs a person two
+readings per environment. An `operator` source is for a question no telemetry can answer, not for
+convenience.
+
+### A source only the operator can run
+
+**Not yet built.** The harness never spawns anything for a `runBy: operator` source. It cannot,
+because it does not hold the credential, and a check that pretended to read on a schedule would read
+`unknown` ninety-six times. Instead it asks a person **twice per environment**, at the two moments a
+single reading is worth most:
+
+| Ask          | When                                                        | Period                               |
+| ------------ | ----------------------------------------------------------- | ------------------------------------ |
+| The baseline | When the set is accepted (a signal's dry run asks here too) | Before the merge                     |
+| The reading  | When that environment's window reaches `forMs`              | The arrival to the end of the window |
+
+Each ask is a `human_tasks` row, `kind: 'watch_reading'`, one per check per environment per ask. Its
+detail is the query **as it will be put**, with `{since}` and `{until}` already substituted, so it
+runs as it stands. It is in a fence named for the language, with Copy, and the source's `queryUrl`
+link where there is one. A signal's row carries its `presence` query under it, because the person is
+being asked both questions.
+
+Two ways to answer it, and both land in the same place:
+
+- **Paste the result** on the row: the rows as JSON, or, for a measure, one number. It goes through
+  the same output contract as a harness reading, apart from the id echo. A person who copied the
+  query and pasted its answer is the evidence the echo stands in for.
+- **Have Claude run it**: the desktop channel's `watch_reading` tool
+  ([11](11-mcp-tools.md#the-desktop-channel)) lists the open asks and records an answer. The operator's
+  own Claude Code, on their own machine, holds the credential the harness does not, so it can run the
+  query with the operator's `sqlcmd` or their client of choice and hand back the rows. It records
+  `read_by: 'operator'`, because a person's session ran it under a person's credential.
+
+**An ask nobody answers is `unknown`, never clean.** The closing ask stays open for
+`watch.operatorGraceMs`, 72 hours by default, after the window it belongs to. Past that, the check
+settles `unknown` with the reason _nobody ran it_, and the row retracts itself. A baseline ask
+unanswered by the time the window closes leaves the measure `unknown`, for the reason any measure
+with no baseline is.
+
+**A window waits for its operator readings before its outcome, and for nothing else.** Harness-run
+checks in the same window are read on the schedule and settle at `forMs` as they always have. The
+window's [outcome](#the-outcome) is drawn when its operator readings are in or out of grace, so a goal
+does not read _worked_ on its harness checks while the SQL question it was really about has not been
+asked.
+
 ## The window
 
 Four files, split so the halves that decide things are pure. `src/environments/watchDesk.ts` is the
@@ -506,6 +830,12 @@ declares an `observe`; the goal declares at least one check; and the confirming 
 goal that declares its first check _after_ it arrived somewhere is therefore not watched there, which
 is the honest reading rather than a gap — the declaration is what the operator approved, and
 approving it after the deploy is approving it for the next one.
+
+**Not yet built:** that last sentence stops being true for the assessor's set, which is written after
+the merge by design and would otherwise miss every fast deployment. An arrival whose goal's watch is
+owed or proposed is deferred unstamped, after the staleness cut, and opens its window when the set is
+accepted. → [The operator accepts the set](#the-operator-accepts-the-set). The sentence still holds
+for a check an operator adds by hand to a goal that has already arrived.
 
 ### Exposure
 
@@ -613,6 +943,69 @@ same rule because it is the same mistake.
 **A watch does not roll up to a word.** The card draws every check. A goal whose signal passed and
 whose measure failed is a fix that worked and a proc that is still slow, and a single `regressed`
 would hide the half that is good news — which is the half the ticket was about.
+
+**Not yet built:** it does roll up to a headline, [the outcome](#the-outcome), and the headline has
+to keep this rule. It names what passed as well as what did not, and the card under it still draws
+every check.
+
+## The outcome
+
+**Not yet built.** The goal page opens on one answer, drawn above everything else the watch shows,
+because the question an operator brings to a delivered goal is _did it work_, and until now the
+answer was a set of per-check rows to read and fold in their head. A pure fold, `watchOutcome`
+(_src/environments/watchOutcome.ts_), over the goal's settled windows:
+
+| Outcome                     | When                                                                                       | Drawn                   |
+| --------------------------- | ------------------------------------------------------------------------------------------ | ----------------------- |
+| **It worked**               | No check `regressed` anywhere, and every check settled `clean` on at least one environment | Green, with the numbers |
+| **It made something worse** | Any check settled `regressed` on any environment                                           | Red                     |
+| **Couldn't tell**           | Neither: some check is `unknown` everywhere it was read                                    | Amber, with each reason |
+| **Nothing was measured**    | The watch was authored empty, or the hint was `none`                                       | Grey, with the reason   |
+
+Until a window has settled there is no outcome, only _watching_. A goal that has a plan but whose
+watch is still owed reads _not yet written_, which is not the same as nothing measured.
+
+**The headline says what was measured, in numbers.** _Statement failures 37/day → 0; BuildStatement
+p95 1,840 → 1,190 ms on liveUk over 48h._ For a measure that is before → after. For a signal it is
+the rate the dry run read before the merge → what the window read. _It made something worse_ also
+names any check that came back clean, which is the
+[roll-up rule](#the-verdict) kept: one regressed check does not hide a fix that worked. Every check on
+every environment is still drawn underneath.
+
+**`unknown` never reaches _It worked_.** This is the verdict's own rule one layer up: a check that
+was never read, read only on an environment where nothing ran, or left with an operator ask unanswered
+has said nothing about the work. The outcome says _Couldn't tell_ and gives the reason in words.
+_Extend_ is beside it, because the commonest cause is a window that closed before the job ran.
+
+**The outcome holds nothing.** It is a reading, and readings never move the goal. That is
+[a reading is never a `WorldEvent`](#a-reading-is-never-a-worldevent), and it is also an honest limit:
+a number that moved after a deploy may have been moved by something else that shipped the same day
+([what it does not see](#what-it-does-not-see)), so the outcome can say what happened but cannot say
+the change caused it. `holds` stays exactly as it was. It is the opt-in on settling, the outcome
+neither reads it nor writes it, and it is off.
+
+### Discussing an outcome
+
+**Not yet built.** _It made something worse_ and _Couldn't tell_ carry **Discuss in Claude**, which is
+where a person decides what the reading means. Was it us? Was it something else that shipped? Is it
+fine? None of those is the harness's call ([cost](#what-is-deliberately-not-added-later)).
+
+The click writes a `note` to the goal's discussion file ([40](40-discussions.md)) through
+`DiscussionFiles`, authored `LubbDubb (watch)`: the outcome, each check's expectation, its before and
+after, its query in a fence, and the goal's merged pull requests. It then opens
+`/lubbdubb:discuss <n>` through the Discussion tab's existing deep link. The conversation starts from
+the numbers, and the operator's Claude has the repository and, often, the credential to run the query
+again. It ends one of three ways, all through what discussions already do:
+
+- **It was us** — an idea turned into a story ([40](40-discussions.md#turning-an-idea-into-a-story)),
+  related back to the goal by `IssueCreateInput`.
+- **It was something else** — a decision recorded on the goal: _p95 moved with the index rebuild on
+  the 12th, not this change_.
+- **It's fine** — the same, and the bench row is settled.
+
+Without `discussionsDir` the button is not drawn, rather than disabled. The bench row's
+[Raise a bug](#the-bench-row) is unchanged, and stays the direct path for an operator who already
+knows.
 
 ## What a finding does
 
@@ -786,6 +1179,11 @@ number in front of a person.
 
 ## Configuring an environment
 
+**Not yet built:** `watch.sources` in place of `watch.observe`, as set out in [Sources](#sources), and
+`watch.operatorGraceMs`, default 72 hours, for [operator-run sources](#a-source-only-the-operator-can-run).
+`observe` stays valid as the shorthand for one `kql` source run by the harness, so the example below
+is still a correct configuration.
+
 ```jsonc
 {
   "environments": [
@@ -851,6 +1249,13 @@ has upgraded yet. → [Exposure](#exposure)
 ## In the cockpit
 
 → [17](17-cockpit.md). Four surfaces and one changed reading.
+
+**Not yet built**, in this section: the plan sheet's _How we'll know it worked_ section and its
+tick; the Signals card's proposed set with **Accept**, **Edit** and **Send back**; source chips on
+every check; the operator-reading asks; and the outcome card at the top of the goal page, with
+**Discuss in Claude**. Each is described where it belongs above
+([the hint](#the-planner-at-plan-time-writes-a-hint), [the accept](#the-operator-accepts-the-set),
+[sources](#sources), [the outcome](#the-outcome)). What follows is what runs today.
 
 **The plan sheet** draws the watch beside the validation checks, each check with its query, its
 expectation, and the dry-run readings under it (`web/src/components/WatchDigest.tsx`). Read-only but
@@ -1035,6 +1440,24 @@ adds one to an environment with open windows has those windows probed on their n
 the correct reading of _not yet known to be exposed_; the first that clears the floor restarts its
 clock at `forMs`. Declared in `WATCH_COLUMNS`.
 
+**Not yet built**, and each with its migration stated now so it cannot be forgotten later:
+
+- **`plans.watch_hint`**, the hint as JSON. It is a column on an existing table, so it needs a
+  `ColumnMigrations` entry. Null means _a plan from before hints existed_: no hint is drawn, no box is
+  ticked, and the assessor is asked to author the watch from the goal alone. That is the honest
+  reading, so no backfill is needed.
+- **`watch_plans`**, one row per goal: `authored_at`, `note`, `empty_reason`, `accepted_at`,
+  `sent_back` and its words. It is a new table, and `validation_plans`' shape is the model. Null
+  `authored_at` means _owed_, which is what holds an arrival back. On the boot that takes this build,
+  every goal that already has live checks gets a row stamped authored and accepted. Without that,
+  every delivered goal on the deployment would read _owed_ and dispatch an assessor. That is a null
+  that means something ([14](14-persistence.md#when-a-null-means-something)), so the stamp is gated on
+  the table being created.
+- **`goal_watches.source`**, a `ColumnMigrations` entry. Null means _the environment's only source_,
+  which is exactly what every row written before sources read, so no backfill is needed.
+- **`watch_readings.read_by`**, `'harness'` or `'operator'`, a `ColumnMigrations` entry. Null reads as
+  `'harness'`, which every earlier reading was.
+
 `watch_readings` is bounded by `for` rather than by a retention rule: a window's readings are the
 evidence behind its verdict, and a rule that dropped them would leave the verdict standing with
 nothing behind it. At 30-minute intervals over 48 hours that is 96 rows per check per environment,
@@ -1079,3 +1502,30 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
 - the per-pulse cap defers rather than drops, oldest window first;
 - nothing under `src/dispatcher/` imports the module, asserted structurally with the existing lens
   assertions.
+
+**Not yet built**, and owed by the changes that build each piece:
+
+- a plan document with neither `watchHint.intents` nor `watchHint.none`, or both, is refused wherever
+  `watchNote` is appended, and accepted with neither where it is not;
+- the approval is held until the `watch` caveat is ticked, and no `watch` caveat is raised on a
+  deployment with no environment declaring a `watch`;
+- `watch_plan` with no checks and no `emptyReason` is refused, and authors nothing;
+- `watch_plan` refuses a goal with no standing delivery;
+- an assessor whose turn ends after the check set leaves the watch owed, and rule `watch-plan`
+  dispatches for it on the next pulse;
+- a `watch_plan` set takes effect on nothing until it is accepted, and `listGoalWatches` never returns
+  it before then;
+- an arrival landing while the watch is owed is **deferred, not stamped**, and opens a window sized
+  from the arrival when the set is accepted;
+- a measure without `{until}` is refused; the dry run and baseline put `{until}` at the merge and
+  `{since}` one window before it, whenever they are taken;
+- a check naming a source its environment lacks reads `unknown` there, with the source named;
+- a `promql` source refuses a signal;
+- an `operator` source spawns nothing, files one `watch_reading` ask per check per environment per
+  ask, and an unanswered closing ask settles `unknown` after `operatorGraceMs`;
+- `watchOutcome`: any `regressed` reads _made something worse_ and still names the clean checks;
+  `unknown` everywhere is never _worked_; an empty watch reads _nothing measured_ with its reason;
+- **Discuss in Claude** writes one note and no `WorldEvent`, and draws no button without
+  `discussionsDir`;
+- the outcome changes no hold, asserted with `holds` absent and present;
+- `watch_declare` answers with the retirement refusal.
