@@ -111,6 +111,7 @@ function fakeApi(evals: AzPolicyEvaluation[], requeue: RequeueScript = { asked: 
     getWorkItems: unused('getWorkItems'),
     listWorkItemUpdates: unused('listWorkItemUpdates'),
     createThreadReply: unused('createThreadReply'),
+    updateThreadComment: unused('updateThreadComment'),
     createThread: unused('createThread'),
     completePullRequest: unused('completePullRequest'),
     setPullLabel: unused('setPullLabel'),

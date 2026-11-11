@@ -311,6 +311,7 @@ function relationApi(
     listPullLabels: unused,
     listWorkItemUpdates: unused,
     createThreadReply: unused,
+    updateThreadComment: unused,
     createThread: unused,
     completePullRequest: unused,
     setPullLabel: unused,

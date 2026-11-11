@@ -6,6 +6,8 @@ export interface PrReplyInput {
   prNumber: number;
   commentId: string | null;
   body: string;
+  /** The fleet's own earlier reply on `commentId`'s thread, rewritten in place rather than answered. */
+  edits?: string;
 }
 
 export interface PrThreadResolveInput {

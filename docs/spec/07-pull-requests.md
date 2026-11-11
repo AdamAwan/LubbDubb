@@ -2207,7 +2207,7 @@ against the cooldown cap, and at the cap a human instead of an agent.
 So the agent is asked to close that gap itself. `reviewRecheckNote` (`src/dispatcher/reviewThreads.ts`)
 is appended after the thread list and tells it to call `world_read("pr", "pr:<n>")` before finishing
 and compare `unresolvedComments` against the threads it was handed: a thread that is not in the
-prompt arrived after it started and is its to answer, a body that no longer matches was edited, and a
+prompt **and reads `handled: false`** arrived after it started and is its to answer, a body that no longer matches was edited, and a
 thread carrying a reply the prompt does not have was answered while it worked — that reply being the
 live ask on it now. The reading serves the replies for exactly this: a review moves by reply far more
 often than by a new thread, and roots-only this re-check could not see the commonest thing it exists
@@ -2215,6 +2215,14 @@ to catch.
 It is the same snapshot the dispatch was decided against, carrying `observedAt`, so the note also
 says to read once more at the end of a long run. The agent then accounts for every thread by id,
 which is what makes a missed one visible rather than merely absent.
+
+**Only `handled: false` counts as an arrival.** The reading lists every unresolved thread, including
+the ones the fleet already answered and left open for the reviewer (`handled: true` — the fleet's
+reply is the last word). The note once said "a thread that is not above is yours", so every later
+dispatch on the pull request answered those again: thirty-two replies to thirteen threads on one PR,
+four in a row on one of them with the reviewer silent throughout. `reply_to_review` backs this with a
+refusal of its own ([11](11-mcp-tools.md#reply_to_review)), because a prompt rule alone is the thing
+that failed.
 
 Appended, never interpolated, for the reason above and one more: an override written before this
 existed cannot know to ask for the re-check, and those are the deployments where an agent silently

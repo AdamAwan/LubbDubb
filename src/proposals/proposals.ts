@@ -165,6 +165,7 @@ type ProposedAct =
       kind: 'reply_draft';
       prNumber: number;
       commentId: string | null;
+      edits: string | null;
       body: string;
       resolve: boolean;
       originRef: string | null;
@@ -260,6 +261,7 @@ function readReplyAct(id: string, prNumber: number, action: Record<string, unkno
       kind: 'reply_draft',
       prNumber,
       commentId: typeof commentId === 'string' ? commentId : null,
+      edits: typeof commentId === 'string' && typeof action.edits === 'string' ? action.edits : null,
       body,
       resolve: action.resolve === true,
       originRef: typeof action.originRef === 'string' && action.originRef !== '' ? action.originRef : null,

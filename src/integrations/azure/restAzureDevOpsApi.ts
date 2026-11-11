@@ -40,6 +40,7 @@ import {
 import { chunkIds, headsRef, readFileAtCommit, readPullChanges, sameTag, tagWriteOp } from './restHelpers.js';
 import { isRelationAlreadyExists, pullReviewerUrl } from './restHelpers.js';
 import { RestWorkItemComments } from './restWorkItemComments.js';
+import { RestPullThreads } from './restPullThreads.js';
 import { mergeStrategyFor } from './sourceControl.js';
 import { parseTags } from './workItems.js';
 import { workItemBodyField } from './workItemBody.js';
@@ -61,6 +62,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   private viewerIdentity: string | null = null;
   private readonly http: AzureTransport;
   private readonly comments: RestWorkItemComments;
+  private readonly threads: RestPullThreads;
   private projectId: string | null = null;
   private repositoryId: string | null = null;
 
@@ -75,6 +77,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   ) {
     this.http = new AzureTransport(auth, fetchImpl, log, sleep);
     this.comments = new RestWorkItemComments(this.http, this.projectUrl);
+    this.threads = new RestPullThreads(this.http, this.repoUrl, (id) => this.pullUrl(id));
   }
 
   static create(
@@ -267,41 +270,20 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     });
   }
 
-  async createThreadReply(
-    pullRequestId: number,
-    threadId: number,
-    parentCommentId: number,
-    content: string,
-  ): Promise<AzCommentRef> {
-    const created = await this.http.request<{ id?: number }>(
-      withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads/${threadId}/comments`),
-      { method: 'POST', body: JSON.stringify({ content, parentCommentId, commentType: 'text' }) },
-    );
-    return {
-      url: this.pullUrl(pullRequestId),
-      ...(typeof created?.id === 'number' ? { id: created.id } : {}),
-    };
+  createThreadReply(pullRequestId: number, threadId: number, parentId: number, content: string): Promise<AzCommentRef> {
+    return this.threads.reply(pullRequestId, threadId, parentId, content);
   }
 
-  async setThreadStatus(pullRequestId: number, threadId: number, status: string): Promise<void> {
-    await this.http.request(withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads/${threadId}`), {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
-    });
+  updateThreadComment(pullRequestId: number, threadId: number, commentId: number, content: string) {
+    return this.threads.update(pullRequestId, threadId, commentId, content);
   }
 
-  async createThread(pullRequestId: number, content: string): Promise<AzCommentRef> {
-    const created = await this.http.request<{ id?: number; comments?: { id?: number }[] }>(
-      withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads`),
-      { method: 'POST', body: JSON.stringify({ comments: [{ content, commentType: 'text' }], status: 'active' }) },
-    );
-    const id = created?.comments?.[0]?.id;
-    const threadId = created?.id;
-    return {
-      url: this.pullUrl(pullRequestId),
-      ...(typeof id === 'number' ? { id } : {}),
-      ...(typeof threadId === 'number' ? { threadId } : {}),
-    };
+  setThreadStatus(pullRequestId: number, threadId: number, status: string): Promise<void> {
+    return this.threads.setStatus(pullRequestId, threadId, status);
+  }
+
+  createThread(pullRequestId: number, content: string): Promise<AzCommentRef> {
+    return this.threads.create(pullRequestId, content);
   }
 
   async completePullRequest(

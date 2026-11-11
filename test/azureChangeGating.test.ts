@@ -116,6 +116,7 @@ function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script:
     getBuildTimeline: nope,
     getBuildLog: nope,
     createThreadReply: nope,
+    updateThreadComment: nope,
     async setThreadStatus() {},
     createThread: nope,
     completePullRequest: nope,

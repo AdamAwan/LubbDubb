@@ -77,6 +77,7 @@ interface Recorded {
   reviewReplies: Array<{ number: number; inReplyTo: number; body: string }>;
   issueComments: Array<{ number: number; body: string }>;
   commentEdits: Array<{ commentId: number; body: string }>;
+  reviewCommentEdits: Array<{ commentId: number; body: string }>;
   merges: Array<{ number: number; method: MergeMethod }>;
   issueLabelQueries: Array<string | undefined>;
   historySince: string[];
@@ -104,6 +105,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     reviewReplies: [],
     issueComments: [],
     commentEdits: [],
+    reviewCommentEdits: [],
     merges: [],
     issueLabelQueries: [],
     historySince: [],
@@ -234,6 +236,10 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async createPullReviewReply(number, inReplyTo, body): Promise<GhCommentRef> {
       recorded.reviewReplies.push({ number, inReplyTo, body });
       return { url: `https://github.com/o/r/pull/${number}#discussion_r${inReplyTo}`, id: inReplyTo };
+    },
+    async updatePullReviewComment(commentId, body): Promise<GhCommentRef> {
+      recorded.reviewCommentEdits.push({ commentId, body });
+      return { url: `https://github.com/o/r/pull/1#discussion_r${commentId}`, id: commentId };
     },
     async listIssueComments() {
       return [];
@@ -1195,4 +1201,14 @@ test('reopening a GitHub issue opens it', async () => {
   const issues = new GitHubIssuesIntegration({ api });
   assert.deepEqual(await issues.reopenIssue(9), { ok: true, ref: 'issue:9' });
   assert.deepEqual(recorded.reopened, [9]);
+});
+
+test('postPrReply edits the earlier review comment in place when it carries edits', async () => {
+  const { api, recorded } = fakeApi();
+  const sc = new GitHubSourceControlIntegration({ api });
+  const res = await sc.postPrReply({ prNumber: 7, commentId: '100', body: 'corrected', edits: '140' });
+  assert.equal(res.ok, true);
+  assert.equal(res.commentRef, '140');
+  assert.deepEqual(recorded.reviewCommentEdits, [{ commentId: 140, body: 'corrected' }]);
+  assert.equal(recorded.reviewReplies.length, 0);
 });

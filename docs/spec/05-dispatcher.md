@@ -1801,6 +1801,10 @@ It also teaches **`resolved: true`** — the flag on that call which is the only
 thread, since the reply goes out as the harness and the agent has no click of its own. And it says
 when _not_ to set it: a defence of an approach the reviewer may still reject is their thread to
 close. Told only that the flag exists, an agent resolves the threads it is arguing with.
+
+`reviewRecheckNote` counts as a new arrival only a thread reading `handled: false`; one reading
+`handled: true` is already answered and waiting on the reviewer, and the note says to leave it.
+→ [07](07-pull-requests.md#the-agent-checks-the-list-again-before-it-finishes)
 → [09](09-execution.md#where-a-reply_on_pr-comes-from), [11](11-mcp-tools.md#reply_to_review)
 
 The evidence is fetched in the **executor**, at dispatch, not in the rule. The rule pipeline is

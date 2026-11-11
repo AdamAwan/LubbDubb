@@ -103,6 +103,7 @@ const ActionSchema = z.discriminatedUnion('type', [
     type: z.literal('reply_on_pr'),
     prNumber: z.number().int(),
     commentId: z.string().nullable().default(null),
+    edits: z.string().nullable().default(null),
     draft: z.string().min(1),
     resolve: z.boolean().default(false),
     originRef: z.string().nullable().default(null),
