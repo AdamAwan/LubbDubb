@@ -232,7 +232,8 @@ test('a check an amendment stopped declaring stops being asked about', async () 
 const MEASURE = {
   id: 'orders-p95',
   title: 'The orders proc is no slower than it was',
-  query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
+  query:
+    'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = percentile(duration, 95)',
   expect: { noWorseThan: 'baseline' as const },
   unit: 'ms',
 };
@@ -285,14 +286,24 @@ test('an amended measure re-takes its baseline rather than keeping the old one',
 
   await submit(system, agent, {
     measures: [
-      { ...MEASURE, query: 'requests | where timestamp > datetime({since}) | summarize value = avg(duration)' },
+      {
+        ...MEASURE,
+        query:
+          'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = avg(duration)',
+      },
     ],
   });
   const after = system.store.watches.listGoalWatches()[0]!;
-  assert.equal(after.query, 'requests | where timestamp > datetime({since}) | summarize value = avg(duration)');
+  assert.equal(
+    after.query,
+    'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = avg(duration)',
+  );
   assert.deepEqual(
     observer.asked.filter((a) => a.kind === 'measure').map((a) => a.query),
-    [MEASURE.query, 'requests | where timestamp > datetime({since}) | summarize value = avg(duration)'],
+    [
+      MEASURE.query,
+      'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = avg(duration)',
+    ],
     'the amended query was put to the environment, not assumed to answer as its predecessor did',
   );
   assert.ok(after.baselineAt !== null, 'and the reading it answered with is the new baseline');

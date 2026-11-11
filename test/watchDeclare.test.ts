@@ -33,7 +33,8 @@ const SIGNAL = {
 const MEASURE = {
   id: 'orders-p95',
   title: 'The orders proc is no slower than it was',
-  query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
+  query:
+    'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = percentile(duration, 95)',
   expect: { noWorseThan: 'baseline' },
   unit: 'ms',
 };

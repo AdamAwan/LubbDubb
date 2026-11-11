@@ -139,6 +139,12 @@ export function watchNote(environments: readonly WatchedEnvironment[]): string {
       'the very occurrences the work is meant to stop and reads as regressed for ever. It is refused at ' +
       'submission, both queries of a signal and a measure alike.',
     '',
+    'A measure also carries `{until}`, ending its period — `| where timestamp > datetime({since}) and ' +
+      'timestamp <= datetime({until})`. The harness substitutes now for a watch reading, and for the dry run ' +
+      'that takes the baseline it reads the window ending at the moment the goal merged, so the number your ' +
+      'work has to beat is never one the change itself is in. A measure without it is refused; a signal may ' +
+      'carry it too.',
+    '',
     'Both queries are run once against the environment the moment you submit, and you are told what each ' +
       'answered. A query that resolves nothing comes back to you here, where it is cheap.',
     '',
@@ -177,6 +183,11 @@ export function watchDeclareNote(environments: readonly WatchedEnvironment[]): s
       'column — which the harness replaces with the moment the work arrived on that environment. Without it ' +
       'the query answers about the whole retention period and counts the occurrences your fix was for, ' +
       'reporting a regression on the strength of the defect it fixed. It is refused without one.',
+    '',
+    'A measure also carries `{until}` — `| where timestamp > datetime({since}) and timestamp <= ' +
+      'datetime({until})` — which is now for a watch reading and the moment the goal merged for the baseline, ' +
+      'so the baseline is read over the window before the change and never over the change itself. A measure ' +
+      'without it is refused; a signal may carry it too.',
     '',
     'Use it too where the fix changed what the right question is. A timeout fixed by adding a retry does ' +
       'not stop producing timeouts — the honest signal becomes "the job fails after retries", and only you ' +

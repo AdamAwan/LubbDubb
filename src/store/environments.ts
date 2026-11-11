@@ -17,7 +17,7 @@ import type { ColumnMigrations } from './migrate.js';
 
 export const ENVIRONMENT_COLUMNS: ColumnMigrations = {
   goal_arrivals: { watched_at: 'TEXT', sheeted_at: 'TEXT' },
-  goal_landings: { on_integration: 'TEXT' },
+  goal_landings: { on_integration: 'TEXT', merged_at: 'TEXT' },
 };
 
 export function repairPartRefGoals(db: Database.Database): void {
@@ -33,13 +33,13 @@ export function repairPartRefGoals(db: Database.Database): void {
 export class EnvironmentStore {
   constructor(private readonly ctx: StoreContext) {}
 
-  recordGoalLanding(input: { prNumber: number; goalRef: string; sha: string }): void {
+  recordGoalLanding(input: { prNumber: number; goalRef: string; sha: string; mergedAt?: string | null }): void {
     this.ctx
       .prep(
-        `INSERT OR IGNORE INTO goal_landings (pr_number, goal_ref, sha, recorded_at)
-         VALUES (@prNumber, @goalRef, @sha, @recordedAt)`,
+        `INSERT OR IGNORE INTO goal_landings (pr_number, goal_ref, sha, recorded_at, merged_at)
+         VALUES (@prNumber, @goalRef, @sha, @recordedAt, @mergedAt)`,
       )
-      .run({ ...input, recordedAt: this.ctx.now() });
+      .run({ ...input, mergedAt: input.mergedAt ?? null, recordedAt: this.ctx.now() });
   }
 
   listGoalLandings(): GoalLanding[] {
@@ -52,6 +52,7 @@ export class EnvironmentStore {
       sha: r.sha,
       recordedAt: r.recorded_at,
       onIntegration: r.on_integration === null ? null : r.on_integration === 'yes',
+      mergedAt: r.merged_at,
     }));
   }
 
@@ -59,12 +60,19 @@ export class EnvironmentStore {
     this.ctx.prep(`UPDATE goal_landings SET on_integration=? WHERE pr_number=?`).run(yesNo(onIntegration), prNumber);
   }
 
-  carryLanding(input: { prNumber: number; goalRef: string; sha: string; onIntegration: boolean | null }): void {
+  carryLanding(input: {
+    prNumber: number;
+    goalRef: string;
+    sha: string;
+    onIntegration: boolean | null;
+    mergedAt?: string | null;
+  }): void {
     this.ctx
       .prep(
-        `INSERT INTO goal_landings (pr_number, goal_ref, sha, recorded_at, on_integration)
-         VALUES (@prNumber, @goalRef, @sha, @recordedAt, @onIntegration)
-         ON CONFLICT(pr_number) DO UPDATE SET sha = excluded.sha, on_integration = excluded.on_integration`,
+        `INSERT INTO goal_landings (pr_number, goal_ref, sha, recorded_at, on_integration, merged_at)
+         VALUES (@prNumber, @goalRef, @sha, @recordedAt, @onIntegration, @mergedAt)
+         ON CONFLICT(pr_number) DO UPDATE SET sha = excluded.sha, on_integration = excluded.on_integration,
+           merged_at = excluded.merged_at`,
       )
       .run({
         prNumber: input.prNumber,
@@ -72,6 +80,7 @@ export class EnvironmentStore {
         sha: input.sha,
         recordedAt: this.ctx.now(),
         onIntegration: input.onIntegration === null ? null : yesNo(input.onIntegration),
+        mergedAt: input.mergedAt ?? null,
       });
   }
 
@@ -249,6 +258,7 @@ interface LandingRow {
   sha: string;
   recorded_at: string;
   on_integration: string | null;
+  merged_at: string | null;
 }
 
 interface ArrivalRow {

@@ -125,7 +125,8 @@ test('a measure with nothing that could fail it is refused', async () => {
       kind: 'measure',
       id: 'orders-p95',
       title: 'The orders proc is no slower',
-      query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
+      query:
+        'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = percentile(duration, 95)',
       expect: {},
     },
   });
@@ -181,7 +182,8 @@ test('a replan neither reverts an operator’s edit nor sweeps the check they wr
       kind: 'measure',
       id: 'orders-p95',
       title: 'The orders proc is no slower than it was',
-      query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
+      query:
+        'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = percentile(duration, 95)',
       expect: { noWorseThan: 'baseline' },
       unit: 'ms',
     },
@@ -207,7 +209,8 @@ test('an edit keeps a measure’s baseline where the question did not change, an
     kind: 'measure',
     id: 'orders-p95',
     title: 'The orders proc is no slower than it was',
-    query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
+    query:
+      'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = percentile(duration, 95)',
     expect: { noWorseThan: 'baseline' },
     unit: 'ms',
   };
@@ -223,7 +226,8 @@ test('an edit keeps a measure’s baseline where the question did not change, an
 
   const saved = system.store.watches.saveOperatorWatch('issue:12', {
     ...system.store.watches.listGoalWatches()[0]!,
-    query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 99)',
+    query:
+      'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = percentile(duration, 99)',
   });
   assert.equal(saved.baselineValue, null, 'a reading is a reading of that query');
   assert.equal(saved.dryRunVerdict, null, 'and so is the dry run');

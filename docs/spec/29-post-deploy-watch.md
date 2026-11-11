@@ -20,14 +20,12 @@ know — and everything from the declaration onwards is a scripted pass with no 
 > [the watch hint and its tick at approval](#the-planner-at-plan-time-writes-a-hint);
 > [authoring the watch on `delivered`](#the-assessor-on-delivered-writes-the-checks) and
 > [the accept that releases it](#the-operator-accepts-the-set); [a stated `none`](#declaring-nothing-is-a-legitimate-answer);
-> [`{until}` and the baseline that ends at the merge](#until-and-the-baseline-that-ends-at-the-merge);
 > [sources](#sources) and [the source only the operator can run](#a-source-only-the-operator-can-run);
 > [the outcome](#the-outcome) and [discussing it in Claude](#discussing-an-outcome).
 > **What runs today instead:** the planner writes executable checks into the plan document and they are
 > dry-run at submission; the working agent amends them with `watch_declare` at conclude time; each
-> environment has one `observe` command; a baseline is read over one window before the moment it is
-> taken; and the goal page draws every check's verdict with no headline. Remove each item from this
-> list in the change that builds it.
+> environment has one `observe` command; and the goal page draws every check's verdict with no
+> headline. Remove each item from this list in the change that builds it.
 
 ## What it is not
 
@@ -105,10 +103,10 @@ traces
 
 The harness substitutes the instant the reading is about, before the query reaches a shell: **the
 moment the work arrived on that environment** for a window's reading (`watch_windows.opened_at`, which
-is the arrival), and **one window's length before now** for the dry run that takes the baseline. One
-query, two clocks, which is the arrangement the two readings were always asking for — the dry run
-proves the defect is real _before_ the fix, and the window asks whether it is still happening _since_
-the fix.
+is the arrival), and **one window's length before the merge** for the dry run that takes the baseline
+([`{until}`](#until-and-the-baseline-that-ends-at-the-merge)). One query, two clocks, which is the
+arrangement the two readings were always asking for — the dry run proves the defect is real _before_
+the fix, and the window asks whether it is still happening _since_ the fix.
 
 This is the one refusal whose absence is indistinguishable from the subsystem working, and it fails in
 the direction that reads as a regression rather than as a fault:
@@ -137,9 +135,11 @@ of data rather than about a period.
 
 ### `{until}`, and the baseline that ends at the merge
 
-**Not yet built.** A second token, `{until}`, bounds the other end. A **measure's query must carry
-it**, refused at ingestion by a `carriesUntil` beside `carriesSince`, through the same
-`refuseQueryShape`. A signal's query and its `presence` query may carry it, and should.
+A second token, `{until}`, bounds the other end. A **measure's query must carry it**, refused at
+ingestion by `carriesUntil` beside `carriesSince` (`src/validation/watchQueryShape.ts`), through the
+same `refuseQueryShape`, so the plan document's `watch` block, `watch_declare` and the operator's
+`WatchCheckSchema` are held to it by one rule. A signal's query and its `presence` query may carry it,
+and should. Both tokens are replaced by `withPeriod`, through `preparedQuery`.
 
 | Reading                  | `{since}`                            | `{until}` |
 | ------------------------ | ------------------------------------ | --------- |
@@ -149,6 +149,25 @@ it**, refused at ingestion by a `carriesUntil` beside `carriesSince`, through th
 **The merge** is the instant the goal's last pull request merged, the commit its delivery was
 assessed on. That is the last moment the change is known not to be running anywhere, and it does not
 move afterwards.
+
+It is read from `goal_landings` (`goalMergedAt`, `src/environments/landings.ts`): the latest
+`merged_at` among the goal's landings, leaving out a squash the clone placed off the integration
+branch, since that is not when the work reached anything. `merged_at` is the provider's own closing
+time for the merged pull request — GitHub's `closed_at`, Azure's `closedDate` — stored when the sweep
+records the landing, and a [carried](24-environments.md#a-stacked-pull-request-rides-its-carrier)
+landing takes its carrier's, because that merge is when the stacked work reached the integration
+branch. It is the provider's instant rather than the landing's own `recorded_at`, because `recorded_at`
+is when the harness _noticed_: a pulse later at best, and as late as `closedPrWindowMs` after a
+restart that straddled the merge — late enough for a fast deployment to be inside the baseline. A row
+from before the column, or one the provider gave no time for, has `recorded_at` stand in; that is the
+right side of the error to be on only because nothing earlier is known, and it heals nothing, so it is
+said here rather than hidden. Not the delivery verdict's time either: the assessment runs after the
+merge, by however long the assessor took.
+
+**Before anything has merged**, the dry run falls back to the window ending now — `{until}` is now
+and `{since}` one window before it — which is exactly what a dry run read before the token existed.
+That is the plan-time dry run, which still runs today, and an amendment taken before the goal's first
+landing; the work is not running anywhere then, so _now_ is as good an end as the merge would be.
 
 That is the one decision this section makes, and it exists because checks are now written after the
 merge. A baseline read over _one window before now_ was right when it was taken at plan time, weeks
@@ -164,9 +183,15 @@ defect was real and that the query sees it.
 
 `LUBBDUBB_WATCH_UNTIL` is passed beside `LUBBDUBB_WATCH_SINCE`, for the wrapper that assembles its
 own query. A check declared before the token existed carries no `{until}`. Its window readings are
-unchanged, because `{until}` would be now anyway. Its dry run is refused by `preparedQuery` like a
-query with no `{since}`, and reads `unknown` with that reason, never a baseline taken over the wrong
-period.
+unchanged, because `{until}` would be now anyway. A **measure's** dry run after the merge is refused by
+`preparedQuery` like a query with no `{since}` — the request says its period ends in the past
+(`untilIsPast`), and a measure that cannot be ended there would read the change into its own
+baseline — so it reads `unknown` with that reason, never a baseline taken over the wrong period. A
+signal without `{until}` keeps working: its dry run proves the query resolves and the defect fires, and
+reading on past the merge widens that question without turning it into a false one.
+
+A finding's bench row draws the query as it was put, with `{until}` at the reading that regressed
+(`watchWindowReadings`, `src/environments/watchFinding.ts`).
 
 ### A signal query returns rows, never a count
 
@@ -531,16 +556,14 @@ environment where nothing happened, and the card says so in the operator's own w
 
 ### The baseline, and why a measure is not trusted without one
 
-**Not yet built:** the baseline's period becomes the window before the merge rather than the window
-before the moment it is taken, as set out in
-[`{until}`](#until-and-the-baseline-that-ends-at-the-merge). The rest of this section is unchanged.
-
 A measure declared with `noWorseThan: "baseline"` has its query run at **declaration time**, days
 before the arrival, and that reading is stored on the check (`goal_watches.baseline_value`). It is
 the number the work has to beat, taken on the same query, from the same source, before anything
-changed. Its `{since}` is **one window's length before now** — the same `forMs` the window
-it will be compared against runs for, through `watchWindowMs` rather than a second reading of that
-field — so the before and the after are measured over spans of the same size.
+changed. Its period is **the window that ends at the merge** — `{until}` the merge and `{since}` one
+`forMs` before it, the same length the window it will be compared against runs for, through
+`watchWindowMs` rather than a second reading of that field — so the before and the after are measured
+over spans of the same size, and the before holds none of the change however late it is taken. Before
+the goal has merged it ends now, as set out in [`{until}`](#until-and-the-baseline-that-ends-at-the-merge).
 
 **It rides the dry run rather than being a second call.** The dry run already puts the query to an
 environment the moment it is declared, so the baseline is that reading kept rather than discarded —
@@ -568,10 +591,11 @@ as `CommandEnvironmentProber` runs `at` (`src/environments/prober.ts`).
 
 ### The query is passed by environment variable, and its return is verified
 
-`LUBBDUBB_ENVIRONMENT`, `LUBBDUBB_WATCH_ID`, `LUBBDUBB_WATCH_QUERY` and `LUBBDUBB_WATCH_SINCE`. The
-operator's command is two lines and reads the query out of the variable. `{since}` is already
-substituted in what `LUBBDUBB_WATCH_QUERY` carries — a wrapper has nothing to fill in, and the instant
-is passed beside it only so one that assembles its own query can say what period it read.
+`LUBBDUBB_ENVIRONMENT`, `LUBBDUBB_WATCH_ID`, `LUBBDUBB_WATCH_QUERY`, `LUBBDUBB_WATCH_SINCE` and
+`LUBBDUBB_WATCH_UNTIL`. The operator's command is two lines and reads the query out of the variable.
+`{since}` and `{until}` are already substituted in what `LUBBDUBB_WATCH_QUERY` carries — a wrapper has
+nothing to fill in, and the instants are passed beside it only so one that assembles its own query can
+say what period it read.
 
 A window's reading also carries **`LUBBDUBB_WATCH_COMMITS`**: the goal's landed commits, the ones its
 arrival was confirmed on, space-separated. It names _the change_ rather than the build deployed now,
@@ -1501,7 +1525,12 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   separate readings;
 - the per-pulse cap defers rather than drops, oldest window first;
 - nothing under `src/dispatcher/` imports the module, asserted structurally with the existing lens
-  assertions.
+  assertions;
+- a measure without `{until}` is refused by every writer and a signal without it is not; after the
+  merge the dry run and baseline put `{until}` at the merge and `{since}` one window before it, and
+  before it they fall back to the window ending now; a measure from before the token reads `unknown`
+  on that dry run with no baseline; the observe command is handed `LUBBDUBB_WATCH_UNTIL`; and the merge
+  is the provider's instant with `recorded_at` standing in (`test/watchUntil.test.ts`).
 
 **Not yet built**, and owed by the changes that build each piece:
 
@@ -1517,8 +1546,6 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   it before then;
 - an arrival landing while the watch is owed is **deferred, not stamped**, and opens a window sized
   from the arrival when the set is accepted;
-- a measure without `{until}` is refused; the dry run and baseline put `{until}` at the merge and
-  `{since}` one window before it, whenever they are taken;
 - a check naming a source its environment lacks reads `unknown` there, with the source named;
 - a `promql` source refuses a signal;
 - an `operator` source spawns nothing, files one `watch_reading` ask per check per environment per

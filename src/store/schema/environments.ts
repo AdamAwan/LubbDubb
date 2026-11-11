@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS goal_landings (
   goal_ref       TEXT NOT NULL,      -- issue:<n>
   sha            TEXT NOT NULL,
   recorded_at    TEXT NOT NULL,
-  on_integration TEXT                -- yes | no | NULL, meaning not yet asked
+  on_integration TEXT,               -- yes | no | NULL, meaning not yet asked
+  merged_at      TEXT                -- the provider's merge instant; NULL where it did not say
 );
 
 -- What an environment probe said about one landed commit (see EnvironmentStore).

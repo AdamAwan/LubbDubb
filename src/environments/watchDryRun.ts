@@ -2,8 +2,9 @@ import type { Store } from '../store/store.js';
 import type { GoalWatch, WatchReadingVerdict } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 import type { EnvironmentObserver } from './observer.js';
-import { scalarShaped, type WatchResult } from './watchResult.js';
+import { scalarShaped, type WatchPeriod, type WatchResult } from './watchResult.js';
 import { watchWindowMs } from './watchWindow.js';
+import { goalMergedAt } from './landings.js';
 
 // → docs/spec/24-environments.md
 
@@ -30,18 +31,28 @@ export class WatchDryRun implements WatchDryRunner {
     const environment = dryRunEnvironment(this.deps.environments);
     if (environment === null) return [];
     const checks = this.deps.store.watches.listGoalWatches().filter((c) => c.originRef === originRef);
+    const period = this.period(environment, originRef);
     const refusals: string[] = [];
     for (const check of checks) {
-      const reading = await this.read(environment, check);
+      const reading = await this.read(environment, check, period);
       this.deps.store.watches.recordWatchDryRun(originRef, check.id, { environment: environment.name, ...reading });
       if (reading.detail !== null) refusals.push(`${check.id}: ${reading.detail}`);
     }
     return refusals;
   }
 
-  private async read(environment: EnvironmentConfig, check: GoalWatch): Promise<DryRunReading> {
+  private period(environment: EnvironmentConfig, originRef: string): WatchPeriod {
+    const merged = goalMergedAt(this.deps.store.environments.listGoalLandings(), originRef);
+    const until = merged ?? this.now();
+    return {
+      since: new Date(until - watchWindowMs(environment)).toISOString(),
+      until: new Date(until).toISOString(),
+      untilIsPast: merged !== null,
+    };
+  }
+
+  private async read(environment: EnvironmentConfig, check: GoalWatch, period: WatchPeriod): Promise<DryRunReading> {
     const command = environment.watch!.observe;
-    const since = new Date(this.now() - watchWindowMs(environment)).toISOString();
     if (check.presence !== null) {
       const probe = await this.deps.observer.observe({
         environment: environment.name,
@@ -49,7 +60,7 @@ export class WatchDryRun implements WatchDryRunner {
         checkId: check.id,
         query: check.presence,
         kind: 'presence',
-        since,
+        ...period,
       });
       const presence = verdictOf(probe);
       if (presence === 'unknown')
@@ -78,7 +89,7 @@ export class WatchDryRun implements WatchDryRunner {
       checkId: check.id,
       query: check.query,
       kind: check.kind === 'measure' ? 'measure' : 'signal',
-      since,
+      ...period,
     });
     return readingOf(environment, check, result);
   }

@@ -78,6 +78,8 @@ test('a command that exits non-zero, times out, or prints nothing is unknown', a
         query: 'q | where t > datetime({since})',
         kind: 'signal',
         since: '2026-01-01T00:00:00.000Z',
+        until: '2026-01-02T00:00:00.000Z',
+        untilIsPast: false,
       });
 
     const failed = await ask('echo "no such table" 1>&2; exit 3');
@@ -108,6 +110,8 @@ test('the query reaches the command as a variable’s value and never as syntax'
       query: '"; touch pwned; echo " | where t > datetime({since})',
       kind: 'signal',
       since: '2026-01-01T00:00:00.000Z',
+      until: '2026-01-02T00:00:00.000Z',
+      untilIsPast: false,
     });
     assert.equal(result.verdict, 'answered');
     assert.match(String(result.rows![0]!['q']), /touch pwned/);

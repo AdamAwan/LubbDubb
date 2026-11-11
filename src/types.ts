@@ -1620,6 +1620,8 @@ export interface GoalLanding {
   sha: string;
   recordedAt: string;
   onIntegration: boolean | null;
+  /** When the provider said it merged; null or absent where it did not, which `recordedAt` then stands in for. */
+  mergedAt?: string | null;
 }
 
 export type EnvironmentReachStatus = 'reached' | 'absent' | 'unknown';

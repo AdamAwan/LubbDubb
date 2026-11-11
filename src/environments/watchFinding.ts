@@ -2,7 +2,7 @@ import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { EnvironmentGate, GoalWatch, HumanTask, WatchCheckVerdict, WatchReading, WatchWindow } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 import { watchQueryUrl } from './watchQueryUrl.js';
-import { withSince } from '../validation/watchQueryShape.js';
+import { withPeriod } from '../validation/watchQueryShape.js';
 import { watchSince } from './exposure.js';
 
 // → docs/spec/24-environments.md
@@ -60,7 +60,7 @@ export function watchWindowReadings(input: {
       regressed: checks.flatMap((check, i) => {
         const reading = read[i];
         if (reading?.verdict !== 'regressed') return [];
-        const query = withSince(check.query, watchSince(window));
+        const query = withPeriod(check.query, watchSince(window), reading.readAt);
         return [
           {
             title: check.title,

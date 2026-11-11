@@ -195,7 +195,7 @@ export class WatchDesk {
     commits: readonly string[],
   ): Promise<void> {
     const command = environment.watch!.observe;
-    const since = watchSince(window);
+    const period = { since: watchSince(window), until: new Date(this.now()).toISOString(), untilIsPast: false };
     const presence =
       check.presence === null
         ? null
@@ -205,7 +205,7 @@ export class WatchDesk {
             checkId: check.id,
             query: check.presence,
             kind: 'presence',
-            since,
+            ...period,
             commits,
           });
     const silent = presence !== null && (presence.rows === null || presence.rows.length === 0);
@@ -217,7 +217,7 @@ export class WatchDesk {
           checkId: check.id,
           query: check.query,
           kind: check.kind === 'measure' ? 'measure' : 'signal',
-          since,
+          ...period,
           commits,
         });
     const verdict = watchCheckVerdict({ check, environment: environment.name, presence, reading });

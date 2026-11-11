@@ -303,7 +303,9 @@ function CommonFields({ draft, set, editing }: { draft: Draft; set: SetField; ed
         />
       </label>
       <label className="cn-sig-field">
-        <span title="Bound it with {since} — the harness fills in the moment the work arrived">Query</span>
+        <span title="Bound it with {since} — the harness fills in the moment the work arrived. A measure ends it with {until}: now for a reading, the merge for its baseline">
+          Query
+        </span>
         <textarea
           className="cn-in cn-sig-area"
           rows={2}
@@ -452,10 +454,17 @@ function refuseMeasure(draft: Draft): string | null {
   if (draft.over.trim() !== '' && Number.isNaN(Number(draft.over))) return 'Over is a number.';
   if (draft.under.trim() === '' && draft.over.trim() === '' && !draft.baseline)
     return 'A measure needs a threshold or a baseline — one with neither can never fail.';
+  if (!draft.query.includes(UNTIL_TOKEN))
+    return (
+      `A measure's query carries ${UNTIL_TOKEN} as well, ending its period — the baseline is read over the ` +
+      'window before the merge, and without an end it would read the change into the number it is compared ' +
+      `against. Add: and timestamp <= datetime(${UNTIL_TOKEN}).`
+    );
   return null;
 }
 
 const SINCE_TOKEN = '{since}';
+const UNTIL_TOKEN = '{until}';
 
 function unbounded(field: 'query' | 'presence'): string {
   return (

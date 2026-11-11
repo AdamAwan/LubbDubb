@@ -31,7 +31,8 @@ const WatchDeclareInput = z.object({
               'carry "{since}", bounding it to the period being watched — "| where timestamp > ' +
               'datetime({since})", with your own timestamp column — which the harness replaces with the ' +
               'moment the work arrived on the environment. Without it the query answers about the whole ' +
-              'retention period and counts the occurrences your fix was for; it is refused.',
+              'retention period and counts the occurrences your fix was for; it is refused. It may carry ' +
+              '"{until}" as well, which is now for a watch reading and the moment the goal merged for the dry run.',
           ),
         presence: z
           .string()
@@ -71,7 +72,10 @@ const WatchDeclareInput = z.object({
             'Answers exactly one row with a numeric "value". It carries "{since}" — "| where timestamp > ' +
               'datetime({since})", with your own timestamp column — which the harness replaces with the ' +
               'moment the work arrived, so the number is about the period being watched rather than ' +
-              'about the whole retention period. It is refused without one.',
+              'about the whole retention period. It is refused without one. It carries "{until}" too — ' +
+              '"and timestamp <= datetime({until})" — which is now for a watch reading and the moment the ' +
+              'goal merged for the baseline, so the number your work has to beat is read over the window ' +
+              'before the change and never over the change itself. It is refused without that either.',
           ),
         expect: z
           .object({

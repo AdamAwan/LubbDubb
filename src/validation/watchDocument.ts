@@ -1,7 +1,14 @@
 import { z } from 'zod';
 import { strictObject } from '../schemaErrors.js';
 import type { GoalWatchDeclaration, GoalWatchInput } from '../types.js';
-import { aggregatingQueryRefusal, aggregatingTail, carriesSince, missingSinceRefusal } from './watchQueryShape.js';
+import {
+  aggregatingQueryRefusal,
+  aggregatingTail,
+  carriesSince,
+  carriesUntil,
+  missingSinceRefusal,
+  missingUntilRefusal,
+} from './watchQueryShape.js';
 
 // → docs/spec/20-validation.md
 
@@ -73,6 +80,12 @@ function refuseQueryShape(
         message: `${kind} "${check.id}": ${missingSinceRefusal(field)}`,
       });
   }
+  if (kind === 'measure' && !carriesUntil(check.query))
+    ctx.addIssue({
+      code: 'custom',
+      path: [...path, 'query'],
+      message: `measure "${check.id}": ${missingUntilRefusal()}`,
+    });
 }
 
 export const WatchSchema = strictObject(

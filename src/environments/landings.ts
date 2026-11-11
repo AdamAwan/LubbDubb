@@ -10,6 +10,7 @@ interface LandingToRecord {
   prNumber: number;
   goalRef: string;
   sha: string;
+  mergedAt?: string;
 }
 
 interface LandingSweepInput {
@@ -28,7 +29,12 @@ export function unrecordedLandings(input: LandingSweepInput): LandingToRecord[] 
     if (pr.baseBranch !== undefined && pr.baseBranch !== input.integrationBranch) continue;
     const goalRef = goals.get(pr.number) ?? issueRefFor(pr, input.world);
     if (goalRef === null) continue;
-    out.push({ prNumber: pr.number, goalRef, sha: pr.mergeCommitSha });
+    out.push({
+      prNumber: pr.number,
+      goalRef,
+      sha: pr.mergeCommitSha,
+      ...(pr.closedAt === undefined ? {} : { mergedAt: pr.closedAt }),
+    });
   }
   return out;
 }
@@ -60,7 +66,13 @@ export function carriedLandings(input: CarrySweepInput): CarriedLanding[] {
     const pr = pulls.get(number);
     const goalRef = own?.goalRef ?? goals.get(number) ?? (pr === undefined ? null : issueRefFor(pr, input.world));
     if (goalRef === null) continue;
-    out.push({ prNumber: number, goalRef, sha: carrier.sha, onIntegration: carrier.onIntegration });
+    out.push({
+      prNumber: number,
+      goalRef,
+      sha: carrier.sha,
+      onIntegration: carrier.onIntegration,
+      ...(carrier.mergedAt == null ? {} : { mergedAt: carrier.mergedAt }),
+    });
   }
   return out;
 }
@@ -172,4 +184,15 @@ function isGoalRoot(ref: string): boolean {
 /** A goal's landed commits on the integration branch. → docs/spec/24-environments.md#what-counts-as-a-landing */
 export function landedCommits(landings: readonly GoalLanding[], goalRef: string): string[] {
   return landings.filter((l) => l.goalRef === goalRef && l.onIntegration !== false).map((l) => l.sha);
+}
+
+/** The instant the goal's last pull request merged, or null while none has. → docs/spec/29-post-deploy-watch.md */
+export function goalMergedAt(landings: readonly GoalLanding[], goalRef: string): number | null {
+  let last: number | null = null;
+  for (const l of landings) {
+    if (l.goalRef !== goalRef || l.onIntegration === false) continue;
+    const at = Date.parse(l.mergedAt ?? l.recordedAt);
+    if (Number.isFinite(at) && (last === null || at > last)) last = at;
+  }
+  return last;
 }
