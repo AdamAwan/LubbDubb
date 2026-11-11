@@ -40,6 +40,7 @@ interface McpBridgeServerOptions {
   filing?: () => McpToolDeps['filing'];
   prReply?: () => McpToolDeps['prReply'];
   watch?: () => McpToolDeps['watch'];
+  watchHintRequired?: boolean;
   state?: () => McpToolDeps['state'];
   stepCapabilities?: () => McpToolDeps['stepCapabilities'];
   localValidations?: McpToolDeps['localValidations'];
@@ -214,6 +215,7 @@ export class McpBridgeServer {
         filing: this.opts.filing?.(),
         prReply: this.opts.prReply?.(),
         watch: this.opts.watch?.(),
+        watchHintRequired: this.opts.watchHintRequired,
         state: this.opts.state?.(),
         stepCapabilities: this.opts.stepCapabilities?.(),
         localValidations: this.opts.localValidations,

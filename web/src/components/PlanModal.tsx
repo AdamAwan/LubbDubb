@@ -10,6 +10,7 @@ import { ProofBand, type ProofCell } from './ProofBand.js';
 import { StateDigest } from './StateDigest.js';
 import { ValidationDigest } from './ValidationSection.js';
 import { WatchDigest } from './WatchDigest.js';
+import { WatchHintDigest } from './WatchHintDigest.js';
 import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 import { Modal } from './Modal.js';
 import { Ref } from './refs.js';
@@ -170,6 +171,7 @@ function PlanSheet(
 }
 
 function DigestSections({
+  plan,
   checks,
   validationPlan,
   watches,
@@ -210,6 +212,7 @@ function DigestSections({
               asks whether the thing is behaving once it is there — the later
               question, drawn later. Nothing renders where nothing was
               declared. */}
+        <WatchHintDigest hint={plan.watchHint} refUrls={refUrls} />
         <WatchDigest
           watches={watches}
           refUrls={refUrls}

@@ -863,6 +863,15 @@ export interface IssueShortfall {
 
 export type PlanStatus = 'planning' | 'awaiting_approval' | 'active' | 'complete' | 'abandoned';
 
+interface WatchIntent {
+  kind: GoalWatchKind;
+  source: string;
+  says: string;
+  why: string | null;
+}
+
+export type WatchHint = { intents: WatchIntent[] } | { none: string };
+
 export interface Plan {
   id: string;
   originRef: string;
@@ -878,6 +887,7 @@ export interface Plan {
   verification: string | null;
   evidence: PlanEvidence[];
   document: string | null;
+  watchHint: WatchHint | null;
   statusCommentRef: string | null;
   createdAt: string;
   updatedAt: string;

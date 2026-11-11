@@ -121,7 +121,7 @@ export class AgentChannels {
       });
       return;
     }
-    const parsed = parsePlanDocument(raw);
+    const parsed = parsePlanDocument(raw, { watchHintRequired: this.opts.watchHintRequired });
     if (!parsed.ok) {
       this.opts.errors?.record({
         source: 'agent',

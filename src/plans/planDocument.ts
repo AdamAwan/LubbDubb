@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ValidationSchema } from '../validation/checkDocument.js';
 import { WatchSchema } from '../validation/watchDocument.js';
 import { StateSchema } from '../validation/stateDocument.js';
+import { WATCH_HINT_MISSING, WatchHintSchema } from './watchHint.js';
 import type { PlanAtomInput, PlanNarrative, PlanPartInput } from '../types.js';
 
 // → docs/spec/08-planning.md
@@ -89,6 +90,7 @@ const PlanDocumentSchema = z
     parts: z.array(PartSchema).default([]),
     validation: ValidationSchema.optional(),
     watch: WatchSchema.optional(),
+    watchHint: WatchHintSchema.optional(),
     state: StateSchema.optional(),
   })
   .superRefine((doc, ctx) => {
@@ -274,21 +276,27 @@ export type PlanDocument = z.infer<typeof PlanDocumentSchema>;
 
 type PlanParseResult = { ok: true; document: PlanDocument } | { ok: false; error: string };
 
-export function parsePlanDocument(raw: string): PlanParseResult {
+interface PlanValidationOptions {
+  watchHintRequired?: boolean;
+}
+
+export function parsePlanDocument(raw: string, opts: PlanValidationOptions = {}): PlanParseResult {
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch (err) {
     return { ok: false, error: `not valid JSON: ${(err as Error).message}` };
   }
-  return validatePlanDocument(json);
+  return validatePlanDocument(json, opts);
 }
 
-export function validatePlanDocument(value: unknown): PlanParseResult {
+export function validatePlanDocument(value: unknown, opts: PlanValidationOptions = {}): PlanParseResult {
   const result = PlanDocumentSchema.safeParse(value);
   if (!result.success) {
     return { ok: false, error: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') };
   }
+  if (opts.watchHintRequired === true && result.data.watchHint === undefined)
+    return { ok: false, error: WATCH_HINT_MISSING };
   return { ok: true, document: result.data };
 }
 

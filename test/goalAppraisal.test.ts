@@ -175,6 +175,7 @@ test('an issue that already has a plan is past this gate', async () => {
     verification: null,
     evidence: [],
     document: null,
+    watchHint: null,
     statusCommentRef: null,
     createdAt: NOW,
     updatedAt: NOW,

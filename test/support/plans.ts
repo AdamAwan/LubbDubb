@@ -118,6 +118,7 @@ export function onePartPlanRows(
     verification: null,
     evidence: [],
     document: null,
+    watchHint: null,
     statusCommentRef: null,
     createdAt: at,
     updatedAt: at,

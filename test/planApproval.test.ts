@@ -619,6 +619,7 @@ function planRow(): Plan {
     verification: null,
     evidence: [],
     document: null,
+    watchHint: null,
     statusCommentRef: null,
     createdAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',
@@ -949,7 +950,7 @@ test('the approval ask names an open PR that would belong to no part', () => {
   };
   const parts = [partRow('a', 1), partRow('b', 2)];
 
-  const clean = { risks: null, openQuestions: null };
+  const clean = { risks: null, openQuestions: null, watchHint: null };
   const [unclaimed] = planCaveats(clean, issue, parts, [pr]);
   assert.equal(unclaimed!.label, 'PR #31231 is open on this issue and unclaimed');
   const warning = caveatNotice(planCaveats(clean, issue, parts, [pr]));
@@ -978,7 +979,7 @@ test('a blocked decomposition warns before it is approved, quoting the stored re
       blockedReason: refCollisionReason(12, { local: true, remote: false }),
     },
   ];
-  const warning = caveatNotice(planCaveats({ risks: null, openQuestions: null }, issue, parts, []));
+  const warning = caveatNotice(planCaveats({ risks: null, openQuestions: null, watchHint: null }, issue, parts, []));
   assert.ok(warning.includes(refCollisionReason(12, { local: true, remote: false })));
   assert.match(warning, /cannot be cut/);
 });

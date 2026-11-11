@@ -6,6 +6,7 @@ import { declaresCheckSet, validationCheckInputs, validationResourceInputs } fro
 import { watchCheckInputs } from '../validation/watchDocument.js';
 import { stateQueryInputs } from '../validation/stateDocument.js';
 import { withdrawResourceAsks } from '../validation/ask.js';
+import { watchHintOf } from './watchHint.js';
 import { partIsHuman, partOrigin, partsToRetire, planIssueNumber } from './parts.js';
 import { AMENDED_PART_RESOLUTION, withdrawPartAsks } from './partAsks.js';
 
@@ -41,7 +42,10 @@ export function ingestPlanDocument(
   const status: PlanStatus = input.approved === true ? 'active' : 'awaiting_approval';
 
   const narrative = planNarrative(doc);
-  const plan = store.plans.upsertPlan({ originRef, title, status, ...narrative });
+  const upserted = store.plans.upsertPlan({ originRef, title, status, ...narrative });
+  const hint = watchHintOf(doc.watchHint);
+  if (hint) store.plans.setPlanWatchHint(upserted.id, hint);
+  const plan = hint ? { ...upserted, watchHint: hint } : upserted;
   store.plans.recordPlanRevision(plan.id, { narrative, parts: declared });
   for (const part of retire) store.plans.updatePlanPart(part.id, { status: 'retired' });
   withdrawPartAsks(store, retire, AMENDED_PART_RESOLUTION);
