@@ -1,3 +1,4 @@
+import type { Store } from '../store/store.js';
 import type {
   PrComment,
   PrReviewThread,
@@ -46,12 +47,7 @@ export interface PrThreadReopen {
   reopenedAt: string;
 }
 
-interface ReopenedWorldSource {
-  world: { getWorldBaseline(): WorldSnapshot | null };
-  threadReopens: { prThreadReopens(): readonly PrThreadReopen[] };
-}
-
-export function reopenedBaseline(store: ReopenedWorldSource): WorldSnapshot | null {
+export function reopenedBaseline(store: Pick<Store, 'world' | 'threadReopens'>): WorldSnapshot | null {
   const stored = store.world.getWorldBaseline();
   return stored === null ? null : applyThreadReopens(stored, store.threadReopens.prThreadReopens());
 }

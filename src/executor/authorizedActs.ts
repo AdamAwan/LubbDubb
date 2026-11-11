@@ -89,7 +89,10 @@ export async function sendAuthorized(
       };
     }
     const { edits } = act;
-    if (edits !== null && lastWord(reopenedBaseline(deps.store), act.prNumber, act.commentId!)?.id !== edits) {
+    if (
+      edits !== null &&
+      (act.commentId === null || lastWord(reopenedBaseline(deps.store), act.prNumber, act.commentId)?.id !== edits)
+    ) {
       return {
         outcome: 'skipped',
         detail: `Did not send the correction on PR #${act.prNumber} (${proposal.id}): the reply it rewrites is no longer the last word on thread ${act.commentId}, so editing it would change what the reviewer answered. Nothing was posted.`,
