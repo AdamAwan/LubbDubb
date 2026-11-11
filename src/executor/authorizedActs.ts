@@ -1,3 +1,4 @@
+import { lastWord, reopenedBaseline } from '../pr/prThreads.js';
 import type { Store } from '../store/store.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { StackLandingDesk } from '../stacks/landingDesk.js';
@@ -87,13 +88,20 @@ export async function sendAuthorized(
         detail: `Merged PR #${act.prNumber} via ${act.method} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
       };
     }
+    const { edits } = act;
+    if (edits !== null && lastWord(reopenedBaseline(deps.store), act.prNumber, act.commentId!)?.id !== edits) {
+      return {
+        outcome: 'skipped',
+        detail: `Did not send the correction on PR #${act.prNumber} (${proposal.id}): the reply it rewrites is no longer the last word on thread ${act.commentId}, so editing it would change what the reviewer answered. Nothing was posted.`,
+      };
+    }
     const res = await deps.sink.postPrReply({
       prNumber: act.prNumber,
       commentId: act.commentId,
       body: act.body,
-      ...(act.edits === null ? {} : { edits: act.edits }),
+      ...(edits === null ? {} : { edits }),
     });
-    if (act.commentId !== null && act.edits === null) {
+    if (act.commentId !== null && edits === null) {
       deps.store.threadReopens.setPrThreadReopened(act.prNumber, act.commentId, false);
       recordReplySent(deps, act.prNumber, act.commentId, res.commentRef);
     }

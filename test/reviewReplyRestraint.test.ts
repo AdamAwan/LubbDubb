@@ -54,7 +54,7 @@ function sink(): ActionSink & { sent: PrReplyInput[] } {
   };
 }
 
-function build(s: ActionSink): System {
+function build(s: ActionSink, autoSend = true): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-restraint-'));
   const config = loadConfig({
     dbPath: ':memory:',
@@ -62,7 +62,7 @@ function build(s: ActionSink): System {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
-    sendPrRepliesWithoutApproval: true,
+    sendPrRepliesWithoutApproval: autoSend,
   });
   return buildSystem(config, {
     worktrees: new FakeWorktreeManager(),
@@ -180,4 +180,24 @@ test('a correction is refused where the fleet does not hold the last word', asyn
 
 test('the recheck note counts only unhandled threads as new arrivals', () => {
   assert.match(reviewRecheckNote(42), /handled: false/);
+});
+
+test('a held correction is not sent once the reviewer has written since', async () => {
+  const s = sink();
+  const system = build(s, false);
+  seed(system, [thread('c-1', 'answered', [ours])]);
+  const res = await reply(system, agentFor(system), {
+    body: 'Fixed in abc123.',
+    thread: 'c-1',
+    correction: true,
+    resolved: true,
+  });
+  assert.equal(res.isError, false, res.text);
+  const theirs: PrThreadMessage = { id: 'r-10', author: 'reviewer', body: 'Wait, why?', ours: false };
+  seed(system, [thread('c-1', 'open', [ours, theirs])]);
+  const [proposal] = system.store.escalations.listProposals();
+  const outcome = await system.proposals.accept(proposal!.id);
+  assert.equal(s.sent.length, 0, 'neither an edit nor a new reply goes out');
+  assert.match(JSON.stringify(outcome), /no longer the last word/);
+  system.store.close();
 });
