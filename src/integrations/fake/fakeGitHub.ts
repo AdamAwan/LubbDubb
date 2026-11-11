@@ -175,6 +175,10 @@ export class FakeGitHubIntegration
   }
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
+    if (input.edits !== undefined && input.commentId) {
+      const edited = this.editReply(input.prNumber, input.commentId, input.edits, input.body);
+      return { ok: edited, ref: `fake-edit_${nanoid(6)}`, ...(edited ? { commentRef: input.edits } : {}) };
+    }
     const replyId = input.commentId ? this.markCommentHandled(input.prNumber, input.commentId, input.body) : null;
     const ref = `fake-reply_${nanoid(6)}`;
     return { ok: true, ref, ...(replyId === null ? {} : { commentRef: replyId }) };
@@ -299,6 +303,21 @@ export class FakeGitHubIntegration
 
   markCommentHandled(prNumber: number, commentId: string, body?: string): string | null {
     return this.setThreadState(prNumber, commentId, 'answered', body).replyId;
+  }
+
+  private editReply(prNumber: number, threadId: string, replyId: string, body: string): boolean {
+    let edited = false;
+    this.world.mutate((world) => {
+      mutatePr(world, prNumber, (pr) => {
+        const threads = pr.reviewThreads ?? [];
+        const reply = threads.find((t) => t.id === threadId)?.replies.find((r) => r.id === replyId);
+        if (!reply) return;
+        reply.body = body;
+        edited = true;
+        pr.unresolvedComments = threadComments(threads);
+      });
+    });
+    return edited;
   }
 
   private setThreadState(

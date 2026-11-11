@@ -1,20 +1,24 @@
 import { z } from 'zod';
 import { replyOrigin } from '../../dispatcher/reviewThreads.js';
+import { applyThreadReopens } from '../../pr/prThreads.js';
+import type { Store } from '../../store/store.js';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
 
-const MAX_REPLY_CHARS = 4000;
+const MAX_REPLY_CHARS = 600;
 
 const ReplyInput = z.object({
   body: z
     .string()
     .describe(
-      'The reply, as the reviewer will read it. Answer what they asked and nothing else: what ' +
-        'you changed, or why you are keeping the current approach. Do not restate their comment ' +
-        'back to them, and do not thank them for it at length.',
+      `The reply, as the reviewer will read it — at most ${MAX_REPLY_CHARS} characters. Lead with the ` +
+        'outcome ("Fixed in <sha>." or "Keeping it, because …"), then give one reason. Leave out ' +
+        'verification logs, test counts, approaches you tried and dropped, apologies, and anything an ' +
+        'earlier reply already said; evidence belongs in the commit message. Do not restate their ' +
+        'comment back to them.',
     ),
   thread: z
     .string()
@@ -50,13 +54,62 @@ const ReplyInput = z.object({
         'harness, so this flag is the only way one gets closed.',
     )
     .optional(),
+  correction: z
+    .boolean()
+    .describe(
+      'True to replace the fleet’s own last reply on this thread rather than add a new one — for ' +
+        'when that reply was wrong or out of date and the reviewer has not written since. The body ' +
+        'is the whole corrected reply, not a note about the correction. Needs `thread`.',
+    )
+    .optional(),
 });
+
+function bodyRefusal(body: string): string | null {
+  if (!body) return 'reply_to_review rejected: body is required and must not be empty.';
+  if (body.length <= MAX_REPLY_CHARS) return null;
+  return (
+    `reply_to_review rejected: body is ${body.length} characters and the limit is ${MAX_REPLY_CHARS}. ` +
+    'Lead with the outcome, give one reason, and leave the evidence to the commit message.'
+  );
+}
+
+type ThreadRead = { ok: true; edits: string | null } | { ok: false; error: string };
+
+function readThread(store: Store, prNumber: number, threadId: string | null, correction: boolean): ThreadRead {
+  if (threadId === null) {
+    return correction
+      ? { ok: false, error: 'reply_to_review rejected: correction needs the thread whose earlier reply it replaces.' }
+      : { ok: true, edits: null };
+  }
+  const stored = store.world.getWorldBaseline();
+  const world = stored === null ? null : applyThreadReopens(stored, store.threadReopens.prThreadReopens());
+  const found = world?.pullRequests.find((p) => p.number === prNumber)?.reviewThreads?.find((t) => t.id === threadId);
+  const lastWord = found?.state === 'answered' ? found.replies[found.replies.length - 1] : undefined;
+  if (correction) {
+    if (lastWord?.ours === true) return { ok: true, edits: lastWord.id };
+    return {
+      ok: false,
+      error:
+        `reply_to_review rejected: correction needs the fleet's own reply to be the last word on thread ` +
+        `${threadId}, and it is not. Post an ordinary reply instead (correction: false).`,
+    };
+  }
+  if (lastWord === undefined) return { ok: true, edits: null };
+  return {
+    ok: false,
+    error:
+      `reply_to_review rejected: thread ${threadId} is already answered — the fleet's reply is the last ` +
+      'word on it and the reviewer has not written since. It is waiting on them, not on you. Leave it ' +
+      'alone; if that earlier reply was wrong, set correction: true to edit it instead of adding another.',
+  };
+}
 
 export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
   description:
     'Post your reply to a review thread on the pull request you were dispatched for — a defence of ' +
     'the approach the reviewer questioned, an answer to what they asked, or a note saying what you ' +
-    'changed for them. One call per thread.\n\n' +
+    'changed for them. One call per thread, and none on a thread whose last word is already the ' +
+    'fleet’s: that one is waiting on the reviewer. To fix an earlier reply, set `correction` to edit it.\n\n' +
     '**Do not post to the thread yourself.** Not with `gh`, not with `az`, not with the provider’s ' +
     'REST API, not from a shell of any kind, even where your credentials would let you. A reply the ' +
     'harness sends is signed as the harness, recorded against the pull request, and shown to the ' +
@@ -74,15 +127,13 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
     if (!scope.ok) return toolError(scope.error);
 
     const body = typeof args.body === 'string' ? args.body.trim() : '';
-    if (!body) return toolError('reply_to_review rejected: body is required and must not be empty.');
-    if (body.length > MAX_REPLY_CHARS) {
-      return toolError(
-        `reply_to_review rejected: body is ${body.length} characters and the limit is ${MAX_REPLY_CHARS}. ` +
-          'A reviewer reads this in a thread — say the shorter thing.',
-      );
-    }
+    const refused = bodyRefusal(body);
+    if (refused !== null) return toolError(refused);
     const thread = typeof args.thread === 'string' && args.thread.trim() ? args.thread.trim() : null;
     const resolve = args.resolved === true && thread !== null;
+    const read = readThread(deps.store, scope.prNumber, thread, args.correction === true);
+    if (!read.ok) return toolError(read.error);
+    const { edits } = read;
 
     const desk = deps.prReply;
     if (!desk) {
@@ -96,6 +147,7 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
       agentId: agent.id,
       prNumber: scope.prNumber,
       commentId: thread,
+      edits,
       draft: body,
       resolve,
       originRef: scope.originRef,
@@ -116,6 +168,7 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
       handedOver: true,
       thread,
       resolveRequested: resolve,
+      correction: edits !== null,
       pullRequest: scope.prNumber,
       note: outcome.detail,
     });

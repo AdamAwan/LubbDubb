@@ -24,6 +24,7 @@ export interface GitHubApi {
   listIssueComments(number: number, since?: string): Promise<GhIssueComment[]>;
 
   createPullReviewReply(number: number, inReplyTo: number, body: string): Promise<GhCommentRef>;
+  updatePullReviewComment(commentId: number, body: string): Promise<GhCommentRef>;
   createIssueComment(number: number, body: string): Promise<GhCommentRef>;
   updateIssueComment(commentId: number, body: string): Promise<GhCommentRef>;
   mergePull(number: number, method: MergeMethod): Promise<GhMergeResult>;

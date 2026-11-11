@@ -364,6 +364,11 @@ export class OctokitGitHubApi implements GitHubApi {
     return { url: data.html_url, id: data.id };
   }
 
+  async updatePullReviewComment(commentId: number, body: string): Promise<GhCommentRef> {
+    const { data } = await this.octokit.pulls.updateReviewComment({ ...this.base, comment_id: commentId, body });
+    return { url: data.html_url, id: data.id };
+  }
+
   listIssueComments(number: number, since?: string): Promise<GhIssueComment[]> {
     return listIssueComments(this.octokit, this.base, number, since);
   }

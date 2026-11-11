@@ -31,6 +31,12 @@ export interface AzureDevOpsApi {
     parentCommentId: number,
     content: string,
   ): Promise<AzCommentRef>;
+  updateThreadComment(
+    pullRequestId: number,
+    threadId: number,
+    commentId: number,
+    content: string,
+  ): Promise<AzCommentRef>;
   setThreadStatus(pullRequestId: number, threadId: number, status: string): Promise<void>;
   createThread(pullRequestId: number, content: string): Promise<AzCommentRef>;
   completePullRequest(

@@ -286,9 +286,11 @@ export class GitHubSourceControlIntegration
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
     const { api } = this.opts;
     const ref =
-      input.commentId !== null
-        ? await api.createPullReviewReply(input.prNumber, Number(input.commentId), input.body)
-        : await api.createIssueComment(input.prNumber, input.body);
+      input.edits !== undefined
+        ? await api.updatePullReviewComment(Number(input.edits), input.body)
+        : input.commentId !== null
+          ? await api.createPullReviewReply(input.prNumber, Number(input.commentId), input.body)
+          : await api.createIssueComment(input.prNumber, input.body);
     return { ok: true, ref: ref.url, commentRef: String(ref.id) };
   }
 

@@ -709,7 +709,7 @@ asserts that rather than intending it.
 ### `reply_to_review`
 
 Hands the harness the reply an agent has written for a review thread. Arguments
-`{body, about_comment, changed_code, thread?, resolved?}` — and, like every tool here, **nothing that
+`{body, about_comment, changed_code, thread?, resolved?, correction?}` — and, like every tool here, **nothing that
 names a pull request**: it comes from the caller's origin.
 
 - **It sends nothing.** The handler calls `ActionExecutor.proposeReply`, which raises the same
@@ -750,6 +750,27 @@ names a pull request**: it comes from the caller's origin.
   and files **one** remedy, so a cause counts dispatches where this counts threads. The two readings
   are orthogonal — `report_remedy` says _why_ the fleet came back, this says _what the thread was
   about_. → [18](18-observability.md#which-part-of-the-code-a-review-thread-was-about)
+- **The body is at most 600 characters** (`MAX_REPLY_CHARS`). It was 4000, and agents filled it with
+  verification logs, test counts, restructurings tried and reverted, apologies and repeats of their
+  earlier replies — a wall the reviewer reads once per thread. The schema says what to write: lead
+  with the outcome ("Fixed in `<sha>`" / "Keeping it, because …"), one reason, and put the evidence in
+  the commit message. Over the limit is a refusal, not a truncation.
+- **A thread whose last word is already the fleet's is refused.** The handler reads the stored world
+  (with operator reopens folded in, as the pulse sees it) and refuses a reply on a thread in state
+  `answered` — the newest message is the fleet's own, recorded in `pr_replies_sent`, and the reviewer
+  has not written since. It is waiting on them, and another reply is noise. The refusal names the
+  thread and points at `correction`. A thread the stored world does not hold yet (one that arrived
+  mid-dispatch) is let through: refusing it would block the very arrival the re-check exists to
+  catch. → [07](07-pull-requests.md#attribution-is-a-record-never-an-identity)
+- **`correction: true` edits the fleet's last reply instead of appending one.** Without it, an agent
+  that got something wrong could only post "I owe you a correction" on top of the wrong reply. With
+  it, the act carries `edits` — the id of that reply — through `reply_on_pr`, the proposal and
+  `ActionSink.postPrReply`, and the provider rewrites the comment in place
+  (`GitHubApi.updatePullReviewComment`, `AzureDevOpsApi.updateThreadComment`). It is allowed **only**
+  where the fleet holds the last word, and refused otherwise: editing a reply the reviewer has since
+  answered rewrites what they were answering. An edit records no new `pr_replies_sent` row — the
+  comment it edits is already recorded — and still goes through the same hold and authority as any
+  reply.
 - **A reply with no `thread` is labelled nowhere.** It is a comment on the pull request rather than on
   a review thread, so there is no thread for a row to be about, and inventing one would put a comment
   on nothing into whichever area came first.

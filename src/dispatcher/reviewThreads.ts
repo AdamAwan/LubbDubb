@@ -54,7 +54,9 @@ export function reviewRecheckNote(prNumber: number): string {
     '\n\nBefore you finish, read that list again — it was taken when you were dispatched, and a review moves ' +
     `while you work. Call world_read("pr", "pr:${prNumber}") and compare its unresolvedComments against the ` +
     'threads above:\n\n' +
-    '- A thread that is not above arrived after you started. It is yours — answer it in this dispatch.\n' +
+    '- A thread that is not above, and that reads handled: false, arrived after you started. It is yours — ' +
+    'answer it in this dispatch. One that reads handled: true is already answered and waiting on the ' +
+    'reviewer: leave it alone.\n' +
     '- A thread whose body no longer reads as it does above was edited after you started. Answer the wording ' +
     'you can see now, and say that it changed.\n' +
     '- A thread carrying a reply that is not above was answered while you worked, and that reply is now the ' +

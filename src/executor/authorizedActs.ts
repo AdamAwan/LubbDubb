@@ -91,8 +91,9 @@ export async function sendAuthorized(
       prNumber: act.prNumber,
       commentId: act.commentId,
       body: act.body,
+      ...(act.edits === null ? {} : { edits: act.edits }),
     });
-    if (act.commentId !== null) {
+    if (act.commentId !== null && act.edits === null) {
       deps.store.threadReopens.setPrThreadReopened(act.prNumber, act.commentId, false);
       recordReplySent(deps, act.prNumber, act.commentId, res.commentRef);
     }

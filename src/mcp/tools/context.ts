@@ -205,6 +205,7 @@ interface PrReplyDesk {
     agentId: string;
     prNumber: number;
     commentId: string | null;
+    edits: string | null;
     draft: string;
     resolve: boolean;
     originRef: string;

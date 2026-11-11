@@ -71,6 +71,7 @@ interface Script {
 interface Recorded {
   threadStatuses: Array<{ pullRequestId: number; threadId: number; status: string }>;
   threadReplies: Array<{ prId: number; threadId: number; parentCommentId: number; content: string }>;
+  threadCommentEdits: Array<{ prId: number; threadId: number; commentId: number; content: string }>;
   newThreads: Array<{ prId: number; content: string }>;
   completions: Array<{ prId: number; commit: string; method: MergeMethod }>;
   tagQueries: Array<string | undefined>;
@@ -114,6 +115,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
   const recorded: Recorded = {
     threadStatuses: [],
     threadReplies: [],
+    threadCommentEdits: [],
     requeues: [],
     newThreads: [],
     completions: [],
@@ -259,6 +261,10 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     async createThreadReply(prId, threadId, parentCommentId, content): Promise<AzCommentRef> {
       recorded.threadReplies.push({ prId, threadId, parentCommentId, content });
       return { url: `https://dev.azure.com/o/p/_git/r/pullrequest/${prId}` };
+    },
+    async updateThreadComment(prId, threadId, commentId, content): Promise<AzCommentRef> {
+      recorded.threadCommentEdits.push({ prId, threadId, commentId, content });
+      return { url: `https://dev.azure.com/o/p/_git/r/pullrequest/${prId}`, id: commentId };
     },
     async createThread(prId, content): Promise<AzCommentRef> {
       recorded.newThreads.push({ prId, content });
@@ -1603,4 +1609,14 @@ test('the tag query names every key and spans open and closed items', () => {
   const wiql = buildTagsQuery(['err:shop:1', "err:o'brien:2"]);
   assert.match(wiql, /\[System\.Tags\] CONTAINS 'err:shop:1' OR \[System\.Tags\] CONTAINS 'err:o''brien:2'/);
   assert.doesNotMatch(wiql, /System\.State/);
+});
+
+test('postPrReply edits the earlier comment in place when it carries edits', async () => {
+  const { api, recorded } = fakeApi();
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+  const res = await sc.postPrReply({ prNumber: 7, commentId: '300', body: 'corrected', edits: '4' });
+  assert.equal(res.ok, true);
+  assert.equal(res.commentRef, '4');
+  assert.deepEqual(recorded.threadCommentEdits, [{ prId: 7, threadId: 300, commentId: 4, content: 'corrected' }]);
+  assert.equal(recorded.threadReplies.length, 0);
 });

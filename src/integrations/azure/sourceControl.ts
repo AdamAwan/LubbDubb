@@ -238,18 +238,16 @@ export class AzureDevOpsSourceControlIntegration
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
     const { api } = this.opts;
+    const thread = input.commentId === null ? null : Number(input.commentId);
     const ref =
-      input.commentId !== null
-        ? await api.createThreadReply(input.prNumber, Number(input.commentId), 1, input.body)
-        : await api.createThread(input.prNumber, input.body);
-    const threadRef =
-      input.commentId !== null ? input.commentId : ref.threadId === undefined ? undefined : String(ref.threadId);
-    return {
-      ok: true,
-      ref: ref.url,
-      ...(ref.id === undefined ? {} : { commentRef: String(ref.id) }),
-      ...(threadRef === undefined ? {} : { threadRef }),
-    };
+      thread === null
+        ? await api.createThread(input.prNumber, input.body)
+        : input.edits !== undefined
+          ? await api.updateThreadComment(input.prNumber, thread, Number(input.edits), input.body)
+          : await api.createThreadReply(input.prNumber, thread, 1, input.body);
+    const threadRef = input.commentId ?? (ref.threadId === undefined ? undefined : String(ref.threadId));
+    const commentRef = ref.id === undefined ? {} : { commentRef: String(ref.id) };
+    return { ok: true, ref: ref.url, ...commentRef, ...(threadRef === undefined ? {} : { threadRef }) };
   }
 
   async resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {

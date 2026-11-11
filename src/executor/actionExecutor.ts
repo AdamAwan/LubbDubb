@@ -352,7 +352,7 @@ export class ActionExecutor {
         ? mergeEscalation(action, preamble)
         : {
             type: 'review_reply',
-            prompt: `${preamble}Draft reply for PR #${action.prNumber}:\n\n${action.draft}`,
+            prompt: `${preamble}${action.edits ? 'Correction replacing the fleet’s earlier reply' : 'Draft reply'} for PR #${action.prNumber}:\n\n${action.draft}`,
             context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft },
           },
     );
@@ -388,6 +388,7 @@ export class ActionExecutor {
     agentId: string;
     prNumber: number;
     commentId: string | null;
+    edits: string | null;
     draft: string;
     resolve: boolean;
     originRef: string;
@@ -398,6 +399,7 @@ export class ActionExecutor {
       type: 'reply_on_pr' as const,
       prNumber: input.prNumber,
       commentId: input.commentId,
+      edits: input.edits,
       draft: input.draft,
       resolve: input.resolve,
       originRef: input.originRef,
