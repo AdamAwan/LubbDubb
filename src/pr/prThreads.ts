@@ -1,4 +1,12 @@
-import type { PrComment, PrReviewThread, PrThreadState, PullRequest, WorldSnapshot } from '../types.js';
+import type { Store } from '../store/store.js';
+import type {
+  PrComment,
+  PrReviewThread,
+  PrThreadMessage,
+  PrThreadState,
+  PullRequest,
+  WorldSnapshot,
+} from '../types.js';
 
 // → docs/spec/07-pull-requests.md#attribution-is-a-record-never-an-identity
 
@@ -37,6 +45,17 @@ export interface PrThreadReopen {
   prNumber: number;
   threadId: string;
   reopenedAt: string;
+}
+
+export function reopenedBaseline(store: Pick<Store, 'world' | 'threadReopens'>): WorldSnapshot | null {
+  const stored = store.world.getWorldBaseline();
+  return stored === null ? null : applyThreadReopens(stored, store.threadReopens.prThreadReopens());
+}
+
+export function lastWord(world: WorldSnapshot | null, prNumber: number, threadId: string): PrThreadMessage | undefined {
+  const pr = world?.pullRequests.find((p) => p.number === prNumber);
+  const thread = pr?.reviewThreads?.find((t) => t.id === threadId);
+  return thread?.state === 'answered' ? thread.replies[thread.replies.length - 1] : undefined;
 }
 
 export function applyThreadReopens(world: WorldSnapshot, reopens: readonly PrThreadReopen[]): WorldSnapshot {

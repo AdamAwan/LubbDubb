@@ -770,7 +770,11 @@ names a pull request**: it comes from the caller's origin.
   where the fleet holds the last word, and refused otherwise: editing a reply the reviewer has since
   answered rewrites what they were answering. An edit records no new `pr_replies_sent` row — the
   comment it edits is already recorded — and still goes through the same hold and authority as any
-  reply.
+  reply. The send re-reads the stored thread (`lastWord`, `src/pr/prThreads.ts`, from
+  `sendAuthorized`): a correction whose target is no longer the last word — the reviewer wrote while
+  it was held, or the thread is gone — is **skipped and nothing posted**, never turned into a new
+  reply, since its body and `resolved` were written for the thread as it was. The read is the last
+  pulse's snapshot, so a reviewer reply newer than that is not seen.
 - **A reply with no `thread` is labelled nowhere.** It is a comment on the pull request rather than on
   a review thread, so there is no thread for a row to be about, and inventing one would put a comment
   on nothing into whichever area came first.

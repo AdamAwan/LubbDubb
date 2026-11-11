@@ -6,7 +6,7 @@ import type { Store } from '../store/store.js';
 import type { EjectionView, PlanPartView, PlanView, ValidationCheckView, ValidationResourceView } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
 import { fleetHistory } from './fleetHistory.js';
-import { applyThreadReopens } from '../pr/prThreads.js';
+import { reopenedBaseline } from '../pr/prThreads.js';
 import { expiresAt } from '../ejection/policy.js';
 import type { IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { investigationStandings } from '../intake/investigation.js';
@@ -52,8 +52,7 @@ export type ContextReadsOn = VerdictReadsOn & ReturnType<typeof contextReads>;
 export function baseReads(system: System, opts: SnapshotOpts | undefined) {
   const { store, connector, config, runtimeControl } = system;
   const watchLabel = watchLabelFor(config.labelPrefix);
-  const stored = store.world.getWorldBaseline();
-  const baseline = stored === null ? null : applyThreadReopens(stored, store.threadReopens.prThreadReopens());
+  const baseline = reopenedBaseline(store);
   const world: WorldSnapshot = baseline ?? {
     takenAt: new Date().toISOString(),
     pullRequests: [],

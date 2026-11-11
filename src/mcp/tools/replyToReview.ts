@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { replyOrigin } from '../../dispatcher/reviewThreads.js';
-import { applyThreadReopens } from '../../pr/prThreads.js';
+import { lastWord, reopenedBaseline } from '../../pr/prThreads.js';
 import type { Store } from '../../store/store.js';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
@@ -81,12 +81,9 @@ function readThread(store: Store, prNumber: number, threadId: string | null, cor
       ? { ok: false, error: 'reply_to_review rejected: correction needs the thread whose earlier reply it replaces.' }
       : { ok: true, edits: null };
   }
-  const stored = store.world.getWorldBaseline();
-  const world = stored === null ? null : applyThreadReopens(stored, store.threadReopens.prThreadReopens());
-  const found = world?.pullRequests.find((p) => p.number === prNumber)?.reviewThreads?.find((t) => t.id === threadId);
-  const lastWord = found?.state === 'answered' ? found.replies[found.replies.length - 1] : undefined;
+  const last = lastWord(reopenedBaseline(store), prNumber, threadId);
   if (correction) {
-    if (lastWord?.ours === true) return { ok: true, edits: lastWord.id };
+    if (last?.ours === true) return { ok: true, edits: last.id };
     return {
       ok: false,
       error:
@@ -94,7 +91,7 @@ function readThread(store: Store, prNumber: number, threadId: string | null, cor
         `${threadId}, and it is not. Post an ordinary reply instead (correction: false).`,
     };
   }
-  if (lastWord === undefined) return { ok: true, edits: null };
+  if (last === undefined) return { ok: true, edits: null };
   return {
     ok: false,
     error:
