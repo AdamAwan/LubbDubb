@@ -1,5 +1,6 @@
 // → docs/spec/24-environments.md
 
+import type { WatchSourceLanguage } from '../types.js';
 import { carriesSince, missingSinceRefusal, withSince } from '../validation/watchQueryShape.js';
 
 export type WatchQueryKind = 'signal' | 'presence' | 'measure';
@@ -30,7 +31,8 @@ export function idProjection(query: string, checkId: string): string {
  * before the work arrived, which reads as the defect the work fixed.
  *
  * Both observers route through it rather than their callers, so a query reaches
- * a shell substituted or not at all.
+ * a shell substituted or not at all. The id projection is a pipeline segment, so
+ * it is appended to `kql` alone; every other language's wrapper echoes the id.
  *
  * @public read by `CommandEnvironmentObserver` and by its fake
  */
@@ -39,10 +41,12 @@ export function preparedQuery(
   since: string,
   checkId: string,
   kind: WatchQueryKind,
+  language: WatchSourceLanguage,
 ): { query: string; refusal: null } | { query: null; refusal: string } {
   if (!carriesSince(query))
     return { query: null, refusal: missingSinceRefusal(kind === 'presence' ? 'presence' : 'query') };
-  return { query: idProjection(withSince(query, since), checkId), refusal: null };
+  const bounded = withSince(query, since);
+  return { query: language === 'kql' ? idProjection(bounded, checkId) : bounded, refusal: null };
 }
 
 export function parseWatchResult(stdout: string, checkId: string, kind: WatchQueryKind): WatchResult {

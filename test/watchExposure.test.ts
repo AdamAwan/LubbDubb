@@ -40,6 +40,7 @@ const SIGNAL: GoalWatchInput = {
   expectBaseline: false,
   unit: null,
   why: null,
+  source: null,
 };
 
 const STILL_FAILING = {

@@ -9,10 +9,12 @@ import type {
   GoalWatchCheckView,
   GoalWatchView,
   WatchCheckVerdict,
+  WatchSourceDeclaration,
 } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { GateReleaseModal } from '../components/GateReleaseModal.js';
 import { Tag, type TagTone } from '../components/tag.js';
+import { WatchSourceChip } from '../components/WatchSourceChip.js';
 import { relTime } from '../components/util.js';
 import { Button } from '../components/button.js';
 import { Disclosure, type Fold } from './goalFold.js';
@@ -162,6 +164,7 @@ function EnvironmentRows({ page, only }: { page: GoalPageView; only: string | nu
 export function WatchWindow({
   watch,
   environment,
+  sources,
   issueNumber,
   now,
   actions,
@@ -169,6 +172,8 @@ export function WatchWindow({
   watch: GoalWatchView | undefined;
   /** The environment this pane is showing — named even where its window has not opened. */
   environment: string | null;
+  /** The sources that environment's watch declares. */
+  sources: WatchSourceDeclaration[];
   issueNumber: number;
   now: number;
   actions: CockpitActions;
@@ -187,7 +192,7 @@ export function WatchWindow({
            read nothing are different answers, and only the second is about the work. */
         <p className="cn-sub">No window has opened here — nothing of this goal has arrived in {environment} yet.</p>
       ) : (
-        <Watch watch={watch} issueNumber={issueNumber} now={now} actions={actions} />
+        <Watch watch={watch} sources={sources} issueNumber={issueNumber} now={now} actions={actions} />
       )}
     </section>
   );
@@ -195,11 +200,13 @@ export function WatchWindow({
 
 function Watch({
   watch,
+  sources,
   issueNumber,
   now,
   actions,
 }: {
   watch: GoalWatchView;
+  sources: WatchSourceDeclaration[];
   issueNumber: number;
   now: number;
   actions: CockpitActions;
@@ -241,6 +248,7 @@ function Watch({
                 only a reading that came back can say anything about the work. */}
             <span className="cn-sub">{watchSaid(check)}</span>
           </span>
+          <WatchSourceChip source={check.source} sources={sources} />
           <Tag
             tone={WATCH_TONE[check.reading?.verdict ?? 'unread']}
             fill={WATCH_TONE[check.reading?.verdict ?? 'unread'] !== undefined}

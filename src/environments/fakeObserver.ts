@@ -21,9 +21,18 @@ export class FakeEnvironmentObserver implements EnvironmentObserver {
   constructor(private readonly output: Record<string, string> = {}) {}
 
   observe(request: EnvironmentObservationRequest): Promise<WatchResult> {
-    const { environment, checkId, kind, query, since, commits } = request;
-    this.asked.push({ environment, checkId, kind, query, since, ...(commits === undefined ? {} : { commits }) });
-    const prepared = preparedQuery(query, since, checkId, kind);
+    const { environment, source, language, checkId, kind, query, since, commits } = request;
+    this.asked.push({
+      environment,
+      source,
+      language,
+      checkId,
+      kind,
+      query,
+      since,
+      ...(commits === undefined ? {} : { commits }),
+    });
+    const prepared = preparedQuery(query, since, checkId, kind, language);
     if (prepared.query === null) return Promise.resolve(unanswered(prepared.refusal));
     const stdout = this.output[`${checkId}:${kind}`];
     if (stdout === undefined) return Promise.resolve(unanswered('unscripted'));

@@ -7,6 +7,8 @@ import { aggregatingQueryRefusal, aggregatingTail, carriesSince, missingSinceRef
 
 const MAX_SIGNALS = 20;
 
+const SourceSchema = z.string().regex(/^\S+$/, 'names one of the environment\'s watch sources, e.g. "logs"').optional();
+
 const WatchSignalSchema = strictObject(
   {
     id: z
@@ -18,8 +20,9 @@ const WatchSignalSchema = strictObject(
     presence: z.string().min(1),
     tolerate: z.number().int().min(0).default(0),
     why: z.string().min(1).optional(),
+    source: SourceSchema,
   },
-  'a signal declares only id/title/query/presence/tolerate/why',
+  'a signal declares only id/title/query/presence/tolerate/why/source',
 );
 
 const WatchExpectSchema = strictObject(
@@ -46,8 +49,9 @@ const WatchMeasureSchema = strictObject(
     expect: WatchExpectSchema,
     unit: z.string().min(1).optional(),
     why: z.string().min(1).optional(),
+    source: SourceSchema,
   },
-  'a measure declares only id/title/query/expect/unit/why',
+  'a measure declares only id/title/query/expect/unit/why/source',
 );
 
 function refuseQueryShape(
@@ -106,11 +110,11 @@ export const WatchCheckSchema: z.ZodType<GoalWatchDeclaration, unknown> = z
   .discriminatedUnion('kind', [
     strictObject(
       { ...WatchSignalSchema.shape, kind: z.literal('signal') },
-      'a signal declares only kind/id/title/query/presence/tolerate/why',
+      'a signal declares only kind/id/title/query/presence/tolerate/why/source',
     ),
     strictObject(
       { ...WatchMeasureSchema.shape, kind: z.literal('measure') },
-      'a measure declares only kind/id/title/query/expect/unit/why',
+      'a measure declares only kind/id/title/query/expect/unit/why/source',
     ),
   ])
   .superRefine((check, ctx) => {
@@ -132,6 +136,7 @@ export function watchCheckInput(check: GoalWatchDeclaration, seq: number): GoalW
       expectBaseline: false,
       unit: null,
       why: check.why ?? null,
+      source: check.source ?? null,
     };
   return {
     id: check.id,
@@ -146,6 +151,7 @@ export function watchCheckInput(check: GoalWatchDeclaration, seq: number): GoalW
     expectBaseline: check.expect.noWorseThan === 'baseline',
     unit: check.unit ?? null,
     why: check.why ?? null,
+    source: check.source ?? null,
   };
 }
 

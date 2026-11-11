@@ -1,6 +1,7 @@
 import type { Decision, Plan } from '../types.js';
 import { dispatchVerdict, type CooldownPolicy, type DispatchVerdict } from '../dispatcher/dispatchCooldown.js';
 import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
+import { measuresOnly, watchSourceDeclarations } from '../environments/watchSource.js';
 
 // → docs/spec/08-planning.md
 
@@ -77,7 +78,7 @@ export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
 
 interface WatchedEnvironment {
   name: string;
-  watch?: { schema?: string; exposure?: object };
+  watch?: { schema?: string; exposure?: object } & Parameters<typeof watchSourceDeclarations>[0];
 }
 
 /**
@@ -85,7 +86,7 @@ interface WatchedEnvironment {
  * query is scoped to traffic running the change. → docs/spec/29-post-deploy-watch.md#exposure
  */
 function watchedEnvironmentLines(watched: readonly WatchedEnvironment[]): string[] {
-  const lines: string[] = [];
+  const lines: string[] = [...watchSourceLines(watched)];
   for (const env of watched) {
     const schema = env.watch?.schema?.trim();
     if (schema !== undefined && schema !== '') lines.push('', `**${env.name}** — ${schema}`);
@@ -104,6 +105,41 @@ function watchedEnvironmentLines(watched: readonly WatchedEnvironment[]): string
         'cannot scope a query for you.',
     );
   return lines;
+}
+
+/**
+ * Each watched environment's sources, with their language and who runs them, and what each costs.
+ * → docs/spec/29-post-deploy-watch.md#what-a-language-changes
+ */
+function watchSourceLines(watched: readonly WatchedEnvironment[]): string[] {
+  const listed = watched.map((env) => {
+    const sources = watchSourceDeclarations(env.watch).map(
+      (s) => `\`${s.name}\` (${s.language}, run by ${s.runBy === 'harness' ? 'the harness' : 'the operator'})`,
+    );
+    return `- **${env.name}**: ${sources.join(', ')}`;
+  });
+  const languages = new Set(watched.flatMap((env) => watchSourceDeclarations(env.watch).map((s) => s.language)));
+  const metricOnly = [...languages].filter(measuresOnly);
+  return [
+    '',
+    '**Where each query is asked.** Each environment answers from named sources, and a check names the one it ' +
+      "reads with `source`. A check that names none reads the environment's only source, so where an " +
+      'environment declares more than one, name it — otherwise that environment reads the check as unknown. An ' +
+      'environment without the source a check names reads it as unknown there, and that is not a refusal.',
+    '',
+    ...listed,
+    '',
+    'A source **run by the harness costs nothing**: it is asked on a schedule for as long as the window is open. ' +
+      "A source **run by the operator costs a person's time**, and is for a question no other telemetry can " +
+      'answer — never for convenience.',
+    ...(metricOnly.length === 0
+      ? []
+      : [
+          '',
+          `A ${metricOnly.join(' or ')} source takes **measures only**: the harness cannot read whether such a ` +
+            'query aggregates, so a signal there is read as unknown. Write the count as a measure with an `under`.',
+        ]),
+  ];
 }
 
 export function watchNote(environments: readonly WatchedEnvironment[]): string {

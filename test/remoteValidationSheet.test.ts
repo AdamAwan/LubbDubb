@@ -68,6 +68,7 @@ const SIGNAL: GoalWatchInput = {
   expectBaseline: false,
   unit: null,
   why: null,
+  source: null,
 };
 
 const CHECK: ValidationCheckInput = {

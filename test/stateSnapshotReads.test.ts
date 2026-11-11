@@ -130,6 +130,7 @@ function seeded() {
       expectBaseline: false,
       unit: null,
       why: null,
+      source: null,
     },
   ]);
   store.watches.openWatchWindow({

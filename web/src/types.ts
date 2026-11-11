@@ -234,6 +234,7 @@ export type {
   RemoteTenantView,
   WatchCheckVerdict,
   WatchReadingVerdict,
+  WatchSourceDeclaration,
   WorldEvent,
   WorldEventKind,
   AssessedBotPr,
