@@ -342,7 +342,6 @@ function sheet(one: PlanPartView, atoms: PlanAtom[]): string {
         refUrls: {},
         onClose: () => undefined,
         onReplan: () => undefined,
-        onWatchProposal: () => undefined,
         onDecide: () => undefined,
         onBackOut: () => undefined,
         onOpenGoal: () => undefined,

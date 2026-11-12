@@ -1885,17 +1885,32 @@ export interface GoalWatch extends GoalWatchInput {
   dryRunDetail: string | null;
   baselineValue: number | null;
   baselineAt: string | null;
+  /** False while the assessor's set awaits the operator's accept. */
   live: boolean;
-  proposal: GoalWatchProposal | null;
   authored: GoalWatchAuthor;
+  /**
+   * The assessor's own account of where this check departs from the plan's hint, or null where it
+   * says it does not. Drawn as the "changed from plan" chip. → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
+   */
+  changedFromHint: string | null;
 }
 
-type GoalWatchAuthor = 'plan' | 'operator';
+type GoalWatchAuthor = 'plan' | 'operator' | 'assessor';
 
-export interface GoalWatchProposal {
-  at: string;
-  note: string;
-  declaration: GoalWatchInput;
+/**
+ * A goal's post-deploy watch as the assessor wrote it, and what the operator did with it.
+ * → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
+ */
+export interface WatchPlanRecord {
+  goalRef: string;
+  /** Null is *owed*: asked for and not written yet, or sent back. No record at all is *never asked*. */
+  authoredAt: string | null;
+  note: string | null;
+  emptyReason: string | null;
+  /** Null on an authored watch is a set still proposed: nothing in it runs on a schedule. */
+  acceptedAt: string | null;
+  /** The operator's words on the last send-back, handed to the next author; null where it was never sent back. */
+  sentBackWords: string | null;
 }
 
 export type StateQueryAuthor = 'plan' | 'agent' | 'operator';
@@ -2219,6 +2234,50 @@ export interface WatchReading {
   rows: number | null;
   value: number | null;
   detail: string | null;
+}
+
+/**
+ * A goal's watch rolled up to one answer. `watching` is no window settled yet; `none` is a watch
+ * that was decided to measure nothing. → docs/spec/29-post-deploy-watch.md#the-outcome
+ */
+type WatchOutcomeKind = 'worked' | 'worse' | 'unknown' | 'none' | 'unwritten' | 'watching';
+
+export interface WatchOutcomeCheck {
+  checkId: string;
+  title: string;
+  kind: GoalWatchKind;
+  /** Regressed on any settled window, else clean on one, else unknown. */
+  verdict: WatchCheckVerdict;
+  /** The environment the verdict was read on; null where no settled window read it. */
+  environment: string | null;
+  /** A measure's baseline, or the rows a signal's dry run read before the merge. */
+  before: number | null;
+  /** The environment `before` was read on — the dry run's, which may not be `environment`; null with no `before`. */
+  beforeEnvironment: string | null;
+  /** A measure's last value, or the rows a signal's window read. */
+  after: number | null;
+  unit: string | null;
+  /** How long the window that read it ran: whole hours (`48h`), or minutes under an hour (`20m`). */
+  windowSpan: string | null;
+  /** Why it is `unknown` or `regressed`, in words; null where it read clean. */
+  reason: string | null;
+}
+
+export interface WatchOutcome {
+  goalRef: string;
+  outcome: WatchOutcomeKind;
+  /** The answer in words, as the card and the discussion note both say it. */
+  headline: string;
+  /** Every check, whatever it settled as — a regressed one never hides a clean one. */
+  checks: WatchOutcomeCheck[];
+  /** Why nothing was measured, for `none`. */
+  reason: string | null;
+  /** Environments whose window is still open. */
+  watching: string[];
+  /** `worse` or `unknown`: an answer a person decides the meaning of, which Discuss in Claude is offered for. */
+  discussable: boolean;
+  /** Environments whose settled window Extend re-opens: every settled one, for `unknown`; none otherwise. */
+  extendable: string[];
 }
 
 export interface EnvironmentGateRelease {

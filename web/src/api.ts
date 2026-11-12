@@ -319,8 +319,9 @@ const realApi = {
     post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/cancel`),
   reseedRemoteTenant: (issueNumber: number, environment: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/remote-validation/${encodeURIComponent(environment)}/reseed`),
-  ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
-    post<{ ok: true }>(`/api/issues/${issueNumber}/watch-proposals/${encodeURIComponent(checkId)}`, { accept }),
+  acceptWatch: (issueNumber: number) => post<{ ok: true }>(`/api/issues/${issueNumber}/watch/accept`),
+  sendBackWatch: (issueNumber: number, words: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/watch/send-back`, { words }),
   saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) =>
     put<{ ok: true; dryRun: string[] }>(
       `/api/issues/${issueNumber}/watch/checks/${encodeURIComponent(check.id)}`,
@@ -330,6 +331,7 @@ const realApi = {
     del<{ ok: true }>(`/api/issues/${issueNumber}/watch/checks/${encodeURIComponent(checkId)}`),
   extendWatch: (issueNumber: number, environment: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/watch/${encodeURIComponent(environment)}/extend`),
+  discussWatchOutcome: (issueNumber: number) => post<{ ok: true }>(`/api/discussions/${issueNumber}/watch-outcome`),
   getPlanHistory: (planId: string) => authFetch(`/api/plans/${planId}/history`).then((r) => json<PlanHistory>(r)),
   setValidation: (
     issueNumber: number,

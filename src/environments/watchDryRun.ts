@@ -31,7 +31,7 @@ export class WatchDryRun implements WatchDryRunner {
   /** @public the seam `plan_submit` and the plan-file drain both reach it through */
   async run(originRef: string): Promise<string[]> {
     if (!this.deps.environments.some((env) => watchSources(env.watch).length > 0)) return [];
-    const checks = this.deps.store.watches.listGoalWatches().filter((c) => c.originRef === originRef);
+    const checks = this.deps.store.watches.listDryRunWatches(originRef);
     const merged = goalMergedAt(this.deps.store.environments.listGoalLandings(), originRef);
     const refusals: string[] = [];
     for (const check of checks) {

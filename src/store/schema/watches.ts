@@ -19,9 +19,10 @@ CREATE TABLE IF NOT EXISTS goal_watches (
   unit            TEXT,            -- what the number is in; drawn, never parsed
   baseline_value  REAL,            -- the *before*, taken at declaration. NULL means never taken.
   baseline_at     TEXT,
-  live            INTEGER NOT NULL DEFAULT 1,  -- 0 while an agent's declaration awaits the operator
-  proposal        TEXT,            -- an agent's pending amendment, as JSON; NULL where none is outstanding
-  authored        TEXT NOT NULL DEFAULT 'plan', -- 'plan' | 'operator'; an operator's row is neither swept nor overwritten by a replan
+  live            INTEGER NOT NULL DEFAULT 1,  -- 0 while the assessor's set awaits the operator's accept
+  proposal        TEXT,            -- retired with watch_declare and read by nothing; left in place, never dropped
+  authored        TEXT NOT NULL DEFAULT 'plan', -- 'plan' | 'operator' | 'assessor'; an operator's row is neither swept nor overwritten by a replan
+  changed_from_hint TEXT,          -- the assessor's account of where this check departs from the plan's hint; NULL where it says none
   why        TEXT,
   source     TEXT,                 -- the environment watch source it reads, by name; NULL reads the environment's only one
   dry_run_environment TEXT,        -- NULL while nothing has been asked
@@ -72,5 +73,19 @@ CREATE TABLE IF NOT EXISTS watch_readings (
   value       REAL,                 -- a measure's *now*; NULL for a signal and for anything that did not answer
   detail      TEXT,                 -- why, in words, for anything but a clean one
   PRIMARY KEY (goal_ref, environment, check_id, read_at)
+);
+
+-- A goal's post-deploy watch as the assessor wrote it with watch_plan, and what the
+-- operator did with it (see WatchStore). validation_plans' shape, one subsystem over.
+-- A row is written owed (authored_at NULL) when the assessor's delivered verdict is
+-- recorded; no row means the watch was never asked for, which is every goal from before.
+CREATE TABLE IF NOT EXISTS watch_plans (
+  goal_ref        TEXT PRIMARY KEY,   -- issue:<n>
+  authored_at     TEXT,               -- NULL is owed: never written, or sent back
+  note            TEXT,               -- where the checks departed from the plan's hint, and why
+  empty_reason    TEXT,               -- why nothing was declared; NULL where checks were
+  accepted_at     TEXT,               -- NULL on an authored watch is a set still proposed
+  sent_back_words TEXT,               -- the operator's last send-back, handed to the next author
+  updated_at      TEXT NOT NULL
 );
 `;

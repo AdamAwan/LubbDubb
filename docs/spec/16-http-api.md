@@ -780,15 +780,30 @@ rather than holding one. → [24](24-environments.md#lifting-the-hold). The desk
 takes the same two answers and makes the same refusal on a release with no note
 ([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have)).
 
-### `POST /api/issues/:number/watch-proposals/:checkId`
+### `POST /api/issues/:number/watch-proposals/:checkId` — retired
 
-Body `{accept: boolean}`. The operator's ruling on a check the working agent declared through
-`watch_declare` ([29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)). Accepting makes it
-live **and runs the dry run in the same call**, which is what first puts the query to the operator's
-own telemetry with the operator's own credential — that approval is the whole authorisation story for
-the subsystem. Declining asks nothing: putting a declined query to an environment would be the
-approval running the query it exists to gate. 404 on an acceptance with no pending declaration on
-that check, because answering `ok` would leave the operator believing they had accepted something.
+Removed. It was the operator's ruling on one check the working agent declared through `watch_declare`,
+which is [retired](11-mcp-tools.md#retired-tools); the pending declarations it ruled on are deleted on
+boot ([14](14-persistence.md#retired-watch-proposals)), so nothing is left for it to answer, and a request
+to it is an unknown route. The whole watch the assessor writes is accepted or sent back as a set instead,
+below. → [29](29-post-deploy-watch.md#the-operator-accepts-the-set)
+
+### `POST /api/issues/:number/watch/accept`
+
+No body. The operator's accept on the post-deploy watch the assessor wrote with `watch_plan`
+([29](29-post-deploy-watch.md#the-operator-accepts-the-set)): every proposed check goes live together,
+keeping what its dry run read and the baseline it took, and `watch_plans.accepted_at` is stamped. An
+arrival held for the watch opens its window on the next pass, sized from the arrival — the accept being
+fresh is what lets an arrival older than the freshness guard open at all. 409 where nothing
+authored is waiting — never written, sent back, or already accepted — because answering `ok` would leave
+the operator believing they had released something.
+
+### `POST /api/issues/:number/watch/send-back`
+
+Body `{words}`, required and non-blank: what the next author should do differently. Takes the authoring
+stamp off, keeps the words on the record, and leaves the proposed rows as the account of what was refused;
+rule `watch-plan` dispatches again with the words appended. 400 on blank words, 409 where nothing authored
+is waiting. → [29](29-post-deploy-watch.md#the-operator-accepts-the-set)
 
 ### `POST /api/issues/:number/watch/:environment/extend`
 
@@ -1215,6 +1230,24 @@ an ordinary answer. `related` is the feature's standing decisions and open quest
 each story's for a feature, leaving out a file with neither. It reads through `System.discussions`
 alone, so it writes nothing and a file it cannot read is recorded and answered as absent. A number that
 is not an integer is a 400 (`IssueNumberParams`). → [40](40-discussions.md#in-the-cockpit)
+
+### `POST /api/discussions/:number/watch-outcome`
+
+No body. **Discuss in Claude** on a post-deploy watch's outcome: writes one `note` to the goal's
+discussion file through `System.discussions`, authored `LubbDubb (watch)` — the outcome, each check's
+expectation, its before and after, its query in a fence named by its source's language, and the goal's
+merged pull requests — and answers `{ok, entry, path}`. The cockpit's control is a link that opens
+`/lubbdubb:discuss <n>` itself and fires this POST from the same click without awaiting it. It is
+idempotent per reading: where the goal's file already holds a `LubbDubb (watch)` note carrying this
+outcome's key (`watchOutcomeKey`: the answer and the windows it was read off, as each settled), it writes
+nothing and answers that note. The outcome is built by `goalWatchOutcome`, the same per-goal builder
+`/api/state` ships, gate included. **409** with discussions off (`discussionsDir` is what turns them on),
+**404** for a number the last world snapshot does not list and no discussion file holds
+(`knownDiscussionSubject`, the desktop tools' own check) — never an untitled story — and **409** where the
+outcome is not `discussable` — anything but _It made something worse_ or _Couldn't tell_, or no
+outcome at all because no environment declares a `watch` — there is nothing for a conversation to decide about a watch that
+worked or has not settled. It writes no `WorldEvent` and changes no hold; it broadcasts `dirty` for
+`goals` and `queue`, as a desktop discussion write does. → [29](29-post-deploy-watch.md#discussing-an-outcome)
 
 ### `GET /api/retrospectives/:ref`
 
@@ -2412,7 +2445,10 @@ Four properties hold it together:
   and walks each one's transitive relative imports refusing a node builtin or a package value import.
   The list is the ask queue's three pure modules under `src/asks/` — `buildAskQueue`, which the
   demo's fake server derives its queue with, and the line-wording helpers the cockpit shares with the
-  rows it draws ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)). Nothing else.
+  rows it draws ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)) — among the
+  others the test names, `isProposed` (`src/validation/watchProposed.ts`), so the Signals card reads a
+  proposed watch check exactly as the window pass does
+  ([29](29-post-deploy-watch.md#the-operator-accepts-the-set)).
 - **Domain types are reused, never re-declared.** A wire type either _is_ the server's type or
   `extends` it. The cockpit's copy previously widened the server's unions three different ways in one
   file — `Job.status` to `string`, `Proposal.action` to an index-signature bag, `Finding.status`

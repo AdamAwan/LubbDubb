@@ -40,7 +40,7 @@ import { BranchReapStore } from './branchReaps.js';
 import { ENVIRONMENT_COLUMNS, EnvironmentStore, repairPartRefGoals } from './environments.js';
 import { dateInterruptionsFromBeforeTheStamp, LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
 import { LocalValidationStore, LOCAL_VALIDATION_COLUMNS } from './localValidations.js';
-import { WatchStore, WATCH_COLUMNS } from './watches.js';
+import { deleteRetiredWatchProposals, WatchStore, WATCH_COLUMNS } from './watches.js';
 import {
   RemoteValidationStore,
   REMOTE_VALIDATION_COLUMNS,
@@ -145,6 +145,7 @@ function migrate(db: Database.Database, clock: Clock): void {
   if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(db);
   if (addedColumns.includes('validation_plans.released_at')) releaseValidationPlansFromBeforeTheGate(db);
   if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(db, clock());
+  deleteRetiredWatchProposals(db);
   if (intentsAreNew)
     consumeIntentsForExistingSheets(
       db,

@@ -22,11 +22,14 @@ import type {
   ValidationCheckView,
   ValidationPlanRecord,
   ValidationResourceView,
+  WatchOutcome,
+  WatchPlanRecord,
 } from '../types.js';
 import type { PartGroup } from '../types.js';
 import { PART_GROUP } from './partGroups.js';
 import type { NeedKind, NeedRow } from './needsYou.js';
 import { orphanOf } from './orphanGoal.js';
+import { isProposed } from './watchChecks.js';
 import { belongsToGoal, closedPrs, goalIssue, ownsPr, reachesGoal } from './goalRefs.js';
 import {
   closeStage,
@@ -85,7 +88,11 @@ export interface GoalPageView {
   gateRelease: EnvironmentGateRelease | null;
   remoteSheets: RemoteSheetView[];
   watches: GoalWatchView[];
+  /** The watch rolled up to one answer; null where this goal has no watch to answer. */
+  watchOutcome: WatchOutcome | null;
   signals: GoalWatch[];
+  /** The assessor's watch record: its note, its emptyReason, and whether it is accepted. */
+  watchPlan: WatchPlanRecord | null;
   sequence: FeatureSequence | null;
   /**
    * Which environment carries each obligation, from the deployment's own declaration rather
@@ -233,11 +240,16 @@ function goalReach(
   };
 }
 
-function goalWatchRecords(state: AppState, ref: string): Pick<GoalPageView, 'remoteSheets' | 'watches' | 'signals'> {
+function goalWatchRecords(
+  state: AppState,
+  ref: string,
+): Pick<GoalPageView, 'remoteSheets' | 'watches' | 'watchOutcome' | 'signals' | 'watchPlan'> {
   return {
     remoteSheets: (state.remoteSheets ?? []).filter((s) => s.goalRef === ref),
     watches: (state.goalWatchWindows ?? []).filter((w) => w.goalRef === ref),
+    watchOutcome: (state.goalWatchOutcomes ?? []).find((o) => o.goalRef === ref) ?? null,
     signals: (state.goalWatches ?? []).filter((w) => w.originRef === ref),
+    watchPlan: (state.watchPlans ?? []).find((r) => r.goalRef === ref) ?? null,
   };
 }
 
@@ -292,7 +304,7 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
     validation: (shipped(page) && live.length > 0) || live.some((c) => c.state !== 'unrun'),
     localValidation: page.issue.localValidation !== null,
     remoteValidation: page.remoteSheets.length > 0,
-    signals: (shipped(page) && page.signals.length > 0) || page.signals.some((s) => !s.live || s.proposal !== null),
+    signals: (shipped(page) && page.signals.length > 0) || page.signals.some(isProposed),
     environments: page.environments.some((e) => e.status !== 'absent'),
     sequence: false,
     tail: tailBegun(page),

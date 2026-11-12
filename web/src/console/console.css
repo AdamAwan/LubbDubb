@@ -2356,6 +2356,43 @@ a.cn-qbody {
   flex: 1;
   padding-left: 8px;
 }
+/* The outcome a goal's Watch pane opens on: one answer above every check, drawn in
+   the hue of the answer through the shared tone classes — `cn-t-amber` for couldn't
+   tell, as `.cn-watch-row` draws `unknown`, and `cn-t-grey` for nothing measured and
+   still watching, the deliberately-not-a-verdict tone.
+   → docs/spec/29-post-deploy-watch.md#the-outcome */
+.cn-outcome {
+  background: var(--cn-tone-fill);
+  border-left: 3px solid var(--cn-tone-line);
+}
+.cn-outcome > h3 {
+  color: var(--cn-tone-ink);
+}
+.cn-outcome > .cn-sub {
+  display: block;
+  margin: 4px 13px;
+}
+.cn-outcome-checks {
+  list-style: none;
+  margin: 4px 13px 8px;
+  padding: 0;
+}
+.cn-outcome-checks > li {
+  padding: 3px 0;
+}
+.cn-outcome-checks .cn-sub {
+  display: block;
+}
+.cn-outcome-num {
+  color: var(--cn-fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+.cn-outcome-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 13px 10px;
+}
 /* The signals card: one goal's declared checks, and the form that writes one.
    Rows rather than a table, because a check is four things of different shapes —
    a sentence, a query, an expectation and a reading — and only the first two are

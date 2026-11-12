@@ -166,7 +166,7 @@ function partCandidate(
         s.discussionNote(issueNumber) +
         budgetNote(s.planning.fileBudget) +
         partOutcomeNote(part) +
-        s.watchDeclareNote +
+        s.instrumentationNote +
         s.stateDeclareNote,
       originRef: origin,
       originTitle: `${issue.title} — ${part.title}`,

@@ -28,6 +28,7 @@ import { type IssueReadsOn, issueReads } from './stateIssueReads.js';
 import {
   buildEnvironmentHealth,
   buildEnvironmentReach,
+  buildGoalWatchOutcomes,
   buildGoalWatchWindows,
   buildRemoteSheets,
   tenantCommandViews,
@@ -269,6 +270,7 @@ function goalsSection(
   | 'environmentHealth'
   | 'environmentGroups'
   | 'goalWatchWindows'
+  | 'goalWatchOutcomes'
   | 'environmentArrivals'
   | 'remoteSheets'
   | 'stackLandings'
@@ -325,7 +327,8 @@ function goalsSection(
     environmentGroups: environmentGroups(environments)
       .filter((band) => band.declared)
       .map(({ name, environments: members }) => ({ name, environments: members })),
-    goalWatchWindows: buildGoalWatchWindows(store, environments, r.goalWatches),
+    goalWatchWindows: buildGoalWatchWindows(environments, r.watchWindows),
+    goalWatchOutcomes: buildGoalWatchOutcomes(environments, r, store.environments),
     environmentArrivals: arrivals.slice(0, 50),
     remoteSheets: remoteSheets(),
     stackLandings: stackLandingViews(r, prByNumber, stackRungPrs),
@@ -340,10 +343,7 @@ function stackLandingViews(
   const { world, stacks, landings, mergedPrs, openPrNumbers } = r;
   return [
     ...stacks().map((stack) => {
-      const rungPrs = stack.rungs.flatMap((rung) => {
-        const pr = prByNumber.get(rung.prNumber);
-        return pr ? [pr] : [];
-      });
+      const rungPrs = stack.rungs.flatMap((rung) => prByNumber.get(rung.prNumber) ?? []);
       const landing = landingFor(
         stack.rungs.map((r) => r.prNumber),
         landings(),
@@ -382,6 +382,7 @@ function plansSection(
   | 'validationPlans'
   | 'validationResources'
   | 'goalWatches'
+  | 'watchPlans'
   | 'stateQueries'
 > {
   const { store, openPrNumbers } = r;
@@ -396,6 +397,7 @@ function plansSection(
     validationPlans: r.validationPlanRecords(),
     validationResources: r.wireValidationResources(),
     goalWatches: [...r.goalWatches(), ...store.watches.listProposedGoalWatches()],
+    watchPlans: r.watchPlanRecords(),
     stateQueries: store.remoteValidation.listStateQueries(),
   };
 }

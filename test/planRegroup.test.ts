@@ -386,7 +386,6 @@ function sheet(input: { parts: PlanPartView[]; atoms: PlanAtom[]; status: string
         refUrls: {},
         onClose: () => undefined,
         onReplan: () => undefined,
-        onWatchProposal: () => undefined,
         onDecide: () => undefined,
         onBackOut: () => undefined,
         onOpenGoal: () => undefined,

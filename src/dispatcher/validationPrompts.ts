@@ -17,6 +17,14 @@ export const VALIDATION_PROMPTS = {
       'You cannot record a reading, and you cannot decide who runs a check: whether an agent can run one depends on the logins and browsers this deployment has, and the hand-over is an operator\u2019s press. `fleetCandidate` is a nomination with an argument attached, and it dispatches nothing.',
     doc: "Sent to a code agent when a goal the harness parked as delivered has no validation check set (rule `validation-plan`). The plan's validation hint, what any `coverage` part built and what each configured environment can drive are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the half the agent cannot author without. The agent is in a read-only checkout of the default branch and answers once with `validation_plan`, which speaks for the whole set. Placeholders: {number} {title} {body}.",
   },
+  'watch-plan': {
+    placeholders: ['number', 'title', 'body'],
+    template:
+      'Issue #{number} ("{title}") has been delivered. Write its post-deploy watch \u2014 what a running system would have to show, once this ships, for the work to have done what it claimed.\n\n{body}\n\n' +
+      'You are in a read-only checkout of the default branch, standing in the merged code with every part settled. Read what shipped first: the message templates, the operation names, the metrics the change emits or moves. The pull request descriptions say where an agent added a log line, a metric or an exception that says whether this is behaving. Nothing here is to be committed or pushed.\n\n' +
+      'Then call watch_plan, which declares the **whole** watch. Say in `note` where you departed from the plan\u2019s hint and why. Where nothing running behaves differently \u2014 a refactor, a docs change, a build fix \u2014 declare nothing, with an `emptyReason`. Each check is put to an environment once as you record it; fix anything the reply hands back and call again. Nothing runs on a schedule until the operator accepts the set.',
+    doc: "Sent to a code agent when a goal the harness parked as delivered, with a plan, has no post-deploy watch (rule `watch-plan`) — the catch-up for an assessor whose turn ended before it wrote one, or a watch the operator sent back. The plan's watch hint, the operator's words on its tick, any send-back words and the deployment's watch sources are *appended* to the rendered prompt rather than interpolated. The agent is in a read-only checkout of the default branch and answers with `watch_plan`. Placeholders: {number} {title} {body}.",
+  },
   'validation-check': {
     placeholders: ['number', 'title', 'letter', 'root'],
     template:

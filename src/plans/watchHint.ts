@@ -59,6 +59,11 @@ export function watchHintDetail(hint: WatchHint): string {
     .join('\n');
 }
 
+/** Why the watch measures nothing, as the plan's hint stated it; null where it named something to watch. */
+export function hintEmptyReason(hint: WatchHint | null | undefined): string | null {
+  return hint !== null && hint !== undefined && 'none' in hint ? hint.none : null;
+}
+
 export function storedWatchHint(raw: string | null | undefined): WatchHint | null {
   if (raw === null || raw === undefined) return null;
   let value: unknown;

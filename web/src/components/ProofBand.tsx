@@ -1,5 +1,6 @@
 import type { GoalWatch, PlanPartView, StateQuery, ValidationCheck } from '../types.js';
 import { BareButton } from './button.js';
+import { isProposed } from '../view/watchChecks.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -50,7 +51,7 @@ export function proofCounts(
   const covered = live.filter((c) => checkArea(c) !== null).length;
   const signals = watches.filter((w) => w.kind === 'signal').length;
   const measures = watches.filter((w) => w.kind === 'measure').length;
-  const pending = watches.filter((w) => !w.live).length;
+  const pending = watches.filter(isProposed).length;
   const unread = queries.filter((q) => q.dryRunVerdict === null).length;
 
   return [

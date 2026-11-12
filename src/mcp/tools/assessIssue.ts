@@ -5,6 +5,7 @@ import { SHORTFALL_CAUSE_HELP, SHORTFALL_CAUSES, shortfallRecordedNote } from '.
 import { toolError } from '../protocol.js';
 import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import { checkSetAuthored } from '../../validation/authoring.js';
+import { watchOwed } from '../../validation/watchAuthoring.js';
 import type { McpToolDeps, ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -26,6 +27,22 @@ function checkSetOwed(deps: McpToolDeps, origin: string): boolean {
     checks: deps.store.validation.listValidationChecks(origin),
   });
 }
+
+/**
+ * Whether a `delivered` verdict left the post-deploy watch owed: `checkSetOwed`'s reason, one output over,
+ * read after the verdict wrote the owed record. Silent where no environment declares a `watch`, and for any
+ * goal the record does not say is owed. → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
+ */
+function watchOwedAfter(deps: McpToolDeps, origin: string): boolean {
+  if (deps.watchHintRequired !== true) return false;
+  const { watches, plans } = deps.store;
+  return watchOwed({ record: watches.getWatchPlanRecord(origin), planned: plans.getPlanByOrigin(origin) !== null });
+}
+
+const WATCH_OWED =
+  'The post-deploy watch is owed too: declare it with watch_plan — the whole watch in one call, or no checks ' +
+  'with an emptyReason — after the check set. If you cannot, stop: a watch author is dispatched for a delivered ' +
+  'goal that has none. ';
 
 const AssessmentInput = z.object({
   status: z
@@ -105,10 +122,11 @@ export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
         (parsed.verdict === 'delivered' && checkSetOwed(deps, result.issueOrigin)
           ? 'One thing is still owed: this goal has no validation check set, and you are standing in the ' +
             'delivered code it is written against. Declare it now with validation_plan — the whole set in ' +
-            'one call — and then finish. If you cannot, say so and stop: a validation planner is dispatched ' +
-            'for a delivered goal that has none, so nothing is lost. ' +
-            DONE_REMINDER
-          : DONE_REMINDER),
+            'one call. If you cannot, say so and stop: a validation planner is dispatched ' +
+            'for a delivered goal that has none, so nothing is lost. '
+          : '') +
+        (parsed.verdict === 'delivered' && watchOwedAfter(deps, result.issueOrigin) ? WATCH_OWED : '') +
+        DONE_REMINDER,
     });
   },
 });

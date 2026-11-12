@@ -13,7 +13,7 @@ import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { resolveTenant } from '../src/validation/remote/tenants.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { loadConfig } from '../src/config/config.js';
-import { stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from '../src/plans/planning.js';
+import { stateDeclareNote, testPartNote, watchPlanNote, watchNote } from '../src/plans/planning.js';
 import { buildSystem, type System } from '../src/system/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -318,7 +318,7 @@ test('a tenantEnv’s value reaches neither a prompt, the cockpit, nor a committ
     // rather than interpolated. None of them is a place a tenant's value may reach.
     const notes = [
       watchNote(config.environments),
-      watchDeclareNote(config.environments),
+      watchPlanNote(config.environments),
       stateDeclareNote(config.environments),
       testPartNote(config.environments),
     ].join('\n');

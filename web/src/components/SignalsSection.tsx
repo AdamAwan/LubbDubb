@@ -1,13 +1,18 @@
 import { useState } from 'react';
-import type { GoalWatch, GoalWatchDeclaration, GoalWatchKind, WatchSourceDeclaration } from '../types.js';
+import type {
+  GoalWatch,
+  GoalWatchDeclaration,
+  GoalWatchKind,
+  WatchPlanRecord,
+  WatchSourceDeclaration,
+} from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
-import { expectation, WatchReadingLine } from './WatchDigest.js';
-import { renderMarkdown } from './markdown.js';
-import { HeadRow } from './panel.js';
 import { Button } from './button.js';
-import { Tag } from './tag.js';
-import { measuresOnlyRefusal, WatchSourceChip, WatchSourcePicker } from './WatchSourceChip.js';
+import { measuresOnlyRefusal, WatchSourcePicker } from './WatchSourceChip.js';
+import { AssessorWatch } from './AssessorWatch.js';
+import { SignalRow } from './SignalRow.js';
+import { isProposed } from '../view/watchChecks.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -23,7 +28,7 @@ import { measuresOnlyRefusal, WatchSourceChip, WatchSourcePicker } from './Watch
  * is wrong for as long as it stands, and the plan is not being re-opened.
  *
  * **A saved check runs against an environment in the same call**, exactly as
- * accepting an agent's declaration does, and the refusals it comes back with are
+ * the assessor's `watch_plan` does, and the refusals it comes back with are
  * drawn on the form that caused them. That is what stops the surface being a place
  * to write queries nobody has proved resolve.
  *
@@ -31,25 +36,37 @@ import { measuresOnlyRefusal, WatchSourceChip, WatchSourcePicker } from './Watch
  */
 export function SignalsSection({
   signals,
+  watchPlan,
   sources,
   refUrls,
   onSave,
   onDelete,
-  onRule,
+  onAccept,
+  onSendBack,
 }: {
   signals: GoalWatch[];
+  /** The assessor's record for this goal's watch, or null where nothing was ever asked of it. */
+  watchPlan: WatchPlanRecord | null;
   /** Every source a watched environment declares; the form offers a choice only where there is one to make. */
   sources: WatchSourceDeclaration[];
   refUrls: Record<string, string>;
   onSave: (check: GoalWatchDeclaration) => Promise<string[]>;
   onDelete: (checkId: string) => Promise<void>;
-  onRule: (checkId: string, accept: boolean) => Promise<void>;
+  onAccept: () => Promise<void>;
+  onSendBack: (words: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState<string | GoalWatchKind | null>(null);
   const taken = new Set(signals.map((c) => c.id));
 
   return (
     <div className="cn-sig">
+      <AssessorWatch
+        record={watchPlan}
+        proposed={signals.filter(isProposed).length}
+        refUrls={refUrls}
+        onAccept={onAccept}
+        onSendBack={onSendBack}
+      />
       {signals.map((check) =>
         open === check.id ? (
           <CheckForm
@@ -69,7 +86,6 @@ export function SignalsSection({
             refUrls={refUrls}
             onEdit={() => setOpen(check.id)}
             onDelete={() => onDelete(check.id)}
-            onRule={onRule}
           />
         ),
       )}
@@ -83,106 +99,31 @@ export function SignalsSection({
           onDelete={null}
         />
       )}
-      <div className="cn-sig-add">
-        <Button
-          usage="watch.expand"
-          onClick={() => setOpen('signal')}
-          title="Something that should not be happening: an exception, a failure, a retry. Needs a second query proving the code path runs."
-        >
-          Add a signal
-        </Button>
-        <Button
-          usage="watch.expand"
-          onClick={() => setOpen('measure')}
-          title="One number: a percentile, a rate, a duration. Needs a threshold, or the baseline it is compared against."
-        >
-          Add a measure
-        </Button>
-        <span className="cn-sub">
-          Saving puts the query to an environment once, with your credential — which is why it is asked.
-        </span>
-      </div>
+      <AddControls onAdd={setOpen} />
     </div>
   );
 }
 
-function SignalRow({
-  check,
-  sources,
-  refUrls,
-  onEdit,
-  onDelete,
-  onRule,
-}: {
-  check: GoalWatch;
-  sources: WatchSourceDeclaration[];
-  refUrls: Record<string, string>;
-  onEdit: () => void;
-  onDelete: () => Promise<void>;
-  onRule: (checkId: string, accept: boolean) => Promise<void>;
-}) {
-  const tone = !check.live ? 'pending' : (check.dryRunVerdict ?? 'unread');
+function AddControls({ onAdd }: { onAdd: (kind: GoalWatchKind) => void }) {
   return (
-    <div className={`cn-sig-row ${tone}`}>
-      <span className="cn-sig-stripe" />
-      <div className="cn-sig-body">
-        <HeadRow className="cn-sig-head">
-          <b className="cn-name">{check.title}</b>
-          <Tag>{check.kind}</Tag>
-          <WatchSourceChip source={check.source} sources={sources} />
-          <Tag lower title="The author’s own id, and the merge key every writer folds on">
-            {check.id}
-          </Tag>
-          {check.authored === 'operator' && (
-            <Tag title="Yours. A replan neither removes this nor writes over it.">yours</Tag>
-          )}
-          {!check.live && (
-            <Tag tone="amber" fill title="Declared by the agent that did the work, and not yet run">
-              awaiting you
-            </Tag>
-          )}
-        </HeadRow>
-        <p className="cn-sig-expect">{expectation(check)}</p>
-        <pre className="cn-sig-query">{check.query}</pre>
-        {check.presence !== null && (
-          <pre className="cn-sig-query" title="The second query, whose only job is to prove the code path runs at all">
-            {check.presence}
-          </pre>
-        )}
-        {check.why !== null && <div className="cn-sig-why">{renderMarkdown(check.why, refUrls)}</div>}
-        {check.live ? (
-          <WatchReadingLine check={check} className="cn-sig-read" />
-        ) : (
-          <p className="cn-sig-read">
-            {check.proposal?.note ?? 'Declared by an agent.'} Nothing has been run: accepting is what puts this query to
-            an environment.
-          </p>
-        )}
-      </div>
-      <div className="cn-sig-ctrls">
-        {check.live ? (
-          <Button usage="watch.expand" onClick={onEdit}>
-            Edit
-          </Button>
-        ) : (
-          <AsyncButton usage="watch.accept" onClick={() => onRule(check.id, true)}>
-            Accept &amp; run
-          </AsyncButton>
-        )}
-        {check.live ? (
-          <ConfirmButton
-            usage="watch.waive"
-            label="Delete"
-            confirmLabel="Delete it"
-            title="Drop this check and the readings taken against it. A check the plan declares comes back on the next replan."
-            onConfirm={onDelete}
-          />
-        ) : (
-          <AsyncButton usage="watch.reject" onClick={() => onRule(check.id, false)}>
-            Decline
-          </AsyncButton>
-        )}
-      </div>
+    <div className="cn-sig-add">
+      <Button
+        usage="watch.expand"
+        onClick={() => onAdd('signal')}
+        title="Something that should not be happening: an exception, a failure, a retry. Needs a second query proving the code path runs."
+      >
+        Add a signal
+      </Button>
+      <Button
+        usage="watch.expand"
+        onClick={() => onAdd('measure')}
+        title="One number: a percentile, a rate, a duration. Needs a threshold, or the baseline it is compared against."
+      >
+        Add a measure
+      </Button>
+      <span className="cn-sub">
+        Saving puts the query to an environment once, with your credential — which is why it is asked.
+      </span>
     </div>
   );
 }

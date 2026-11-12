@@ -4,12 +4,11 @@ import {
   DISCUSSIONS_OFF,
   failure,
   type DiscussionSettlement,
-  type DiscussionSubject,
 } from '../discussions/discussionFile.js';
 import { openQuestions } from '../discussions/entries.js';
 import { DISCUSSION_KINDS, isOneOf } from '../discussions/parse.js';
 import { readDiscussion } from '../discussions/related.js';
-import { discussionSubject } from '../discussions/subject.js';
+import { knownDiscussionSubject } from '../discussions/subject.js';
 import type { DiscussionEntry } from '../types.js';
 import { desktopIssueRef } from '../validation/desktop.js';
 import { toolSchema } from './schema.js';
@@ -40,22 +39,6 @@ function entryLine(entry: DiscussionEntry): Record<string, unknown> {
     supersedes: entry.supersedes,
     ...(entry.unreadable ? { unreadable: true, heading: entry.heading } : {}),
   };
-}
-
-function subjectFor(
-  deps: DesktopToolDeps,
-  number: number,
-): { ok: true; subject: DiscussionSubject } | { ok: false; error: string } {
-  const issues = deps.store.world.getWorldBaseline()?.issues ?? [];
-  if (!issues.some((i) => i.number === number) && deps.discussions.locate(number) === null) {
-    return {
-      ok: false,
-      error:
-        `The harness holds nothing about #${number}: the last world snapshot does not list it and it has no ` +
-        'discussion file. Check the number, or that the ticket carries the watch tag.',
-    };
-  }
-  return { ok: true, subject: discussionSubject(issues, number, deps.issueContainerTypes) };
 }
 
 const discussionRead: DesktopToolFactory = (deps) => ({
@@ -129,7 +112,8 @@ const discussionAdd: DesktopToolFactory = (deps) => ({
     if (body === '') return toolError('body is empty — there is nothing to write down.');
     if (args.suggested === true && kind !== 'idea')
       return toolError(`suggested is for ideas only. A ${kind} is written as the operator's, or not at all.`);
-    const found = subjectFor(deps, ref.issue);
+    const issues = deps.store.world.getWorldBaseline()?.issues ?? [];
+    const found = knownDiscussionSubject(deps.discussions, issues, ref.issue, deps.issueContainerTypes);
     if (!found.ok) return toolError(found.error);
     const author = args.suggested === true ? DISCUSSION_AUTHORS.claudeSuggested : DISCUSSION_AUTHORS.operatorViaClaude;
     const write = deps.discussions.add(found.subject, { kind, body, author });

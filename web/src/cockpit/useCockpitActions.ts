@@ -125,7 +125,8 @@ function prActions(then: Then) {
 
 function watchActions(then: Then, refresh: Refresh) {
   return {
-    ruleWatchProposal: (issueNumber, checkId, accept) => then(api.ruleWatchProposal(issueNumber, checkId, accept)),
+    acceptWatch: (issueNumber) => then(api.acceptWatch(issueNumber)),
+    sendBackWatch: (issueNumber, words) => then(api.sendBackWatch(issueNumber, words)),
     saveWatchCheck: async (issueNumber, check) => {
       const { dryRun } = await api.saveWatchCheck(issueNumber, check);
       await refresh(null);
@@ -133,6 +134,7 @@ function watchActions(then: Then, refresh: Refresh) {
     },
     deleteWatchCheck: (issueNumber, checkId) => then(api.deleteWatchCheck(issueNumber, checkId)),
     extendWatch: (issueNumber, environment) => then(api.extendWatch(issueNumber, environment)),
+    discussWatchOutcome: (issueNumber) => then(api.discussWatchOutcome(issueNumber)),
     setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
   } satisfies Partial<CockpitActions>;
 }

@@ -29,8 +29,8 @@ const CHECK: GoalWatch = {
   baselineValue: null,
   baselineAt: null,
   live: true,
-  proposal: null,
   authored: 'plan',
+  changedFromHint: null,
 };
 
 const MEASURE: GoalWatch = {

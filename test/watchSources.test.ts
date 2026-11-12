@@ -408,6 +408,7 @@ test("the bench row fences each query in its source's language, and links throug
     live: true,
     proposal: null,
     authored: 'plan' as const,
+    changedFromHint: null,
   });
   const regressed = (checkId: string) => ({
     goalRef: 'issue:12',

@@ -20,6 +20,7 @@ import { deliverySignalQuery } from '../delivery/delivery.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelFor } from '../watchLabels.js';
+import { watchWindowReadings } from '../environments/watchFinding.js';
 import type { SetupReading } from '../setup/reading.js';
 
 // → docs/spec/16-http-api.md
@@ -227,6 +228,13 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
     }),
   );
   const goalWatches = once(() => store.watches.listGoalWatches());
+  const watchWindows = once(() =>
+    watchWindowReadings({
+      windows: store.watches.listWatchWindows(),
+      checks: goalWatches(),
+      readings: store.watches.listWatchReadings(),
+    }),
+  );
   const conclusions = once(() => new Map(store.verdicts.listIssueConclusions().map((c) => [c.originRef, c])));
   const deliveries = once(() => store.verdicts.listDeliveries());
   const deliveriesByOrigin = once(() => new Map(deliveries().map((d) => [d.originRef, d])));
@@ -248,6 +256,7 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
     return byOrigin;
   });
   const validationPlanRecords = once(() => store.validation.listValidationPlanRecords());
+  const watchPlanRecords = once(() => store.watches.listWatchPlanRecords());
   const appraisals = store.verdicts.listAppraisals();
   const appraisalsByOrigin = once(() => new Map(appraisals.map((a) => [a.originRef, a])));
   const investigations = once(() => store.investigations.list());
@@ -257,6 +266,8 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
     validationPlanRecords,
     wireValidationResources,
     goalWatches,
+    watchWindows,
+    watchPlanRecords,
     conclusions,
     deliveries,
     deliveriesByOrigin,

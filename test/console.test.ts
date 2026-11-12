@@ -1231,7 +1231,7 @@ test('validation and signals are folded on a goal that has not shipped', () => {
     goalPage: {
       ...page,
       checks: [],
-      signals: page.signals.map((s) => ({ ...s, live: true, proposal: null })),
+      signals: page.signals.map((s) => ({ ...s, live: true })),
       environments: [
         {
           environment: 'prod' as const,

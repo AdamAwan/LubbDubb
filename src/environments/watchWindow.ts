@@ -35,30 +35,58 @@ const WATCH_WINDOW_INTERVALS = 2;
 
 const MAX_WATCH_WINDOWS_PER_PULSE = 20;
 
+/**
+ * What the window pass does with one arrival: open a window and stamp it (`settlesAt` set), stamp it
+ * and open nothing (`settlesAt` null), or — `hold` — leave it unstamped for a watch not yet accepted.
+ * → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
+ */
 interface WatchArrivalVerdict {
   arrival: GoalArrival;
   settlesAt: string | null;
+  hold: boolean;
 }
 
+/**
+ * The hold is applied **before** the staleness cut, so an arrival whose goal's watch is owed, proposed or not
+ * yet asked keeps its place unstamped for as long as authoring and the accept take — it needs no stamp of its
+ * own, because the goal's record is what holds it. Once released, an arrival counts as fresh if it was
+ * confirmed within the guard **or the goal's watch was accepted within it**, which is the pass that opens the
+ * held arrival's window, sized from the arrival. Anything else past the guard is stamped and opens nothing, so
+ * turning `watch` on still walks the history once.
+ */
 export function openableArrivals(input: {
   arrivals: readonly GoalArrival[];
   environments: readonly EnvironmentConfig[];
   declared: ReadonlySet<string>;
+  /** Whether this goal's watch holds its arrivals back unstamped. */
+  held: (goalRef: string) => boolean;
+  /** When this goal's watch was accepted, or null. */
+  acceptedAt: (goalRef: string) => string | null;
   probeIntervalMs: number;
   now: number;
 }): WatchArrivalVerdict[] {
   const byName = new Map(input.environments.map((e) => [e.name, e]));
   const floor = input.now - input.probeIntervalMs * WATCH_WINDOW_INTERVALS;
+  const since = (at: string | null): boolean => at !== null && Date.parse(at) >= floor;
   const out: WatchArrivalVerdict[] = [];
   for (const arrival of input.arrivals) {
     if (arrival.watchedAt !== null) continue;
     const environment = byName.get(arrival.environment);
+    if (environment?.watch === undefined) {
+      out.push({ arrival, settlesAt: null, hold: false });
+      continue;
+    }
+    if (input.held(arrival.goalRef)) {
+      out.push({ arrival, settlesAt: null, hold: true });
+      continue;
+    }
     const seen = Date.parse(arrival.arrivedAt);
-    const fresh = Number.isFinite(seen) && seen >= floor;
-    const watchable = environment?.watch !== undefined && input.declared.has(arrival.goalRef);
+    const fresh = Number.isFinite(seen) && (since(arrival.arrivedAt) || since(input.acceptedAt(arrival.goalRef)));
     out.push({
       arrival,
-      settlesAt: watchable && fresh ? new Date(seen + firstWindowMs(environment)).toISOString() : null,
+      settlesAt:
+        fresh && input.declared.has(arrival.goalRef) ? new Date(seen + firstWindowMs(environment)).toISOString() : null,
+      hold: false,
     });
   }
   return out;

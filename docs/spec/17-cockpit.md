@@ -1591,7 +1591,10 @@ the newest card. This is the one place a watch is reduced to a word, and the red
 one-directional: `regressed` first, then anything not `clean` reads _not read_, and only a window
 whose every check came back clean says so. A tab with space for one reading must never fold an unread
 environment into an all-clear. A goal with no window open yet reads what is true of the signals
-instead — `no signals`, `not opened`, or `2 awaiting you` where the operator owes a ruling.
+instead — `no signals`, `not opened`, or `2 awaiting you` where the assessor's set is still proposed
+and the operator owes the accept (`awaitingAccept`: the record authored and not accepted). A set sent
+back keeps its rows `live = 0` as the account of what was refused, but nothing in it is the operator's
+to answer, so it counts none.
 → [29](29-post-deploy-watch.md#in-the-cockpit)
 
 **One dot, where an ask is waiting in that pane.** `GOAL_ASK_TAB` maps every `NeedKind` to the pane it
@@ -7813,10 +7816,26 @@ surfaces.
 
 ### The watch digest
 
-> **Not yet built:** the plan sheet stops drawing executable checks, and the pending-change control
-> below moves to the Signals card, where the assessor's set is accepted after `delivered`. The goal
-> page gains an outcome card above the Watch pane, with **Discuss in Claude**.
-> → [29](29-post-deploy-watch.md#who-writes-it-and-when), [29](29-post-deploy-watch.md#the-outcome)
+The assessor's watch, written after `delivered`, is **not** drawn here: it is proposed and accepted on
+the goal page's Signals card ([29](29-post-deploy-watch.md#the-operator-accepts-the-set)), and the
+sheet filters its unaccepted rows out. The sheet still draws a legacy `watch` block's executable checks,
+for as long as a plan document may carry one. → [29](29-post-deploy-watch.md#who-writes-it-and-when)
+
+The goal page's **Watch** pane opens on the **outcome card** (`web/src/console/goalWatchOutcome.tsx`),
+above the Signals card and the window's own: the goal's watch rolled up to one answer, folded once on
+the server (`CockpitState.goalWatchOutcomes`) and drawn in that answer's hue through the shared tone
+classes — `cn-t-green`, `cn-t-red`, `cn-t-amber`, and `cn-t-grey` for _Nothing was measured_,
+_Not yet written_ and _Still watching_ — with one `.cn-outcome` rule reading `--cn-tone-*`. Its headline is the outcome's own
+`headline`, never a second wording kept in the cockpit. It names what passed beside what did not, and
+every check is still drawn on the cards below it. The card draws an **extend** per environment in the
+outcome's `extendable` and **Discuss in Claude** where it is `discussable` — the server decided both —
+the latter only where `discussionsDir` is set, never disabled. **Discuss in Claude** is a real link to
+the deep link, not a button that navigates after its POST: a navigation made once a request has
+settled has left the click's gesture, and a browser may drop it. It is a `DesktopLink` with `onOpen`,
+which the click fires without awaiting, and a refusal shows on the link as an `AsyncButton`'s does. A check's numbers
+read `before → after on <environment> over <span>`, the span in minutes under an hour; where the before
+was read on another environment, it says so — `37 on staging before the merge → 2 on liveUk over 48h`.
+→ [29](29-post-deploy-watch.md#the-outcome), [29](29-post-deploy-watch.md#discussing-an-outcome)
 
 `WatchHintDigest` (`web/src/components/WatchHintDigest.tsx`) draws the plan's **watch hint** first, as
 a _How we'll know it worked_ section: each intent's kind and source as chips, then what it `says`, its
@@ -7837,19 +7856,12 @@ arrived. A check nothing has asked about yet says so in those words — not yet 
 not a clean reading — and a goal that declared no checks draws nothing at all, because null is a third
 fact and not a synonym for clean.
 
-**Read-only but for one control, and the exception is the whole point.** A check the working agent
-declared through `watch_declare` arrived _after_ the approval that authorises a query to be run
-against the operator's own telemetry with the operator's own credential — so it draws as a **pending
-change** with accept and decline beside it, over the live declaration it amends, which stands
-untouched until somebody rules. Accepting applies it, clears the readings of the text it replaced, and
-runs it once against an environment; declining leaves a live check exactly as it was and drops a row
-that was never anything but a proposal. Nothing else on this sheet takes a verb, for
-`ValidationDigest`'s reason.
-
-The state lives on the check itself (`goal_watches.live` and `goal_watches.proposal`) rather than on
-the plan-amendment path: a declaration made at conclude time would otherwise put a goal's whole plan
-back through approval to carry one query, which holds the goal's own work to move a sentence about
-telemetry.
+**Read-only, with no control at all.** It once carried one: the ruling on a check the working agent
+declared through `watch_declare`, drawn as a pending change with accept and decline. That tool and its
+route are [retired](16-http-api.md#post-apiissuesnumberwatch-proposalscheckid--retired) and the rows it
+left are deleted on boot ([14](14-persistence.md#retired-watch-proposals)), so nothing on this sheet takes
+a verb, for `ValidationDigest`'s reason. What is still not live — the assessor's proposed set — is filtered
+out here by `isProposed` and accepted as a whole on the Signals card.
 
 ### The state digest
 

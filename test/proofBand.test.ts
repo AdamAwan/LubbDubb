@@ -185,7 +185,6 @@ function sheet(input: {
         refUrls: {},
         onClose: () => undefined,
         onReplan: () => undefined,
-        onWatchProposal: () => undefined,
         onDecide: () => undefined,
         onBackOut: () => undefined,
         onOpenGoal: () => undefined,
@@ -308,8 +307,8 @@ function watch(over: Partial<GoalWatch> & { id: string }): GoalWatch {
     baselineValue: null,
     baselineAt: null,
     live: true,
-    proposal: null,
     authored: 'plan',
+    changedFromHint: null,
     ...over,
   } as unknown as GoalWatch;
 }

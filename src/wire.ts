@@ -131,6 +131,7 @@ import type {
   StackLanding,
   GoalWatch,
   GoalWatchKind,
+  WatchOutcome,
   WatchReading,
   WatchSourceDeclaration,
   WatchWindow,
@@ -141,6 +142,7 @@ import type {
   ValidationPlanRecord,
   ValidationResource,
   ValidationVerdict,
+  WatchPlanRecord,
   WorkNode,
   WorldEvent,
   WorldSnapshot,
@@ -476,6 +478,11 @@ export interface CockpitState {
   validationPlans: ValidationPlanRecord[];
   validationResources: ValidationResourceView[];
   goalWatches: GoalWatch[];
+  /**
+   * One record per goal whose post-deploy watch the assessor was asked for: its `note`, its
+   * `emptyReason`, and whether the operator has accepted it. → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
+   */
+  watchPlans: WatchPlanRecord[];
   stateQueries: StateQuery[];
   planning: PlanningPolicy;
   stacks: Stack[];
@@ -491,6 +498,8 @@ export interface CockpitState {
    */
   environmentGroups: EnvironmentGroupView[];
   goalWatchWindows: GoalWatchView[];
+  /** Each goal's watch rolled up to one answer. → docs/spec/29-post-deploy-watch.md#the-outcome */
+  goalWatchOutcomes: WatchOutcome[];
   featureSequences: FeatureSequence[];
   environmentArrivals: GoalArrival[];
   remoteSheets: RemoteSheetView[];
@@ -1135,11 +1144,14 @@ export type {
   ValidationCheckResultBy,
   ValidationCheckState,
   ValidationPlanRecord,
+  WatchPlanRecord,
   ValidationStep,
   ValidationStepKind,
   ValidationVerdict,
   ViewerAssignment,
   WatchCheckVerdict,
+  WatchOutcome,
+  WatchOutcomeCheck,
   WatchReadingVerdict,
   WatchSourceDeclaration,
   WorkNode,
@@ -1160,6 +1172,7 @@ export { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from './asks/kinds.js';
 export { PART_GROUP, PART_GROUP_WORD, type PartGroup } from './plans/partGroup.js';
 export { askGoal, type AskGoalPart } from './asks/askGoal.js';
 export { projectName, upgradeHeadline } from './asks/updateAsks.js';
+export { isProposed } from './validation/watchProposed.js';
 export type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from './ci/describeCiPolicy.js';
 export type { QueueItem } from './dispatcher/dispatcher.js';
 export type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';

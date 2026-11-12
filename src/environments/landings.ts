@@ -191,3 +191,14 @@ export function goalMergedAt(landings: readonly GoalLanding[], goalRef: string):
   }
   return last;
 }
+
+/** The pull requests recorded as a goal's landings, each with its title where the world still holds it. */
+export function goalMergedPrs(
+  goalRef: string,
+  landings: readonly GoalLanding[],
+  world: WorldSnapshot | null,
+): { number: number; title: string | null }[] {
+  const pulls = world === null ? new Map<number, PullRequest>() : pullsByNumber(world);
+  const numbers = new Set(landings.filter((l) => l.goalRef === goalRef).map((l) => l.prNumber));
+  return [...numbers].map((number) => ({ number, title: pulls.get(number)?.title ?? null }));
+}

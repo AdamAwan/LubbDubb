@@ -8,11 +8,13 @@ import type {
   WatchSourceLanguage,
   WatchWindow,
 } from '../types.js';
+import { groupBy } from '../primitives.js';
 import type { EnvironmentConfig } from './policy.js';
 import { watchQueryUrl } from './watchQueryUrl.js';
 import { withPeriod } from '../validation/watchQueryShape.js';
 import { watchPeriod } from './exposure.js';
 import { declaredSource } from './watchSource.js';
+import type { WatchPeriod } from './watchResult.js';
 
 // → docs/spec/24-environments.md
 
@@ -31,28 +33,55 @@ function watchWindowVerdict(readings: readonly (WatchCheckVerdict | null)[]): Wa
   return 'clean';
 }
 
-interface RegressedCheck {
-  title: string;
-  said: string;
-  why: string | null;
+/** A check's query as the operator would run it: the period filled in, its source's language, and where to run it. */
+export interface WatchCheckQuery {
   query: string;
   /** The fence's info string: the language of the source the check read. */
   language: WatchSourceLanguage;
   queryUrl: string | null;
 }
 
-interface WatchWindowReading {
+/**
+ * The query a check put to one environment over `period`, or its declared text where no window is to
+ * hand — never a source borrowed from another environment.
+ */
+export function watchCheckQuery(
+  check: GoalWatch,
+  environment: EnvironmentConfig | undefined,
+  period: WatchPeriod | null,
+): WatchCheckQuery {
+  const query = period === null ? check.query : withPeriod(check.query, period.since, period.until);
+  const source = declaredSource(environment?.watch, check.source);
+  return { query, language: source?.language ?? 'kql', queryUrl: watchQueryUrl(source?.queryUrl, query) };
+}
+
+interface RegressedCheck {
+  check: GoalWatch;
+  said: string;
+  query: WatchCheckQuery;
+}
+
+/** One check and the reading that stands for it on a window; null where the window never read it. */
+interface WatchCheckReading {
+  check: GoalWatch;
+  reading: WatchReading | null;
+}
+
+export interface WatchWindowReading {
   window: WatchWindow;
   verdict: WatchWindowVerdict;
+  /** Every one of the goal's checks, in declared order, with its standing reading here. */
+  checks: WatchCheckReading[];
   regressed: RegressedCheck[];
 }
 
 /**
  * Resolve every window against the goal's declared checks and their newest
  * readings — the newest per `(window, check)` and nothing older, which is what
- * keeps the bench row one row.
+ * keeps the bench row one row. The one place a reading is decided to stand: the
+ * window view and the outcome read `checks` off this rather than re-deriving it.
  *
- * @public read by both the bench arm and the close-out's sentence, which must not disagree
+ * @public read by the bench arm, the close-out's sentence, the window view and the outcome, which must not disagree
  */
 export function watchWindowReadings(input: {
   windows: readonly WatchWindow[];
@@ -62,34 +91,58 @@ export function watchWindowReadings(input: {
 }): WatchWindowReading[] {
   const newest = new Map<string, WatchReading>();
   for (const r of input.readings) newest.set(`${r.goalRef} ${r.environment} ${r.checkId}`, r);
+  const checksByGoal = groupBy(input.checks, (c) => c.originRef);
   return input.windows.map((window) => {
-    const checks = input.checks.filter((c) => c.originRef === window.goalRef);
-    const read = checks.map((c) => newest.get(`${window.goalRef} ${window.environment} ${c.id}`) ?? null);
+    const checks = (checksByGoal.get(window.goalRef) ?? []).map((check) => ({
+      check,
+      reading: newest.get(`${window.goalRef} ${window.environment} ${check.id}`) ?? null,
+    }));
     return {
       window,
-      verdict: watchWindowVerdict(read.map((r) => r?.verdict ?? null)),
-      regressed: checks.flatMap((check, i) => {
-        const reading = read[i];
+      verdict: watchWindowVerdict(checks.map((c) => c.reading?.verdict ?? null)),
+      checks,
+      regressed: checks.flatMap(({ check, reading }) => {
         if (reading?.verdict !== 'regressed') return [];
-        const { since, until } = watchPeriod(window, reading.readAt);
-        const query = withPeriod(check.query, since, until);
-        const source = declaredSource(
-          input.environments?.find((e) => e.name === window.environment)?.watch,
-          check.source,
-        );
+        const environment = input.environments?.find((e) => e.name === window.environment);
         return [
           {
-            title: check.title,
+            check,
             said: reading.detail ?? 'it read outside what the check declared',
-            why: check.why,
-            query,
-            language: source?.language ?? 'kql',
-            queryUrl: watchQueryUrl(source?.queryUrl, query),
+            query: watchCheckQuery(check, environment, watchPeriod(window, reading.readAt)),
           },
         ];
       }),
     };
   });
+}
+
+/**
+ * A check written out for a person to read: its heading, what is said about it, why it was declared,
+ * its query fenced in its source's language with the period filled in, and where to run it. The bench
+ * row and the outcome's discussion note both write a check this way.
+ */
+export function watchCheckBlock(block: {
+  heading: string;
+  body: readonly string[];
+  why: string | null;
+  lead: string | null;
+  environment: string | null;
+  query: WatchCheckQuery;
+}): string[] {
+  const { query, environment } = block;
+  return [
+    `### ${block.heading}`,
+    '',
+    ...block.body,
+    '',
+    ...(block.why === null ? [] : [`**Why it was declared:** ${block.why}`, '']),
+    ...(block.lead === null ? [] : [block.lead, '']),
+    '```' + query.language,
+    query.query,
+    '```',
+    '',
+    ...(query.queryUrl === null || environment === null ? [] : [`[Run it on ${environment} ↗](${query.queryUrl})`, '']),
+  ];
 }
 
 export function watchFindings(input: {
@@ -136,7 +189,18 @@ function findingDetail(window: WatchWindow, regressed: RegressedCheck[]): string
       `declared. Nothing has interpreted this: the numbers below are ${env}'s own answers, which is why the row is ` +
       'in front of you rather than a fix in front of the fleet.',
     '',
-    ...regressed.flatMap((c) => checkBlock(c, env)),
+    ...regressed.flatMap((c) =>
+      watchCheckBlock({
+        heading: c.check.title,
+        body: [c.said],
+        why: c.check.why,
+        lead:
+          `**To see the rows yourself**, this is the query the watch put to ${env}, with the period it read ` +
+          'over — from the moment the work arrived — filled in where the declaration carried its time bounds:',
+        environment: env,
+        query: c.query,
+      }),
+    ),
     `${still} Nothing is held by it — this row is yours to answer whenever you are ready.`,
     '',
     '**Raise a bug** hands the fleet these exact numbers as your own report, related back to this goal, and an agent ' +
@@ -144,24 +208,6 @@ function findingDetail(window: WatchWindow, regressed: RegressedCheck[]): string
       'that you are not acting on it. Either answer stands for good — the harness retracts and re-files its own row, ' +
       'never yours.',
   ].join('\n');
-}
-
-function checkBlock(check: RegressedCheck, environment: string): string[] {
-  return [
-    `### ${check.title}`,
-    '',
-    check.said,
-    '',
-    ...(check.why === null ? [] : [`**Why it was declared:** ${check.why}`, '']),
-    `**To see the rows yourself**, this is the query the watch put to ${environment}, with the period it read ` +
-      'over — from the moment the work arrived — filled in where the declaration carried its time bounds:',
-    '',
-    '```' + check.language,
-    check.query,
-    '```',
-    '',
-    ...(check.queryUrl === null ? [] : [`[Run it on ${environment} ↗](${check.queryUrl})`, '']),
-  ];
 }
 
 /**

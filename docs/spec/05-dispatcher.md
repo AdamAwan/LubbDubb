@@ -79,7 +79,7 @@ shape silently orphans every row already written in the old one.
 
 `src/issueOrigins.ts` is the one place the vocabulary is stated. Each **family** is one entry —
 `issue:<n>` itself, `plan`, `appraisal`, `sequence`, `split:<pr>`, `part:<slug>`, `describe:<pr>`, `describe-check:<pr>`, `assess`, `retro`,
-`validate-plan`, `validate:<check>`, `validate-failure:<check>`, `validate-local:<id>`,
+`validate-plan`, `watch-plan`, `validate:<check>`, `validate-failure:<check>`, `validate-local:<id>`,
 `validate-local-fix:<id>`, `validate-remote:<run>`, `summary`, `shortfall`, `review-stranded` — and the entry carries
 three things and nothing else: the **suffix**, how its **id** is shaped (a pattern, or `null` for a
 family whose suffix is the whole of it), and its **role**.
@@ -101,7 +101,7 @@ The `issue:<n>:*` subtree holds materially different things, and `issueOriginRol
 tells them apart — `null` for an origin that is not under issue `n` at all, and one of:
 
 - **`work`** — the pickup root and a plan's parts, plus `validate-local-fix:<id>`. Something was built.
-- **`evidence`** — `assess`, `retro`, `describe:<pr>`, `describe-check:<pr>`, `validate-plan`, `validate:<check>`,
+- **`evidence`** — `assess`, `retro`, `describe:<pr>`, `describe-check:<pr>`, `validate-plan`, `watch-plan`, `validate:<check>`,
   `validate-failure:<check>`, `validate-local:<id>` and `validate-remote:<run>`. Not work, but only
   ever downstream of some.
 - **`deliberation`** — `plan`, `appraisal`, `sequence` and `split:<pr>`. The harness thinking about the
@@ -1441,6 +1441,33 @@ that is [20](20-validation.md#when-the-check-set-is-written); the dispatcher's h
 - Fails silent: an agent that crashes or spends its attempt cap leaves the goal exactly as delivered,
   with **no escalation**. The goal is parked either way and a bench with no checks on it already says
   what happened.
+
+## `watch-plan` — writing the post-deploy watch
+
+`watch-plan` is `validation-plan` one output over: the catch-up for an assessor whose turn ended before
+it wrote the goal's post-deploy watch with `watch_plan`, or for a watch the operator sent back
+([29](29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks)). It is a `DISPATCH_PIPELINE`
+entry directly below `validation-plan`, registered in `STAGES`, and `enabled` only where some
+environment declares a `watch` — read off `watchPlanNote` being non-empty, so nothing here imports
+`src/environments/`.
+
+- A **code** agent in a **read-only checkout** of `defaultBranch`, leased under
+  `watch-plan/issue/<n>`, origin `issue:<n>:watch-plan`, classified **evidence**. Which origins may
+  write the whole watch is declared once, in `watchAuthoringIssue` (`src/validation/watchAuthoring.ts`):
+  this one and `issue:<n>:assess`.
+- Fires for a goal **parked as delivered** that **has a plan** and whose watch is **owed** (`watchOwed`):
+  a `watch_plans` row with no `authored_at`. The row is written by the assessor's `delivered` verdict, or
+  un-authored by a send-back; a goal with **no row** was never asked — delivered before the assessor wrote
+  watches, while nothing declared one, or already carrying live checks — and is never dispatched for, so
+  taking the build sends no author to every goal ever delivered.
+- The prompt is `watch-plan`; the plan's `watchHint`, the operator's words on its `watch` tick, any
+  send-back words and the deployment's sources are **appended** (`watchBriefing`, the one the assessor's
+  appendix uses too).
+- Shares its loop with `validation-plan` (`dispatchDeliveredAuthor`, `src/dispatcher/rules/deliveredAuthor.ts`):
+  a delivered goal with a plan still owed an output only a reader of the merged code can write.
+- Fails silent, as `validation-plan` does.
+- The pulse reads `watch_plans`, the live-watched goal refs and the `watch` caveat answers only where some
+  environment declares a `watch` (`buildDispatchInputs`' `watched`); elsewhere the rule is inert anyway.
 
 ## `validation-plan-approval` — putting the check set to you
 

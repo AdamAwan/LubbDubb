@@ -149,9 +149,15 @@ survivable:
 | After the verdict, before the set | Goal parked, check set owed | Rule `validation-plan` fires on the next pulse, exactly as it always did                   |
 | After both                        | Parked and authored         | Nothing further; `validation-plan` sees an authored set and stands down                    |
 
-**Not yet built: a third output.** After `validation_plan`, the assessor writes the goal's
-post-deploy watch with `watch_plan`, on the same ordering argument and with its own catch-up rule,
-`watch-plan`, ranked directly below `validation-plan`. → [29](29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks)
+**A third output.** After `validation_plan`, the assessor writes the goal's post-deploy watch with
+`watch_plan`, on the same ordering argument and with its own catch-up rule, `watch-plan`, ranked
+directly below `validation-plan`. Its machinery mirrors the six pieces below one for one —
+`watchAuthoringIssue` (`src/validation/watchAuthoring.ts`), rule `watch-plan`, the origin
+`issue:<n>:watch-plan`, the `watch-plan` prompt, the `watch_plan` tool and the `watch_plans` row —
+and so do its send-back and its arrival deferral, which holds an arrival unstamped the way
+`sheetableArrivals` does, keyed on the goal's own record before the staleness cut. One thing differs:
+the watch's row is written _owed_ by the `delivered` verdict, so a missing row means never asked
+rather than owed. → [29](29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks)
 
 So **rule `validation-plan` stays**, and is now the catch-up rather than the ordinary path. Removing it
 would put the check set behind a turn that has to reach its end, which is the one thing a crashed,

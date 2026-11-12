@@ -10,6 +10,7 @@ import { dueWindows, openableArrivals, settlingWindows, watchWindowMs } from './
 import { exposureFloor, exposureShortfall, watchPeriod } from './exposure.js';
 import { landedCommits } from './landings.js';
 import { resolveWatchSource } from './watchSource.js';
+import { watchHold } from '../validation/watchAuthoring.js';
 
 // → docs/spec/24-environments.md
 
@@ -72,14 +73,29 @@ export class WatchDesk {
   private open(): void {
     const { store, errors } = this.deps;
     try {
-      const declared = new Set(store.watches.listGoalWatches().map((c) => c.originRef));
-      for (const { arrival, settlesAt } of openableArrivals({
-        arrivals: store.environments.listGoalArrivals(),
+      const arrivals = store.environments.listGoalArrivals().filter((a) => a.watchedAt === null);
+      if (arrivals.length === 0) return;
+      const declared = new Set(store.watches.listWatchedGoalRefs());
+      const records = new Map(store.watches.listWatchPlanRecords().map((r) => [r.goalRef, r]));
+      let delivered: Set<string> | null = null;
+      const held = (goalRef: string): boolean =>
+        watchHold({
+          record: records.get(goalRef) ?? null,
+          hasLiveChecks: declared.has(goalRef),
+          planned: () => store.plans.getPlanByOrigin(goalRef) !== null,
+          delivered: () =>
+            (delivered ??= new Set(store.verdicts.listDeliveries().map((d) => d.originRef))).has(goalRef),
+        }) !== null;
+      for (const { arrival, settlesAt, hold } of openableArrivals({
+        arrivals,
         environments: this.deps.environments,
         declared,
+        held,
+        acceptedAt: (goalRef) => records.get(goalRef)?.acceptedAt ?? null,
         probeIntervalMs: this.deps.probeIntervalMs,
         now: this.now(),
       })) {
+        if (hold) continue;
         if (settlesAt !== null)
           store.watches.openWatchWindow({
             goalRef: arrival.goalRef,

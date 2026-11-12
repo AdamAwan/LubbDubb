@@ -86,10 +86,13 @@ export interface CockpitActions {
   decideRecovery(taskId: string, verdict: RecoveryVerdict): Promise<void>;
 
   replan(planId: string): Promise<void>;
-  ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<void>;
+  acceptWatch(issueNumber: number): Promise<void>;
+  sendBackWatch(issueNumber: number, words: string): Promise<void>;
   saveWatchCheck(issueNumber: number, check: GoalWatchDeclaration): Promise<string[]>;
   deleteWatchCheck(issueNumber: number, checkId: string): Promise<void>;
   extendWatch(issueNumber: number, environment: string): Promise<void>;
+  /** Writes the watch's outcome to the goal's discussion file; the link that calls it opens `/lubbdubb:discuss <n>` itself. */
+  discussWatchOutcome(issueNumber: number): Promise<void>;
   setValidation(issueNumber: number, checkId: string, act: ValidationAct): Promise<void>;
   viewPlan(planId: string | null): void;
   regroupPlanView(on: boolean): void;
