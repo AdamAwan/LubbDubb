@@ -1,6 +1,7 @@
 # 18 — Observability
 
-Four durable records answer four different questions, plus one live tail and one debug channel.
+Four durable records answer four different questions, plus one live tail, one debug channel and
+one [runtime watch](#the-runtime-watch) on the harness's own event loop.
 
 Every one of them is about the **fleet**. What the harness asked of a _person_ and what they did
 about it is [34](34-usage-metrics.md), which folds these records rather than adding to them — plus
@@ -71,6 +72,7 @@ one record an operator clears.
 | `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; terminal-runtime warnings; invalid or unreadable `plan.json`; MCP channel/config/frame failures. |
 | `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                  |
 | `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                          |
+| `runtime`  | The [runtime watch](#the-runtime-watch): a blocked event loop; a slow store read.                                                                                                                             |
 
 **Do not add new swallowed `catch`es — route them here.** Tests silence the stderr mirror with
 `buildSystem(config, { errorMirror: () => {} })`.
@@ -1234,6 +1236,55 @@ agents started in the window that hit at least one** — the denominator a raw c
 day has more refusals for no other reason. Nothing gates on a row; the harness's handling of the turn
 (it stalls like any other turn with no sentinel) is unchanged. Only the stream transport is read: a
 `raw`/pty agent's refusals are not counted.
+
+## The runtime watch
+
+On a long-lived deployment the harness can freeze without failing: a synchronous SQLite read that has
+grown with its table holds the event loop, `/health` takes 22 s to answer, and an operator reads it as
+a crash because nothing turned red (#1159). `RuntimeHealthWatch` (`src/runtimeHealth.ts`) is the
+signal for that. It is built in `buildFoundation`, exposed as `system.runtimeHealth`, and **started
+and stopped by `main`** — beside the harness, never by `buildSystem`, so a test's `System` carries no
+running timer.
+
+**What it reads.** Two things, folded once per 30 s window on an `unref`'d interval:
+
+- **Event-loop delay** — `perf_hooks.monitorEventLoopDelay` at a 20 ms resolution, a histogram of
+  how late each of the sampler's own timers fired. The window closes into an `EventLoopWindow` (mean,
+  p50, p99, max, in ms) and the histogram is reset. A delay is measured even while the loop is held:
+  the late timer records it when the loop comes back.
+- **Slow store reads** — the `SlowReadTally` every memoised `get`/`all` reports to
+  ([14](14-persistence.md#reads-are-timed)), drained per window: count and longest time per statement,
+  keyed on the whole statement with its whitespace collapsed, cut at 200 characters. Not the first line: a store
+  statement's first line is often a column list or a `WITH` clause, which names no table and folds two
+  different queries into one count.
+
+**When it turns red.** A window is a fault when its **p99 ≥ 1 s or its max ≥ 5 s** — the max because a
+single 22 s stall is one sample among ~1,500 and moves no percentile; the p99 because a loop that is
+late by a second all window long has no single dramatic stall. A slow read is a fault at **≥ 250 ms**.
+Either is an error-log entry with `source: 'runtime'`, which is what puts it in Faults, on stderr and
+on the WebSocket like any other failure. The thresholds are `RUNTIME_THRESHOLDS`, not config: they
+describe when a Node server is unwell, not a deployment's policy.
+
+**Grouped, so a stuck loop is one entry rather than one a window.** Each key — `event-loop`, or the
+statement's key — records at most once per **15 minutes**; occurrences inside that quiet
+period are counted, and the next entry says how many it held back. The grouping is in memory, so a
+restart may record one more; the error log is the record an operator clears
+([above](#the-error-log)), and a fault worth the list is one that comes back after a clear.
+
+**What it shows.** `GET /api/health` ([16](16-http-api.md#get-apihealth)) carries
+`RuntimeHealthReading`: the last closed window and the slow statements seen since boot (the 20 most
+recent), so a probe that answers can say how close to the line the loop is, and a probe that times out
+is the reading itself.
+
+**Why a signal, not a cure.** Moving SQLite off the main thread was considered and rejected: writes
+are synchronous by design, which is what keeps the harness race-free
+([14](14-persistence.md#reads-are-timed)). The reads are being made smaller and the tables retained
+instead; this watch is the guard that says when that has not been enough.
+
+**Testing.** Nothing in it depends on real time. `buildSystem` takes `loopDelaySampler` (any object
+shaped like the `IntervalHistogram` members it reads) and `readClock` (the clock reads are timed on);
+the watch takes a `clock` for its quiet period; and `tick()` is public, so a test closes a window by
+calling it rather than by waiting for one (`test/runtimeHealth.test.ts`).
 
 ## The live tail
 

@@ -131,6 +131,8 @@ export interface System {
   updates: UpdateDesk;
   /** The project clone's pack store, read and repacked by the pulse; absent when a test fakes git. */
   cloneUpkeep?: Foundation['cloneUpkeep'];
+  /** Ages old transcripts, decisions and task prompts out. → docs/spec/14-persistence.md#history-retention */
+  retention: Foundation['retention'];
   runtimeControl: RuntimeControl;
   pets: PetKeeper;
   localRun: LocalRunner;
@@ -150,6 +152,8 @@ export interface System {
   /** Pulls a discussion file's new tracker comments in. → docs/spec/40-discussions.md#pulling-tracker-comments-in */
   discussionPulls: Foundation['discussionPulls'];
   errors: ErrorLog;
+  /** Event-loop lag and slow store reads; started and stopped by `main`. → docs/spec/18-observability.md#the-runtime-watch */
+  runtimeHealth: Foundation['runtimeHealth'];
   configFile: string;
   projectConfigFile: string;
 }
@@ -226,6 +230,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     plugin: buildPluginDesk(config, opts, base.errors),
     ...foundationParts(base),
     errors: base.errors,
+    runtimeHealth: base.runtimeHealth,
   };
   late.bind(
     lateParts({ fleet, envs, bench, harness, local, prAssign: intake.prAssign, asks: () => askSnapshot(system) }),
@@ -236,10 +241,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 function foundationParts({
   worktrees,
   cloneUpkeep,
+  retention,
   discussions,
   discussionPulls,
-}: Foundation): Pick<System, 'worktrees' | 'cloneUpkeep' | 'discussions' | 'discussionPulls'> {
-  return { worktrees, cloneUpkeep, discussions, discussionPulls };
+}: Foundation): Pick<System, 'worktrees' | 'cloneUpkeep' | 'retention' | 'discussions' | 'discussionPulls'> {
+  return { worktrees, cloneUpkeep, retention, discussions, discussionPulls };
 }
 
 interface HarnessPhases {
@@ -347,6 +353,7 @@ function buildHarness(
     validationReady: bench.validationReady,
     burn: bench.burn,
     cloneUpkeep: base.cloneUpkeep,
+    retention: base.retention,
     runway: bench.runway,
     issuePickup: fleet.issuePickup,
     branchReaps: intake.branchReaps,

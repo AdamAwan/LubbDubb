@@ -23,7 +23,8 @@ façade, and the only thing that caught a forgotten one was the call site failin
 a domain module is now the whole change.
 
 What stays on `Store` is what is not a forward: `close()` (it asks `TranscriptStore` to flush before
-the handle goes), and the two reads that genuinely span two modules —
+the handle goes), `reclaimFreePages(n)` (a pragma over the whole file, which no table owns — see
+[History retention](#history-retention)), and the two reads that genuinely span two modules —
 `sumUsageCostSince` and `listCostDeltasSince`, which add an agent's spend to a local run's. A composite belongs here because it is the caller that holds both modules; a method
 that only names one belongs on that one.
 
@@ -63,7 +64,8 @@ Four properties, all asserted structurally in `test/storeModules.test.ts` rather
 - **Each table is named by exactly one module.** Two writers to one table is how the invariants
   between them come to disagree — which is why the four issue-verdict tables are deliberately one
   module and not four (see below).
-- **The transcript buffer survives `close()`.** `TranscriptStore` is the one stateful module — it
+- **The transcript buffer survives `close()`.** `TranscriptStore` is the one module that holds
+  _unwritten_ state (`TaskStore`'s memo of [`listTasks`](#tasks) holds only a copy of what is on disk) — it
   accumulates output in memory and writes on a ~16KB threshold — so `Store.close()` has to ask it
   to flush before the handle goes, and a test with a real file on disk is what notices if it stops.
 
@@ -97,7 +99,10 @@ are one module rather than scattered through 2,500 lines.
 
 1. Creates the parent directory unless the path is `:memory:`.
 2. Opens the database (better-sqlite3).
-3. `PRAGMA journal_mode = WAL` and `PRAGMA foreign_keys = ON`.
+3. `PRAGMA auto_vacuum = INCREMENTAL`, then `PRAGMA journal_mode = WAL` and `PRAGMA foreign_keys = ON`.
+   The first has to come before anything creates a table, and it only ever takes on a **new** file: an
+   existing database keeps the mode it was made with, and the pragma is a silent no-op there — see
+   [Giving the space back](#giving-the-space-back).
 4. Executes `SCHEMA` (all statements are `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`,
    so it is idempotent).
 5. Runs `ensureColumns` for every domain module's declared columns — **before any module is
@@ -144,6 +149,36 @@ A cached statement is also **stateful**, which is why none of this reaches `iter
 mutate the statement permanently, so a later caller of the same SQL would get someone else's shape.
 `src/store/` uses none of them today, and a site that needs one must not go through `prep` — or must
 apply the modifier once, under a cache key of its own.
+
+### Reads are timed
+
+The `Store` constructor takes an optional `ReadObserver` (`{now, read}`), and `createPrepare` given
+one shadows each memoised statement's `get` and `all` with a timed copy **once, when it is compiled**:
+two clock reads and a call per read, and nothing at all when no observer is passed —
+which is every `new Store(...)` a test builds directly. `buildFoundation` passes the runtime watch's
+`SlowReadTally`, which keeps only reads at or over 250 ms, keyed on the whole statement with its whitespace collapsed (cut at 200 characters), for
+the watch to drain into the error log ([18](18-observability.md#the-runtime-watch)).
+
+Timing lives at `prep` rather than at call sites because `prep` is the one door almost every read
+already walks through, so the reading names _whichever_ statement is slow, including the ones nobody
+suspected — a call-site timer only ever sees the queries someone thought to wrap. What it does not
+see, deliberately:
+
+- **`run`** — a write. A slow write is a different fault (contention, a fat transaction), and the
+  issue this answers (#1159) was reads growing with the tables.
+- **`ctx.db.prepare(...)`** — the variable-`IN` sites above, and the migration pass. They are not
+  memoised, so wrapping them would re-wrap on every call; and they are bounded by their argument
+  lists rather than by table growth.
+- **`iterate`** — lazy, so the time is spent in the consumer's loop, not in the call.
+
+The tally only counts; it never writes. Recording happens on the watch's tick, outside any statement
+call, so a slow read can never re-enter the store from inside a read.
+
+**Moving SQLite off the main thread was considered and not done.** A worker-thread or async driver
+would stop a slow read from freezing the server, but it would make every write asynchronous, and
+writes being synchronous is what keeps the harness's read-then-write logic race-free (above). The
+cost of a slow read is therefore paid on the event loop, and the [runtime
+watch](18-observability.md#the-runtime-watch) is what turns that cost red instead of silent.
 
 ## Migrations
 
@@ -524,7 +559,7 @@ an in-memory store has no prior schema to disagree with and cannot show the repe
 
 | Table                       | Holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Key constraints                                                                                                                                                                                                                                                                                                                                  |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tasks`                     | Units of work materialised at dispatch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —                                                                                                                                                                                                                                                                                                                                                |
+| `tasks`                     | Units of work materialised at dispatch. Kept for good; a finished task's `prompt` is emptied after `historyRetentionDays` ([History retention](#history-retention)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | —                                                                                                                                                                                                                                                                                                                                                |
 | `jobs`                      | Operator-queued prompts awaiting a slot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | —                                                                                                                                                                                                                                                                                                                                                |
 | `job_schedules`             | Recurring briefs: the prompt an operator wants queued on a cron schedule, and how far through that recurrence the harness has got. Intent, not work — a firing writes an ordinary `jobs` row, so nothing downstream of the queue knows a clock queued it. `next_run_at` is the whole of the scheduling state, recomputed from the clock at each firing rather than from the slot that fired.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | —                                                                                                                                                                                                                                                                                                                                                |
 | `job_attachments`           | Images an operator attached to a brief (#249): what they are and where the file is. Bytes live on disk under `attachmentRoot`, never in the database.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `UNIQUE (target_ref, idx)`                                                                                                                                                                                                                                                                                                                       |
@@ -566,9 +601,9 @@ an in-memory store has no prior schema to disagree with and cannot show the repe
 | `work_item_filings`         | A tracker item an operator had filed for work nothing external accounted for. `filing` is the **claim**, held for the moment between the click and the tracker answering — the harness files these itself, so a claim whose create failed is deleted rather than left standing. No `job_id`: nothing is dispatched for one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `target_ref` is `PRIMARY KEY`                                                                                                                                                                                                                                                                                                                    |
 | `work_item_ignores`         | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `target_ref` is `PRIMARY KEY`                                                                                                                                                                                                                                                                                                                    |
 | `issue_bug_filings`         | A bug an operator raised against a story from the cockpit — they ran it and it does not do what they expect. Keyed on the **job**, not the story, so one story can carry several bugs: it can be wrong in more than one way, and each is its own bug. The operator's report is not a column; the desk job's prompt carries it verbatim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `job_id` is `PRIMARY KEY`; `origin_ref` indexed                                                                                                                                                                                                                                                                                                  |
-| `agent_transcripts`         | Chunked agent output.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `PRIMARY KEY (agent_id, seq)`                                                                                                                                                                                                                                                                                                                    |
+| `agent_transcripts`         | Chunked agent output. A finished agent's chunks are deleted after `historyRetentionDays` ([History retention](#history-retention)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `PRIMARY KEY (agent_id, seq)`                                                                                                                                                                                                                                                                                                                    |
 | `escalations`               | The human-in-the-loop inbox. `context` is JSON.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | —                                                                                                                                                                                                                                                                                                                                                |
-| `decisions`                 | The audit log. `action` is JSON; `rule` and `admission` are lifted off it at record time.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | —                                                                                                                                                                                                                                                                                                                                                |
+| `decisions`                 | The audit log. `action` is JSON; `rule` and `admission` are lifted off it at record time. Rows older than `historyRetentionDays` are deleted ([History retention](#history-retention)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —                                                                                                                                                                                                                                                                                                                                                |
 | `branch_reaps`              | Pull requests whose merged branch has already been deleted on both sides. Keyed on the PR, not the branch: a branch name is reusable, and a row keyed on the name would suppress the reap owed to the next branch wearing it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `pr_number` is `PRIMARY KEY`                                                                                                                                                                                                                                                                                                                     |
 | `local_run_cost_deltas`     | The same shape for **local runs**: one dated cost delta per usage report the sessions behind a run made. Two tables of deltas, added in exactly one place — `Store.sumUsageCostSince` and `listCostDeltasSince` compose them, and a third source of spend is added there or it is money nothing states. → [18](18-observability.md#two-tables-of-deltas-added-in-one-place)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | —                                                                                                                                                                                                                                                                                                                                                |
 | `local_runs`                | The machine's one dev environment, one row per run: which goal's code is in it, the checkout, the pid, how it ended, and what its sessions cost — accumulated across up to two of them, because a teardown by a fresh session reports its own cumulative total from zero ([23](23-local-runs.md#what-it-costs)). Which statuses count as **live** (`starting`, `running`, `stopping`) is declared once in `LIVE` and the SQL derives its `IN` clause from it — three statements used to write the set out by hand with `LIVE` read by nobody, and a status added to some of them is silent both ways: a second run allowed beside a live one, or a row that stays live across every restart. The row **outlives the run**, because a start that failed is the case an operator hits and its reason has to be readable after the process is gone. At most one row is live, and `beginLocalRun` is what makes that true — it ends the last in the same transaction that writes the next, rather than trusting a caller to check first. → [23](23-local-runs.md#persistence)                                                                                                                                                      | `id` is `PRIMARY KEY`; `idx_local_runs_status`                                                                                                                                                                                                                                                                                                   |
@@ -614,7 +649,8 @@ lacked the index.
 ### Tasks
 
 `createTask`, `updateTask` (status / agentId / branch only), `getTask`, `listTasks`,
-`listOutstandingTasks`, `findActiveTaskByOrigin(originRef)`, `findActiveTaskByBranch(branch)`,
+`listTasksTouchedSince(since)`, `listGoalTasks(goalRef, prRefs)`, `listOutstandingTasks`,
+`findActiveTaskByOrigin(originRef)`, `findActiveTaskByBranch(branch)`,
 `hasActiveTaskOnBranch(branch, exceptTaskId)`. "Active" is `queued`, `running` or `waiting`, spelled
 once as `ACTIVE_TASK_STATUS_SQL` in `src/tasks.ts` and shared with `isActiveTask`.
 
@@ -622,15 +658,49 @@ once as `ACTIVE_TASK_STATUS_SQL` in `src/tasks.ts` and shared with `isActiveTask
 task **other than** the one being asked about still holds the branch. The reaped-agent handler in
 `src/system/system.ts` asks it before releasing a worktree slot, and asked it by hydrating the whole table
 and filtering in JS until it was an index-shaped `SELECT 1 … LIMIT 1`. There is no index on
-`tasks(branch)` — `idx_tasks_status` and `idx_tasks_origin` are the only two — so the query is a scan
-of `tasks` with an early exit, still strictly cheaper than hydrating every row.
+`tasks(branch)` — the indexes are `idx_tasks_status`, `idx_tasks_origin` and `idx_tasks_updated` — so
+the query is a scan of `tasks` with an early exit, still strictly cheaper than hydrating every row.
 
 **`listTasks` returns `TaskSummary`, not `Task`: every column except `prompt`.** It is the only
 all-time reading of the table, and it names its columns rather than starring. A rendered agent prompt
 is kilobytes; on a deployment with 1,248 tasks the prompts were 17.4 MB of the 20.2 MB `SELECT *`
 returned, and better-sqlite3 is synchronous, so that read blocked the server — 322 ms against 33 ms
-for the named columns — every time any of its thirteen callers ran, several times a pulse per open
+for the named columns — every time any of its callers ran, several times a pulse per open
 cockpit. None of them reads a prompt: they read origins, branches, statuses and rules.
+
+**Naming the columns does not make the read cheap.** `prompt` sits fourth in the row, so on a table
+whose prompts run to kilobytes every column after it lives on overflow pages, and reading a summary
+still walks every row's chain. On a deployment with 5,487 tasks and a 424 MB database the summary
+read, issued by the cycle's observe step, its reconcile desks (the work graph, branch reaping), the
+pulse read, the pool digest, and by `/api/state`, allowance, reliability, both spend routes, tickets,
+features and MCP usage per open cockpit, froze the event loop (#1159). Two things answer it:
+
+- **`listTasks` is memoised in `TaskStore`, and every task write clears the memo.** `createTask` and
+  `updateTask` set it to null after their statement runs; the next `listTasks` reads the table once and
+  every later caller is handed the same list until the next write. So a cycle that writes no task
+  reads the table once, however many desks ask, and repeated cockpit requests between task writes read
+  it not at all. The list is returned **frozen**, items and all, and typed `readonly TaskSummary[]`:
+  it is shared, so a caller that sorted it in place would reorder every other caller's. An earlier
+  holder keeps the list it was handed; a write replaces the memo rather than editing it.
+  A memo rather than a hand-me-down through the cycle, because the cycle's own passes write tasks
+  between its readers — a park resumed, a stall completed, a dispatch — and a list handed down from
+  the top of the cycle would be stale exactly there.
+- **A caller that needs a slice reads the slice.** `listTasksTouchedSince(since)` is the read plan's
+  ([04](04-harness-cycle.md#the-fresh-set)): the active set, unioned with every row whose `updated_at`
+  is past the instant, each half on its own index (`idx_tasks_status`, `idx_tasks_updated`).
+  `listGoalTasks` serves the goal retrospective's dossier (`src/retro/record.ts`), which wants one
+  goal's origins. A part restart's refusal (`partRestartRefusal`) asks only whether a _live_ task holds
+  the part, so it is handed `listOutstandingTasks`. None of these goes through the memo; each is
+  bounded by what it asks for rather than by the table.
+
+**Every write to `tasks` is a `TaskStore` method that clears the memo.** A statement that writes the
+table from anywhere else — a retention `DELETE` in another module, a repair pass on `Store` — leaves
+`listTasks` serving the table as it was, with nothing red: the cockpit draws tasks that are gone, and
+the dispatcher reads an origin as covered by a task that has ended. `test/taskListReads.test.ts`
+asserts both halves structurally. A transaction that writes `tasks` and then rolls back would leave
+a memo read inside it describing rows that never landed; none exists, and one that is added clears
+the memo on rollback too. The boot backfill (`backfillTaskDispatchKind`) is the one writer outside the
+class, and it runs before `TaskStore` is constructed.
 
 The prompt is a **single-row** read. `getTask`, `listOutstandingTasks` (bounded to the active set) and
 `createTask`'s own return value are `Task`, and they are what the three readers of a prompt use — the
@@ -643,6 +713,12 @@ reads a summary field has to change.
 name, the field is optional on the domain type, so it simply reads back as absent everywhere the
 snapshot is drawn. `test/snapshotShape.test.ts` compares a summary's keys against a whole row's, which
 is what says so.
+
+`compactTaskPrompts(before, heldTaskIds, limit)` is the retention sweep's write: it empties the
+`prompt` of up to `limit` finished tasks last updated before `before`, never one in `heldTaskIds` and
+never an active one. The row stays; see [History retention](#history-retention) for why it is the
+prompt that goes and not the task. An empty prompt is unambiguous — no dispatch writes one — so it
+needs no `prompt_dropped` flag beside it, unlike `mcp_calls.args`.
 
 The two `findActive*` predicates are the dispatch gates. They are mirrors of each other, and the branch
 one exists because origin and branch are not 1:1 on the job path — see [09](09-execution.md) and
@@ -732,7 +808,9 @@ provider.
 `createAgent`, `updateAgent` (status / pid / waitingReason / endedAt), `getAgent`, `listAgents`,
 `listAgentsByStatus(...statuses)`, `countLiveAgents()`, `recordAgentUsage(id, usage)`,
 `recordAgentNote(id, note)`, `sumUsageCostSince(iso)`, `listCostDeltasSince(iso)`,
-`listUsageEventsSince(iso)`.
+`listUsageEventsSince(iso)`, `listRetiredAgentIds({before, heldTaskIds, heldAgentIds, after, limit})` (one
+page, by id, of the finished agents whose transcripts the [retention sweep](#history-retention) may
+take).
 
 `countLiveAgents` is the liveness reading the cap arithmetic and file-overlap detection both use: it
 counts `starting` / `running` / `waiting`. `crashed` is deliberately outside it — a row stamped by boot
@@ -764,6 +842,13 @@ Output arrives as many tiny deltas, so chunks are buffered in memory and flushed
 Buffers are flushed on threshold, **on read**, and on `close()`, so read-your-writes stays intact.
 `AgentManager` also flushes explicitly at every terminal transition and on kill, so a finished agent's
 transcript is durable.
+
+Durable, not permanent: `deleteTranscripts(agentIds, limit)` removes up to `limit` chunks belonging to
+the named agents, and the [retention sweep](#history-retention) is its only caller. Which agents is
+asked of `AgentStore.listRetiredAgentIds` — a module does not read a sibling's table — and every
+reader of a transcript (`/api/agents/:id/transcript`, the desktop `agent_read`, the ejection read, the
+end-of-run excerpt) already treats an agent with no chunks as an empty string, so a swept transcript
+reads as one that said nothing rather than as an error.
 
 ### Flags and files
 
@@ -856,6 +941,96 @@ Three properties of the sweep:
 It sweeps from the write path (rate-limited to hourly: a fleet making calls is the only one
 accumulating arguments) **and** at boot, because an idle harness would otherwise hold arguments past
 their window with nothing to trigger the sweep. A retention promise kept only while busy is not one.
+
+### History retention
+
+Three tables grew for the life of a deployment with nothing ever deleting from them, and one operator's
+database reached 424 MB ([#1159](https://github.com/AdamAwan/LubbDubb/issues/1159)). The sweep is
+`HistoryRetentionDesk` (`src/retention/historyRetention.ts`), and what it takes is decided per table by
+the same question `mcp_calls` was decided by: **what actually grows, and what does a reader lose if it
+goes**.
+
+| What                              | After `historyRetentionDays` (default **90**)                                |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| `agent_transcripts`               | **Deleted** — every chunk of an agent that finished before the cutoff        |
+| `decisions`                       | **Deleted** — every row recorded before the cutoff                           |
+| `tasks.prompt`                    | **Emptied** on a finished task last updated before the cutoff; the row stays |
+| `tasks`, `agents`, `usage_events` | Kept — see below                                                             |
+| `agent_flags`, `agent_files`      | Kept — see below                                                             |
+
+**Why ninety days.** It is the window `surface_reach` already keeps, and well past every reader of
+the three deleted things: the decision log's readers look at
+hours, and a transcript is read while somebody is still asking what an agent did.
+
+**Why the task and agent rows stay.** They are small once the prompt is gone — a rendered prompt was
+17.4 of the 20.2 MB a whole-table task read returned ([Tasks](#tasks)) — and they are what every
+all-time reading is a join through: spend per goal and the Insights `all` window (`agents.task_id` →
+`tasks.origin_ref`), the work graph's attempt list (`tasks(origin_ref)`), the prior-work briefing's file
+and neighbour sections (`agent_files` → `agents` → `tasks`), retrospectives, reliability, the MCP usage
+panel. Deleting them would not fail anything; it would quietly change a goal's total, empty a goal's
+attempt list and drop the neighbour that last touched a file, which is exactly the "a history that
+forgets cannot answer it" failure [the ticket mirror](#the-ticket-mirror) refuses. `agent_files` is the
+briefing's whole source and `agent_flags` an artifact chip an operator may still open, so both stay
+with their agent. So the rows are compacted, `mcp_calls`' shape: keep what is counted, drop the text.
+
+The one reading the compaction does change is the MCP usage panel's **named in prompts** figure
+(`countTasksNamingTools`), which searches the prompt text itself: past the retention age a task names
+no tool, so on the `all` window that figure counts only the retained span while the call counts beside
+it, from `mcp_calls`, still cover all time. That is accepted — the figure asks whether prompts are
+pointing agents at a tool now, which is a recent question.
+
+**What is never touched, whatever its age.** Anything live or that somebody may still act on is
+_held_, read fresh at the start of each sweep:
+
+- an **active** task (`queued`, `running`, `waiting`) and its agent — which also covers a crashed agent
+  whose task crash recovery has not settled, since recovery's requeue quotes the original prompt
+  verbatim and its restore resumes the transcript's session;
+- the task and agent of an **unsettled ejection**, whose read hands the operator both the brief and the
+  transcript tail;
+- the agent behind an **open escalation**.
+
+An agent is otherwise eligible when it is not live (`starting`, `running`, `waiting`) and ended — or,
+with no `ended_at`, started — before the cutoff. A transcript is taken whole or not at all, keyed on the
+agent, so no transcript is ever left missing its beginning.
+
+**Nothing the rest of this spec keeps is in scope.** Job attachments live as long as what they attach
+to; plan revisions, amendments and caveat answers, the scratchpad, verdicts, the ticket mirror, the
+closed pull request archive, the work graph, `rate_limit_readings` and `api_errors` are all stated
+above as kept, and the sweep names none of them.
+
+**In batches, off the pulse's back.** A first run on a large database has hundreds of megabytes to
+delete, and better-sqlite3 is synchronous, so one statement would hold the event loop for as long as it
+took. Each delete or update is bounded — 250 transcript chunks (a chunk is up to ~16 KB), 2,000
+decisions or prompts — and is its own implicit transaction, and the sweep yields to the event loop
+(`setImmediate`) between batches. It stops between batches if the store has closed. The pulse entry
+`retention` (`open` phase) **starts** a sweep and returns, `botPrRisks`' arrangement, so a long first
+run never holds `cycleInFlight`; it starts one on the first pulse after boot — after the migration pass
+by construction — and then at most once a day, and never while one is still running. A sweep that
+throws is recorded through `errors.record` and tried again the next day.
+
+**`0` keeps everything.** The setting is the off switch — with it at `0` (or negative) neither the pulse
+entry nor a direct call deletes anything. That is the opposite reading of `mcpArgsRetentionDays: 0`,
+deliberately: there `0` means _record none_, which is safe, and here it would mean _delete it all now_,
+which never is. It is read at boot (`restart` liveness, [02](02-configuration.md)), and lowering it is
+retroactive from the next sweep after that restart, like the MCP setting.
+
+#### Giving the space back
+
+SQLite does not shrink a file when rows go: freed pages go on the freelist and are reused by later
+writes. That alone stops the growth, which is what an operator needs. Shrinking the file is
+`auto_vacuum`'s job, and the mode is fixed when a database is created:
+
+- **A database created by this build is `INCREMENTAL`**: `Store` sets the pragma before the schema runs.
+  After a sweep that deleted anything, `Store.reclaimFreePages(256)` runs `PRAGMA incremental_vacuum`
+  256 pages at a time, yielding between steps, until the freelist is empty or stops shrinking.
+- **An existing database stays as it was made** (`NONE`), and the sweep reuses its freed pages without
+  shrinking it — `reclaimFreePages` answers `0` and does nothing. Converting one takes a full `VACUUM`,
+  which rewrites the whole file, needs as much free disk again, and holds the database for the length
+  of the copy. The harness does **not** do that at boot: a step that blocks a start for minutes on a big
+  database, and fails it on a full disk, is not one an upgrade should take for an operator. An operator
+  who wants the space back stops the harness and runs, once,
+  `sqlite3 .lubbdubb/lubbdubb.sqlite "PRAGMA auto_vacuum = INCREMENTAL; VACUUM;"`; every sweep after
+  that hands pages back like a new database's.
 
 ### Issue verdicts, and the exclusion matrix
 
@@ -1372,7 +1547,15 @@ without the tiebreak which of them a capped reader keeps is arbitrary run to run
 `recordDecision(input)` — **lifts `action.rule` and `action.admission` into the `rule` and `admission`
 columns** at record time, so the audit log can answer "what proposed this" and "what became of it"
 separately rather than losing the first to the second. `listDecisions(limit=200)` and
-`listDecisionsForGoal(goalRef, limit=200)`.
+`listDecisionsForGoal(goalRef, limit=200)`, and `pruneDecisions(before, limit)`, the retention sweep's
+delete — oldest first over `idx_decisions_created`, at most `limit` rows a call.
+
+The log is the fastest-growing table that is not output: every cycle writes at least its rationale
+row, so a thirty-second pulse is close to three thousand rows a day before a single action. Every
+reader is bounded to the recent end — the cockpit's last 200, the planner's recent window,
+`workItemStateMovesWithin`'s hour, the dossier's last 200 for one goal — so a row past
+`historyRetentionDays` is one no reader reaches, and it is deleted rather than kept. The
+[History retention](#history-retention) section has the rest.
 
 The goal-scoped read matches on `json_extract(action, '$.originRef')` — the same field `actionOrigin`
 narrows to — because `decisions` has no column for the origin and the alternative is asking every row
@@ -1548,7 +1731,9 @@ so a description written as one would un-park the goal it describes.
 - **`recordDecision` is called for every action outcome**, including skips and the cycle rationale.
 - **Nothing is deleted on a status change.** Cancelled jobs, rejected claims, retired parts and
   dismissed escalations all keep their rows; the status carries the meaning. "We looked at this" is
-  information.
+  information. The one thing that deletes by **age** is the [retention sweep](#history-retention), and
+  it takes transcripts, decision rows and task prompts — never a row another table or an all-time
+  reading joins through.
 - **A work node is never deleted at all**, not even on a status change — nothing observes it away, and
   no pass prunes it.
 - **The runtime cap and pause flag are not persisted.** They live in `RuntimeControl` and a restart

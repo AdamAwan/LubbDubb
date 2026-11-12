@@ -28,7 +28,7 @@ export function issueReadRef(number: number): string {
 
 interface ReadPlanInputs {
   previous: WorldSnapshot | null;
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   events: WorldEvent[];
   now: number;
   lanes: ReadLanes;

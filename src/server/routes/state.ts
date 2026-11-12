@@ -5,6 +5,7 @@ import { absentOr } from '../../schemaErrors.js';
 import type { StateSection } from '../../wire.js';
 import type {
   CiPolicyPayload,
+  HealthPayload,
   ConfigPreviewPayload,
   ConfigSavePayload,
   McpChannelPayload,
@@ -73,7 +74,10 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
 
   app.get('/api/ci-policy', async () => ({ policy: describeCiPolicy(config) }) satisfies CiPolicyPayload);
 
-  app.get('/api/health', async () => ({ ok: true }));
+  app.get(
+    '/api/health',
+    async () => ({ ok: true, runtime: ctx.system.runtimeHealth.reading() }) satisfies HealthPayload,
+  );
 }
 
 function registerStateRoute(

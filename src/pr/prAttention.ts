@@ -59,7 +59,7 @@ export interface PrAttentionContext {
   openPrs: PullRequest[];
   defaultBranch: string;
   watchLabel: string;
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   proposals: Proposal[];
   rejectionSignals?: WorldEvent[];
   recentDecisions: Decision[];

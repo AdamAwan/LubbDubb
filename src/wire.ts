@@ -154,6 +154,7 @@ import type {
   IssueInvestigation,
   DiscussionEntry,
   DiscussionSubjectKind,
+  RuntimeHealthReading,
 } from './types.js';
 
 export interface PullRequest extends WorldPullRequest {
@@ -508,7 +509,7 @@ export interface CockpitState {
   environmentArrivals: GoalArrival[];
   remoteSheets: RemoteSheetView[];
   stackLandings: StackLandingView[];
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   jobs: Job[];
   schedules: JobSchedule[];
   agents: Agent[];
@@ -720,7 +721,7 @@ export interface AgentFilesPayload {
 export interface GoalAgentsPayload {
   ref: string;
   agents: Agent[];
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
 }
 
 export interface WorkRootsPayload {
@@ -1087,6 +1088,11 @@ export interface ConfigSavePayload {
   revision: string;
   changes: readonly ConfigChange[];
   pending: readonly ConfigChange[];
+}
+
+export interface HealthPayload {
+  ok: true;
+  runtime: RuntimeHealthReading;
 }
 
 export interface CiPolicyPayload {

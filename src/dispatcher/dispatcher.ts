@@ -64,7 +64,7 @@ export interface DispatchContext {
   descriptionDrafts?: PrDescriptionDraft[];
   uncheckedDescriptions?: DescriptionAwaitingCheck[];
   prReviewedElsewhere?: ReadonlySet<number>;
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   agents: Agent[];
   openEscalations: Escalation[];
   queuedJobs: Job[];

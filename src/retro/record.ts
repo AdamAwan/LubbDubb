@@ -14,7 +14,7 @@ export function goalRecord(store: Store, issueOriginRef: string): RetroDossierIn
   if (issue?.linkedPrNumber) prNumbers.add(issue.linkedPrNumber);
   const mine = (ref: string | null | undefined): boolean =>
     ref === issueOriginRef || (ref?.startsWith(`${issueOriginRef}:`) ?? false);
-  const tasks = store.tasks.listTasks().filter((t) => mine(t.originRef));
+  const tasks = store.tasks.listGoalTasks(issueOriginRef, []);
   const taskIds = new Set(tasks.map((t) => t.id));
   const agents = store.agents.listAgents().filter((a) => taskIds.has(a.taskId));
 

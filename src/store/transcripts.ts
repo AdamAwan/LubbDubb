@@ -39,6 +39,18 @@ export class TranscriptStore {
     for (const agentId of [...this.buffers.keys()]) this.flushTranscript(agentId);
   }
 
+  deleteTranscripts(agentIds: readonly string[], limit: number): number {
+    if (agentIds.length === 0) return 0;
+    return this.ctx
+      .prep(
+        `DELETE FROM agent_transcripts WHERE rowid IN (
+           SELECT rowid FROM agent_transcripts
+           WHERE agent_id IN (SELECT value FROM json_each(?))
+           LIMIT ?)`,
+      )
+      .run(JSON.stringify(agentIds), limit).changes;
+  }
+
   getTranscript(agentId: string): string {
     this.flushTranscript(agentId);
     const rows = this.ctx.prep(`SELECT chunk FROM agent_transcripts WHERE agent_id=? ORDER BY seq`).all(agentId) as {

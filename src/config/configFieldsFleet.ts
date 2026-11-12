@@ -220,6 +220,12 @@ export const FLEET_FIELDS: readonly ConfigField[] = [
     why: 'How long a recorded MCP call keeps its arguments, in days. The call itself is kept for ever — only the arguments go. 0 records none at all.',
   },
   {
+    path: 'historyRetentionDays',
+    type: 'number',
+    access: 'plain',
+    why: 'How long finished agents keep their transcripts, the decision log keeps its rows, and finished tasks keep their prompts, in days. Task and agent rows themselves are kept. 0 keeps everything.',
+  },
+  {
     path: 'whitelistedApprovals',
     type: 'json',
     access: 'fileOnly',

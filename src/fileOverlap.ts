@@ -37,7 +37,7 @@ function lifetime(agent: Agent): { start: number; end: number } {
 export function detectFileOverlaps(input: {
   files: AgentFile[];
   agents: Agent[];
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
 }): FileOverlap[] {
   const agents = new Map(input.agents.map((a) => [a.id, a]));
   const tasks = new Map(input.tasks.map((t) => [t.id, t]));

@@ -6,6 +6,8 @@ import { DiscussionFiles, discussionRepoFolder } from '../discussions/discussion
 import { DiscussionPullDesk } from '../discussions/pullDesk.js';
 import { recordIssueComments } from '../sink/issueCommentsSent.js';
 import { Store } from '../store/store.js';
+import { systemClock } from '../store/context.js';
+import { RuntimeHealthWatch, SlowReadTally, type LoopDelaySampler } from '../runtimeHealth.js';
 import { CompositeConnector } from '../integrations/compositeConnector.js';
 import { buildIntegrations } from '../integrations/registry.js';
 import type { PoolTransport } from '../pool/transport.js';
@@ -17,6 +19,7 @@ import { NodePtyBackend, type PtyBackend } from '../pty/backend.js';
 import { defaultPoolSize, WorktreeManager, type Worktrees } from '../worktree/worktreeManager.js';
 import { GitCliObserver, type GitObserver } from '../git/gitObserver.js';
 import { CloneUpkeepDesk, GitCloneKeeper, type CloneKeeper } from '../git/cloneUpkeep.js';
+import { HistoryRetentionDesk } from '../retention/historyRetention.js';
 import { AreaPathDirectory } from '../intake/areaPaths.js';
 import { AgentManager } from '../agents/agentManager.js';
 import { buildClaudeStreamArgs, buildInitialMessage, buildResumeMessage } from '../agents/agentProtocol.js';
@@ -84,6 +87,10 @@ export interface BuildOptions {
   tenants?: TenantKeeper;
   pluginCli?: PluginCli;
   errorMirror?: (entry: ErrorLogEntry) => void;
+  /** The event-loop delay histogram the runtime watch reads; `perf_hooks`' own unless a test injects one. */
+  loopDelaySampler?: LoopDelaySampler;
+  /** The clock store reads are timed on; `performance.now` unless a test injects one. */
+  readClock?: () => number;
   configFile?: string;
   projectConfigFile?: string;
   upstream?: UpstreamIssues;
@@ -191,11 +198,13 @@ function realClone(opts: BuildOptions): boolean {
 }
 
 export function buildFoundation(config: Config, opts: BuildOptions) {
-  const store = new Store(config.dbPath);
+  const reads = new SlowReadTally(opts.readClock);
+  const store = new Store(config.dbPath, systemClock, reads);
   store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
   store.surfaceReach.pruneSurfaceReach(true);
   const now = (): string => new Date().toISOString();
   const errors = new ErrorLog(store, opts.errorMirror);
+  const runtimeHealth = new RuntimeHealthWatch({ errors, reads, sampler: opts.loopDelaySampler });
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
   const connector = new CompositeConnector(integrations, now, {
     hotMaxAgeMs: config.hotReadMaxAgeMs,
@@ -227,10 +236,12 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
   const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot, errors);
   const keeper = opts.cloneKeeper ?? (realClone(opts) ? new GitCloneKeeper(config.repoRoot) : undefined);
   const cloneUpkeep = keeper === undefined ? undefined : new CloneUpkeepDesk({ keeper, errors });
+  const retention = new HistoryRetentionDesk({ store, retentionDays: config.historyRetentionDays, errors });
   return {
     store,
     now,
     errors,
+    runtimeHealth,
     connector,
     sink: recordIssueComments(opts.sink ?? connector, (issue, ref) =>
       store.issueComments.recordIssueCommentSent(issue, ref),
@@ -241,6 +252,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     worktrees,
     gitObserver,
     cloneUpkeep,
+    retention,
     watchLabel: watchLabelFor(config.labelPrefix),
     discussions,
     discussionPulls: new DiscussionPullDesk({

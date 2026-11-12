@@ -23,7 +23,7 @@ import { abandonedRunIssues, retainedRunIssues } from './runs/runs.js';
 // → docs/spec/04-harness-cycle.md
 
 export interface CycleReadings {
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   agents: Agent[];
   queuedJobs: Job[];
   plans: Plan[];

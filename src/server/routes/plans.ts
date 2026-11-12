@@ -186,7 +186,7 @@ function registerRestartPart(app: FastifyInstance, { system, hub }: RouteContext
       const issueNumber = planIssueNumber(plan.originRef);
       if (issueNumber === null)
         return reply.code(400).send({ error: `${plan.originRef} names no issue, so its parts have no branch to drop` });
-      const refusal = partRestartRefusal(part, store.tasks.listTasks(), system.connector.canClosePr());
+      const refusal = partRestartRefusal(part, store.tasks.listOutstandingTasks(), system.connector.canClosePr());
       if (refusal !== null) return reply.code(400).send({ error: refusal });
 
       const done = await restartPlanPart(

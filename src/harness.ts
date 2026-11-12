@@ -288,10 +288,11 @@ export class Harness extends EventEmitter {
 
   private async observe(cached: WorldSnapshot | null, readWorld: boolean): Promise<WorldSnapshot> {
     const { store } = this.deps;
+    const planFrom = readWorld ? (this.prevWorld ?? store.world.getWorldBaseline()) : null;
     const readPlan = readWorld
       ? buildReadPlan({
-          previous: this.prevWorld ?? store.world.getWorldBaseline(),
-          tasks: store.tasks.listTasks(),
+          previous: planFrom,
+          tasks: planFrom === null ? [] : store.tasks.listTasksTouchedSince(isoInstant(planFrom.takenAt)),
           events: store.world.listWorldEvents(READ_PLAN_EVENTS),
           now: Date.now(),
           lanes: this.deps.readLanes,
@@ -507,4 +508,9 @@ export class Harness extends EventEmitter {
   override on<K extends keyof HarnessEvents>(event: K, listener: (...args: HarnessEvents[K]) => void): this {
     return super.on(event, listener as (...args: unknown[]) => void);
   }
+}
+
+function isoInstant(at: string): string {
+  const ms = Date.parse(at);
+  return Number.isNaN(ms) ? at : new Date(ms).toISOString();
 }

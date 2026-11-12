@@ -20,7 +20,7 @@ import { jobBranch } from '../jobs/naming.js';
 
 export interface WorkGraphInput {
   world: WorldSnapshot;
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   plans: Plan[];
   parts: PlanPart[];
   jobs: Job[];
@@ -182,7 +182,10 @@ function foldPrs(
   return seen;
 }
 
-function tasksByOrigin(tasks: TaskSummary[], matches: (originRef: string) => boolean): Map<string, TaskSummary[]> {
+function tasksByOrigin(
+  tasks: readonly TaskSummary[],
+  matches: (originRef: string) => boolean,
+): Map<string, TaskSummary[]> {
   const byOrigin = new Map<string, TaskSummary[]>();
   for (const task of tasks) {
     if (task.originRef === null) continue;
@@ -194,7 +197,7 @@ function tasksByOrigin(tasks: TaskSummary[], matches: (originRef: string) => boo
   return byOrigin;
 }
 
-function attemptsLive(attempts: TaskSummary[]): boolean {
+function attemptsLive(attempts: readonly TaskSummary[]): boolean {
   return attempts.some((t) => t.status === 'queued' || t.status === 'running' || t.status === 'waiting');
 }
 

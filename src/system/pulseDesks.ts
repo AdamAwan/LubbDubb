@@ -69,6 +69,7 @@ export interface PulseDeps {
   discussionPulls?: DiscussionPullDesk;
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   ejections?: { sweepExpiries(): unknown[] };
+  retention?: { run(): void };
   burn?: SpendBurnDesk;
   cloneUpkeep?: CloneUpkeepDesk;
   escalations?: {
@@ -95,10 +96,10 @@ export type PulsePhase =
 interface PulseReadings {
   reconcile: { world: WorldSnapshot; previousWorld: WorldSnapshot | null; readWorld: boolean };
   open: Record<string, never>;
-  afterTasks: { world: WorldSnapshot; tasks: TaskSummary[] };
-  afterAgents: { tasks: TaskSummary[]; agents: Agent[] };
+  afterTasks: { world: WorldSnapshot; tasks: readonly TaskSummary[] };
+  afterAgents: { tasks: readonly TaskSummary[]; agents: Agent[] };
   afterVerdicts: { world: WorldSnapshot };
-  afterOrigins: { world: WorldSnapshot; tasks: TaskSummary[]; signals: CompletionSignals };
+  afterOrigins: { world: WorldSnapshot; tasks: readonly TaskSummary[]; signals: CompletionSignals };
   afterReviews: { dispatchWorld: WorldSnapshot; prReviews: PrReview[]; prReviewRoutes: PrReviewRoute[] };
   afterExecute: Record<string, never>;
 }
@@ -153,6 +154,7 @@ const ENTRIES = [
     { id: 'parks', readWorld: false, run: (d) => resumeExpiredParks(d) },
     { id: 'stalls', readWorld: false, run: (d) => d.fleet?.completeExpiredStalls() },
     { id: 'ejectionExpiries', readWorld: false, run: (d) => d.ejections?.sweepExpiries() },
+    { id: 'retention', readWorld: false, run: (d) => d.retention?.run() },
   ]),
   ...phase('afterTasks', [{ id: 'reviewWaits', readWorld: false, run: (d, at) => foldReviewWaits(d, at) }]),
   ...phase('afterAgents', [

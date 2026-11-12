@@ -35,7 +35,7 @@ function unclearHold(appraisal: IssueAppraisal): string {
   return `${by} could not act on this goal`;
 }
 
-export function hasWorkStarted(issueNumber: number, tasks: TaskSummary[]): boolean {
+export function hasWorkStarted(issueNumber: number, tasks: readonly TaskSummary[]): boolean {
   return hasPriorWork(issueNumber, tasks);
 }
 
