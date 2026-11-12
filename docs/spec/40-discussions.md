@@ -346,7 +346,8 @@ Named in `DESKTOP_TOOL_NAMES`, built in `src/mcp/desktopDiscussion.ts`, never in
   file's `published` and `pulled` (its front matter, carried beside the reading) and the open questions pulled
   to the front as `open`. A first `discussion_add` heads the file the way the fleet tool does
   (`discussionSubject`, `src/discussions/subject.ts`), and refuses an issue the world does not list and that has no file —
-  a mistyped number never becomes a file.
+  a mistyped number never becomes a file. That check is `knownDiscussionSubject`, beside it, which the cockpit's
+  watch-outcome note makes too.
 - **`discussion_read` names what was written by hand.** A question typed into the file in Obsidian has no
   `^id` until something writes to the file, and an entry with no id cannot be settled — so the read
   first calls `DiscussionFiles.identify` on the subject and on every related file, adding the missing
@@ -369,8 +370,8 @@ Named in `DESKTOP_TOOL_NAMES`, built in `src/mcp/desktopDiscussion.ts`, never in
 - The cockpit's Discussion tab carries a deep link that opens `/lubbdubb:discuss <n>`.
 - A post-deploy watch's outcome. _It made something worse_ and _Couldn't tell_ carry **Discuss in
   Claude**, which writes the readings into the goal's file as a `note` authored `LubbDubb (watch)`
-  (`DISCUSSION_AUTHORS.watch`, through `POST /api/discussions/:number/watch-outcome`) and then opens
-  `/lubbdubb:discuss <n>` by the same deep link. → [29](29-post-deploy-watch.md#discussing-an-outcome)
+  (`DISCUSSION_AUTHORS.watch`, through `POST /api/discussions/:number/watch-outcome`) and opens
+  `/lubbdubb:discuss <n>` by the same deep link, in the same click. → [29](29-post-deploy-watch.md#discussing-an-outcome)
 
 ## Publishing
 

@@ -9,7 +9,7 @@ import { logControl, placeNow } from '../cockpit/usage.js';
 
 type AsyncPhase = 'idle' | 'pending' | 'done' | 'error';
 
-function flashClass(phase: AsyncPhase): string {
+export function flashClass(phase: AsyncPhase): string {
   return phase === 'done' ? 'is-done' : phase === 'error' ? 'is-error' : '';
 }
 

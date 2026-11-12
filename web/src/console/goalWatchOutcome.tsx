@@ -2,7 +2,8 @@ import type { JSX } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { WatchCheckVerdict, WatchOutcome, WatchOutcomeCheck } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
-import { Icon } from '../components/icons.js';
+import { DesktopLink } from '../components/DesktopLink.js';
+import { discussionPrompt } from '../cockpit/desktopLink.js';
 import type { TagTone } from '../components/tag.js';
 
 // → docs/spec/29-post-deploy-watch.md#the-outcome
@@ -86,7 +87,6 @@ interface ActsProps {
 function Acts({ outcome, issueNumber, discussions, desktopFolder, actions }: ActsProps): JSX.Element | null {
   const discussable = discussions && outcome.discussable;
   if (outcome.extendable.length === 0 && !discussable) return null;
-  const n = String(issueNumber);
   return (
     <div className="cn-outcome-acts">
       {outcome.extendable.map((environment) => (
@@ -101,15 +101,16 @@ function Acts({ outcome, issueNumber, discussions, desktopFolder, actions }: Act
         </AsyncButton>
       ))}
       {discussable && (
-        <AsyncButton
-          size="small"
+        <DesktopLink
+          folder={desktopFolder}
+          prompt={discussionPrompt(issueNumber)}
+          ready="ready to send"
+          explain={`after writing these readings into #${String(issueNumber)}'s discussion as a note, to decide what they mean`}
+          label="Discuss in Claude"
           usage="discussion.open"
-          onClick={() => actions.discussWatchOutcome(issueNumber, desktopFolder)}
-          title={`Writes these readings into #${n}'s discussion as a note, then opens "/lubbdubb:discuss ${n}" in your own Claude Code to decide what they mean`}
-        >
-          <Icon name="chat" />
-          Discuss in Claude ↗
-        </AsyncButton>
+          control={false}
+          onOpen={() => actions.discussWatchOutcome(issueNumber)}
+        />
       )}
     </div>
   );
@@ -134,6 +135,11 @@ function numbers(check: WatchOutcomeCheck): string {
   const rows = check.kind === 'signal' ? ' rows' : '';
   const show = (n: number | null): string => (n === null ? '?' : n.toLocaleString());
   const on = check.environment === null ? '' : ` on ${check.environment}`;
-  const over = check.windowHours === null ? '' : ` over ${String(check.windowHours)}h`;
-  return `${show(check.before)} → ${show(check.after)}${rows}${unit}${on}${over}`;
+  const over = check.windowSpan === null ? '' : ` over ${check.windowSpan}`;
+  const elsewhere =
+    check.beforeEnvironment !== null && check.environment !== null && check.beforeEnvironment !== check.environment;
+  const before = elsewhere
+    ? `${show(check.before)} on ${check.beforeEnvironment} before the merge`
+    : show(check.before);
+  return `${before} → ${show(check.after)}${rows}${unit}${on}${over}`;
 }

@@ -1050,7 +1050,7 @@ above a window drawn regressed.
 | **It worked**               | No check `regressed` anywhere, and every check settled `clean` on at least one environment | Green, with the numbers |
 | **It made something worse** | Any check settled `regressed` on any environment                                           | Red                     |
 | **Couldn't tell**           | Neither: some check is `unknown` everywhere it was read                                    | Amber, with each reason |
-| **Nothing was measured**    | The watch was authored empty, or the hint was `none`                                       | Grey, with the reason   |
+| **Nothing was measured**    | The watch was authored empty, or the hint was `none`, and the goal has landed work         | Grey, with the reason   |
 
 Until a window has settled there is no outcome, only _watching_; once one has, the outcome is folded over
 the settled windows alone, and the environments still open are named beside it. A goal with checks and
@@ -1060,7 +1060,10 @@ environment and `clean` on another counts as clean; `unknown` on all of them is 
 tell, and an environment whose window settled without reading the check says so in those words.
 
 The fold takes the empty reason as a string, `emptyReason`, rather than reading where it came from.
-Today it is the plan hint's `none` (`hintEmptyReason`, `src/plans/watchHint.ts`). **Not yet built:** the assessor's
+Today it is the plan hint's `none` (`hintEmptyReason`, `src/plans/watchHint.ts`), handed over only once
+the goal has a landing (`goal_landings`). Before anything merged, _Nothing was measured_ is a statement
+about a watch that has had nothing to measure yet, so the builders pass no reason and the goal has no
+outcome — a plan approved with a `none` hint does not open on a grey verdict on day one. **Not yet built:** the assessor's
 [stated `none`](#declaring-nothing-is-a-legitimate-answer) — `watch_plan`'s `emptyReason` — is the
 reason once it lands, and a goal that has a plan but whose watch is still owed reads _not yet written_,
 which is not the same as nothing measured.
@@ -1080,9 +1083,12 @@ _Extend_ re-opens — every settled one for _Couldn’t tell_, none otherwise.
 
 **The headline says what was measured, in numbers.** _Statement failures 37/day → 0; BuildStatement
 p95 1,840 → 1,190 ms on liveUk over 48h._ For a measure that is before → after. For a signal it is
-the rows the dry run read before the merge → what the window read. Each check's numbers come from the
+the rows the dry run read before the merge → what the window read. Each check's after comes from the
 environment its verdict was read on, and the window's length is from its exposure (or opening) to its
-settling. _It made something worse_ also
+settling, as `windowSpan`: whole hours, or minutes under an hour (_over 20m_, never _over 0h_). The before
+is the dry run's, read on whichever environment the dry run picked (`beforeEnvironment`), which need
+not be the window's: where they differ the numbers say so — _37 on staging before the merge → 2 on
+liveUk over 48h_ — because two environments' numbers side by side, unlabelled, read as one moving. _It made something worse_ also
 names any check that came back clean, which is the
 [roll-up rule](#the-verdict) kept: one regressed check does not hide a fix that worked. Every check on
 every environment is still drawn underneath.
@@ -1115,8 +1121,20 @@ Each check is written by `watchCheckBlock`, the block the [bench row](#the-bench
 with, so the note carries the same heading, fence and `Run it on <environment> ↗` link. A check that
 read `unknown` everywhere was judged on no one window, so its fence holds the declaration's own text
 and no link — never a source borrowed from another environment. It refuses any outcome that is not
-`discussable`. It then opens
-`/lubbdubb:discuss <n>` through the Discussion tab's existing deep link. The conversation starts from
+`discussable`, and it refuses (404) a number the last world snapshot does not list and no discussion
+file holds — `knownDiscussionSubject` (`src/discussions/subject.ts`), the same check the desktop
+`discussion_add` makes — rather than file an untitled story for it.
+
+**One note per reading.** The note ends on its key, `watchOutcomeKey`: the answer and the windows it
+was read off, as each settled. A press whose key a `LubbDubb (watch)` note in the file already carries
+writes nothing and answers that note, so a second click, or a click from a second tab, is not a second
+copy of the same numbers. A window that is extended and settles again is a new reading, and a new note.
+
+**The deep link opens in the click.** The control is a link to `/lubbdubb:discuss <n>` through the
+Discussion tab's existing deep link, and the click fires the note's POST without awaiting it. Opened
+after the POST settled, the navigation is no longer inside the user's gesture, and a browser may drop
+it; the note takes milliseconds to write, and the skill reads the file only once the conversation is
+under way. A refused POST shows on the link the way any refused press does. The conversation starts from
 the numbers, and the operator's Claude has the repository and, often, the credential to run the query
 again. It ends one of three ways, all through what discussions already do:
 

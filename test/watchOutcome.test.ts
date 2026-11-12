@@ -17,9 +17,18 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { watchClearedGoals, watchWindowReadings } from '../src/environments/watchFinding.js';
 import { watchOutcome, watchOutcomeNote } from '../src/environments/watchOutcome.js';
+import { buildGoalWatchOutcomes } from '../src/server/stateEnvironmentViews.js';
 import { hintEmptyReason } from '../src/plans/watchHint.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { GoalWatch, WatchCheckVerdict, WatchOutcome, WatchReading, WatchWindow } from '../src/types.js';
+import type {
+  GoalLanding,
+  GoalWatch,
+  Plan,
+  WatchCheckVerdict,
+  WatchOutcome,
+  WatchReading,
+  WatchWindow,
+} from '../src/types.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -141,10 +150,10 @@ test('every check settled clean on at least one environment reads it worked, wit
   });
   assert.equal(outcome?.outcome, 'worked');
   assert.deepEqual(
-    outcome.checks.map((c) => [c.before, c.after, c.environment, c.windowHours]),
+    outcome.checks.map((c) => [c.before, c.after, c.environment, c.windowSpan]),
     [
-      [37, 0, 'liveUk', 48],
-      [1840, 1190, 'liveUk', 48],
+      [37, 0, 'liveUk', '48h'],
+      [1840, 1190, 'liveUk', '48h'],
     ],
   );
 });
@@ -211,6 +220,61 @@ test('a watch decided empty reads nothing measured with its reason; no checks an
   assert.equal(hintEmptyReason({ none: 'copy only' }), 'copy only');
   assert.equal(hintEmptyReason({ intents: [] }), null);
   assert.equal(hintEmptyReason(null), null);
+});
+
+test('nothing was measured is said only once the goal has landed work, never before anything shipped', () => {
+  const plan = { originRef: GOAL, watchHint: { none: 'A copy change.' } } as unknown as Plan;
+  const landing: GoalLanding = {
+    prNumber: 40,
+    goalRef: GOAL,
+    sha: 'abc',
+    recordedAt: '2026-11-01T00:00:00.000Z',
+    onIntegration: true,
+    mergedAt: null,
+  };
+  const outcomes = (landings: GoalLanding[]): WatchOutcome[] =>
+    buildGoalWatchOutcomes(
+      [OPEN],
+      () => [],
+      () => [],
+      [plan],
+      { listGoalLandings: () => landings },
+    );
+  assert.deepEqual(outcomes([]), [], 'a plan that said none, before anything merged, has no outcome yet');
+  assert.deepEqual(outcomes([{ ...landing, goalRef: 'issue:99' }]), [], 'another goal’s landing is not this one’s');
+  assert.deepEqual(
+    outcomes([landing]).map((o) => [o.outcome, o.reason]),
+    [['none', 'A copy change.']],
+  );
+});
+
+test('a before read on another environment says so; the same environment reads as it did', () => {
+  const checks = [check('fails', { dryRunRows: 37, dryRunEnvironment: 'staging' })];
+  const windows = [window('liveUk', true)];
+  const readings = [reading('liveUk', 'fails', 'regressed', { rows: 2 })];
+  const outcome = fold({ checks, windows, readings })!;
+  assert.equal(outcome.checks[0]?.beforeEnvironment, 'staging');
+  const note = (cs: GoalWatch[]): string =>
+    watchOutcomeNote({
+      outcome: fold({ checks: cs, windows, readings })!,
+      checks: cs,
+      windows: resolve(cs, windows, readings),
+      environments: [],
+      pullRequests: [],
+    });
+  assert.match(note(checks), /37 on staging before the merge → 2 on liveUk over 48h/);
+  const same = [check('fails', { dryRunRows: 37, dryRunEnvironment: 'liveUk' })];
+  assert.match(note(same), /\*\*Before → after:\*\* 37 → 2 on liveUk over 48h/);
+});
+
+test('a window under an hour is spanned in minutes, never over 0h', () => {
+  const short: WatchWindow = {
+    ...window('liveUk', true),
+    openedAt: '2026-11-03T00:00:00.000Z',
+    settledAt: '2026-11-03T00:20:00.000Z',
+  };
+  const outcome = fold({ checks: [check('a')], windows: [short], readings: [reading('liveUk', 'a', 'clean')] });
+  assert.equal(outcome?.checks[0]?.windowSpan, '20m');
 });
 
 test('another goal’s checks and readings never reach the fold', () => {
@@ -362,6 +426,31 @@ test('Discuss in Claude writes one note authored LubbDubb (watch), and no WorldE
   system.store.close();
 });
 
+test('Discuss in Claude pressed twice on the same reading writes one note', async () => {
+  const { system } = build({ discussions: true });
+  settledRegressed(system);
+  const { app } = await buildApp(system);
+  const first = await app.inject({ method: 'POST', url: '/api/discussions/12/watch-outcome' });
+  const second = await app.inject({ method: 'POST', url: '/api/discussions/12/watch-outcome' });
+  assert.equal(first.statusCode, 200, first.body);
+  assert.equal(second.statusCode, 200, second.body);
+  assert.equal(system.discussions.read(12)?.entries.length, 1, 'the second press is the note already written');
+  await app.close();
+  system.store.close();
+});
+
+test('Discuss in Claude refuses a number the world does not list and no discussion file holds', async () => {
+  const { system } = build({ discussions: true });
+  settledRegressed(system);
+  const { app } = await buildApp(system);
+  const res = await app.inject({ method: 'POST', url: '/api/discussions/77/watch-outcome' });
+  assert.equal(res.statusCode, 404);
+  assert.match(res.body, /holds nothing about #77/);
+  assert.equal(system.discussions.read(77), null, 'no untitled story is filed for it');
+  await app.close();
+  system.store.close();
+});
+
 test('Discuss in Claude is refused with discussions off, and for an outcome with nothing to discuss', async () => {
   const off = build({ discussions: false });
   settledRegressed(off.system);
@@ -373,6 +462,13 @@ test('Discuss in Claude is refused with discussions off, and for an outcome with
   off.system.store.close();
 
   const on = build({ discussions: true });
+  on.system.store.world.setWorldBaseline({
+    takenAt: new Date().toISOString(),
+    pullRequests: [],
+    issues: [
+      { id: 'I_12', number: 12, title: 'Statements fail', body: '', labels: [], state: 'open', linkedPrNumber: null },
+    ],
+  });
   const app = (await buildApp(on.system)).app;
   const nothing = await app.inject({ method: 'POST', url: '/api/discussions/12/watch-outcome' });
   assert.equal(nothing.statusCode, 409);
@@ -422,9 +518,10 @@ test('the outcome card draws no Discuss button without discussionsDir, rather th
         verdict: 'unknown',
         environment: null,
         before: 37,
+        beforeEnvironment: null,
         after: null,
         unit: null,
-        windowHours: null,
+        windowSpan: null,
         reason: 'liveUk: the window settled without ever reading it',
       },
     ],
@@ -446,6 +543,11 @@ test('the outcome card draws no Discuss button without discussionsDir, rather th
   assert.match(on, /window settled without ever reading it/);
   assert.match(on, /extend liveUk/);
   assert.match(on, /Discuss in Claude/);
+  assert.match(
+    on,
+    /<a [^>]*href="claude:\/\/code\/new\?[^"]*lubbdubb%3Adiscuss\+12/,
+    'a real link, so the deep link opens inside the click itself',
+  );
   assert.doesNotMatch(draw(false), /Discuss in Claude/);
   assert.doesNotMatch(
     renderToStaticMarkup(

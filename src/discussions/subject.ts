@@ -64,6 +64,27 @@ export function discussionSubject(
   return { number: issueNumber, title: subject.title ?? '', kind: subject.kind ?? 'story', parent: subject.parent };
 }
 
+/**
+ * The subject a write from outside the fleet names — the operator's Claude, a cockpit press — refused for a
+ * number the world does not list and no discussion file holds, rather than filed as an untitled story.
+ */
+export function knownDiscussionSubject(
+  files: Pick<DiscussionFiles, 'locate'>,
+  issues: readonly Issue[],
+  issueNumber: number,
+  containerTypes: readonly string[] | undefined,
+): { ok: true; subject: DiscussionSubject } | { ok: false; error: string } {
+  if (!issues.some((i) => i.number === issueNumber) && files.locate(issueNumber) === null) {
+    return {
+      ok: false,
+      error:
+        `The harness holds nothing about #${String(issueNumber)}: the last world snapshot does not list it and it ` +
+        'has no discussion file. Check the number, or that the ticket carries the watch tag.',
+    };
+  }
+  return { ok: true, subject: discussionSubject(issues, issueNumber, containerTypes) };
+}
+
 export function fleetDiscussions(
   files: DiscussionFiles,
   store: Store,

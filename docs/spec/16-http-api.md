@@ -1221,9 +1221,14 @@ is not an integer is a 400 (`IssueNumberParams`). → [40](40-discussions.md#in-
 No body. **Discuss in Claude** on a post-deploy watch's outcome: writes one `note` to the goal's
 discussion file through `System.discussions`, authored `LubbDubb (watch)` — the outcome, each check's
 expectation, its before and after, its query in a fence named by its source's language, and the goal's
-merged pull requests — and answers `{ok, entry, path}`; the cockpit then opens `/lubbdubb:discuss <n>`.
-The outcome is built by `goalWatchOutcome`, the same per-goal builder `/api/state` ships, gate
-included. **409** with discussions off (`discussionsDir` is what turns them on), and **409** where the
+merged pull requests — and answers `{ok, entry, path}`. The cockpit's control is a link that opens
+`/lubbdubb:discuss <n>` itself and fires this POST from the same click without awaiting it. It is
+idempotent per reading: where the goal's file already holds a `LubbDubb (watch)` note carrying this
+outcome's key (`watchOutcomeKey`: the answer and the windows it was read off, as each settled), it writes
+nothing and answers that note. The outcome is built by `goalWatchOutcome`, the same per-goal builder
+`/api/state` ships, gate included. **409** with discussions off (`discussionsDir` is what turns them on),
+**404** for a number the last world snapshot does not list and no discussion file holds
+(`knownDiscussionSubject`, the desktop tools' own check) — never an untitled story — and **409** where the
 outcome is not `discussable` — anything but _It made something worse_ or _Couldn't tell_, or no
 outcome at all because no environment declares a `watch` — there is nothing for a conversation to decide about a watch that
 worked or has not settled. It writes no `WorldEvent` and changes no hold; it broadcasts `dirty` for

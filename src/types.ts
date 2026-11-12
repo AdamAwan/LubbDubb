@@ -2237,11 +2237,13 @@ export interface WatchOutcomeCheck {
   environment: string | null;
   /** A measure's baseline, or the rows a signal's dry run read before the merge. */
   before: number | null;
+  /** The environment `before` was read on — the dry run's, which may not be `environment`; null with no `before`. */
+  beforeEnvironment: string | null;
   /** A measure's last value, or the rows a signal's window read. */
   after: number | null;
   unit: string | null;
-  /** How long the window that read it ran, in hours. */
-  windowHours: number | null;
+  /** How long the window that read it ran: whole hours (`48h`), or minutes under an hour (`20m`). */
+  windowSpan: string | null;
   /** Why it is `unknown` or `regressed`, in words; null where it read clean. */
   reason: string | null;
 }

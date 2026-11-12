@@ -7825,7 +7825,12 @@ _Still watching_ — with one `.cn-outcome` rule reading `--cn-tone-*`. Its head
 `headline`, never a second wording kept in the cockpit. It names what passed beside what did not, and
 every check is still drawn on the cards below it. The card draws an **extend** per environment in the
 outcome's `extendable` and **Discuss in Claude** where it is `discussable` — the server decided both —
-the latter only where `discussionsDir` is set, never disabled.
+the latter only where `discussionsDir` is set, never disabled. **Discuss in Claude** is a real link to
+the deep link, not a button that navigates after its POST: a navigation made once a request has
+settled has left the click's gesture, and a browser may drop it. It is a `DesktopLink` with `onOpen`,
+which the click fires without awaiting, and a refusal shows on the link as an `AsyncButton`'s does. A check's numbers
+read `before → after on <environment> over <span>`, the span in minutes under an hour; where the before
+was read on another environment, it says so — `37 on staging before the merge → 2 on liveUk over 48h`.
 → [29](29-post-deploy-watch.md#the-outcome), [29](29-post-deploy-watch.md#discussing-an-outcome)
 
 `WatchHintDigest` (`web/src/components/WatchHintDigest.tsx`) draws the plan's **watch hint** first, as

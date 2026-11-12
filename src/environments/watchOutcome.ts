@@ -12,7 +12,7 @@ import { watchCheckBlock, watchCheckQuery, type WatchWindowReading } from './wat
 
 // → docs/spec/29-post-deploy-watch.md#the-outcome
 
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
 
 const HEADLINE: Record<WatchOutcome['outcome'], string> = {
   worked: 'It worked',
@@ -96,7 +96,7 @@ function foldCheck(check: GoalWatch, settled: readonly WatchWindowReading[]): Wa
       verdict: reading.verdict,
       environment: window.environment,
       after: check.kind === 'measure' ? reading.value : reading.rows,
-      windowHours: windowHours(window),
+      windowSpan: windowSpan(window),
       reason: reading.verdict === 'regressed' ? reading.detail : null,
     };
   }
@@ -110,27 +110,51 @@ function foldCheck(check: GoalWatch, settled: readonly WatchWindowReading[]): Wa
     verdict: 'unknown',
     environment: null,
     after: null,
-    windowHours: null,
+    windowSpan: null,
     reason: reasons.join('; '),
   };
 }
 
-function base(check: GoalWatch): Pick<WatchOutcomeCheck, 'checkId' | 'title' | 'kind' | 'unit' | 'before'> {
+function base(
+  check: GoalWatch,
+): Pick<WatchOutcomeCheck, 'checkId' | 'title' | 'kind' | 'unit' | 'before' | 'beforeEnvironment'> {
+  const before = check.kind === 'measure' ? check.baselineValue : check.dryRunRows;
   return {
     checkId: check.id,
     title: check.title,
     kind: check.kind,
     unit: check.unit,
-    before: check.kind === 'measure' ? check.baselineValue : check.dryRunRows,
+    before,
+    beforeEnvironment: before === null ? null : check.dryRunEnvironment,
   };
 }
 
-function windowHours(window: WatchWindow): number | null {
+function windowSpan(window: WatchWindow): string | null {
   const { since, until } = settledWatchPeriod(window);
   const from = Date.parse(since);
   const to = Date.parse(until);
   if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return null;
-  return Math.round((to - from) / HOUR_MS);
+  const minutes = Math.round((to - from) / MINUTE_MS);
+  return minutes < 60 ? `${String(minutes)}m` : `${String(Math.round(minutes / 60))}h`;
+}
+
+/** Where the before number was read on another environment than the after, the environment it was read on. */
+function beforeElsewhere(check: WatchOutcomeCheck): string | null {
+  const { beforeEnvironment, environment } = check;
+  return beforeEnvironment !== null && environment !== null && beforeEnvironment !== environment
+    ? beforeEnvironment
+    : null;
+}
+
+/**
+ * What a settled outcome is a reading of: its answer and the windows it was folded from, as each settled. The
+ * discuss route writes one note per key — a second press on the same reading is the note already written.
+ */
+export function watchOutcomeKey(outcome: WatchOutcome, windows: readonly WatchWindowReading[]): string {
+  const settled = windows
+    .flatMap(({ window }) => (window.settledAt === null ? [] : [`${window.environment} ${window.settledAt}`]))
+    .sort();
+  return `_Watch outcome ${outcome.outcome}, read off the windows settled ${settled.join(', ')}._`;
 }
 
 /**
@@ -159,6 +183,7 @@ export function watchOutcomeNote(input: {
   }
   const prs = input.pullRequests.map((p) => (p.title ? `#${String(p.number)} ${p.title}` : `#${String(p.number)}`));
   lines.push(`**Merged pull requests:** ${prs.length === 0 ? 'none recorded' : prs.join(', ')}.`);
+  lines.push('', watchOutcomeKey(outcome, input.windows));
   return lines.join('\n');
 }
 
@@ -171,13 +196,16 @@ function checkNote(
   const unit = check.unit === null ? '' : ` ${check.unit}`;
   const number = (n: number | null): string => (n === null ? 'not read' : `${String(n)}${unit}`);
   const on = folded.environment === null ? '' : ` on ${folded.environment}`;
-  const over = folded.windowHours === null ? '' : ` over ${String(folded.windowHours)}h`;
+  const over = folded.windowSpan === null ? '' : ` over ${folded.windowSpan}`;
+  const elsewhere = beforeElsewhere(folded);
+  const before =
+    elsewhere === null ? number(folded.before) : `${number(folded.before)} on ${elsewhere} before the merge`;
   const window = windows.find((w) => w.window.settledAt !== null && w.window.environment === folded.environment);
   return watchCheckBlock({
     heading: `${check.title} — ${folded.verdict}${on}`,
     body: [
       `**Expected:** ${expectation(check, unit)}`,
-      `**Before → after:** ${number(folded.before)} → ${number(folded.after)}${on}${over}` +
+      `**Before → after:** ${before} → ${number(folded.after)}${on}${over}` +
         (check.kind === 'signal' ? ' (rows: the dry run before the merge, then the window)' : ''),
       ...(folded.reason === null ? [] : [`**Reading:** ${folded.reason}`]),
     ],

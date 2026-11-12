@@ -7,6 +7,7 @@ import { resolveTenant, type OperatorTenants } from '../validation/remote/tenant
 import type {
   EnvironmentHealthReading,
   GoalArrival,
+  GoalLanding,
   GoalReachStatus,
   NoSheet,
   GoalWatch,
@@ -186,7 +187,9 @@ export function readGoalWatchRecords(store: System['store'], goalRef: string): G
     checks,
     readings: store.watches.listWatchReadings().filter((r) => r.goalRef === goalRef),
   });
-  return { goalRef, checks, windows, emptyReason: hintEmptyReason(store.plans.getPlanByOrigin(goalRef)?.watchHint) };
+  const landed = store.environments.listGoalLandings().some((l) => l.goalRef === goalRef);
+  const emptyReason = landed ? hintEmptyReason(store.plans.getPlanByOrigin(goalRef)?.watchHint) : null;
+  return { goalRef, checks, windows, emptyReason };
 }
 
 /**
@@ -199,13 +202,15 @@ export function buildGoalWatchOutcomes(
   readGoalWatches: () => GoalWatch[],
   resolved: () => WatchWindowReading[],
   plans: readonly Plan[],
+  landings: { listGoalLandings(): readonly GoalLanding[] },
 ): WatchOutcome[] {
   if (!watched(environments)) return [];
   const checksByGoal = groupBy(readGoalWatches(), (c) => c.originRef);
   const windowsByGoal = groupBy(resolved(), (w) => w.window.goalRef);
+  const landed = new Set(landings.listGoalLandings().map((l) => l.goalRef));
   const emptyReasons = new Map(
     plans.flatMap((p) => {
-      const reason = hintEmptyReason(p.watchHint);
+      const reason = landed.has(p.originRef) ? hintEmptyReason(p.watchHint) : null;
       return reason === null ? [] : [[p.originRef, reason] as const];
     }),
   );

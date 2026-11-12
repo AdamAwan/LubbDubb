@@ -328,7 +328,7 @@ function goalsSection(
       .filter((band) => band.declared)
       .map(({ name, environments: members }) => ({ name, environments: members })),
     goalWatchWindows: buildGoalWatchWindows(environments, r.watchWindows),
-    goalWatchOutcomes: buildGoalWatchOutcomes(environments, r.goalWatches, r.watchWindows, r.plans),
+    goalWatchOutcomes: buildGoalWatchOutcomes(environments, r.goalWatches, r.watchWindows, r.plans, store.environments),
     environmentArrivals: arrivals.slice(0, 50),
     remoteSheets: remoteSheets(),
     stackLandings: stackLandingViews(r, prByNumber, stackRungPrs),

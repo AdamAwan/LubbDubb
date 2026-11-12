@@ -3,7 +3,6 @@ import { api } from '../api.js';
 import type { AppliedFix } from '../view/needsYou.js';
 import { goalMove, homeTab, POOL_VIEWS } from './place.js';
 import type { CockpitActions } from './actions.js';
-import { desktopDeepLink, discussionPrompt } from './desktopLink.js';
 import type { useNavigation } from './useNavigation.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
@@ -134,11 +133,7 @@ function watchActions(then: Then, refresh: Refresh) {
     },
     deleteWatchCheck: (issueNumber, checkId) => then(api.deleteWatchCheck(issueNumber, checkId)),
     extendWatch: (issueNumber, environment) => then(api.extendWatch(issueNumber, environment)),
-    discussWatchOutcome: async (issueNumber, folder) => {
-      await api.discussWatchOutcome(issueNumber);
-      window.location.assign(desktopDeepLink(folder, discussionPrompt(issueNumber)));
-      await refresh(null);
-    },
+    discussWatchOutcome: (issueNumber) => then(api.discussWatchOutcome(issueNumber)),
     setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
   } satisfies Partial<CockpitActions>;
 }
