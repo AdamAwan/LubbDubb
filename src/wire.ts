@@ -131,6 +131,7 @@ import type {
   StackLanding,
   GoalWatch,
   GoalWatchKind,
+  WatchOutcome,
   WatchReading,
   WatchSourceDeclaration,
   WatchWindow,
@@ -491,6 +492,8 @@ export interface CockpitState {
    */
   environmentGroups: EnvironmentGroupView[];
   goalWatchWindows: GoalWatchView[];
+  /** Each goal's watch rolled up to one answer. → docs/spec/29-post-deploy-watch.md#the-outcome */
+  goalWatchOutcomes: WatchOutcome[];
   featureSequences: FeatureSequence[];
   environmentArrivals: GoalArrival[];
   remoteSheets: RemoteSheetView[];
@@ -1140,6 +1143,8 @@ export type {
   ValidationVerdict,
   ViewerAssignment,
   WatchCheckVerdict,
+  WatchOutcome,
+  WatchOutcomeCheck,
   WatchReadingVerdict,
   WatchSourceDeclaration,
   WorkNode,

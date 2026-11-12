@@ -18,15 +18,15 @@ know — and everything from the declaration onwards is a scripted pass with no 
 > **Partly built.** The windows, the readings, the verdict, the bench row, the Signals card,
 > [the watch hint and its tick at approval](#the-planner-at-plan-time-writes-a-hint),
 > [`{until}` and the baseline that ends at the merge](#until-and-the-baseline-that-ends-at-the-merge) and
-> [sources](#sources) are built. **Not yet built**, and each section that describes them says so:
+> [sources](#sources), [the outcome](#the-outcome) and [discussing it in Claude](#discussing-an-outcome) are built.
+> **Not yet built**, and each section that describes them says so:
 > [authoring the watch on `delivered`](#the-assessor-on-delivered-writes-the-checks) and
 > [the accept that releases it](#the-operator-accepts-the-set); [the assessor's stated `none`](#declaring-nothing-is-a-legitimate-answer);
-> [the source only the operator can run](#a-source-only-the-operator-can-run);
-> [the outcome](#the-outcome) and [discussing it in Claude](#discussing-an-outcome).
+> [the source only the operator can run](#a-source-only-the-operator-can-run).
 > **What runs today instead:** the planner is asked for the hint and not for checks, but a plan document's
 > executable `watch` block still parses and is dry-run at submission; the working agent amends them with
 > `watch_declare` at conclude time; a check reading an `operator` source is `unknown`, because nothing
-> asks a person for it; and the goal page draws every check's verdict with no headline. Remove each item
+> asks a person for it. Remove each item
 > from this list in the change that builds it.
 
 ## What it is not
@@ -1026,16 +1026,16 @@ same rule because it is the same mistake.
 whose measure failed is a fix that worked and a proc that is still slow, and a single `regressed`
 would hide the half that is good news — which is the half the ticket was about.
 
-**Not yet built:** it does roll up to a headline, [the outcome](#the-outcome), and the headline has
-to keep this rule. It names what passed as well as what did not, and the card under it still draws
-every check.
+It does roll up to a headline, [the outcome](#the-outcome), and the headline keeps this rule. It names
+what passed as well as what did not, and the card under it still draws every check.
 
 ## The outcome
 
-**Not yet built.** The goal page opens on one answer, drawn above everything else the watch shows,
+The goal page opens on one answer, drawn above everything else the watch shows,
 because the question an operator brings to a delivered goal is _did it work_, and until now the
 answer was a set of per-check rows to read and fold in their head. A pure fold, `watchOutcome`
-(_src/environments/watchOutcome.ts_), over the goal's settled windows:
+(`src/environments/watchOutcome.ts`), over the goal's settled windows, their newest reading per
+environment and check, and the reason a watch was decided empty:
 
 | Outcome                     | When                                                                                       | Drawn                   |
 | --------------------------- | ------------------------------------------------------------------------------------------ | ----------------------- |
@@ -1044,12 +1044,28 @@ answer was a set of per-check rows to read and fold in their head. A pure fold, 
 | **Couldn't tell**           | Neither: some check is `unknown` everywhere it was read                                    | Amber, with each reason |
 | **Nothing was measured**    | The watch was authored empty, or the hint was `none`                                       | Grey, with the reason   |
 
-Until a window has settled there is no outcome, only _watching_. A goal that has a plan but whose
-watch is still owed reads _not yet written_, which is not the same as nothing measured.
+Until a window has settled there is no outcome, only _watching_; once one has, the outcome is folded over
+the settled windows alone, and the environments still open are named beside it. A goal with checks and
+no window — nothing has arrived — has no outcome, and neither has a goal with no checks and no stated
+reason: null, which draws nothing, because null is not clean. A check settled `unknown` on one
+environment and `clean` on another counts as clean; `unknown` on all of them is the reason it couldn't
+tell, and an environment whose window settled without reading the check says so in those words.
+
+The fold takes the empty reason as a string, `emptyReason`, rather than reading where it came from.
+Today it is the plan hint's `none` (`hintEmptyReason`). **Not yet built:** the assessor's
+[stated `none`](#declaring-nothing-is-a-legitimate-answer) — `watch_plan`'s `emptyReason` — is the
+reason once it lands, and a goal that has a plan but whose watch is still owed reads _not yet written_,
+which is not the same as nothing measured.
+
+It ships on `/api/state` as `CockpitState.goalWatchOutcomes`, one per goal with an outcome, folded
+once on the server (`buildGoalWatchOutcomes`) and absent where no environment declares a `watch`, for
+the windows' own reason.
 
 **The headline says what was measured, in numbers.** _Statement failures 37/day → 0; BuildStatement
 p95 1,840 → 1,190 ms on liveUk over 48h._ For a measure that is before → after. For a signal it is
-the rate the dry run read before the merge → what the window read. _It made something worse_ also
+the rows the dry run read before the merge → what the window read. Each check's numbers come from the
+environment its verdict was read on, and the window's length is from its exposure (or opening) to its
+settling. _It made something worse_ also
 names any check that came back clean, which is the
 [roll-up rule](#the-verdict) kept: one regressed check does not hide a fix that worked. Every check on
 every environment is still drawn underneath.
@@ -1064,17 +1080,20 @@ _Extend_ is beside it, because the commonest cause is a window that closed befor
 a number that moved after a deploy may have been moved by something else that shipped the same day
 ([what it does not see](#what-it-does-not-see)), so the outcome can say what happened but cannot say
 the change caused it. `holds` stays exactly as it was. It is the opt-in on settling, the outcome
-neither reads it nor writes it, and it is off.
+neither reads it nor writes it, and it is off. Nothing in the fold, the snapshot or the discuss route
+writes a window, a verdict or a `WorldEvent`.
 
 ### Discussing an outcome
 
-**Not yet built.** _It made something worse_ and _Couldn't tell_ carry **Discuss in Claude**, which is
+_It made something worse_ and _Couldn't tell_ carry **Discuss in Claude**, which is
 where a person decides what the reading means. Was it us? Was it something else that shipped? Is it
 fine? None of those is the harness's call ([cost](#what-is-deliberately-not-added-later)).
 
 The click writes a `note` to the goal's discussion file ([40](40-discussions.md)) through
-`DiscussionFiles`, authored `LubbDubb (watch)`: the outcome, each check's expectation, its before and
-after, its query in a fence, and the goal's merged pull requests. It then opens
+`DiscussionFiles`, authored `LubbDubb (watch)` (`POST /api/discussions/:number/watch-outcome`,
+composed by `watchOutcomeNote`): the outcome, each check's expectation, its before and after, its query
+in a fence named by its source's language with the period of the window it was judged on filled in,
+and the goal's merged pull requests (its landings). It refuses any other outcome. It then opens
 `/lubbdubb:discuss <n>` through the Discussion tab's existing deep link. The conversation starts from
 the numbers, and the operator's Claude has the repository and, often, the credential to run the query
 again. It ends one of three ways, all through what discussions already do:
@@ -1335,11 +1354,17 @@ paragraph: a hint has no query to scope. → [Exposure](#exposure)
 → [17](17-cockpit.md). Four surfaces and one changed reading.
 
 **Not yet built**, in this section: the Signals card's proposed set with **Accept**, **Edit** and
-**Send back**; the operator-reading asks; and the outcome card at the top of the goal page, with
-**Discuss in Claude**. Each is described where it belongs above
+**Send back**; and the operator-reading asks. Each is described where it belongs above
 ([the hint](#the-planner-at-plan-time-writes-a-hint), [the accept](#the-operator-accepts-the-set),
-[the operator's source](#a-source-only-the-operator-can-run), [the outcome](#the-outcome)). Source chips
-are built and described [with sources](#what-a-language-changes). What follows is what runs today.
+[the operator's source](#a-source-only-the-operator-can-run)). Source chips are built and described
+[with sources](#what-a-language-changes). What follows is what runs today.
+
+**The Watch pane opens on the outcome card** (`web/src/console/goalWatchOutcome.tsx`), above the
+Signals card: [the outcome](#the-outcome) in its hue — green, red, amber, and the inert grey for
+_Nothing was measured_ and _Watching_ — with each check's numbers, the reasons for _Couldn't tell_ and
+an **extend** per settled window beside them, and **Discuss in Claude** on _It made something worse_
+and _Couldn't tell_ where `discussionsDir` is set ([discussing it](#discussing-an-outcome)). Every
+check is still drawn on the cards under it.
 
 **The plan sheet draws the hint** as a _How we'll know it worked_ section above the checks
 (`web/src/components/WatchHintDigest.tsx`): each intent with its kind and source as chips, what it
@@ -1610,6 +1635,11 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   appended to `kql` alone; `LUBBDUBB_WATCH_SOURCE` reaches the command; the bench row's fence takes the
   source's language; `goal_watches.source` reaches a database from before it; and `validateEnvironments`
   refuses each source shape that would read nothing (`test/watchSources.test.ts`).
+- `watchOutcome`: any `regressed` reads _made something worse_ and still names the clean checks;
+  `unknown` everywhere is never _worked_; only settled windows count; an empty watch reads _nothing
+  measured_ with its reason; **Discuss in Claude** writes one note authored `LubbDubb (watch)` and no
+  `WorldEvent`, is refused with discussions off, and draws no button without `discussionsDir`; and the
+  outcome changes no hold, asserted with `holds` absent and present (`test/watchOutcome.test.ts`).
 
 **Not yet built**, and owed by the changes that build each piece:
 
@@ -1623,9 +1653,4 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   from the arrival when the set is accepted;
 - an `operator` source spawns nothing, files one `watch_reading` ask per check per environment per
   ask, and an unanswered closing ask settles `unknown` after `operatorGraceMs`;
-- `watchOutcome`: any `regressed` reads _made something worse_ and still names the clean checks;
-  `unknown` everywhere is never _worked_; an empty watch reads _nothing measured_ with its reason;
-- **Discuss in Claude** writes one note and no `WorldEvent`, and draws no button without
-  `discussionsDir`;
-- the outcome changes no hold, asserted with `holds` absent and present;
 - `watch_declare` answers with the retirement refusal.

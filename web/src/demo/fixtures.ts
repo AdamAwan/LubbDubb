@@ -2182,6 +2182,7 @@ export function buildDemoState(): DemoSeed {
     featureSequences: [],
     /* A watch window opens on an arrival, so these too belong only to delivered goals. #395's has one
        regressed reading. */
+    goalWatchOutcomes: [{ goalRef: 'issue:395', outcome: 'watching', checks: [], reason: null, watching: ['staging'] }],
     goalWatchWindows: [
       {
         goalRef: 'issue:395',

@@ -2221,6 +2221,42 @@ export interface WatchReading {
   detail: string | null;
 }
 
+/**
+ * A goal's watch rolled up to one answer. `watching` is no window settled yet; `none` is a watch
+ * that was decided to measure nothing. → docs/spec/29-post-deploy-watch.md#the-outcome
+ */
+type WatchOutcomeKind = 'worked' | 'worse' | 'unknown' | 'none' | 'watching';
+
+export interface WatchOutcomeCheck {
+  checkId: string;
+  title: string;
+  kind: GoalWatchKind;
+  /** Regressed on any settled window, else clean on one, else unknown. */
+  verdict: WatchCheckVerdict;
+  /** The environment the verdict was read on; null where no settled window read it. */
+  environment: string | null;
+  /** A measure's baseline, or the rows a signal's dry run read before the merge. */
+  before: number | null;
+  /** A measure's last value, or the rows a signal's window read. */
+  after: number | null;
+  unit: string | null;
+  /** How long the window that read it ran, in hours. */
+  windowHours: number | null;
+  /** Why it is `unknown` or `regressed`, in words; null where it read clean. */
+  reason: string | null;
+}
+
+export interface WatchOutcome {
+  goalRef: string;
+  outcome: WatchOutcomeKind;
+  /** Every check, whatever it settled as — a regressed one never hides a clean one. */
+  checks: WatchOutcomeCheck[];
+  /** Why nothing was measured, for `none`. */
+  reason: string | null;
+  /** Environments whose window is still open. */
+  watching: string[];
+}
+
 export interface EnvironmentGateRelease {
   goalRef: string;
   note: string;

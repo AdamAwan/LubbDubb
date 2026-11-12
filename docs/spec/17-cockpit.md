@@ -7814,9 +7814,17 @@ surfaces.
 ### The watch digest
 
 > **Not yet built:** the plan sheet stops drawing executable checks, and the pending-change control
-> below moves to the Signals card, where the assessor's set is accepted after `delivered`. The goal
-> page gains an outcome card above the Watch pane, with **Discuss in Claude**.
-> → [29](29-post-deploy-watch.md#who-writes-it-and-when), [29](29-post-deploy-watch.md#the-outcome)
+> below moves to the Signals card, where the assessor's set is accepted after `delivered`.
+> → [29](29-post-deploy-watch.md#who-writes-it-and-when)
+
+The goal page's **Watch** pane opens on the **outcome card** (`web/src/console/goalWatchOutcome.tsx`),
+above the Signals card and the window's own: the goal's watch rolled up to one answer, folded once on
+the server (`CockpitState.goalWatchOutcomes`) and drawn in that answer's hue from the existing tone
+tokens — green, red, amber, and the inert grey for _Nothing was measured_ and _Watching_. It names what
+passed beside what did not, and every check is still drawn on the cards below it. _Couldn't tell_
+carries an **extend** per settled window; _It made something worse_ and _Couldn't tell_ carry
+**Discuss in Claude**, drawn only where `discussionsDir` is set, never disabled.
+→ [29](29-post-deploy-watch.md#the-outcome), [29](29-post-deploy-watch.md#discussing-an-outcome)
 
 `WatchHintDigest` (`web/src/components/WatchHintDigest.tsx`) draws the plan's **watch hint** first, as
 a _How we'll know it worked_ section: each intent's kind and source as chips, then what it `says`, its

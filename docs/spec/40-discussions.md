@@ -367,10 +367,10 @@ Named in `DESKTOP_TOOL_NAMES`, built in `src/mcp/desktopDiscussion.ts`, never in
 - `/lubbdubb:feature` and `/lubbdubb:plan` read the discussion and hand off to `/lubbdubb:discuss`
   when the talk turns to something worth writing down; they write nothing themselves.
 - The cockpit's Discussion tab carries a deep link that opens `/lubbdubb:discuss <n>`.
-- **Not yet built:** a post-deploy watch's outcome. _It made something worse_ and _Couldn't tell_
-  carry **Discuss in Claude**, which writes the readings into the goal's file as a `note` authored
-  `LubbDubb (watch)` and then opens `/lubbdubb:discuss <n>` by the same deep link.
-  → [29](29-post-deploy-watch.md#discussing-an-outcome)
+- A post-deploy watch's outcome. _It made something worse_ and _Couldn't tell_ carry **Discuss in
+  Claude**, which writes the readings into the goal's file as a `note` authored `LubbDubb (watch)`
+  (`DISCUSSION_AUTHORS.watch`, through `POST /api/discussions/:number/watch-outcome`) and then opens
+  `/lubbdubb:discuss <n>` by the same deep link. → [29](29-post-deploy-watch.md#discussing-an-outcome)
 
 ## Publishing
 
