@@ -66,7 +66,7 @@ export class DecisionStore {
     return this.ctx
       .prep(
         `DELETE FROM decisions WHERE rowid IN (
-           SELECT rowid FROM decisions WHERE created_at < ? ORDER BY created_at LIMIT ?)`,
+           SELECT rowid FROM decisions WHERE created_at < ? LIMIT ?)`,
       )
       .run(before, limit).changes;
   }

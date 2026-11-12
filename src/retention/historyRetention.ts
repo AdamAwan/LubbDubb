@@ -87,14 +87,7 @@ export class HistoryRetentionDesk {
       const ids = store.agents.listRetiredAgentIds({ before, ...held, after, limit: AGENT_PAGE });
       if (ids.length === 0) break;
       after = ids[ids.length - 1]!;
-      for (;;) {
-        if (!store.open) return;
-        const gone = store.transcripts.deleteTranscripts(ids, chunkRows);
-        if (gone === 0) break;
-        tally.transcriptChunks += gone;
-        tally.batches += 1;
-        await nextTurn();
-      }
+      tally.transcriptChunks += await this.batched(tally, () => store.transcripts.deleteTranscripts(ids, chunkRows));
     }
     tally.decisions = await this.batched(tally, () => store.decisions.pruneDecisions(before, rows));
     tally.taskPrompts = await this.batched(tally, () => store.tasks.compactTaskPrompts(before, held.heldTaskIds, rows));

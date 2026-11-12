@@ -204,6 +204,7 @@ export class AgentStore {
            AND task_id NOT IN (SELECT value FROM json_each(?))
            AND id NOT IN (SELECT value FROM json_each(?))
            AND id > ?
+           AND EXISTS (SELECT 1 FROM agent_transcripts t WHERE t.agent_id = agents.id)
          ORDER BY id LIMIT ?`,
       )
       .all(
