@@ -19,6 +19,7 @@ import { NodePtyBackend, type PtyBackend } from '../pty/backend.js';
 import { defaultPoolSize, WorktreeManager, type Worktrees } from '../worktree/worktreeManager.js';
 import { GitCliObserver, type GitObserver } from '../git/gitObserver.js';
 import { CloneUpkeepDesk, GitCloneKeeper, type CloneKeeper } from '../git/cloneUpkeep.js';
+import { HistoryRetentionDesk } from '../retention/historyRetention.js';
 import { AreaPathDirectory } from '../intake/areaPaths.js';
 import { AgentManager } from '../agents/agentManager.js';
 import { buildClaudeStreamArgs, buildInitialMessage, buildResumeMessage } from '../agents/agentProtocol.js';
@@ -235,6 +236,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
   const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot, errors);
   const keeper = opts.cloneKeeper ?? (realClone(opts) ? new GitCloneKeeper(config.repoRoot) : undefined);
   const cloneUpkeep = keeper === undefined ? undefined : new CloneUpkeepDesk({ keeper, errors });
+  const retention = new HistoryRetentionDesk({ store, retentionDays: config.historyRetentionDays, errors });
   return {
     store,
     now,
@@ -250,6 +252,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     worktrees,
     gitObserver,
     cloneUpkeep,
+    retention,
     watchLabel: watchLabelFor(config.labelPrefix),
     discussions,
     discussionPulls: new DiscussionPullDesk({

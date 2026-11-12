@@ -131,6 +131,8 @@ export interface System {
   updates: UpdateDesk;
   /** The project clone's pack store, read and repacked by the pulse; absent when a test fakes git. */
   cloneUpkeep?: Foundation['cloneUpkeep'];
+  /** Ages old transcripts, decisions and task prompts out. → docs/spec/14-persistence.md#history-retention */
+  retention: Foundation['retention'];
   runtimeControl: RuntimeControl;
   pets: PetKeeper;
   localRun: LocalRunner;
@@ -239,10 +241,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 function foundationParts({
   worktrees,
   cloneUpkeep,
+  retention,
   discussions,
   discussionPulls,
-}: Foundation): Pick<System, 'worktrees' | 'cloneUpkeep' | 'discussions' | 'discussionPulls'> {
-  return { worktrees, cloneUpkeep, discussions, discussionPulls };
+}: Foundation): Pick<System, 'worktrees' | 'cloneUpkeep' | 'retention' | 'discussions' | 'discussionPulls'> {
+  return { worktrees, cloneUpkeep, retention, discussions, discussionPulls };
 }
 
 interface HarnessPhases {
@@ -350,6 +353,7 @@ function buildHarness(
     validationReady: bench.validationReady,
     burn: bench.burn,
     cloneUpkeep: base.cloneUpkeep,
+    retention: base.retention,
     runway: bench.runway,
     issuePickup: fleet.issuePickup,
     branchReaps: intake.branchReaps,

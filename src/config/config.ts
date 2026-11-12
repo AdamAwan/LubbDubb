@@ -109,6 +109,7 @@ export interface Config {
   agentSilenceParkMs: number;
   agentResumeAttempts: number;
   mcpArgsRetentionDays: number;
+  historyRetentionDays: number;
   claudeCommand: string;
   claudeArgs: string[];
   docsFolderPrefix?: string | string[];
@@ -291,6 +292,7 @@ const DEFAULTS: Config = {
   agentSilenceParkMs: 1_800_000,
   agentResumeAttempts: 3,
   mcpArgsRetentionDays: DEFAULT_MCP_ARGS_RETENTION_DAYS,
+  historyRetentionDays: 90,
   claudeCommand: 'claude',
   claudeArgs: [],
   promptTemplatesDir: '.lubbdubb/prompts',

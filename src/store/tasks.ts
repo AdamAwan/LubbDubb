@@ -147,6 +147,20 @@ export class TaskStore {
     return rows.map(rowToTask);
   }
 
+  compactTaskPrompts(before: string, heldTaskIds: readonly string[], limit: number): number {
+    return this.ctx
+      .prep(
+        `UPDATE tasks SET prompt = '' WHERE rowid IN (
+           SELECT rowid FROM tasks
+           WHERE status NOT IN ${ACTIVE_TASK_STATUS_SQL}
+             AND updated_at < ?
+             AND prompt <> ''
+             AND id NOT IN (SELECT value FROM json_each(?))
+           LIMIT ?)`,
+      )
+      .run(before, JSON.stringify(heldTaskIds), limit).changes;
+  }
+
   findActiveTaskByOrigin(originRef: string): Task | null {
     const row = this.ctx
       .prep(`SELECT * FROM tasks WHERE origin_ref=? AND status IN ${ACTIVE_TASK_STATUS_SQL} LIMIT 1`)
