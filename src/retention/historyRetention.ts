@@ -7,6 +7,7 @@ import type { Store } from '../store/store.js';
 export interface RetentionSweep {
   transcriptChunks: number;
   decisions: number;
+  errors: number;
   taskPrompts: number;
   batches: number;
   freePagesLeft: number;
@@ -28,7 +29,14 @@ const AGENT_PAGE = 200;
 
 const VACUUM_PAGES = 256;
 
-const EMPTY: RetentionSweep = { transcriptChunks: 0, decisions: 0, taskPrompts: 0, batches: 0, freePagesLeft: 0 };
+const EMPTY: RetentionSweep = {
+  transcriptChunks: 0,
+  decisions: 0,
+  errors: 0,
+  taskPrompts: 0,
+  batches: 0,
+  freePagesLeft: 0,
+};
 
 function nextTurn(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
@@ -91,6 +99,7 @@ export class HistoryRetentionDesk {
       await nextTurn();
     }
     tally.decisions = await this.batched(tally, () => store.decisions.pruneDecisions(before, rows));
+    tally.errors = await this.batched(tally, () => store.errors.pruneErrors(before, rows));
     tally.taskPrompts = await this.batched(tally, () => store.tasks.compactTaskPrompts(before, held.heldTaskIds, rows));
     if (tally.batches > 0) tally.freePagesLeft = await this.reclaim();
   }

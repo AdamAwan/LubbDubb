@@ -74,6 +74,22 @@ test('old finished history goes: transcripts, decisions and task prompts — the
   store.close();
 });
 
+test('the error log ages out with the rest: an old entry goes, a recent one stays', async () => {
+  const { store, set } = clockedStore();
+  store.errors.recordError({ source: 'cycle', message: 'old' });
+  set(START + 50 * DAY_MS);
+  store.errors.recordError({ source: 'cycle', message: 'recent' });
+
+  const sweep = await desk(store).sweep();
+
+  assert.deepEqual(
+    store.errors.listErrors().map((e) => e.message),
+    ['recent'],
+  );
+  assert.equal(sweep.errors, 1);
+  store.close();
+});
+
 test('recent history, live work and anything a person may still open are kept', async () => {
   const { store, set } = clockedStore();
   const active = store.tasks.createTask({
