@@ -491,3 +491,13 @@ function goalWatch(over: Partial<GoalWatch>): GoalWatch {
     ...over,
   };
 }
+
+test('two checks sharing a title are two asks, never one bench row the second check cannot record against', async () => {
+  const system = build([sqlEnvironment('liveUk')]);
+  system.store.watches.ingestGoalWatch(GOAL, [MEASURE, { ...MEASURE, id: 'orders-landed-eu', seq: 2 }]);
+  await system.watch.run(GOAL);
+  const filed = asks(system);
+  assert.equal(filed.length, 2);
+  assert.deepEqual(filed.map((a) => a.ask.checkId).sort(), ['orders-landed', 'orders-landed-eu']);
+  system.store.close();
+});

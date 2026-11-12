@@ -14,6 +14,7 @@ import { parseOperatorAnswer, type WatchPeriod, type WatchResult } from './watch
 import { resolveWatchSource, watchSources, type WatchSource } from './watchSource.js';
 import { watchCheckVerdict } from './watchVerdict.js';
 import { beforeMergePeriod, operatorGraceMs } from './watchWindow.js';
+import { carriesUntil } from '../validation/watchQueryShape.js';
 
 // → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
 
@@ -92,6 +93,7 @@ export class WatchAsks {
       for (const environment of this.operated) {
         const source = operatorSource(environment, check);
         if (source === null || asked.has(`${check.id} ${environment.name}`)) continue;
+        if (merged !== null && check.kind === 'measure' && !carriesUntil(check.query)) continue;
         const period = beforeMergePeriod(environment, merged, this.now());
         const step = fileStep({ check, environment, source, ask: 'baseline', period }, existing, standing);
         if (step !== null) steps.push(step);
@@ -414,8 +416,8 @@ function operatorSource(environment: EnvironmentConfig, check: GoalWatch): Watch
 
 function askTitle(check: GoalWatch, environment: string, ask: WatchAskKind): string {
   return ask === 'baseline'
-    ? `Run “${check.title}” on ${environment} for its baseline — only a person can`
-    : `Run “${check.title}” on ${environment} now its window has closed — only a person can`;
+    ? `Run “${check.title}” (${check.id}) on ${environment} for its baseline — only a person can`
+    : `Run “${check.title}” (${check.id}) on ${environment} now its window has closed — only a person can`;
 }
 
 function askView(ask: WatchAsk, { check, environment, source }: ResolvedAsk): WatchAskView {

@@ -57,6 +57,15 @@ export class WatchDryRun implements WatchDryRunner {
     merged: number | null,
   ): Promise<{ reading: DryRunReading; refusal: string | null }> {
     const resolved = resolveWatchSource(environment, check);
+    if (
+      (resolved.source !== null || resolved.operator !== null) &&
+      merged !== null &&
+      check.kind === 'measure' &&
+      !carriesUntil(check.query)
+    ) {
+      const refused = readingOf(environment, check, unanswered(missingUntilRefusal()));
+      return { reading: refused, refusal: refused.detail };
+    }
     if (resolved.operator !== null) return { reading: operatorDryRun(environment, check), refusal: null };
     const reading = await this.observe(environment, check, resolved, merged);
     return { reading, refusal: reading.detail };
@@ -70,8 +79,6 @@ export class WatchDryRun implements WatchDryRunner {
   ): Promise<DryRunReading> {
     if (resolved.source === null)
       return { verdict: 'unknown', presence: null, rows: null, value: null, detail: resolved.refusal };
-    if (merged !== null && check.kind === 'measure' && !carriesUntil(check.query))
-      return readingOf(environment, check, unanswered(missingUntilRefusal()));
     const period = beforeMergePeriod(environment, merged, this.now());
     const ask = observationAsk(environment.name, resolved.source, check.id, period);
     const presence =

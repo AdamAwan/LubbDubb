@@ -155,7 +155,7 @@ export class WatchDesk {
       const environment = byName.get(opened.environment);
       if (environment?.watch === undefined) continue;
       const mine = checks.filter((c) => c.originRef === opened.goalRef);
-      if (mine.length === 0) continue;
+      if (mine.length === 0 || nothingToRead(environment, opened, mine)) continue;
       const commits = landedCommits(landings, opened.goalRef);
       let window: WatchWindow | null;
       try {
@@ -264,4 +264,10 @@ export class WatchDesk {
       ...verdict,
     });
   }
+}
+
+/** Every check reads through a person and exposure needs no probe: the harness has nothing to put to the window. */
+function nothingToRead(environment: EnvironmentConfig, window: WatchWindow, checks: readonly GoalWatch[]): boolean {
+  if (environment.watch?.exposure !== undefined && window.exposedAt === null) return false;
+  return checks.every((c) => resolveWatchSource(environment, c).operator !== null);
 }

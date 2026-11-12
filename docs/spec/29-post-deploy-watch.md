@@ -866,7 +866,10 @@ What each row asks is a `watch_asks` row keyed on the task — goal, check, envi
 the `since` and `until` it was filed with — so an answer is judged against the period the person was
 shown, never one recomputed after a merge moved. The table's unique key on `(goal, check, environment,
 ask)` is what makes it one per check per environment per ask, and filing again for the same key
-updates that row rather than adding one. All of it is `WatchAsks` (`src/environments/watchAsks.ts`),
+updates that row rather than adding one. The bench row's title carries the **check's id** as well as its
+title, because `recordHumanTask` folds rows by title and titles are not unique: two checks titled alike
+folded into one task would put two `watch_asks` rows on one `task_id`, a primary-key clash that throws
+the whole pass on every pulse. All of it is `WatchAsks` (`src/environments/watchAsks.ts`),
 the one object the window pass, the paste box and the desktop tool go through. It works out once, at
 construction, which environments declare a source only a person can run, and on a deployment where none
 does every method returns before reading anything; otherwise it walks only those environments.
@@ -889,7 +892,9 @@ edit that changed the check's query cleared the ask row it answered, so the same
   which the dry run calls for a goal with live checks — so an operator's own edit and a plan document's
   `watch` block ask at their dry run, and a proposed set asks nothing until it is accepted. Its period
   is the dry run's: one window's length ending at the merge, or ending now before anything merged
-  (`beforeMergePeriod`).
+  (`beforeMergePeriod`). A measure whose query carries no `{until}` is **not asked once the goal has
+  merged**, and its dry run reads `unknown` with `missingUntilRefusal`, exactly as a harness-run one does:
+  a person running it would read up to now, a baseline that includes the change.
 - **The closing reading** is asked by the window pass, below settling, for each window that settled
   **within grace** — a window that settled longer ago than `operatorGraceMs` before this build files
   nothing, so turning the feature on does not ask a person about March. Its period is the window's own,
@@ -929,7 +934,9 @@ baseline ask unanswered by the time the window closes is retracted the same way 
 `unknown`, for the reason any measure with no baseline is. A person who declines the row instead leaves
 the check unread on that window, which the outcome reads as `unknown` — never clean.
 
-**A window waits for its operator readings before its outcome, and for nothing else.** Harness-run
+**A window waits for its operator readings before its outcome, and for nothing else.** A window whose
+every check reads through a person is skipped by the read pass once there is no exposure probe left to
+run, so it neither probes on every pulse nor holds one of the pass's window slots. Harness-run
 checks in the same window are read on the schedule and settle at `forMs` as they always have. The
 window's [outcome](#the-outcome) is drawn when its operator readings are in or out of grace, so a goal
 does not read _worked_ on its harness checks while the SQL question it was really about has not been
