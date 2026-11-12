@@ -19,6 +19,7 @@ const HEADLINE: Record<WatchOutcome['outcome'], string> = {
   worse: 'It made something worse',
   unknown: 'Couldn’t tell',
   none: 'Nothing was measured',
+  unwritten: 'Not yet written',
   watching: 'Still watching',
 };
 
@@ -34,12 +35,14 @@ export function watchOutcome(input: {
   windows: readonly WatchWindowReading[];
   /** Why the watch measures nothing, where that was the decision; null where it was not. */
   emptyReason: string | null;
+  /** A planned goal with landed work whose watch nobody has written yet. */
+  owed: boolean;
 }): WatchOutcome | null {
   const { goalRef, checks, windows } = input;
   const watching = windows.filter((w) => w.window.settledAt === null).map((w) => w.window.environment);
   if (checks.length === 0) {
-    if (input.emptyReason === null) return null;
-    return answer(goalRef, 'none', { reason: input.emptyReason });
+    if (input.emptyReason !== null) return answer(goalRef, 'none', { reason: input.emptyReason });
+    return input.owed ? answer(goalRef, 'unwritten', {}) : null;
   }
   const settled = windows
     .filter((w) => w.window.settledAt !== null)

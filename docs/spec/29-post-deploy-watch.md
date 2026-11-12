@@ -1080,6 +1080,7 @@ above a window drawn regressed.
 | **It made something worse** | Any check settled `regressed` on any environment                                           | Red                     |
 | **Couldn't tell**           | Neither: some check is `unknown` everywhere it was read                                    | Amber, with each reason |
 | **Nothing was measured**    | The watch was authored empty, or the hint was `none`, and the goal has landed work         | Grey, with the reason   |
+| **Not yet written**         | The goal has a plan and landed work, no live checks, and its watch is still owed           | Grey                    |
 
 Until a window has settled there is no outcome, only _watching_; once one has, the outcome is folded over
 the settled windows alone, and the environments still open are named beside it. A goal with checks and
@@ -1088,14 +1089,21 @@ reason: null, which draws nothing, because null is not clean. A check settled `u
 environment and `clean` on another counts as clean; `unknown` on all of them is the reason it couldn't
 tell, and an environment whose window settled without reading the check says so in those words.
 
-The fold takes the empty reason as a string, `emptyReason`, rather than reading where it came from.
-Today it is the plan hint's `none` (`hintEmptyReason`, `src/plans/watchHint.ts`), handed over only once
-the goal has a landing (`goal_landings`). Before anything merged, _Nothing was measured_ is a statement
-about a watch that has had nothing to measure yet, so the builders pass no reason and the goal has no
-outcome — a plan approved with a `none` hint does not open on a grey verdict on day one. **Not yet built:** the assessor's
-[stated `none`](#declaring-nothing-is-a-legitimate-answer) — `watch_plan`'s `emptyReason` — is the
-reason once it lands, and a goal that has a plan but whose watch is still owed reads _not yet written_,
-which is not the same as nothing measured.
+The fold takes the empty reason as a string, `emptyReason`, and a flag, `owed`, rather than reading
+where either came from; `watchOutcomeStanding` (`src/validation/watchAuthoring.ts`) decides both, for the
+snapshot and the discuss route alike. The reason is the authored watch's — the assessor's
+[stated `none`](#declaring-nothing-is-a-legitimate-answer), `watch_plans.empty_reason` — where a watch
+has been authored, and otherwise the plan hint's `none` (`hintEmptyReason`, `src/plans/watchHint.ts`).
+Where there is neither and the watch is still **owed** — `watchAuthored`'s answer, the one rule
+`watch-plan` and the arrival hold read — a goal with a plan reads _Not yet written_, which is not the
+same as nothing measured: nobody has yet said what a running system should show. A hint's `none` is
+the plan's own statement, so it is the reason until the assessor writes; an authored watch with checks
+still proposed has no live checks and is not owed, so it has no outcome until it is accepted.
+
+Both wait for a landing (`goal_landings`). Before anything merged, _Nothing was measured_ is a statement
+about a watch that has had nothing to measure yet and _Not yet written_ is true of every planned goal,
+so the builders pass neither and the goal has no outcome — a plan approved with a `none` hint does not
+open on a grey verdict on day one.
 
 It ships on `/api/state` as `CockpitState.goalWatchOutcomes`, one per goal with an outcome, folded
 once on the server and absent where no environment declares a `watch`, for the windows' own reason.
@@ -1106,7 +1114,7 @@ can never put to a discussion an outcome the cockpit does not draw.
 
 The outcome carries what follows from it, decided in the fold so nothing downstream decides it again:
 `headline`, the answer in words that the card and the discussion note both say (_It worked_, _It made
-something worse_, _Couldn’t tell_, _Nothing was measured_, _Still watching_); `discussable`, true for
+something worse_, _Couldn’t tell_, _Nothing was measured_, _Not yet written_, _Still watching_); `discussable`, true for
 _It made something worse_ and _Couldn’t tell_; and `extendable`, the environments whose settled window
 _Extend_ re-opens — every settled one for _Couldn’t tell_, none otherwise.
 
@@ -1428,7 +1436,7 @@ paragraph: a hint has no query to scope. → [Exposure](#exposure)
 
 **The Watch pane opens on the outcome card** (`web/src/console/goalWatchOutcome.tsx`), above the
 Signals card: [the outcome](#the-outcome) in its hue — green, red, amber, and the inert grey for
-_Nothing was measured_ and _Watching_ — with each check's numbers, the reasons for _Couldn't tell_ and
+_Nothing was measured_, _Not yet written_ and _Watching_ — with each check's numbers, the reasons for _Couldn't tell_ and
 an **extend** per settled window beside them, and **Discuss in Claude** on _It made something worse_
 and _Couldn't tell_ where `discussionsDir` is set ([discussing it](#discussing-an-outcome)). Every
 check is still drawn on the cards under it.
@@ -1735,7 +1743,8 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   refuses each source shape that would read nothing (`test/watchSources.test.ts`).
 - `watchOutcome`: any `regressed` reads _made something worse_ and still names the clean checks;
   `unknown` everywhere is never _worked_; only settled windows count; an empty watch reads _nothing
-  measured_ with its reason; **Discuss in Claude** writes one note authored `LubbDubb (watch)` and no
+  measured_ with its reason, the assessor's `emptyReason` over the hint's `none`; an owed watch on landed
+  work reads _not yet written_, and before a landing reads nothing; **Discuss in Claude** writes one note authored `LubbDubb (watch)` and no
   `WorldEvent`, is refused with discussions off, and draws no button without `discussionsDir`; and the
   outcome changes no hold, asserted with `holds` absent and present (`test/watchOutcome.test.ts`).
 

@@ -7821,8 +7821,8 @@ for as long as a plan document may carry one. → [29](29-post-deploy-watch.md#w
 The goal page's **Watch** pane opens on the **outcome card** (`web/src/console/goalWatchOutcome.tsx`),
 above the Signals card and the window's own: the goal's watch rolled up to one answer, folded once on
 the server (`CockpitState.goalWatchOutcomes`) and drawn in that answer's hue through the shared tone
-classes — `cn-t-green`, `cn-t-red`, `cn-t-amber`, and `cn-t-grey` for _Nothing was measured_ and
-_Still watching_ — with one `.cn-outcome` rule reading `--cn-tone-*`. Its headline is the outcome's own
+classes — `cn-t-green`, `cn-t-red`, `cn-t-amber`, and `cn-t-grey` for _Nothing was measured_,
+_Not yet written_ and _Still watching_ — with one `.cn-outcome` rule reading `--cn-tone-*`. Its headline is the outcome's own
 `headline`, never a second wording kept in the cockpit. It names what passed beside what did not, and
 every check is still drawn on the cards below it. The card draws an **extend** per environment in the
 outcome's `extendable` and **Discuss in Claude** where it is `discussable` — the server decided both —

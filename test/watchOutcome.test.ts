@@ -26,6 +26,7 @@ import type {
   Plan,
   WatchCheckVerdict,
   WatchOutcome,
+  WatchPlanRecord,
   WatchReading,
   WatchWindow,
 } from '../src/types.js';
@@ -102,6 +103,7 @@ function fold(input: {
   windows?: WatchWindow[];
   readings?: WatchReading[];
   emptyReason?: string | null;
+  owed?: boolean;
 }): WatchOutcome | null {
   const checks = (input.checks ?? []).filter((c) => c.originRef === GOAL);
   return watchOutcome({
@@ -109,6 +111,7 @@ function fold(input: {
     checks,
     windows: resolve(checks, input.windows ?? [], input.readings ?? []),
     emptyReason: input.emptyReason ?? null,
+    owed: input.owed ?? false,
   });
 }
 
@@ -236,9 +239,7 @@ test('nothing was measured is said only once the goal has landed work, never bef
   const outcomes = (landings: GoalLanding[]): WatchOutcome[] =>
     buildGoalWatchOutcomes(
       [OPEN],
-      () => [],
-      () => [],
-      [plan],
+      { goalWatches: () => [], watchWindows: () => [], plans: [plan], watchPlanRecords: () => [] },
       { listGoalLandings: () => landings },
     );
   assert.deepEqual(outcomes([]), [], 'a plan that said none, before anything merged, has no outcome yet');
@@ -246,6 +247,57 @@ test('nothing was measured is said only once the goal has landed work, never bef
   assert.deepEqual(
     outcomes([landing]).map((o) => [o.outcome, o.reason]),
     [['none', 'A copy change.']],
+  );
+});
+
+test('the assessor’s stated none is the reason; an owed watch on landed work reads not yet written', () => {
+  const landing: GoalLanding = {
+    prNumber: 40,
+    goalRef: GOAL,
+    sha: 'abc',
+    recordedAt: '2026-11-01T00:00:00.000Z',
+    onIntegration: true,
+    mergedAt: null,
+  };
+  const record: WatchPlanRecord = {
+    goalRef: GOAL,
+    authoredAt: '2026-11-02T00:00:00.000Z',
+    note: 'A refactor.',
+    emptyReason: 'Nothing running behaves differently.',
+    acceptedAt: null,
+    sentBackAt: null,
+    sentBackWords: null,
+  };
+  const outcomes = (hint: Plan['watchHint'], records: WatchPlanRecord[], landings: GoalLanding[]) =>
+    buildGoalWatchOutcomes(
+      [OPEN],
+      {
+        goalWatches: () => [],
+        watchWindows: () => [],
+        plans: [{ originRef: GOAL, watchHint: hint } as unknown as Plan],
+        watchPlanRecords: () => records,
+      },
+      { listGoalLandings: () => landings },
+    ).map((o) => [o.outcome, o.headline, o.reason, o.discussable]);
+  const intents = { intents: [] } as unknown as Plan['watchHint'];
+  assert.deepEqual(outcomes({ none: 'A copy change.' }, [record], [landing]), [
+    ['none', 'Nothing was measured', 'Nothing running behaves differently.', false],
+  ]);
+  assert.deepEqual(outcomes(intents, [], [landing]), [['unwritten', 'Not yet written', null, false]]);
+  assert.deepEqual(outcomes(intents, [], []), [], 'an owed watch before anything merged has no outcome yet');
+  assert.deepEqual(
+    outcomes(
+      intents,
+      [{ ...record, authoredAt: null, emptyReason: null, sentBackAt: '2026-11-03T00:00:00.000Z' }],
+      [landing],
+    ),
+    [['unwritten', 'Not yet written', null, false]],
+    'a watch sent back is owed again',
+  );
+  assert.deepEqual(
+    outcomes(intents, [{ ...record, emptyReason: null }], [landing]),
+    [],
+    'a proposed set has no live checks yet and is not owed',
   );
 });
 

@@ -1,7 +1,7 @@
 import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { assessIssueNumber } from '../delivery/assessment.js';
-import { watchHintDetail } from '../plans/watchHint.js';
-import type { WatchHint, WatchPlanRecord } from '../types.js';
+import { hintEmptyReason, watchHintDetail } from '../plans/watchHint.js';
+import type { Plan, WatchHint, WatchPlanRecord } from '../types.js';
 
 // → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
 
@@ -32,6 +32,25 @@ export function watchAuthored(input: { record: WatchPlanRecord | null; hasLiveCh
   if (input.record?.authoredAt != null) return true;
   if (input.record?.sentBackAt != null) return false;
   return input.hasLiveChecks;
+}
+
+/**
+ * What the outcome fold is told about a goal with no live checks: the authored watch's empty reason,
+ * else the plan hint's `none`, else whether the watch is still owed — and nothing at all before the goal
+ * has landed work, when _nothing measured_ would describe a watch with nothing to measure yet.
+ * → docs/spec/29-post-deploy-watch.md#the-outcome
+ */
+export function watchOutcomeStanding(input: {
+  plan: Pick<Plan, 'watchHint'> | null;
+  record: WatchPlanRecord | null;
+  hasLiveChecks: boolean;
+  landed: boolean;
+}): { emptyReason: string | null; owed: boolean } {
+  if (!input.landed) return { emptyReason: null, owed: false };
+  if (input.record?.authoredAt != null) return { emptyReason: input.record.emptyReason, owed: false };
+  const hinted = hintEmptyReason(input.plan?.watchHint);
+  if (hinted !== null) return { emptyReason: hinted, owed: false };
+  return { emptyReason: null, owed: input.plan !== null && !watchAuthored(input) };
 }
 
 /**

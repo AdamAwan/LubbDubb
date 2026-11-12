@@ -256,6 +256,7 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
     return byOrigin;
   });
   const validationPlanRecords = once(() => store.validation.listValidationPlanRecords());
+  const watchPlanRecords = once(() => store.watches.listWatchPlanRecords());
   const appraisals = store.verdicts.listAppraisals();
   const appraisalsByOrigin = once(() => new Map(appraisals.map((a) => [a.originRef, a])));
   const investigations = once(() => store.investigations.list());
@@ -266,6 +267,7 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
     wireValidationResources,
     goalWatches,
     watchWindows,
+    watchPlanRecords,
     conclusions,
     deliveries,
     deliveriesByOrigin,

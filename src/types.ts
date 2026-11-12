@@ -2253,7 +2253,7 @@ export interface WatchReading {
  * A goal's watch rolled up to one answer. `watching` is no window settled yet; `none` is a watch
  * that was decided to measure nothing. → docs/spec/29-post-deploy-watch.md#the-outcome
  */
-type WatchOutcomeKind = 'worked' | 'worse' | 'unknown' | 'none' | 'watching';
+type WatchOutcomeKind = 'worked' | 'worse' | 'unknown' | 'none' | 'unwritten' | 'watching';
 
 export interface WatchOutcomeCheck {
   checkId: string;

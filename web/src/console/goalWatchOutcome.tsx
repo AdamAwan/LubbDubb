@@ -13,6 +13,7 @@ const TONE: Record<WatchOutcome['outcome'], TagTone> = {
   worse: 'red',
   unknown: 'amber',
   none: 'grey',
+  unwritten: 'grey',
   watching: 'grey',
 };
 
@@ -56,6 +57,9 @@ export function WatchOutcomeCard({
         </p>
       )}
       {answer === 'none' && <p className="cn-sub">{outcome.reason}</p>}
+      {answer === 'unwritten' && (
+        <p className="cn-sub">Work has landed, and nobody has written what a running system should show for it yet.</p>
+      )}
       {(answer === 'worked' || answer === 'worse' || answer === 'unknown') && (
         <>
           {GROUPS[answer].map(({ verdict, label }) => {

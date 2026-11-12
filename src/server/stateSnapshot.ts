@@ -328,7 +328,7 @@ function goalsSection(
       .filter((band) => band.declared)
       .map(({ name, environments: members }) => ({ name, environments: members })),
     goalWatchWindows: buildGoalWatchWindows(environments, r.watchWindows),
-    goalWatchOutcomes: buildGoalWatchOutcomes(environments, r.goalWatches, r.watchWindows, r.plans, store.environments),
+    goalWatchOutcomes: buildGoalWatchOutcomes(environments, r, store.environments),
     environmentArrivals: arrivals.slice(0, 50),
     remoteSheets: remoteSheets(),
     stackLandings: stackLandingViews(r, prByNumber, stackRungPrs),
@@ -397,7 +397,7 @@ function plansSection(
     validationPlans: r.validationPlanRecords(),
     validationResources: r.wireValidationResources(),
     goalWatches: [...r.goalWatches(), ...store.watches.listProposedGoalWatches()],
-    watchPlans: store.watches.listWatchPlanRecords(),
+    watchPlans: r.watchPlanRecords(),
     stateQueries: store.remoteValidation.listStateQueries(),
   };
 }

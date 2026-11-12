@@ -14,6 +14,7 @@ import type {
   IssueDelivery,
   IssueShortfall,
   Plan,
+  WatchPlanRecord,
   PlanPart,
   ValidationCheck,
   TaskSummary,
@@ -34,7 +35,7 @@ import { environmentGateHold } from '../environments/arrival.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import { watchOutcome } from '../environments/watchOutcome.js';
 import { watchWindowReadings, type WatchWindowReading } from '../environments/watchFinding.js';
-import { hintEmptyReason } from '../plans/watchHint.js';
+import { watchOutcomeStanding } from '../validation/watchAuthoring.js';
 
 // → docs/spec/16-http-api.md
 
@@ -187,9 +188,13 @@ export function readGoalWatchRecords(store: System['store'], goalRef: string): G
     checks,
     readings: store.watches.listWatchReadings().filter((r) => r.goalRef === goalRef),
   });
-  const landed = store.environments.listGoalLandings().some((l) => l.goalRef === goalRef);
-  const emptyReason = landed ? hintEmptyReason(store.plans.getPlanByOrigin(goalRef)?.watchHint) : null;
-  return { goalRef, checks, windows, emptyReason };
+  const standing = watchOutcomeStanding({
+    plan: store.plans.getPlanByOrigin(goalRef) ?? null,
+    record: store.watches.getWatchPlanRecord(goalRef),
+    hasLiveChecks: checks.length > 0,
+    landed: store.environments.listGoalLandings().some((l) => l.goalRef === goalRef),
+  });
+  return { goalRef, checks, windows, ...standing };
 }
 
 /**
@@ -199,28 +204,33 @@ export function readGoalWatchRecords(store: System['store'], goalRef: string): G
  */
 export function buildGoalWatchOutcomes(
   environments: EnvironmentConfig[],
-  readGoalWatches: () => GoalWatch[],
-  resolved: () => WatchWindowReading[],
-  plans: readonly Plan[],
+  reads: {
+    goalWatches: () => GoalWatch[];
+    watchWindows: () => WatchWindowReading[];
+    plans: readonly Plan[];
+    watchPlanRecords: () => readonly WatchPlanRecord[];
+  },
   landings: { listGoalLandings(): readonly GoalLanding[] },
 ): WatchOutcome[] {
   if (!watched(environments)) return [];
-  const checksByGoal = groupBy(readGoalWatches(), (c) => c.originRef);
-  const windowsByGoal = groupBy(resolved(), (w) => w.window.goalRef);
+  const checksByGoal = groupBy(reads.goalWatches(), (c) => c.originRef);
+  const windowsByGoal = groupBy(reads.watchWindows(), (w) => w.window.goalRef);
   const landed = new Set(landings.listGoalLandings().map((l) => l.goalRef));
-  const emptyReasons = new Map(
-    plans.flatMap((p) => {
-      const reason = landed.has(p.originRef) ? hintEmptyReason(p.watchHint) : null;
-      return reason === null ? [] : [[p.originRef, reason] as const];
-    }),
-  );
-  const goals = new Set([...checksByGoal.keys(), ...windowsByGoal.keys(), ...emptyReasons.keys()]);
+  const plansByGoal = new Map(reads.plans.map((p) => [p.originRef, p]));
+  const records = new Map(reads.watchPlanRecords().map((r) => [r.goalRef, r]));
+  const goals = new Set([...checksByGoal.keys(), ...windowsByGoal.keys(), ...plansByGoal.keys(), ...records.keys()]);
   return [...goals].flatMap((goalRef) => {
+    const checks = checksByGoal.get(goalRef) ?? [];
     const outcome = goalWatchOutcome(environments, {
       goalRef,
-      checks: checksByGoal.get(goalRef) ?? [],
+      checks,
       windows: windowsByGoal.get(goalRef) ?? [],
-      emptyReason: emptyReasons.get(goalRef) ?? null,
+      ...watchOutcomeStanding({
+        plan: plansByGoal.get(goalRef) ?? null,
+        record: records.get(goalRef) ?? null,
+        hasLiveChecks: checks.length > 0,
+        landed: landed.has(goalRef),
+      }),
     });
     return outcome === null ? [] : [outcome];
   });
