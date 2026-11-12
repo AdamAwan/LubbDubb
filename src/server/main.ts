@@ -91,6 +91,7 @@ function resumeLocalRun(system: System): void {
 async function main(): Promise<void> {
   const config = loadDeploymentConfig();
   const system = buildSystem(config);
+  system.runtimeHealth.start();
 
   clearVivarium(system);
 
@@ -128,6 +129,7 @@ async function main(): Promise<void> {
     );
     system.harness.stop();
     system.localCycles.stop();
+    system.runtimeHealth.stop();
     stopConfigWatch();
     stopProjectConfigWatch();
     system.agents.interruptAll();

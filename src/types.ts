@@ -361,13 +361,37 @@ export interface PrThreadLabel extends PrThreadLabelInput {
 
 export interface ErrorLogEntry {
   id: string;
-  source: 'cycle' | 'provider' | 'agent' | 'server' | 'boot';
+  source: 'cycle' | 'provider' | 'agent' | 'server' | 'boot' | 'runtime';
   message: string;
   detail: string | null;
   createdAt: string;
 }
 
 export type ErrorLogInput = Omit<ErrorLogEntry, 'id' | 'createdAt' | 'detail'> & { detail?: string | null };
+
+/** One window of event-loop delay, in milliseconds. → docs/spec/18-observability.md#the-runtime-watch */
+export interface EventLoopWindow {
+  at: string;
+  windowMs: number;
+  meanMs: number;
+  p50Ms: number;
+  p99Ms: number;
+  maxMs: number;
+}
+
+export interface SlowRead {
+  sql: string;
+  count: number;
+  maxMs: number;
+  lastAt: string;
+}
+
+export interface RuntimeHealthReading {
+  /** Null until the first window closes. */
+  eventLoop: EventLoopWindow | null;
+  /** Statements that have crossed the slow-read threshold since boot, most recent first. */
+  slowReads: SlowRead[];
+}
 
 type TaskKind = 'code' | 'desk';
 

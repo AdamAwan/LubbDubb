@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SCHEMA } from './schema.js';
-import { createPrepare, systemClock, type Clock, type StoreContext } from './context.js';
+import { createPrepare, systemClock, type Clock, type ReadObserver, type StoreContext } from './context.js';
 import { dropRetiredTables, ensureColumns, rebuildTables, renameTables, tableExists } from './migrate.js';
 import { POOL_RETIRED_TABLES, PoolStore } from './pool.js';
 import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
@@ -229,13 +229,13 @@ export class Store {
   readonly pets: PetStore;
   readonly pool: PoolStore;
 
-  constructor(dbPath: string, clock: Clock = systemClock) {
+  constructor(dbPath: string, clock: Clock = systemClock, reads?: ReadObserver) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     migrate(this.db, clock);
-    const ctx: StoreContext = { db: this.db, now: clock, prep: createPrepare(this.db) };
+    const ctx: StoreContext = { db: this.db, now: clock, prep: createPrepare(this.db, reads) };
     this.tasks = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);
     this.schedules = new JobScheduleStore(ctx);
