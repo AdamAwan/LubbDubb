@@ -154,6 +154,7 @@ import type {
   IssueInvestigation,
   DiscussionEntry,
   DiscussionSubjectKind,
+  RuntimeHealthReading,
 } from './types.js';
 
 export interface PullRequest extends WorldPullRequest {
@@ -1087,6 +1088,11 @@ export interface ConfigSavePayload {
   revision: string;
   changes: readonly ConfigChange[];
   pending: readonly ConfigChange[];
+}
+
+export interface HealthPayload {
+  ok: true;
+  runtime: RuntimeHealthReading;
 }
 
 export interface CiPolicyPayload {

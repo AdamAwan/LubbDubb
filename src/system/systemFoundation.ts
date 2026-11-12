@@ -6,6 +6,8 @@ import { DiscussionFiles, discussionRepoFolder } from '../discussions/discussion
 import { DiscussionPullDesk } from '../discussions/pullDesk.js';
 import { recordIssueComments } from '../sink/issueCommentsSent.js';
 import { Store } from '../store/store.js';
+import { systemClock } from '../store/context.js';
+import { RUNTIME_THRESHOLDS, RuntimeHealthWatch, SlowReadTally, type LoopDelaySampler } from '../runtimeHealth.js';
 import { CompositeConnector } from '../integrations/compositeConnector.js';
 import { buildIntegrations } from '../integrations/registry.js';
 import type { PoolTransport } from '../pool/transport.js';
@@ -84,6 +86,10 @@ export interface BuildOptions {
   tenants?: TenantKeeper;
   pluginCli?: PluginCli;
   errorMirror?: (entry: ErrorLogEntry) => void;
+  /** The event-loop delay histogram the runtime watch reads; `perf_hooks`' own unless a test injects one. */
+  loopDelaySampler?: LoopDelaySampler;
+  /** The clock store reads are timed on; `performance.now` unless a test injects one. */
+  readClock?: () => number;
   configFile?: string;
   projectConfigFile?: string;
   upstream?: UpstreamIssues;
@@ -191,11 +197,13 @@ function realClone(opts: BuildOptions): boolean {
 }
 
 export function buildFoundation(config: Config, opts: BuildOptions) {
-  const store = new Store(config.dbPath);
+  const reads = new SlowReadTally(RUNTIME_THRESHOLDS.slowReadMs, opts.readClock);
+  const store = new Store(config.dbPath, systemClock, reads);
   store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
   store.surfaceReach.pruneSurfaceReach(true);
   const now = (): string => new Date().toISOString();
   const errors = new ErrorLog(store, opts.errorMirror);
+  const runtimeHealth = new RuntimeHealthWatch({ errors, reads, sampler: opts.loopDelaySampler });
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
   const connector = new CompositeConnector(integrations, now, {
     hotMaxAgeMs: config.hotReadMaxAgeMs,
@@ -231,6 +239,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     store,
     now,
     errors,
+    runtimeHealth,
     connector,
     sink: recordIssueComments(opts.sink ?? connector, (issue, ref) =>
       store.issueComments.recordIssueCommentSent(issue, ref),

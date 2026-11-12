@@ -310,7 +310,12 @@ refetches → each fan-out fails → recording the error broadcasts another `dir
 
 ### `GET /api/health`
 
-`{ ok: true, dispatcher }`.
+`HealthPayload`: `{ ok: true, runtime }`, where `runtime` is the runtime watch's
+`RuntimeHealthReading` — the last closed event-loop window (`eventLoop`: mean, p50, p99 and max delay
+in ms, or `null` before the first window closes) and the statements that have crossed the slow-read
+threshold since boot (`slowReads`, most recent first). It reads in-memory numbers only, so a probe
+that times out is itself the reading: the loop it would have answered on is blocked.
+→ [18](18-observability.md#the-runtime-watch)
 
 ### `GET /api/agents/:id/transcript`
 

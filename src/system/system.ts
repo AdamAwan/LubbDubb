@@ -150,6 +150,8 @@ export interface System {
   /** Pulls a discussion file's new tracker comments in. → docs/spec/40-discussions.md#pulling-tracker-comments-in */
   discussionPulls: Foundation['discussionPulls'];
   errors: ErrorLog;
+  /** Event-loop lag and slow store reads; started and stopped by `main`. → docs/spec/18-observability.md#the-runtime-watch */
+  runtimeHealth: Foundation['runtimeHealth'];
   configFile: string;
   projectConfigFile: string;
 }
@@ -226,6 +228,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     plugin: buildPluginDesk(config, opts, base.errors),
     ...foundationParts(base),
     errors: base.errors,
+    runtimeHealth: base.runtimeHealth,
   };
   late.bind(
     lateParts({ fleet, envs, bench, harness, local, prAssign: intake.prAssign, asks: () => askSnapshot(system) }),

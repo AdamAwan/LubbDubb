@@ -145,6 +145,36 @@ mutate the statement permanently, so a later caller of the same SQL would get so
 `src/store/` uses none of them today, and a site that needs one must not go through `prep` — or must
 apply the modifier once, under a cache key of its own.
 
+### Reads are timed
+
+The `Store` constructor takes an optional `ReadObserver` (`{now, read}`), and `createPrepare` given
+one shadows each memoised statement's `get` and `all` with a timed copy **once, when it is compiled**:
+two clock reads and a call per read, no allocation, and nothing at all when no observer is passed —
+which is every `new Store(...)` a test builds directly. `buildFoundation` passes the runtime watch's
+`SlowReadTally`, which keeps only reads at or over 250 ms, keyed on the SQL's first non-empty line, for
+the watch to drain into the error log ([18](18-observability.md#the-runtime-watch)).
+
+Timing lives at `prep` rather than at call sites because `prep` is the one door almost every read
+already walks through, so the reading names _whichever_ statement is slow, including the ones nobody
+suspected — a call-site timer only ever sees the queries someone thought to wrap. What it does not
+see, deliberately:
+
+- **`run`** — a write. A slow write is a different fault (contention, a fat transaction), and the
+  issue this answers (#1159) was reads growing with the tables.
+- **`ctx.db.prepare(...)`** — the variable-`IN` sites above, and the migration pass. They are not
+  memoised, so wrapping them would re-wrap on every call; and they are bounded by their argument
+  lists rather than by table growth.
+- **`iterate`** — lazy, so the time is spent in the consumer's loop, not in the call.
+
+The tally only counts; it never writes. Recording happens on the watch's tick, outside any statement
+call, so a slow read can never re-enter the store from inside a read.
+
+**Moving SQLite off the main thread was considered and not done.** A worker-thread or async driver
+would stop a slow read from freezing the server, but it would make every write asynchronous, and
+writes being synchronous is what keeps the harness's read-then-write logic race-free (above). The
+cost of a slow read is therefore paid on the event loop, and the [runtime
+watch](18-observability.md#the-runtime-watch) is what turns that cost red instead of silent.
+
 ## Migrations
 
 `CREATE TABLE IF NOT EXISTS` never alters an existing table, so a column added to the schema is

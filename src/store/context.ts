@@ -6,16 +6,40 @@ export type Clock = () => string;
 
 export const systemClock: Clock = () => new Date().toISOString();
 
-export function createPrepare(db: Database.Database): (sql: string) => Database.Statement {
+/** Told how long each memoised `get`/`all` took. → docs/spec/14-persistence.md#reads-are-timed */
+export interface ReadObserver {
+  now(): number;
+  read(sql: string, ms: number): void;
+}
+
+export function createPrepare(db: Database.Database, reads?: ReadObserver): (sql: string) => Database.Statement {
   const cache = new Map<string, Database.Statement>();
   return (sql) => {
     let statement = cache.get(sql);
     if (statement === undefined) {
       statement = db.prepare(sql);
+      if (reads !== undefined) {
+        timeRead(statement, 'get', sql, reads);
+        timeRead(statement, 'all', sql, reads);
+      }
       cache.set(sql, statement);
     }
     return statement;
   };
+}
+
+function timeRead(statement: Database.Statement, method: 'get' | 'all', sql: string, reads: ReadObserver): void {
+  const original = statement[method] as (...args: unknown[]) => unknown;
+  Object.defineProperty(statement, method, {
+    value: (...args: unknown[]): unknown => {
+      const start = reads.now();
+      try {
+        return original.apply(statement, args);
+      } finally {
+        reads.read(sql, reads.now() - start);
+      }
+    },
+  });
 }
 
 export interface StoreContext {
