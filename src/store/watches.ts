@@ -43,19 +43,32 @@ export const WATCH_COLUMNS: ColumnMigrations = {
   watch_plans: {},
 };
 
+const DELIVERED_BEFORE_THE_ASSESSOR = 'Delivered before the assessor wrote watches';
+
 /**
  * Every goal already carrying live checks when `watch_plans` is created was authorised under the plan
- * approval that preceded it. Null `authored_at` is *owed*, so without this every such goal would
- * read owed, dispatch an assessor and hold its next arrival. Run only on the boot that creates the
- * table: a pass on every boot would stamp the watch an operator is being asked about right now.
+ * approval that preceded it, and every planned goal already delivered without any was delivered before
+ * anything wrote watches. Null `authored_at` is *owed*, so without this each would dispatch `watch-plan`
+ * and hold its next arrival. Run only on the boot that creates the table: a pass on every boot would
+ * stamp the watch an operator is being asked about right now.
  * → docs/spec/14-persistence.md#when-a-null-means-something
  */
-export function stampWatchPlansFromBeforeTheAssessor(db: Database.Database, now: string): void {
+export function stampWatchPlansFromBeforeTheAssessor(
+  db: Database.Database,
+  now: string,
+  plannedAndDelivered: readonly string[],
+): void {
   db.prepare(
     `INSERT OR IGNORE INTO watch_plans (goal_ref, authored_at, note, empty_reason, accepted_at, sent_back_at,
                                         sent_back_words, updated_at)
      SELECT DISTINCT goal_ref, @now, NULL, NULL, @now, NULL, NULL, @now FROM goal_watches WHERE live=1`,
   ).run({ now });
+  const stamp = db.prepare(
+    `INSERT OR IGNORE INTO watch_plans (goal_ref, authored_at, note, empty_reason, accepted_at, sent_back_at,
+                                        sent_back_words, updated_at)
+     VALUES (@goalRef, @now, NULL, @reason, @now, NULL, NULL, @now)`,
+  );
+  for (const goalRef of plannedAndDelivered) stamp.run({ goalRef, now, reason: DELIVERED_BEFORE_THE_ASSESSOR });
 }
 
 export class WatchStore {

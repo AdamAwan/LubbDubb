@@ -94,7 +94,7 @@ function build(observer = new FakeEnvironmentObserver(ANSWERS), environments = [
   );
 }
 
-function planned(system: System): void {
+function planned(system: Pick<System, 'store'>, originRef = GOAL): void {
   const parsed = validatePlanDocument(
     {
       version: 1,
@@ -105,7 +105,7 @@ function planned(system: System): void {
     { watchHintRequired: true },
   );
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
-  ingestPlanDocument(system.store, { doc: parsed.document, originRef: GOAL, title: 'Ship it' });
+  ingestPlanDocument(system.store, { doc: parsed.document, originRef, title: 'Ship it' });
 }
 
 function park(system: System): void {
@@ -573,6 +573,13 @@ test('the boot that creates watch_plans stamps every goal already carrying live 
   const path = join(dir, 'harness.db');
   const first = new Store(path);
   first.watches.ingestGoalWatch(GOAL, [LIVE]);
+  const deliver = (store: Store, originRef: string): void => {
+    store.verdicts.recordDelivery({ originRef, summary: 'every part merged', by: 'assessor' });
+  };
+  planned({ store: first }, 'issue:20');
+  deliver(first, 'issue:20');
+  deliver(first, 'issue:21');
+  planned({ store: first }, 'issue:22');
   first.close();
   const raw = new Database(path);
   raw.exec('DROP TABLE watch_plans');
@@ -582,10 +589,20 @@ test('the boot that creates watch_plans stamps every goal already carrying live 
   const record = second.watches.getWatchPlanRecord(GOAL);
   assert.notEqual(record?.authoredAt, null, 'a goal that already had live checks is not owed');
   assert.notEqual(record?.acceptedAt, null);
+  assert.equal(record?.emptyReason, null);
+  const delivered = second.watches.getWatchPlanRecord('issue:20');
+  assert.notEqual(delivered?.authoredAt, null, 'a planned goal delivered before the assessor is not owed');
+  assert.notEqual(delivered?.acceptedAt, null);
+  assert.equal(delivered?.emptyReason, 'Delivered before the assessor wrote watches');
+  assert.equal(second.watches.getWatchPlanRecord('issue:21'), null, 'a delivery with no plan has no watch to owe');
+  assert.equal(second.watches.getWatchPlanRecord('issue:22'), null, 'a planned goal not yet delivered stays owed');
   second.watches.ingestGoalWatch('issue:13', [LIVE]);
+  planned({ store: second }, 'issue:23');
+  deliver(second, 'issue:23');
   second.close();
 
   const third = new Store(path);
   assert.equal(third.watches.getWatchPlanRecord('issue:13'), null, 'a later boot stamps nothing');
+  assert.equal(third.watches.getWatchPlanRecord('issue:23'), null, 'nor a goal delivered after the table');
   third.close();
 });

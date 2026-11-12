@@ -1656,8 +1656,12 @@ by `setPlanWatchHint` from `ingestPlanDocument`, and only when the document carr
 `validation_plans`' shape is the model. Null `authored_at` means _owed_, which is what holds an arrival
 back. On the boot that **creates** the table, every goal that already has live checks gets a row
 stamped authored and accepted (`stampWatchPlansFromBeforeTheAssessor`, gated on `tableExists` before
-the schema pass, as `remote_run_intents` is). Without that, those goals would read on the record as
-never authored. That is a null that means something
+the schema pass, as `remote_run_intents` is), and so does every goal with a plan and a delivery row
+(`issue_deliveries`) and no live checks, with `empty_reason` _Delivered before the assessor wrote
+watches_ — its outcome then reads _Nothing was measured_ in those words. Without that, those goals would
+read on the record as never authored, and taking the build would dispatch a `watch-plan` agent for every
+goal ever delivered, and hold each one's next arrival. A delivery with no plan is left alone: rule
+`watch-plan` never asks for one. That is a null that means something
 ([14](14-persistence.md#when-a-null-means-something)), so the stamp is gated on the table being created —
 a pass on every boot would stamp the watch an operator is being asked about right now. It is declared in
 `WATCH_COLUMNS` with no columns yet, for the rule that a table being new once does not keep it exempt.
@@ -1705,7 +1709,8 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   words; an arrival landing while the watch is owed is **deferred, not stamped**, and opens a window
   sized from the arrival on accept, while a stale one is stamped first; `assess_issue` repeats the ask;
   `watch_declare` answers with the retirement refusal; and the boot that creates `watch_plans` stamps
-  goals with live checks and a later one does not (`test/watchPlan.test.ts`, with the arithmetic in
+  goals with live checks, and planned goals already delivered with the empty reason, and a later one does
+  not (`test/watchPlan.test.ts`, with the arithmetic in
   `test/watchWindow.test.ts`);
 - a watch does **not** open for an arrival older than two probe intervals, and the arrival is stamped
   anyway;

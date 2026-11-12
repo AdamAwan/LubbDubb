@@ -276,9 +276,11 @@ created whole adds no columns. → [36](36-remote-validation.md#the-ok)
 
 `watch_plans` is the same case the other way up: a **missing** row means nothing, but a row's null
 `authored_at` means _owed_, and the gates read live checks alongside it. The boot that creates the table
-stamps a row authored and accepted for every goal already carrying live checks
-(`stampWatchPlansFromBeforeTheAssessor`, gated on the same `tableExists` asked before the schema pass),
-so the record agrees with the watch those goals were already running; on any later boot the same
+stamps a row authored and accepted for every goal already carrying live checks, and for every planned
+goal already delivered with none — that one with the empty reason _Delivered before the assessor wrote
+watches_ (`stampWatchPlansFromBeforeTheAssessor`, gated on the same `tableExists` asked before the schema
+pass), so the record agrees with the watch those goals were already running, and the build does not
+dispatch a watch author for every goal ever delivered; on any later boot the same
 statement would stamp the set an operator is being asked to accept right now.
 → [29](29-post-deploy-watch.md#persistence)
 

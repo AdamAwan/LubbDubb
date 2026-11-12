@@ -146,7 +146,16 @@ function migrate(db: Database.Database, clock: Clock): void {
   if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(db);
   if (addedColumns.includes('validation_plans.released_at')) releaseValidationPlansFromBeforeTheGate(db);
   if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(db, clock());
-  if (watchPlansAreNew) stampWatchPlansFromBeforeTheAssessor(db, clock());
+  if (watchPlansAreNew)
+    stampWatchPlansFromBeforeTheAssessor(
+      db,
+      clock(),
+      (
+        db.prepare(`SELECT d.origin_ref FROM issue_deliveries d JOIN plans p ON p.origin_ref = d.origin_ref`).all() as {
+          origin_ref: string;
+        }[]
+      ).map((r) => r.origin_ref),
+    );
   if (intentsAreNew)
     consumeIntentsForExistingSheets(
       db,
