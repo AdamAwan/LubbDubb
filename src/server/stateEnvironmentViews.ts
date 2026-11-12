@@ -35,6 +35,7 @@ import { environmentGateHold } from '../environments/arrival.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import { watchOutcome } from '../environments/watchOutcome.js';
 import { watchWindowReadings, type WatchWindowReading } from '../environments/watchFinding.js';
+import { openWatchAsks } from '../environments/watchAsks.js';
 import { watchOutcomeStanding } from '../validation/watchAuthoring.js';
 import { watchHintRequired } from '../plans/planning.js';
 
@@ -147,7 +148,7 @@ export function buildGoalWatchWindows(
   if (!watchHintRequired(environments)) return [];
   return resolved().map(({ window, checks }) => ({
     ...window,
-    checks: checks.map(({ check: c, reading }) => ({
+    checks: checks.map(({ check: c, reading, waitingOnYou }) => ({
       checkId: c.id,
       title: c.title,
       kind: c.kind,
@@ -159,6 +160,7 @@ export function buildGoalWatchWindows(
       unit: c.unit,
       baselineValue: c.baselineValue,
       reading,
+      waitingOnYou,
     })),
   }));
 }
@@ -184,6 +186,7 @@ export function readGoalWatchRecords(store: System['store'], goalRef: string): G
     windows: store.watches.listWatchWindows().filter((w) => w.goalRef === goalRef),
     checks,
     readings: store.watches.listWatchReadings().filter((r) => r.goalRef === goalRef),
+    waiting: openWatchAsks(store, { goalRef }),
   });
   const standing = watchOutcomeStanding({
     plan: store.plans.getPlanByOrigin(goalRef) ?? null,

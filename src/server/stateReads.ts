@@ -21,6 +21,7 @@ import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelFor } from '../watchLabels.js';
 import { watchWindowReadings } from '../environments/watchFinding.js';
+import { openWatchAsks } from '../environments/watchAsks.js';
 import type { SetupReading } from '../setup/reading.js';
 
 // → docs/spec/16-http-api.md
@@ -77,6 +78,7 @@ export function baseReads(system: System, opts: SnapshotOpts | undefined) {
         Date.now() - Date.parse(row.ejectedAt) >= config.ejection.contactGraceMinutes * 60_000,
     }));
   const allHumanTasks = once(() => store.humanTasks.listAllHumanTasks());
+  const watchAsks = once(() => openWatchAsks(store, { tasks: allHumanTasks() }));
   const proposals = store.escalations.listProposals();
   const openEscalations = once(() => store.escalations.listOpenEscalations());
   const bugFilings = store.bugFilings.listBugFilings();
@@ -107,6 +109,7 @@ export function baseReads(system: System, opts: SnapshotOpts | undefined) {
     humanTasks,
     ejectionViews,
     allHumanTasks,
+    watchAsks,
     proposals,
     openEscalations,
     bugFilings,
@@ -204,7 +207,7 @@ function planPartViews(
   return wirePlanParts;
 }
 
-export function verdictReads({ store, config, opts }: PlanReadsOn) {
+export function verdictReads({ store, config, opts, watchAsks }: PlanReadsOn) {
   const claimNow = new Date().toISOString();
   const validationChecks = once((): ValidationCheckView[] =>
     store.validation
@@ -233,6 +236,7 @@ export function verdictReads({ store, config, opts }: PlanReadsOn) {
       windows: store.watches.listWatchWindows(),
       checks: goalWatches(),
       readings: store.watches.listWatchReadings(),
+      waiting: watchAsks(),
     }),
   );
   const conclusions = once(() => new Map(store.verdicts.listIssueConclusions().map((c) => [c.originRef, c])));

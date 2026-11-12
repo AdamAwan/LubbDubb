@@ -11,6 +11,7 @@ import { exposureFloor, exposureShortfall, watchPeriod } from './exposure.js';
 import { landedCommits } from './landings.js';
 import { resolveWatchSource } from './watchSource.js';
 import { watchHold } from '../validation/watchAuthoring.js';
+import { openWatchAsks, type WatchAsks } from './watchAsks.js';
 
 // → docs/spec/24-environments.md
 
@@ -20,6 +21,8 @@ interface WatchDeskDeps {
   observer: EnvironmentObserver;
   probeIntervalMs: number;
   watchIntervalMs: number;
+  /** The readings only a person can take: asked for as windows close, settled as grace runs out. */
+  asks: Pick<WatchAsks, 'pass'>;
   errors?: ErrorRecorder;
   now?: () => number;
 }
@@ -36,19 +39,31 @@ export class WatchDesk {
     if (!this.deps.environments.some((e) => e.watch !== undefined)) return;
     this.open();
     this.settle();
-    await this.read();
-    this.file();
+    const { store, errors } = this.deps;
+    let windows: WatchWindow[];
+    let checks: GoalWatch[];
+    try {
+      windows = store.watches.listWatchWindows();
+      checks = store.watches.listGoalWatches();
+    } catch (err) {
+      errors?.record({ source: 'cycle', message: `reading watch windows failed: ${(err as Error).message}` });
+      return;
+    }
+    this.deps.asks.pass({ windows, checks });
+    await this.read(windows, checks);
+    this.file(checks);
   }
 
-  private file(): void {
+  private file(checks: readonly GoalWatch[]): void {
     const { store, errors } = this.deps;
     try {
       const steps = watchFindings({
         readings: watchWindowReadings({
           windows: store.watches.listWatchWindows(),
-          checks: store.watches.listGoalWatches(),
+          checks,
           readings: store.watches.listWatchReadings(),
           environments: this.deps.environments,
+          waiting: openWatchAsks(store),
         }),
         existing: store.humanTasks.listHumanTasksOfKind('watch'),
       });
@@ -120,12 +135,12 @@ export class WatchDesk {
     }
   }
 
-  private async read(): Promise<void> {
+  private async read(windows: readonly WatchWindow[], checks: readonly GoalWatch[]): Promise<void> {
     const { store, errors } = this.deps;
     let due: WatchWindow[];
     try {
       due = dueWindows({
-        windows: store.watches.listWatchWindows(),
+        windows,
         readings: store.watches.listWatchReadings(),
         watchIntervalMs: this.deps.watchIntervalMs,
         now: this.now(),
@@ -135,13 +150,12 @@ export class WatchDesk {
       return;
     }
     const byName = new Map(this.deps.environments.map((e) => [e.name, e]));
-    const checks = store.watches.listGoalWatches();
     const landings = store.environments.listGoalLandings();
     for (const opened of due) {
       const environment = byName.get(opened.environment);
       if (environment?.watch === undefined) continue;
       const mine = checks.filter((c) => c.originRef === opened.goalRef);
-      if (mine.length === 0) continue;
+      if (mine.length === 0 || nothingToRead(environment, opened, mine)) continue;
       const commits = landedCommits(landings, opened.goalRef);
       let window: WatchWindow | null;
       try {
@@ -215,6 +229,7 @@ export class WatchDesk {
     commits: readonly string[],
   ): Promise<void> {
     const resolved = resolveWatchSource(environment, check);
+    if (resolved.operator !== null) return;
     if (resolved.source === null) {
       this.deps.store.watches.recordWatchReading({
         goalRef: window.goalRef,
@@ -249,4 +264,10 @@ export class WatchDesk {
       ...verdict,
     });
   }
+}
+
+/** Every check reads through a person and exposure needs no probe: the harness has nothing to put to the window. */
+function nothingToRead(environment: EnvironmentConfig, window: WatchWindow, checks: readonly GoalWatch[]): boolean {
+  if (environment.watch?.exposure !== undefined && window.exposedAt === null) return false;
+  return checks.every((c) => resolveWatchSource(environment, c).operator !== null);
 }

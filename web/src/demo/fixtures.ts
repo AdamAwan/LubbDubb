@@ -2238,6 +2238,7 @@ export function buildDemoState(): DemoSeed {
         extendable: [],
       },
     ],
+    watchAsks: [],
     goalWatchWindows: [
       {
         goalRef: 'issue:395',
@@ -2268,7 +2269,9 @@ export function buildDemoState(): DemoSeed {
               rows: 0,
               value: null,
               detail: null,
+              readBy: 'harness',
             },
+            waitingOnYou: false,
           },
           {
             checkId: 'refund-p95',
@@ -2290,7 +2293,9 @@ export function buildDemoState(): DemoSeed {
               rows: null,
               value: 1240,
               detail: REFUND_SLOW,
+              readBy: 'harness',
             },
+            waitingOnYou: false,
           },
           {
             checkId: 'no-refund-retries',
@@ -2312,7 +2317,9 @@ export function buildDemoState(): DemoSeed {
               rows: null,
               value: null,
               detail: SINK_UNREACHABLE,
+              readBy: 'harness',
             },
+            waitingOnYou: false,
           },
         ],
       },
@@ -2345,7 +2352,9 @@ export function buildDemoState(): DemoSeed {
               rows: null,
               value: 380,
               detail: null,
+              readBy: 'harness',
             },
+            waitingOnYou: false,
           },
           {
             checkId: 'no-missing-cover-renders',
@@ -2367,7 +2376,9 @@ export function buildDemoState(): DemoSeed {
               rows: 0,
               value: null,
               detail: null,
+              readBy: 'harness',
             },
+            waitingOnYou: false,
           },
         ],
       },

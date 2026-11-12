@@ -58,6 +58,7 @@ export function buildDesktop(
         .harness.runCycle('manual')
         .then(() => undefined),
     remoteValidation: () => desktopRemoteValidation(config, store, late.get()),
+    watchAsks: () => late.get().watchAsks,
     now: () => new Date().toISOString(),
     socketPath: config.validation.desktopSocketPath,
     credentialPath: config.validation.desktopCredentialPath,

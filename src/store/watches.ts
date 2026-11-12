@@ -1,10 +1,13 @@
 import type {
   GoalWatch,
   GoalWatchInput,
+  WatchAsk,
+  WatchAskKind,
   WatchCheckVerdict,
   WatchReading,
   WatchReadingVerdict,
   WatchPlanRecord,
+  WatchSourceRunner,
   WatchWindow,
 } from '../types.js';
 import type Database from 'better-sqlite3';
@@ -15,6 +18,7 @@ import {
   hydrateWindow,
   keptAnswers,
   type GoalWatchRow,
+  type WatchAskRow,
   type WatchPlanRow,
   type WatchReadingRow,
   type WatchWindowRow,
@@ -37,9 +41,10 @@ export const WATCH_COLUMNS: ColumnMigrations = {
     source: 'TEXT',
     changed_from_hint: 'TEXT',
   },
-  watch_readings: { value: 'REAL' },
+  watch_readings: { value: 'REAL', read_by: 'TEXT' },
   watch_windows: { extended_at: 'TEXT', exposed_at: 'TEXT' },
   watch_plans: {},
+  watch_asks: {},
 };
 
 /**
@@ -74,7 +79,7 @@ export class WatchStore {
         }
         if (keep.has(row.check_id)) continue;
         this.ctx.prep(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
-        this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
+        this.dropCheckState(originRef, row.check_id);
       }
       for (const check of checks) {
         if (mine.has(check.id)) continue;
@@ -195,7 +200,7 @@ export class WatchStore {
           goalRef: originRef,
           now,
         });
-      if (!asked) this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, check.id);
+      if (!asked) this.dropCheckState(originRef, check.id);
     })();
     const saved = this.ctx
       .prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
@@ -209,7 +214,7 @@ export class WatchStore {
         .prep(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`)
         .run(originRef, checkId).changes;
       if (gone === 0) return false;
-      this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
+      this.dropCheckState(originRef, checkId);
       return true;
     })();
   }
@@ -396,14 +401,54 @@ export class WatchStore {
     rows: number | null;
     value: number | null;
     detail: string | null;
+    readBy?: WatchSourceRunner;
   }): void {
     this.ctx
       .prep(
         `INSERT OR REPLACE INTO watch_readings
-           (goal_ref, environment, check_id, read_at, verdict, rows_read, value, detail)
-         VALUES (@goalRef, @environment, @checkId, @readAt, @verdict, @rows, @value, @detail)`,
+           (goal_ref, environment, check_id, read_at, verdict, rows_read, value, detail, read_by)
+         VALUES (@goalRef, @environment, @checkId, @readAt, @verdict, @rows, @value, @detail, @readBy)`,
       )
-      .run({ ...input, readAt: this.ctx.now() });
+      .run({ ...input, readBy: input.readBy ?? 'harness', readAt: this.ctx.now() });
+  }
+
+  /** What a `watch_reading` bench row asks. Null where the row is not one, or its ask was never recorded. */
+  getWatchAsk(taskId: string): WatchAsk | null {
+    const row = this.ctx.prep(`SELECT * FROM watch_asks WHERE task_id=?`).get(taskId) as WatchAskRow | undefined;
+    return row === undefined ? null : hydrateAsk(row);
+  }
+
+  /** Every ask, or one goal's. */
+  listWatchAsks(goalRef?: string): WatchAsk[] {
+    const rows = (
+      goalRef === undefined
+        ? this.ctx.prep(`SELECT * FROM watch_asks ORDER BY goal_ref, check_id`).all()
+        : this.ctx.prep(`SELECT * FROM watch_asks WHERE goal_ref=? ORDER BY check_id`).all(goalRef)
+    ) as WatchAskRow[];
+    return rows.map(hydrateAsk);
+  }
+
+  /** One per check per environment per ask: a second write for the same key moves its period, never adds a row. */
+  recordWatchAsk(ask: WatchAsk): void {
+    this.ctx
+      .prep(
+        `INSERT INTO watch_asks (task_id, goal_ref, check_id, environment, ask, since, until)
+         VALUES (@taskId, @goalRef, @checkId, @environment, @ask, @since, @until)
+         ON CONFLICT(goal_ref, check_id, environment, ask) DO UPDATE SET
+           task_id=excluded.task_id, since=excluded.since, until=excluded.until`,
+      )
+      .run(ask);
+  }
+
+  /** One window's asks of one kind, whatever became of their rows: the question they asked is gone. */
+  dropWindowAsks(goalRef: string, environment: string, ask: WatchAskKind): void {
+    this.ctx.prep(`DELETE FROM watch_asks WHERE goal_ref=? AND environment=? AND ask=?`).run(goalRef, environment, ask);
+  }
+
+  /** A check's readings and asks, which describe the query it no longer carries. */
+  private dropCheckState(originRef: string, checkId: string): void {
+    this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
+    this.ctx.prep(`DELETE FROM watch_asks WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
   }
 
   listWatchReadings(): WatchReading[] {
@@ -419,6 +464,19 @@ export class WatchStore {
       rows: r.rows_read,
       value: r.value,
       detail: r.detail,
+      readBy: r.read_by === 'operator' ? 'operator' : 'harness',
     }));
   }
+}
+
+function hydrateAsk(row: WatchAskRow): WatchAsk {
+  return {
+    taskId: row.task_id,
+    goalRef: row.goal_ref,
+    checkId: row.check_id,
+    environment: row.environment,
+    ask: row.ask === 'closing' ? 'closing' : 'baseline',
+    since: row.since,
+    until: row.until,
+  };
 }

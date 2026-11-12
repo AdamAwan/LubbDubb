@@ -329,6 +329,11 @@ const realApi = {
     ),
   deleteWatchCheck: (issueNumber: number, checkId: string) =>
     del<{ ok: true }>(`/api/issues/${issueNumber}/watch/checks/${encodeURIComponent(checkId)}`),
+  answerWatchAsk: (id: string, answer: string, presence: string | null) =>
+    post<{ ok: true; recorded: string }>(
+      `/api/watch-asks/${encodeURIComponent(id)}/answer`,
+      presence === null ? { answer } : { answer, presence },
+    ),
   extendWatch: (issueNumber: number, environment: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/watch/${encodeURIComponent(environment)}/extend`),
   discussWatchOutcome: (issueNumber: number) => post<{ ok: true }>(`/api/discussions/${issueNumber}/watch-outcome`),

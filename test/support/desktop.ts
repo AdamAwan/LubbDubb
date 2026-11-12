@@ -16,6 +16,7 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     prAssign: () => system.prAssign,
     runCycle: () => system.harness.runCycle('manual').then(() => undefined),
     remoteValidation: () => desktopRemoteValidation(system.config, system.store, system),
+    watchAsks: () => system.watchAsks,
     runtimeControl: system.runtimeControl,
     harness: () => system.harness,
     escalations: () => system.escalations,

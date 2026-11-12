@@ -249,12 +249,18 @@ function Watch({
             <span className="cn-sub">{watchSaid(check)}</span>
           </span>
           <WatchSourceChip source={check.source} sources={sources} />
-          <Tag
-            tone={WATCH_TONE[check.reading?.verdict ?? 'unread']}
-            fill={WATCH_TONE[check.reading?.verdict ?? 'unread'] !== undefined}
-          >
-            {check.reading?.verdict ?? 'not read'}
-          </Tag>
+          {check.waitingOnYou ? (
+            <Tag tone="amber" fill title="Asked of you under Needs you — the outcome waits for it">
+              waiting on you
+            </Tag>
+          ) : (
+            <Tag
+              tone={WATCH_TONE[check.reading?.verdict ?? 'unread']}
+              fill={WATCH_TONE[check.reading?.verdict ?? 'unread'] !== undefined}
+            >
+              {check.reading?.verdict ?? 'not read'}
+            </Tag>
+          )}
         </div>
       ))}
     </div>
@@ -262,6 +268,8 @@ function Watch({
 }
 
 function watchSaid(check: GoalWatchCheckView): string {
+  if (check.waitingOnYou)
+    return 'Only a person can run this source, and the reading the window closed on is asked of you under Needs you. The outcome waits for it.';
   const reading = check.reading;
   if (reading === null) return 'Not yet put to this environment. Nothing has been read.';
   if (reading.detail !== null) return reading.detail;

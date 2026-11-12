@@ -121,6 +121,7 @@ test('the fake observer answers an aggregating query as an engine does — one r
     store: system.store,
     environments: [TEST_UK],
     observer,
+    asks: system.watchAsks,
   }).run('issue:12');
 
   const check = system.store.watches.listGoalWatches()[0]!;
@@ -137,7 +138,12 @@ test('a signal answering rows is untouched by any of it', async () => {
   });
   const system = build(observer);
   system.store.watches.ingestGoalWatch('issue:12', [watchCheckInput({ ...SIGNAL, kind: 'signal' }, 1)]);
-  const refusals = await new WatchDryRun({ store: system.store, environments: [TEST_UK], observer }).run('issue:12');
+  const refusals = await new WatchDryRun({
+    store: system.store,
+    environments: [TEST_UK],
+    observer,
+    asks: system.watchAsks,
+  }).run('issue:12');
   assert.deepEqual(refusals, []);
   assert.equal(system.store.watches.listGoalWatches()[0]!.dryRunRows, 1);
   system.store.close();

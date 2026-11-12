@@ -61,6 +61,22 @@ the cockpit draws.
 - **Queued or running is not a result.** Read it again later and report what the
   sheet says.
 
+### A watch reading only a person can take
+
+The post-deploy watch asks some telemetry through a person — a SQL database the
+harness holds no credential for. Those asks are on the bench, and this machine
+often holds the credential.
+
+- `watch_reading` with nothing lists the open asks, each with its query ready to
+  run as it stands — the period is already filled in — in the source's language.
+- Run it here with the operator's own client, then `watch_reading` with the
+  ask's `taskId` and what came back: the rows as JSON, or a measure's one number,
+  and a signal's presence rows beside them. It is recorded as read by the
+  operator, exactly as a paste in the cockpit is.
+- **Never hand back a number you did not read.** If you cannot run it, say so
+  and leave it: an unanswered ask reads unknown at its `closesAt`, when its grace
+  runs out, which is the honest answer.
+
 ### The three answers
 
 - **passed** — you followed the procedure and saw what it expects.

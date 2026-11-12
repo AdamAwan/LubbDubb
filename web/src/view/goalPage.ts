@@ -18,6 +18,7 @@ import type {
   GoalLandingReach,
   GoalWatch,
   GoalWatchView,
+  WatchAskView,
   RemoteSheetView,
   ValidationCheckView,
   ValidationPlanRecord,
@@ -88,6 +89,8 @@ export interface GoalPageView {
   gateRelease: EnvironmentGateRelease | null;
   remoteSheets: RemoteSheetView[];
   watches: GoalWatchView[];
+  /** The readings only a person can take on this goal, still asked for. */
+  watchAsks: WatchAskView[];
   /** The watch rolled up to one answer; null where this goal has no watch to answer. */
   watchOutcome: WatchOutcome | null;
   signals: GoalWatch[];
@@ -243,10 +246,11 @@ function goalReach(
 function goalWatchRecords(
   state: AppState,
   ref: string,
-): Pick<GoalPageView, 'remoteSheets' | 'watches' | 'watchOutcome' | 'signals' | 'watchPlan'> {
+): Pick<GoalPageView, 'remoteSheets' | 'watches' | 'watchAsks' | 'watchOutcome' | 'signals' | 'watchPlan'> {
   return {
     remoteSheets: (state.remoteSheets ?? []).filter((s) => s.goalRef === ref),
     watches: (state.goalWatchWindows ?? []).filter((w) => w.goalRef === ref),
+    watchAsks: (state.watchAsks ?? []).filter((a) => a.goalRef === ref),
     watchOutcome: (state.goalWatchOutcomes ?? []).find((o) => o.goalRef === ref) ?? null,
     signals: (state.goalWatches ?? []).filter((w) => w.originRef === ref),
     watchPlan: (state.watchPlans ?? []).find((r) => r.goalRef === ref) ?? null,
@@ -603,6 +607,7 @@ export const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   validation_plan: 'validate',
   unwatched: 'watch',
   watch: 'watch',
+  watch_reading: 'watch',
   close_out: 'close',
   shortfall: 'close',
   /* About the goal itself, or about the fleet carrying it: neither has a stage

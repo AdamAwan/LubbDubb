@@ -41,6 +41,7 @@ import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
 import { CommandTenantKeeper, tenantLogRoot } from '../validation/remote/tenants.js';
 import { WatchDesk } from '../environments/watchDesk.js';
+import { WatchAsks } from '../environments/watchAsks.js';
 import { PrWatchDesk } from '../pr/prWatchDesk.js';
 import { PrWorkItemDesk } from '../pr/prWorkItemDesk.js';
 import { PrAssignDesk } from '../pr/prAssignAsk.js';
@@ -123,6 +124,7 @@ export function buildEnvironmentDesks(
 ) {
   const { store, sink, errors, gitObserver } = base;
   const environmentObserver = opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot);
+  const watchAsks = new WatchAsks({ store, environments: config.environments, errors });
   const environments = new EnvironmentDesk({
     store,
     environments: config.environments,
@@ -139,6 +141,7 @@ export function buildEnvironmentDesks(
       observer: environmentObserver,
       probeIntervalMs: config.environmentProbeIntervalMs,
       watchIntervalMs: config.watchIntervalMs,
+      asks: watchAsks,
       errors,
     }),
     errors,
@@ -163,12 +166,14 @@ export function buildEnvironmentDesks(
     store,
     environments: config.environments,
     observer: environmentObserver,
+    asks: watchAsks,
   });
   return {
     environments,
     appErrors,
     appErrorTracker,
     watchDryRun,
+    watchAsks,
     appErrorPayloads: new CurrentAppErrors({ store, config, linker: new AppErrorLinker({ git: gitObserver, errors }) }),
     ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
   };

@@ -94,6 +94,7 @@ function reading(
     rows: verdict === 'unknown' ? null : 0,
     value: null,
     detail: verdict === 'unknown' ? `the watch could not read ${environment}` : null,
+    readBy: 'harness',
     ...over,
   };
 }
@@ -114,7 +115,7 @@ function fold(input: {
 }
 
 function resolve(checks: GoalWatch[], windows: WatchWindow[], readings: WatchReading[]) {
-  return watchWindowReadings({ windows, checks, readings });
+  return watchWindowReadings({ windows, checks, readings, waiting: [] });
 }
 
 test('any check settled regressed on any environment reads made something worse, and still names the clean ones', () => {
@@ -532,7 +533,7 @@ for (const holds of [undefined, ['close_out' as const]]) {
     settledRegressed(system);
     system.store.verdicts.recordDelivery({ originRef: GOAL, summary: 'PR #40 landed it', by: 'assessor' });
     const cleared = (): ReadonlySet<string> | null =>
-      watchClearedGoals('close_out', [environment], system.store.watches.listWatchWindows(), []);
+      watchClearedGoals('close_out', [environment], system.store.watches.listWatchWindows(), [], () => []);
     const windowsBefore = system.store.watches.listWatchWindows();
     const clearedBefore = cleared();
     const delivery = system.store.verdicts.getDelivery(GOAL);

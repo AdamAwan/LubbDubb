@@ -30,7 +30,7 @@ is about.
 | `routes/jobs.ts`            | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`                                                                                            |
 | `routes/plans.ts`           | Plan history, replan, acceptance ticks, part model pins                                                                                                                    |
 | `routes/validation.ts`      | One validation check's current reading — result, defer, waive, reset — and who runs it                                                                                     |
-| `routes/watches.ts`         | The post-deploy watch's two operator verbs: ruling on a check an agent declared, and extending a window                                                                    |
+| `routes/watches.ts`         | The post-deploy watch's operator verbs: editing a check, accepting or sending back a set, extending a window, and answering a reading only a person can take               |
 | `routes/schedules.ts`       | Recurring briefs: write, edit, run now, delete                                                                                                                             |
 | `routes/spend.ts`           | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                              |
 | `routes/allowance.ts`       | `/api/allowance` — the account's usage percentage over time, and the work that spent it                                                                                    |
@@ -794,7 +794,9 @@ No body. The operator's accept on the post-deploy watch the assessor wrote with 
 ([29](29-post-deploy-watch.md#the-operator-accepts-the-set)): every proposed check goes live together,
 keeping what its dry run read and the baseline it took, and `watch_plans.accepted_at` is stamped. An
 arrival held for the watch opens its window on the next pass, sized from the arrival — the accept being
-fresh is what lets an arrival older than the freshness guard open at all. 409 where nothing
+fresh is what lets an arrival older than the freshness guard open at all. The accept also files the
+baseline ask for every accepted check that reads its source only through a person
+([29](29-post-deploy-watch.md#a-source-only-the-operator-can-run)). 409 where nothing
 authored is waiting — never written, sent back, or already accepted — because answering `ok` would leave
 the operator believing they had released something.
 
@@ -811,13 +813,27 @@ No body. Gives a post-deploy watch window more time — the honest answer for on
 weekly job it was about ever ran. It **re-opens the window it names** rather than opening a second
 one, and the readings it already took are untouched, so the verdict that was fixed stays readable
 under the ones it is about to take. The new end is measured from **now** by the environment's own
-`forMs`, through the one function the arrival pass sizes a window with.
+`forMs`, through the one function the arrival pass sizes a window with. It goes through
+`WatchAsks.extend`, which also clears the window's closing asks for a reading only a person can take —
+answered or not — so they are asked again over the new period when the window settles.
 
 Two refusals, each a different kind of no. **404** where there is no window on that goal and
 environment — a stale page and a wrong name look identical from here, and reporting either as done
 would leave the operator believing they had extended something. **409** where the environment declares
 no `watch`: a window re-opened there would run to its new end reading nothing at all.
 → [29](29-post-deploy-watch.md#closing)
+
+### `POST /api/watch-asks/:id/answer`
+
+Body `{answer, presence?}`: what a person's run of a `watch_reading` ask returned — the rows as JSON, or a
+measure's one number — and, for a signal, its presence query's rows. It goes through `WatchAsks.answer`,
+the object the desktop `watch_reading` tool records through, so a paste and an answer from Claude are
+one write: a closing answer is the window's reading of the check, `read_by: 'operator'`; a baseline
+answer is the check's dry run and a measure's baseline; and the row settles `done`. **400** on an answer
+off the output contract, or a signal without its presence rows — nothing is recorded, and the person can
+paste it again. **404** where the id is no `watch_reading` row, **409** where it is already settled or
+its check has changed or gone — the same test the pass retracts an ask on and the listing leaves one out
+by. → [29](29-post-deploy-watch.md#a-source-only-the-operator-can-run)
 
 ### `POST /api/issues/:number/shortfall`
 

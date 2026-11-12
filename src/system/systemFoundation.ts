@@ -34,6 +34,7 @@ import type { ReviewProber } from '../review/reviewedElsewhere.js';
 import type { EnvironmentProber } from '../environments/prober.js';
 import type { EnvironmentObserver } from '../environments/observer.js';
 import { WatchDryRun } from '../environments/watchDryRun.js';
+import type { WatchAsks } from '../environments/watchAsks.js';
 import type { StateReader } from '../validation/remote/stateReader.js';
 import { StateQueryDesk } from '../validation/remote/stateQueries.js';
 import { RemoteReadingDesk } from '../validation/remote/readings.js';
@@ -103,6 +104,7 @@ interface Late {
   executor: ActionExecutor;
   filing: TicketFiler;
   watchDryRun: WatchDryRun;
+  watchAsks: WatchAsks;
   stateQueries: StateQueryDesk;
   remoteReadings: RemoteReadingDesk;
   remoteListings: RemoteListingDesk;
@@ -145,6 +147,7 @@ export function lateParts({ fleet, envs, bench, harness, local, prAssign, asks }
     executor: fleet.executor,
     filing: bench.filing,
     watchDryRun: envs.watchDryRun,
+    watchAsks: envs.watchAsks,
     stateQueries: envs.stateQueries,
     remoteReadings: envs.remoteReadings,
     remoteListings: envs.remoteListings,

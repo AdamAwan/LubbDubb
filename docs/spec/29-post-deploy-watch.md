@@ -15,20 +15,6 @@ The one-line version, because it is the thing most easily got wrong: **the harne
 what to watch for, and never judges a reading.** Both are declared, up front, by parties who already
 know — and everything from the declaration onwards is a scripted pass with no model in it.
 
-> **Partly built.** The windows, the readings, the verdict, the bench row, the Signals card,
-> [the watch hint and its tick at approval](#the-planner-at-plan-time-writes-a-hint),
-> [`{until}` and the baseline that ends at the merge](#until-and-the-baseline-that-ends-at-the-merge),
-> [sources](#sources), [authoring the watch on `delivered`](#the-assessor-on-delivered-writes-the-checks),
-> [the accept that releases it](#the-operator-accepts-the-set),
-> [the assessor's stated `none`](#declaring-nothing-is-a-legitimate-answer), [the outcome](#the-outcome)
-> and [discussing it in Claude](#discussing-an-outcome) are built. **Not yet built**, and each section
-> that describes them says so: [the source only the operator can run](#a-source-only-the-operator-can-run)
-> — its readings, its asks, `read_by`, `operatorGraceMs` and the desktop `watch_reading` tool.
-> **What runs today instead:** a plan document's executable `watch` block, from a planner or a template
-> override written before the hint, still parses and is dry-run at submission; a check reading an
-> `operator` source is `unknown`, because nothing asks a person for it. Remove each item from this list
-> in the change that builds it.
-
 ## What it is not
 
 | Not                    | Because                                                                                                                                                                                                                                                          |
@@ -801,10 +787,13 @@ The [dry run](#the-dry-run) puts each check to the **first environment that decl
 a check naming none, the first that watches at all — so a `sql` check on a deployment where only
 `liveUk` has SQL is proved against `liveUk`.
 
-**Until [the operator's source](#a-source-only-the-operator-can-run) is built, a check reading an
-`operator` source is `unknown`** on that environment, with the reason _operator-run sources are not
-read yet_, and nothing is spawned for it. That is the configuration shape accepted ahead of the
-behaviour, so a deployment can declare its SQL source now; no reading of it is ever clean.
+**A check reading an `operator` source is never put to it by the harness.** `resolveWatchSource`
+answers such a source as `operator` rather than with an `observe` command, and every reader takes that
+as _ask a person_: the window's reading pass records nothing for the check, and the dry run records
+`unknown` saying the source is read only through a person and is **not** a refusal handed back to the
+author. The dry run resolves the source once, in `WatchDryRun.read`, which answers both the reading and
+whether it is a refusal: the person-run branch is that method's first arm, not a guard beside it. What is asked instead, and when, is [the operator's source](#a-source-only-the-operator-can-run).
+A measures-only language is refused first, whoever runs the source.
 
 ### What a language changes
 
@@ -850,14 +839,14 @@ offers a source picker where the deployment declares more than one.
 
 **The authoring prompt lists each environment's sources with their language and who runs them**, and
 says plainly that a `harness` source costs nothing and an `operator` source costs a person's time —
-two readings per environment, once [that is built](#a-source-only-the-operator-can-run). An `operator`
+two readings per environment ([below](#a-source-only-the-operator-can-run)). An `operator`
 source is for a question no telemetry can answer, not for convenience. It is appended to `watchNote` and
 `watchPlanNote` (`src/plans/planning.ts`) beside each environment's `schema`, never interpolated, and
 names the measures-only languages where any environment declares one.
 
 ### A source only the operator can run
 
-**Not yet built.** The harness never spawns anything for a `runBy: operator` source. It cannot,
+The harness never spawns anything for a `runBy: operator` source. It cannot,
 because it does not hold the credential, and a check that pretended to read on a schedule would read
 `unknown` ninety-six times. Instead it asks a person **twice per environment**, at the two moments a
 single reading is worth most:
@@ -870,31 +859,107 @@ single reading is worth most:
 Each ask is a `human_tasks` row, `kind: 'watch_reading'`, one per check per environment per ask. Its
 detail is the query **as it will be put**, with `{since}` and `{until}` already substituted, so it
 runs as it stands. It is in a fence named for the language, with Copy, and the source's `queryUrl`
-link where there is one. A signal's row carries its `presence` query under it, because the person is
-being asked both questions.
+link where there is one — written by `watchCheckBlock` and `watchCheckQuery`, the bench row's own. A
+signal's row carries its `presence` query under it, because the person is being asked both questions.
+
+What each row asks is a `watch_asks` row keyed on the task — goal, check, environment, which ask, and
+the `since` and `until` it was filed with — so an answer is judged against the period the person was
+shown, never one recomputed after a merge moved. The table's unique key on `(goal, check, environment,
+ask)` is what makes it one per check per environment per ask, and filing again for the same key
+updates that row rather than adding one. The bench row's title carries the **check's id** as well as its
+title, because `recordHumanTask` folds rows by title and titles are not unique: two checks titled alike
+folded into one task would put two `watch_asks` rows on one `task_id`, a primary-key clash that throws
+the whole pass on every pulse. All of it is `WatchAsks` (`src/environments/watchAsks.ts`),
+the one object the window pass, the paste box and the desktop tool go through. It works out once, at
+construction, which environments declare a source only a person can run, and on a deployment where none
+does every method returns before reading anything; otherwise it walks only those environments.
+
+**One rule says whether an ask still stands**, and the listing, an answer and the pass all go through
+it (`resolve`): its check is still live, its environment is still declared, and the check still reads a
+source only a person can run there. An ask that fails it is not listed, refuses an answer (409) and is
+retracted by the pass.
+
+**Filing is a plan, then its application**, the desks' pure-step arrangement (`watchFindings` and the
+watch desk's apply loop): the pass and `askBaselines` decide `file`, `reopen` or `settle` steps off the
+rows they read once, and `apply` writes them. **The harness re-opens only a row it settled itself**
+(`deskSettled`) — a retraction for an extended window, a baseline its window outran. A row a person
+answered (`done`) or declined is theirs and is never re-opened by the harness on its own — not on the
+next pass, and not on any later one. A person's row comes back only when the question itself is gone,
+and two things end a question, each cleared ask row letting the same title ask afresh: an edit that
+changed the check's query, and the operator **extending** that window.
+
+- **The baseline** is asked by `askBaselines`, which the accept route calls once the set is live, and
+  which the dry run calls for a goal with live checks — so an operator's own edit and a plan document's
+  `watch` block ask at their dry run, and a proposed set asks nothing until it is accepted. Its period
+  is the dry run's: one window's length ending at the merge, or ending now before anything merged
+  (`beforeMergePeriod`). A measure whose query carries no `{until}` is **not asked once the goal has
+  merged**, and its dry run reads `unknown` with `missingUntilRefusal`, exactly as a harness-run one does:
+  a person running it would read up to now, a baseline that includes the change.
+- **The closing reading** is asked by the window pass, below settling, for each window that settled
+  **within grace** — a window that settled longer ago than `operatorGraceMs` before this build files
+  nothing, so turning the feature on does not ask a person about March. Its period is the window's own,
+  arrival (or exposure) to the end (`settledWatchPeriod`). Asking it retracts any baseline ask still
+  open for that check there. **An extend asks the closing reading again.** It is the operator's own
+  click asking to watch longer, so a reading over the shorter period no longer answers it:
+  `WatchAsks.extend`, which the extend route goes through, retracts the window's closing asks still open
+  and clears every closing ask row on that window, answered or not. When the window settles again the
+  pass files them over the new period — the same rows, re-opened — and the window is `awaiting` until
+  they are answered or grace runs out. An answer from the old period stays in `watch_readings` as
+  history, but the reading that stands for the window's outcome is the new answer, or `unknown` once
+  nobody ran it.
+- **An ask whose check was edited, dropped or moved off an operator source retracts itself**, with the
+  harness's settlement prefix, and an edit that changes a check's query clears its asks with its
+  readings so the dry run asks afresh.
+- **A dry run never overwrites an answered baseline.** `WatchDryRun.run` puts every check on the goal
+  through again — an edit to one check dry-runs its siblings — and a check on an operator source gets the
+  placeholder dry run (_nothing was put to it_). That placeholder is written only for a check with no
+  answered baseline: where its baseline ask settled `done` and the check still holds the dry run the
+  answer wrote, the dry run leaves it alone. The ask row itself is the test that the query is unchanged,
+  because an edit to the query, presence or source clears it; a check whose dry run was wiped by a plan
+  document's re-ingest gets the placeholder back.
 
 Two ways to answer it, and both land in the same place:
 
 - **Paste the result** on the row: the rows as JSON, or, for a measure, one number. It goes through
-  the same output contract as a harness reading, apart from the id echo. A person who copied the
-  query and pasted its answer is the evidence the echo stands in for.
+  the same output contract as a harness reading, apart from the id echo (`parseOperatorAnswer`,
+  `src/environments/watchResult.ts`). A person who copied the query and pasted its answer is the
+  evidence the echo stands in for. An answer off the contract — two rows for a measure, a count for a
+  signal, a signal without its presence rows — is **refused and records nothing**, because a person can
+  paste it again and a reading of `unknown` they never meant would stand. → `POST
+/api/watch-asks/:id/answer` ([16](16-http-api.md#post-apiwatch-asksidanswer))
 - **Have Claude run it**: the desktop channel's `watch_reading` tool
   ([11](11-mcp-tools.md#the-desktop-channel)) lists the open asks and records an answer. The operator's
   own Claude Code, on their own machine, holds the credential the harness does not, so it can run the
   query with the operator's `sqlcmd` or their client of choice and hand back the rows. It records
   `read_by: 'operator'`, because a person's session ran it under a person's credential.
 
+A **closing** answer is the window's reading of that check, folded by `watchCheckVerdict` exactly as a
+harness reading is, and written with `read_by: 'operator'`. A **baseline** answer is the check's dry run
+(`dryRunOf`, `src/environments/watchDryRun.ts`): a measure's number is its baseline, and a signal's rows
+are the dry-run count its outcome's _before_ is drawn from. Either way the row settles `done` with what
+was recorded.
+
 **An ask nobody answers is `unknown`, never clean.** The closing ask stays open for
 `watch.operatorGraceMs`, 72 hours by default, after the window it belongs to. Past that, the check
-settles `unknown` with the reason _nobody ran it_, and the row retracts itself. A baseline ask
-unanswered by the time the window closes leaves the measure `unknown`, for the reason any measure
-with no baseline is.
+settles `unknown` with the reason _nobody ran it_, and the row retracts itself (`DESK_SETTLED`). A
+baseline ask unanswered by the time the window closes is retracted the same way and leaves the measure
+`unknown`, for the reason any measure with no baseline is. A person who declines the row instead leaves
+the check unread on that window, which the outcome reads as `unknown` — never clean.
 
-**A window waits for its operator readings before its outcome, and for nothing else.** Harness-run
+**A window waits for its operator readings before its outcome, and for nothing else.** A window whose
+every check reads through a person is skipped by the read pass once there is no exposure probe left to
+run, so it neither probes on every pulse nor holds one of the pass's window slots. Harness-run
 checks in the same window are read on the schedule and settle at `forMs` as they always have. The
 window's [outcome](#the-outcome) is drawn when its operator readings are in or out of grace, so a goal
 does not read _worked_ on its harness checks while the SQL question it was really about has not been
-asked.
+asked. `watchWindowReadings` marks a window `awaiting` while any closing ask on it is open — the open
+ask is the whole test, because the pass retracts it the moment grace runs out — and its result carries
+**`settled`**: settled _and_ not awaiting. The open asks are a required input (`openWatchAsks`), so no
+reader can forget them. `settled` is the one settledness every reader of a window's answer goes by,
+never `window.settledAt` alone: `watchOutcome` counts an unsettled window among the environments still
+watching, the close-out's sentence says the watch is still open, and the bench row's detail says the
+window is still open. A [`holds`](#it-holds-nothing-unless-asked) opt-in is not cleared by an awaiting
+window either. Only a closing ask holds a window; a baseline never does.
 
 ## The window
 
@@ -1030,7 +1095,9 @@ harness already wrote, and an operator's decision is not a reading. The new end 
 window with (`watchWindowMs`, `src/environments/watchWindow.ts`) — a second reading of that field is
 one edit from a window extending by a different length from the one it opened with, with nothing
 red. `watch_windows.extended_at` records that it happened, so the card can say why a window's end is
-not the one its arrival would have given it.
+not the one its arrival would have given it. On a source only a person can run, the extend also
+clears the window's closing asks, so the closing reading is asked again over the longer period when it
+settles ([below](#a-source-only-the-operator-can-run)).
 → `POST /api/issues/:number/watch/:environment/extend` (`src/server/routes/watches.ts`)
 
 A settled window is never pruned either, which is the other half of the same rule: its readings are
@@ -1322,7 +1389,10 @@ so a hold scoped to open windows would read as configured and withhold nothing e
 `watchClearedGoals` therefore has `openedGoals`' exact shape, null and all — an empty set would
 withhold the obligation on every deployment on earth and would look identical to the feature working
 — and an operator's _not waiting on an environment_ clears a hold as it clears a gate, so a goal whose
-work will never reach an environment does not sit delivered with an empty bench for good.
+work will never reach an environment does not sit delivered with an empty bench for good. A window still
+waiting on a person's closing reading ([below](#a-source-only-the-operator-can-run)) has not answered,
+so it clears nothing until the reading is in or its grace has run out; `watchClearedGoals` takes the open
+asks as a thunk, read only where some environment declares a `holds`.
 
 ### A reading is never a `WorldEvent`
 
@@ -1378,8 +1448,10 @@ number in front of a person.
 
 `watch.sources` may stand in place of `watch.observe`, as set out in [Sources](#sources); `observe`
 stays valid as the shorthand for one `kql` source run by the harness, so the example below is still a
-correct configuration. **Not yet built:** `watch.operatorGraceMs`, default 72 hours, for
-[operator-run sources](#a-source-only-the-operator-can-run).
+correct configuration. `watch.operatorGraceMs`, default 72 hours (`operatorGraceMs`,
+`src/environments/watchWindow.ts`), is how long a closing ask on an
+[operator-run source](#a-source-only-the-operator-can-run) stays open after its window, and
+`validateEnvironments` refuses one that is not a positive duration.
 
 ```jsonc
 {
@@ -1447,9 +1519,17 @@ paragraph: a hint has no query to scope. → [Exposure](#exposure)
 
 → [17](17-cockpit.md). Four surfaces and one changed reading.
 
-**Not yet built**, in this section: the operator-reading asks, described where it belongs above
-([the operator's source](#a-source-only-the-operator-can-run)). Source chips are built and described
-[with sources](#what-a-language-changes). What follows is what runs today.
+Source chips are described [with sources](#what-a-language-changes).
+
+**A reading only a person can take is a row on the Needs-you rail** (`WatchReadingAsk`,
+`web/src/console/taskAsks.tsx`), ask kind `watch_reading`: its detail — the query, period filled in,
+fenced in its language with the link to run it — then a box for what it returned, a second for a
+signal's presence rows, and **Record the reading**, which posts through the route the desktop tool's
+object shares. Done and Decline stay beside it, for a person who will not run it. The open asks ship on
+the snapshot as `CockpitState.watchAsks`, each with its query and presence already substituted. The
+Signals card marks a check whose baseline is asked and unanswered **waiting on you**, and counts them in
+its heading; the Watch card draws a check whose closing reading is asked **waiting on you** in place of
+its verdict, saying the outcome waits for it (`GoalWatchCheckView.waitingOnYou`).
 
 **The Watch pane opens on the outcome card** (`web/src/console/goalWatchOutcome.tsx`), above the
 Signals card: [the outcome](#the-outcome) in its hue — green, red, amber, and the inert grey for
@@ -1595,7 +1675,7 @@ question marks. A goal that declared no checks renders nothing either, because n
 
 ## Persistence
 
-→ [14](14-persistence.md). Four tables, owned by `src/store/watches.ts` and reached as `store.watches`,
+→ [14](14-persistence.md). Five tables, owned by `src/store/watches.ts` and reached as `store.watches`,
 per the store's composition rule.
 
 | Table            | One row per                   | Written                                                                                                              |
@@ -1604,6 +1684,7 @@ per the store's composition rule.
 | `watch_windows`  | `(goal_ref, environment)`     | `OR IGNORE` — an arrival opens one window, and re-arriving is not a second; an operator's extend re-opens _that_ row |
 | `watch_readings` | `(window, check_id, read_at)` | append-only, and pruned only with the check an amendment dropped                                                     |
 | `watch_plans`    | `goal_ref`                    | upserted by `watch_plan`; stamped by the operator's accept, cleared by their send-back                               |
+| `watch_asks`     | `task_id`                     | one per `(goal_ref, check_id, environment, ask)`; a refile for the same key moves its task and period                |
 
 `goal_watches` also carries the dry run — the environment it was put to, when, what the check's own
 query and its `presence` query each answered, the row count, and a measure's baseline. On the check rather than in a
@@ -1675,10 +1756,11 @@ no backfill. `watch_declare`'s pending rows (`live = 0`, `authored = 'plan'`) ar
 with their readings, an idempotent predicate that needs no one-shot id; `goal_watches.proposal` stays,
 read by nothing ([14](14-persistence.md#retired-watch-proposals)).
 
-**Not yet built**, and each with its migration stated now so it cannot be forgotten later:
-
-- **`watch_readings.read_by`**, `'harness'` or `'operator'`, a `ColumnMigrations` entry. Null reads as
-  `'harness'`, which every earlier reading was.
+**`watch_readings.read_by`** is `'harness'` or `'operator'`, declared in `WATCH_COLUMNS`. Null reads as
+`'harness'`, which every earlier reading was, so it needs no backfill. **`watch_asks`** is new, declared
+in `WATCH_COLUMNS` with no columns yet for the same rule as `watch_plans`; it needs no backfill because a
+missing row is an ask never filed, and a `watch_reading` task with no row is retracted as one whose check
+is gone.
 
 `watch_readings` is bounded by `for` rather than by a retention rule: a window's readings are the
 evidence behind its verdict, and a rule that dropped them would leave the verdict standing with
@@ -1745,7 +1827,8 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   `watch` caveat is ticked, and a plan with no hint raises none; `plans.watch_hint` reaches a database
   from before it (`test/watchHint.test.ts`).
 - a check naming a source its environment lacks reads `unknown` there, with the source named; a check
-  naming none where there are several does too; an `operator` source spawns nothing and reads `unknown`;
+  naming none where there are several does too; an `operator` source spawns nothing and the harness
+  records no reading of it on the schedule;
   a `promql` source refuses a signal at the operator's edit and reads it `unknown`; the id projection is
   appended to `kql` alone; `LUBBDUBB_WATCH_SOURCE` reaches the command; the bench row's fence takes the
   source's language; `goal_watches.source` reaches a database from before it; and `validateEnvironments`
@@ -1756,8 +1839,14 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   work reads _not yet written_, a goal never asked reads nothing, and before a landing reads nothing; **Discuss in Claude** writes one note authored `LubbDubb (watch)` and no
   `WorldEvent`, is refused with discussions off, and draws no button without `discussionsDir`; and the
   outcome changes no hold, asserted with `holds` absent and present (`test/watchOutcome.test.ts`).
-
-**Not yet built**, and owed by the changes that build each piece:
-
-- an `operator` source spawns nothing, files one `watch_reading` ask per check per environment per
-  ask, and an unanswered closing ask settles `unknown` after `operatorGraceMs`;
+- an `operator` source spawns nothing and files one `watch_reading` baseline ask per check per
+  environment, at the dry run and at the accept and never for a proposed set; a closing window files one
+  closing ask, from the arrival to the end of the window, and the outcome reads _watching_ until it is
+  answered; a pasted answer is recorded `read_by: 'operator'`, a pasted baseline sets the measure's
+  baseline, and a paste off the contract is refused recording nothing; an unanswered closing ask settles
+  `unknown` after `operatorGraceMs` and retracts itself; an ask whose check is dropped retracts itself;
+  an answered closing ask is not re-opened on the next pass nor when its window settles again, while an
+  unanswered one its window outran is re-opened with the new period; an answered baseline is asked afresh
+  once an edit changes its query; a `holds` opt-in is not cleared by a window awaiting a closing reading;
+  the desktop `watch_reading` tool lists the asks and records through the same object; and
+  `watch_readings.read_by` reaches a database from before it (`test/watchOperator.test.ts`).

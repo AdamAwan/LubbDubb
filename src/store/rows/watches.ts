@@ -53,6 +53,17 @@ export interface WatchReadingRow {
   rows_read: number | null;
   value: number | null;
   detail: string | null;
+  read_by: string | null;
+}
+
+export interface WatchAskRow {
+  task_id: string;
+  goal_ref: string;
+  check_id: string;
+  environment: string;
+  ask: string;
+  since: string;
+  until: string;
 }
 
 export interface GoalWatchRow {

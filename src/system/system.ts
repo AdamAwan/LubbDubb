@@ -26,6 +26,7 @@ import { buildDesktop } from './systemDesktop.js';
 import { ValidationReadyDesk } from '../validation/readyDesk.js';
 import { CommandReviewProber } from '../review/reviewedElsewhere.js';
 import type { WatchDryRunner } from '../environments/watchDryRun.js';
+import type { WatchAsks } from '../environments/watchAsks.js';
 import { StateQueryDesk } from '../validation/remote/stateQueries.js';
 import { RemoteValidationDesk } from '../validation/remote/desk.js';
 import type { AppErrorTrackerDesk } from '../appErrors/tracker.js';
@@ -111,6 +112,8 @@ export interface System {
   tickets: TicketSweep;
   pool?: PoolDesk;
   watch: WatchDryRunner;
+  /** The readings only a person can take. → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run */
+  watchAsks: WatchAsks;
   stateQueries: StateQueryDesk;
   remoteValidation: RemoteValidationDesk;
   appErrorTracker: AppErrorTrackerDesk;
@@ -192,6 +195,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     filing: bench.filing,
     upstream: bench.upstream,
     watch: envs.watchDryRun,
+    watchAsks: envs.watchAsks,
     stateQueries: envs.stateQueries,
     remoteValidation: envs.remoteValidation,
     appErrorTracker: envs.appErrorTracker,
