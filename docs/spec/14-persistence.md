@@ -973,6 +973,12 @@ forgets cannot answer it" failure [the ticket mirror](#the-ticket-mirror) refuse
 briefing's whole source and `agent_flags` an artifact chip an operator may still open, so both stay
 with their agent. So the rows are compacted, `mcp_calls`' shape: keep what is counted, drop the text.
 
+The one reading the compaction does change is the MCP usage panel's **named in prompts** figure
+(`countTasksNamingTools`), which searches the prompt text itself: past the retention age a task names
+no tool, so on the `all` window that figure counts only the retained span while the call counts beside
+it, from `mcp_calls`, still cover all time. That is accepted — the figure asks whether prompts are
+pointing agents at a tool now, which is a recent question.
+
 **What is never touched, whatever its age.** Anything live or that somebody may still act on is
 _held_, read fresh at the start of each sweep:
 

@@ -88,6 +88,7 @@ export class HistoryRetentionDesk {
       if (ids.length === 0) break;
       after = ids[ids.length - 1]!;
       tally.transcriptChunks += await this.batched(tally, () => store.transcripts.deleteTranscripts(ids, chunkRows));
+      await nextTurn();
     }
     tally.decisions = await this.batched(tally, () => store.decisions.pruneDecisions(before, rows));
     tally.taskPrompts = await this.batched(tally, () => store.tasks.compactTaskPrompts(before, held.heldTaskIds, rows));
