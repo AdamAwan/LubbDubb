@@ -1900,6 +1900,7 @@ export function buildDemoState(): DemoSeed {
         announcedAt: ago(6),
         watchedAt: ago(6),
         sheetedAt: ago(6),
+        watchHeldAt: null,
       },
       {
         goalRef: 'issue:395',
@@ -1908,6 +1909,7 @@ export function buildDemoState(): DemoSeed {
         announcedAt: ago(2),
         watchedAt: null,
         sheetedAt: ago(2),
+        watchHeldAt: null,
       },
       {
         goalRef: 'issue:398',
@@ -1916,6 +1918,7 @@ export function buildDemoState(): DemoSeed {
         announcedAt: ago(66),
         watchedAt: ago(66),
         sheetedAt: ago(66),
+        watchHeldAt: null,
       },
       {
         goalRef: 'issue:398',
@@ -1924,6 +1927,7 @@ export function buildDemoState(): DemoSeed {
         announcedAt: ago(20),
         watchedAt: null,
         sheetedAt: ago(20),
+        watchHeldAt: null,
       },
       {
         goalRef: 'issue:364',
@@ -1932,6 +1936,7 @@ export function buildDemoState(): DemoSeed {
         announcedAt: ago(52),
         watchedAt: null,
         sheetedAt: ago(52),
+        watchHeldAt: null,
       },
     ],
     environmentHealth: [
@@ -3522,6 +3527,7 @@ export function buildDemoState(): DemoSeed {
         live: true,
         proposal: null,
         authored: 'plan',
+        changedFromHint: null,
       },
       {
         originRef: 'issue:395',
@@ -3548,6 +3554,7 @@ export function buildDemoState(): DemoSeed {
         baselineAt: null,
         live: false,
         authored: 'plan',
+        changedFromHint: null,
         proposal: {
           at: ago(2),
           note:
@@ -3572,6 +3579,7 @@ export function buildDemoState(): DemoSeed {
         },
       },
     ],
+    watchPlans: [],
     jobs: [],
     schedules: [
       {

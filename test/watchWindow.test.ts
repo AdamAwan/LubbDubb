@@ -17,6 +17,7 @@ function arrival(over: Partial<GoalArrival> = {}): GoalArrival {
     arrivedAt: ago(PROBE_MS),
     announcedAt: null,
     sheetedAt: null,
+    watchHeldAt: null,
     watchedAt: null,
     ...over,
   };
@@ -27,6 +28,7 @@ const open = (input: Partial<Parameters<typeof openableArrivals>[0]> = {}) =>
     arrivals: [arrival()],
     environments: WATCHED,
     declared: new Set(['issue:12']),
+    held: () => false,
     probeIntervalMs: PROBE_MS,
     now: NOW,
     ...input,
@@ -61,6 +63,25 @@ test('a goal that declared no checks opens no window at all', () => {
   const considered = open({ declared: new Set<string>() });
   assert.equal(considered.length, 1);
   assert.equal(considered[0]!.settlesAt, null);
+});
+
+test('a fresh arrival whose watch is owed is held, not stamped', () => {
+  const [considered] = open({ declared: new Set<string>(), held: () => true });
+  assert.equal(considered!.hold, true);
+  assert.equal(considered!.settlesAt, null);
+});
+
+test('staleness is cut first: an old arrival never held is stamped whatever its watch', () => {
+  const [considered] = open({ arrivals: [arrival({ arrivedAt: ago(PROBE_MS * 3) })], held: () => true });
+  assert.equal(considered!.hold, false, 'the history walks once when the feature is turned on');
+  assert.equal(considered!.settlesAt, null);
+});
+
+test('a held arrival outlasts the guard, and opens sized from the arrival once released', () => {
+  const old = arrival({ arrivedAt: ago(PROBE_MS * 30), watchHeldAt: ago(PROBE_MS * 29) });
+  assert.equal(open({ arrivals: [old], held: () => true })[0]!.hold, true, 'still waiting on the accept');
+  const [released] = open({ arrivals: [old] });
+  assert.equal(released!.settlesAt, new Date(Date.parse(old.arrivedAt) + 48 * 60 * 60 * 1000).toISOString());
 });
 
 test('a window opens per environment, so one goal travelling is watched twice', () => {

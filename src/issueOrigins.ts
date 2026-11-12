@@ -20,6 +20,7 @@ export type IssueOriginFamily =
   | 'assess'
   | 'retro'
   | 'validationPlan'
+  | 'watchPlan'
   | 'validate'
   | 'validateFailure'
   | 'localValidation'
@@ -43,6 +44,7 @@ const FAMILIES = {
   // `validate-plan` carries no id: there is one check set per goal and it is written once, so this is
   // `assess` and `retro`'s shape rather than `validate:<check>`'s.
   validationPlan: { suffix: 'validate-plan', id: null, role: 'evidence' },
+  watchPlan: { suffix: 'watch-plan', id: null, role: 'evidence' },
   validate: { suffix: 'validate', id: '.+', role: 'evidence' },
   validateFailure: { suffix: 'validate-failure', id: '.+', role: 'evidence' },
   localValidation: { suffix: 'validate-local', id: '[A-Za-z0-9-]+', role: 'evidence' },

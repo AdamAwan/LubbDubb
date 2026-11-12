@@ -25,6 +25,7 @@ import {
   checksByOrigin,
   considerWith,
   cycleLookups,
+  watchLookups,
   investigationView,
   issueGates,
   pinResolver,
@@ -60,6 +61,7 @@ import { featureSummary } from './rules/featureSummary.js';
 import { featureSequence } from './rules/featureSequence.js';
 import { validationFailed } from './rules/validationFailed.js';
 import { validationPlan } from './rules/validationPlan.js';
+import { watchPlan } from './rules/watchPlan.js';
 import { validationPlanApproval } from './rules/validationPlanApproval.js';
 import { remoteValidation } from './rules/remoteValidation.js';
 import { botPrRisk } from './rules/botPrRisk.js';
@@ -89,6 +91,7 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'local-validation': localValidation,
   'local-validation-fix': localValidationFix,
   'validation-plan': validationPlan,
+  'watch-plan': watchPlan,
   'validation-plan-approval': validationPlanApproval,
   'validate-check': validateCheck,
   'remote-validation': remoteValidation,
@@ -111,7 +114,8 @@ interface RuleDispatcherOptions {
   review?: Partial<PrReviewPolicy>;
   reviewCharters?: PrReviewCharters;
   watchNote?: string;
-  watchDeclareNote?: string;
+  watchPlanNote?: string;
+  instrumentationNote?: string;
   localValidation?: () => LocalValidationPolicy;
   testPartNote?: string;
   screenCheckNote?: string;
@@ -190,6 +194,7 @@ export class RuleDispatcher implements Dispatcher {
       sequencer: this.pickup.sequencing === 'full',
       remoteValidation: this.remoteValidationOn,
       checkSets: this.checkSets,
+      watch: this.notes.watchPlanNote !== '',
     };
     for (const rule of DISPATCH_PIPELINE) {
       if (rule.emittedBy !== undefined) continue;
@@ -279,6 +284,7 @@ export class RuleDispatcher implements Dispatcher {
 
     return {
       ...cycleLookups(ctx),
+      ...watchLookups(ctx),
       ...gates,
       ...sequencing,
       ...discussionView(ctx, sequencing.sequenceWaits, plansByOrigin, issueByNumber, this.pickup.containerTypes),
@@ -347,19 +353,34 @@ export class RuleDispatcher implements Dispatcher {
 
 type PromptNotes = Pick<
   StageContext,
-  'watchNote' | 'watchDeclareNote' | 'testPartNote' | 'screenCheckNote' | 'validationPlanNote' | 'stateDeclareNote'
+  | 'watchNote'
+  | 'watchPlanNote'
+  | 'instrumentationNote'
+  | 'testPartNote'
+  | 'screenCheckNote'
+  | 'validationPlanNote'
+  | 'stateDeclareNote'
 >;
 
 function promptNotes(opts: RuleDispatcherOptions): PromptNotes {
   const {
     watchNote = '',
-    watchDeclareNote = '',
+    watchPlanNote = '',
+    instrumentationNote = '',
     testPartNote = '',
     screenCheckNote = '',
     validationPlanNote = '',
     stateDeclareNote = '',
   } = opts;
-  return { watchNote, watchDeclareNote, testPartNote, screenCheckNote, validationPlanNote, stateDeclareNote };
+  return {
+    watchNote,
+    watchPlanNote,
+    instrumentationNote,
+    testPartNote,
+    screenCheckNote,
+    validationPlanNote,
+    stateDeclareNote,
+  };
 }
 
 function ciPolicyOf(ci: Partial<CiPolicy> = {}): CiPolicy {

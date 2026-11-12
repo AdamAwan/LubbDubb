@@ -35,6 +35,8 @@ import type {
   PendingBotPrRiskRun,
   ValidationCheck,
   ValidationPlanRecord,
+  WatchPlanRecord,
+  PlanCaveatAnswer,
   Ejection,
   WorldEvent,
   WorldSnapshot,
@@ -74,6 +76,11 @@ export interface DispatchContext {
   planAmendments?: PlanAmendment[];
   validationChecks?: ValidationCheck[];
   validationPlans?: ValidationPlanRecord[];
+  watchPlans?: WatchPlanRecord[];
+  /** Goal refs carrying a live watch check. */
+  watchedGoals?: string[];
+  /** Answers on plans' `watch` caveat, which reach the watch author with the hint. */
+  watchTickAnswers?: PlanCaveatAnswer[];
   localRun?: LocalRun | null;
   localValidations?: LocalValidation[];
   remoteRuns?: RemoteRunBrief[];

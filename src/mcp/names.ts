@@ -37,7 +37,7 @@ export const MCP_TOOL_NAMES = [
   'local_validation_plan',
   'local_run_read',
   'local_validation_report',
-  'watch_declare',
+  'watch_plan',
   'state_declare',
   'review_report',
   'review_route',
@@ -86,7 +86,7 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   description_review: 'point-of-use',
   validation_amend: 'point-of-use',
   validation_plan: 'point-of-use',
-  watch_declare: 'point-of-use',
+  watch_plan: 'point-of-use',
   state_declare: 'point-of-use',
   report_remedy: 'point-of-use',
   request_permission: 'point-of-use',
@@ -130,16 +130,17 @@ export const RULE_TOOLS: Record<DispatchRuleId, readonly McpToolName[]> = {
   'issue-investigate': ['report_investigation'],
   'criteria-alignment': [],
   'issue-plan': ['plan_submit', 'plan_not_needed'],
-  'issue-assess': ['assess_issue', 'validation_plan'],
+  'issue-assess': ['assess_issue', 'validation_plan', 'watch_plan'],
   'issue-shortfall': [],
   'issue-retro': ['retro_submit'],
   'plan-approval': [],
   'prediction-judge': [],
   'plan-amendment': [],
   'plan-blocked': [],
-  'plan-part': ['conclude_part', 'watch_declare', 'state_declare'],
-  'issue-pickup': ['conclude_work', 'watch_declare', 'state_declare'],
+  'plan-part': ['conclude_part', 'state_declare'],
+  'issue-pickup': ['conclude_work', 'state_declare'],
   'validation-plan': ['validation_plan'],
+  'watch-plan': ['watch_plan'],
   'validation-plan-approval': [],
   'validate-check': ['validation_report'],
   'remote-validation': ['remote_validation_listing', 'remote_validation_report'],
@@ -168,6 +169,7 @@ export const RETIRED_TOOL_NAMES: readonly string[] = [
   'criteria_alignment',
   'prediction_judge',
   'raise',
+  'watch_declare',
 ];
 
 export function namesRetiredTool(text: string, tool: string): boolean {
@@ -183,7 +185,19 @@ const REMOVED_FEATURE_TOOLS: Readonly<Record<string, string>> = {
     'predictions were removed from the harness, and the prediction judge with them, and nothing replaces it',
 };
 
+/** A withdrawn tool whose job moved to another, named in its refusal. → docs/spec/11-mcp-tools.md#retired-tools */
+const REPLACED_TOOLS: Readonly<Record<string, string>> = {
+  watch_declare:
+    'the post-deploy watch is no longer declared while the work happens. The assessor writes the whole watch ' +
+    'with watch_plan once the goal is delivered, against the merged code. If you added a log line, a metric or ' +
+    'an exception that says whether this is behaving, say so in the pull request description — the assessor ' +
+    'reads it there',
+};
+
 export function retiredToolMessage(name: string): string {
+  const replaced = REPLACED_TOOLS[name];
+  if (replaced !== undefined)
+    return `${name} has been retired: ${replaced}. If you reached this from a prompt that named it, that prompt is out of date.`;
   const removed = REMOVED_FEATURE_TOOLS[name];
   if (removed !== undefined) {
     return (

@@ -142,6 +142,7 @@ import type {
   ValidationPlanRecord,
   ValidationResource,
   ValidationVerdict,
+  WatchPlanRecord,
   WorkNode,
   WorldEvent,
   WorldSnapshot,
@@ -477,6 +478,11 @@ export interface CockpitState {
   validationPlans: ValidationPlanRecord[];
   validationResources: ValidationResourceView[];
   goalWatches: GoalWatch[];
+  /**
+   * One record per goal whose post-deploy watch the assessor was asked for: its `note`, its
+   * `emptyReason`, and whether the operator has accepted it. → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
+   */
+  watchPlans: WatchPlanRecord[];
   stateQueries: StateQuery[];
   planning: PlanningPolicy;
   stacks: Stack[];
@@ -1138,6 +1144,7 @@ export type {
   ValidationCheckResultBy,
   ValidationCheckState,
   ValidationPlanRecord,
+  WatchPlanRecord,
   ValidationStep,
   ValidationStepKind,
   ValidationVerdict,

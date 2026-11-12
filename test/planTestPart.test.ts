@@ -327,7 +327,7 @@ async function plannerPrompt(
     prRefStyle: '#',
     reviewCharters: { routing: null, modes: {} },
     watchNote: '',
-    watchDeclareNote: '',
+    watchPlanNote: '',
     testPartNote: testPartNote(environments),
   });
   const { actions } = await dispatcher.decide(context);

@@ -23,6 +23,7 @@ import type {
   ValidationPlanRecord,
   ValidationResourceView,
   WatchOutcome,
+  WatchPlanRecord,
 } from '../types.js';
 import type { PartGroup } from '../types.js';
 import { PART_GROUP } from './partGroups.js';
@@ -89,6 +90,8 @@ export interface GoalPageView {
   /** The watch rolled up to one answer; null where this goal has no watch to answer. */
   watchOutcome: WatchOutcome | null;
   signals: GoalWatch[];
+  /** The assessor's watch record: its note, its emptyReason, and whether it is accepted. */
+  watchPlan: WatchPlanRecord | null;
   sequence: FeatureSequence | null;
   /**
    * Which environment carries each obligation, from the deployment's own declaration rather
@@ -239,12 +242,13 @@ function goalReach(
 function goalWatchRecords(
   state: AppState,
   ref: string,
-): Pick<GoalPageView, 'remoteSheets' | 'watches' | 'watchOutcome' | 'signals'> {
+): Pick<GoalPageView, 'remoteSheets' | 'watches' | 'watchOutcome' | 'signals' | 'watchPlan'> {
   return {
     remoteSheets: (state.remoteSheets ?? []).filter((s) => s.goalRef === ref),
     watches: (state.goalWatchWindows ?? []).filter((w) => w.goalRef === ref),
     watchOutcome: (state.goalWatchOutcomes ?? []).find((o) => o.goalRef === ref) ?? null,
     signals: (state.goalWatches ?? []).filter((w) => w.originRef === ref),
+    watchPlan: (state.watchPlans ?? []).find((r) => r.goalRef === ref) ?? null,
   };
 }
 

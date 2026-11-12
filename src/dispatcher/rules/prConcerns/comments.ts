@@ -36,7 +36,8 @@ export function reviewCommentConcern(pr: PullRequest, s: StageContext): PrConcer
       reviewRecheckNote(pr.number) +
       replyToolNote() +
       priorReviewRemediesNote(s.ctx.priorRemedies ?? []) +
-      remedyAskNote('review'),
+      remedyAskNote('review') +
+      s.instrumentationNote,
     dispatchReason: many
       ? `${unhandled.length} unhandled review comments from ${authors.join(', ')} on PR #${pr.number}.`
       : `Unhandled review comment from ${authors[0]} on PR #${pr.number}.`,

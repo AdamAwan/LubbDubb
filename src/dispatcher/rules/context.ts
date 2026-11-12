@@ -34,6 +34,7 @@ import type {
   TaskSummary,
   ValidationCheck,
   ValidationPlanRecord,
+  WatchPlanRecord,
 } from '../../types.js';
 import type { PlanRouteVerdict } from '../../plans/planning.js';
 import type { PrRefStyle } from '../../pr/prRef.js';
@@ -82,6 +83,12 @@ export interface StageContext {
   validationChecks: Map<string, ValidationCheck[]>;
   /** Each goal's validation plan: the plan's hint, and the planner's stamp once it has run. */
   validationPlans: ReadonlyMap<string, ValidationPlanRecord>;
+  /** Each goal's post-deploy watch record, keyed by goal ref. → 29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks */
+  watchPlans: ReadonlyMap<string, WatchPlanRecord>;
+  /** Goal refs carrying at least one live watch check, whoever wrote it. */
+  watchedGoals: ReadonlySet<string>;
+  /** The operator's words on each plan's `watch` caveat tick, keyed by plan id. */
+  watchTickWords: ReadonlyMap<string, readonly string[]>;
   appraising: Set<number>;
   investigating: Set<number>;
   investigations: InvestigationStandings;
@@ -109,7 +116,10 @@ export interface StageContext {
   defaultBranch: string;
   prRefStyle: PrRefStyle;
   watchNote: string;
-  watchDeclareNote: string;
+  /** What a watch author must know of this deployment's telemetry; '' where no environment declares a `watch`. */
+  watchPlanNote: string;
+  /** The one watch sentence the working agents keep. → 29-post-deploy-watch.md#while-the-work-happens-nothing-is-asked */
+  instrumentationNote: string;
   testPartNote: string;
   /** Why a screen the fleet can capture is not a person's by default. → 20-validation.md#who-carries-a-step */
   screenCheckNote: string;

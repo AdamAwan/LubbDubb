@@ -226,6 +226,7 @@ export type {
   GoalWatchKind,
   GoalWatchView,
   WatchHint,
+  WatchPlanRecord,
   GoalWatchCheckView,
   RemoteReadingView,
   RemoteRowOutcome,

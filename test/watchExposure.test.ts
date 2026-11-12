@@ -12,7 +12,7 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { EXPOSURE_ECHO_COLUMN, exposureShortfall, parseExposure } from '../src/environments/exposure.js';
 import { validateEnvironments, type EnvironmentConfig } from '../src/environments/policy.js';
-import { watchDeclareNote, watchNote } from '../src/plans/planning.js';
+import { watchPlanNote, watchNote } from '../src/plans/planning.js';
 import type { GoalWatchInput } from '../src/types.js';
 
 const HOUR = 60 * 60 * 1000;
@@ -179,8 +179,8 @@ test('config refuses an exposure block that could never gate anything', () => {
 });
 
 test('a query author is told to scope every query on a staged environment, and only there', () => {
-  assert.match(watchDeclareNote([STAGED]), /Staged rollout on liveUk/);
-  assert.match(watchDeclareNote([STAGED]), /signal, measure and presence alike/);
-  assert.doesNotMatch(watchDeclareNote([{ name: 'testUk', watch: { observe: './t.sh' } } as never]), /Staged rollout/);
+  assert.match(watchPlanNote([STAGED]), /Staged rollout on liveUk/);
+  assert.match(watchPlanNote([STAGED]), /signal, measure and presence alike/);
+  assert.doesNotMatch(watchPlanNote([{ name: 'testUk', watch: { observe: './t.sh' } } as never]), /Staged rollout/);
   assert.doesNotMatch(watchNote([STAGED]), /Staged rollout/, 'a planner writes a hint, and a hint has no query');
 });

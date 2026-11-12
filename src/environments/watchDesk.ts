@@ -10,6 +10,7 @@ import { dueWindows, openableArrivals, settlingWindows, watchWindowMs } from './
 import { exposureFloor, exposureShortfall, watchPeriod } from './exposure.js';
 import { landedCommits } from './landings.js';
 import { resolveWatchSource } from './watchSource.js';
+import { watchHold } from '../validation/watchAuthoring.js';
 
 // → docs/spec/24-environments.md
 
@@ -73,13 +74,27 @@ export class WatchDesk {
     const { store, errors } = this.deps;
     try {
       const declared = new Set(store.watches.listGoalWatches().map((c) => c.originRef));
-      for (const { arrival, settlesAt } of openableArrivals({
+      const records = new Map(store.watches.listWatchPlanRecords().map((r) => [r.goalRef, r]));
+      const proposed = store.watches.listProposedGoalWatches().filter((c) => c.authored === 'assessor');
+      const held = (goalRef: string): boolean =>
+        watchHold({
+          record: records.get(goalRef) ?? null,
+          hasLiveChecks: declared.has(goalRef),
+          planned: store.plans.getPlanByOrigin(goalRef) !== null,
+          proposedChecks: proposed.filter((c) => c.originRef === goalRef).length,
+        }) !== null;
+      for (const { arrival, settlesAt, hold } of openableArrivals({
         arrivals: store.environments.listGoalArrivals(),
         environments: this.deps.environments,
         declared,
+        held,
         probeIntervalMs: this.deps.probeIntervalMs,
         now: this.now(),
       })) {
+        if (hold) {
+          store.environments.markArrivalWatchHeld(arrival.goalRef, arrival.environment);
+          continue;
+        }
         if (settlesAt !== null)
           store.watches.openWatchWindow({
             goalRef: arrival.goalRef,

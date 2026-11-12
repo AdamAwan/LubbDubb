@@ -61,6 +61,7 @@ function check(id: string, over: Partial<GoalWatch> = {}): GoalWatch {
     live: true,
     proposal: null,
     authored: 'plan',
+    changedFromHint: null,
     ...over,
   };
 }

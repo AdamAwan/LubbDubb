@@ -783,12 +783,29 @@ takes the same two answers and makes the same refusal on a release with no note
 ### `POST /api/issues/:number/watch-proposals/:checkId`
 
 Body `{accept: boolean}`. The operator's ruling on a check the working agent declared through
-`watch_declare` ([29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)). Accepting makes it
+`watch_declare` ([29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)) — a tool now retired,
+so this answers only a declaration left pending from before. Accepting makes it
 live **and runs the dry run in the same call**, which is what first puts the query to the operator's
 own telemetry with the operator's own credential — that approval is the whole authorisation story for
 the subsystem. Declining asks nothing: putting a declined query to an environment would be the
 approval running the query it exists to gate. 404 on an acceptance with no pending declaration on
 that check, because answering `ok` would leave the operator believing they had accepted something.
+
+### `POST /api/issues/:number/watch/accept`
+
+No body. The operator's accept on the post-deploy watch the assessor wrote with `watch_plan`
+([29](29-post-deploy-watch.md#the-operator-accepts-the-set)): every proposed check goes live together,
+keeping what its dry run read and the baseline it took, and `watch_plans.accepted_at` is stamped. An
+arrival held for the watch opens its window on the next pass, sized from the arrival. 409 where nothing
+authored is waiting — never written, sent back, or already accepted — because answering `ok` would leave
+the operator believing they had released something.
+
+### `POST /api/issues/:number/watch/send-back`
+
+Body `{words}`, required and non-blank: what the next author should do differently. Takes the authoring
+stamp off, keeps the words on the record, and leaves the proposed rows as the account of what was refused;
+rule `watch-plan` dispatches again with the words appended. 400 on blank words, 409 where nothing authored
+is waiting. → [29](29-post-deploy-watch.md#the-operator-accepts-the-set)
 
 ### `POST /api/issues/:number/watch/:environment/extend`
 

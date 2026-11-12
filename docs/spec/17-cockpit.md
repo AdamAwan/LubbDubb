@@ -7813,9 +7813,10 @@ surfaces.
 
 ### The watch digest
 
-> **Not yet built:** the plan sheet stops drawing executable checks, and the pending-change control
-> below moves to the Signals card, where the assessor's set is accepted after `delivered`.
-> → [29](29-post-deploy-watch.md#who-writes-it-and-when)
+The assessor's watch, written after `delivered`, is **not** drawn here: it is proposed and accepted on
+the goal page's Signals card ([29](29-post-deploy-watch.md#the-operator-accepts-the-set)), and the
+sheet filters its unaccepted rows out. The sheet still draws a legacy `watch` block's executable checks,
+for as long as a plan document may carry one. → [29](29-post-deploy-watch.md#who-writes-it-and-when)
 
 The goal page's **Watch** pane opens on the **outcome card** (`web/src/console/goalWatchOutcome.tsx`),
 above the Signals card and the window's own: the goal's watch rolled up to one answer, folded once on
@@ -7853,7 +7854,7 @@ not a clean reading — and a goal that declared no checks draws nothing at all,
 fact and not a synonym for clean.
 
 **Read-only but for one control, and the exception is the whole point.** A check the working agent
-declared through `watch_declare` arrived _after_ the approval that authorises a query to be run
+declared through the now-retired `watch_declare` arrived _after_ the approval that authorises a query to be run
 against the operator's own telemetry with the operator's own credential — so it draws as a **pending
 change** with accept and decline beside it, over the live declaration it amends, which stands
 untouched until somebody rules. Accepting applies it, clears the readings of the text it replaced, and

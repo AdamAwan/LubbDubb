@@ -258,7 +258,7 @@ function dispatcher(on = true, templates?: PromptTemplates): RuleDispatcher {
     validationRoot: '/srv/validation',
     prRefStyle: '#',
     watchNote: '',
-    watchDeclareNote: '',
+    watchPlanNote: '',
     testPartNote: '',
     stateDeclareNote: '',
     remoteValidationOn: on,

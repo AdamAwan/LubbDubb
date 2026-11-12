@@ -87,6 +87,8 @@ export interface CockpitActions {
 
   replan(planId: string): Promise<void>;
   ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<void>;
+  acceptWatch(issueNumber: number): Promise<void>;
+  sendBackWatch(issueNumber: number, words: string): Promise<void>;
   saveWatchCheck(issueNumber: number, check: GoalWatchDeclaration): Promise<string[]>;
   deleteWatchCheck(issueNumber: number, checkId: string): Promise<void>;
   extendWatch(issueNumber: number, environment: string): Promise<void>;

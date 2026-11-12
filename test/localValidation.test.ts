@@ -247,7 +247,7 @@ function rules(policy = DEFAULT_LOCAL_VALIDATION): RuleDispatcher {
     prRefStyle: '#',
     reviewCharters: { routing: null, modes: {} },
     watchNote: '',
-    watchDeclareNote: '',
+    watchPlanNote: '',
     localValidation: () => policy,
   });
 }

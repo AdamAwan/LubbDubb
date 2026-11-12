@@ -367,6 +367,7 @@ test('a set a plan document ingested before the gate reads as released, on both 
     announcedAt: NOW,
     watchedAt: null,
     sheetedAt: null,
+    watchHeldAt: null,
   };
   const considered = sheetableArrivals({
     arrivals: [arrival],
