@@ -35,6 +35,12 @@ export class ErrorStore {
     return rows.map(rowToErrorEntry);
   }
 
+  pruneErrors(before: string, limit: number): number {
+    return this.ctx
+      .prep(`DELETE FROM error_events WHERE rowid IN (SELECT rowid FROM error_events WHERE created_at < ? LIMIT ?)`)
+      .run(before, limit).changes;
+  }
+
   clearErrors(): number {
     return this.ctx.prep(`DELETE FROM error_events`).run().changes;
   }
