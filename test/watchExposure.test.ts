@@ -40,6 +40,7 @@ const SIGNAL: GoalWatchInput = {
   expectBaseline: false,
   unit: null,
   why: null,
+  source: null,
 };
 
 const STILL_FAILING = {
@@ -74,8 +75,8 @@ function build(observer: FakeEnvironmentObserver): System {
 
 function arrived(system: System): void {
   system.store.watches.ingestGoalWatch('issue:12', [SIGNAL]);
-  system.store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc' });
-  system.store.environments.recordGoalLanding({ prNumber: 5, goalRef: 'issue:12', sha: 'def' });
+  system.store.environments.recordGoalLanding({ prNumber: 4, goalRef: 'issue:12', sha: 'abc', mergedAt: null });
+  system.store.environments.recordGoalLanding({ prNumber: 5, goalRef: 'issue:12', sha: 'def', mergedAt: null });
   system.store.environments.recordGoalArrival({
     goalRef: 'issue:12',
     environment: 'liveUk',
@@ -177,10 +178,9 @@ test('config refuses an exposure block that could never gate anything', () => {
   assert.doesNotThrow(() => bad({ command: './e.sh' }));
 });
 
-test('planners are told to scope every query on a staged environment, and only there', () => {
-  for (const note of [watchNote, watchDeclareNote]) {
-    assert.match(note([STAGED]), /Staged rollout on liveUk/);
-    assert.match(note([STAGED]), /signal, measure and presence alike/);
-    assert.doesNotMatch(note([{ name: 'testUk', watch: { observe: './t.sh' } } as never]), /Staged rollout/);
-  }
+test('a query author is told to scope every query on a staged environment, and only there', () => {
+  assert.match(watchDeclareNote([STAGED]), /Staged rollout on liveUk/);
+  assert.match(watchDeclareNote([STAGED]), /signal, measure and presence alike/);
+  assert.doesNotMatch(watchDeclareNote([{ name: 'testUk', watch: { observe: './t.sh' } } as never]), /Staged rollout/);
+  assert.doesNotMatch(watchNote([STAGED]), /Staged rollout/, 'a planner writes a hint, and a hint has no query');
 });

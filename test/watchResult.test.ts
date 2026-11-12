@@ -73,11 +73,14 @@ test('a command that exits non-zero, times out, or prints nothing is unknown', a
     const ask = (command: string) =>
       observer.observe({
         environment: 'testUk',
+        source: 'logs',
+        language: 'kql',
         command,
         checkId: 'no-timeouts',
         query: 'q | where t > datetime({since})',
         kind: 'signal',
         since: '2026-01-01T00:00:00.000Z',
+        until: '2026-01-02T00:00:00.000Z',
       });
 
     const failed = await ask('echo "no such table" 1>&2; exit 3');
@@ -103,11 +106,14 @@ test('the query reaches the command as a variable’s value and never as syntax'
     const observer = new CommandEnvironmentObserver(dir, 5_000);
     const result = await observer.observe({
       environment: 'testUk',
+      source: 'logs',
+      language: 'kql',
       command: `node -e 'process.stdout.write(JSON.stringify([{q: process.env.LUBBDUBB_WATCH_QUERY, ${JSON.stringify(WATCH_ID_COLUMN)}: process.env.LUBBDUBB_WATCH_ID}]))'`,
       checkId: 'no-timeouts',
       query: '"; touch pwned; echo " | where t > datetime({since})',
       kind: 'signal',
       since: '2026-01-01T00:00:00.000Z',
+      until: '2026-01-02T00:00:00.000Z',
     });
     assert.equal(result.verdict, 'answered');
     assert.match(String(result.rows![0]!['q']), /touch pwned/);

@@ -1,6 +1,8 @@
 import type { Decision, Plan } from '../types.js';
 import { dispatchVerdict, type CooldownPolicy, type DispatchVerdict } from '../dispatcher/dispatchCooldown.js';
 import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
+import { UNTIL_EXPLAINED } from '../validation/watchQueryShape.js';
+import { measuresOnly, watchSourceDeclarations } from '../environments/watchSource.js';
 
 // → docs/spec/08-planning.md
 
@@ -77,7 +79,16 @@ export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
 
 interface WatchedEnvironment {
   name: string;
-  watch?: { schema?: string; exposure?: object };
+  watch?: { schema?: string; exposure?: object } & Parameters<typeof watchSourceDeclarations>[0];
+}
+
+function watchedSchemaLines(watched: readonly WatchedEnvironment[]): string[] {
+  const lines: string[] = [];
+  for (const env of watched) {
+    const schema = env.watch?.schema?.trim();
+    if (schema !== undefined && schema !== '') lines.push('', `**${env.name}** — ${schema}`);
+  }
+  return lines;
 }
 
 /**
@@ -85,11 +96,7 @@ interface WatchedEnvironment {
  * query is scoped to traffic running the change. → docs/spec/29-post-deploy-watch.md#exposure
  */
 function watchedEnvironmentLines(watched: readonly WatchedEnvironment[]): string[] {
-  const lines: string[] = [];
-  for (const env of watched) {
-    const schema = env.watch?.schema?.trim();
-    if (schema !== undefined && schema !== '') lines.push('', `**${env.name}** — ${schema}`);
-  }
+  const lines = [...watchSourceLines(watched), ...watchedSchemaLines(watched)];
   const staged = watched.filter((env) => env.watch?.exposure !== undefined).map((env) => env.name);
   if (staged.length > 0)
     lines.push(
@@ -106,48 +113,81 @@ function watchedEnvironmentLines(watched: readonly WatchedEnvironment[]): string
   return lines;
 }
 
+export function watchHintRequired(environments: readonly WatchedEnvironment[]): boolean {
+  return environments.some((env) => env.watch !== undefined);
+}
+
+/**
+ * Each watched environment's sources, with their language and who runs them, and what each costs.
+ * → docs/spec/29-post-deploy-watch.md#what-a-language-changes
+ */
+function watchSourceLines(watched: readonly WatchedEnvironment[]): string[] {
+  const listed = watched.map((env) => {
+    const sources = watchSourceDeclarations(env.watch).map(
+      (s) => `\`${s.name}\` (${s.language}, run by ${s.runBy === 'harness' ? 'the harness' : 'the operator'})`,
+    );
+    return `- **${env.name}**: ${sources.join(', ')}`;
+  });
+  const languages = new Set(watched.flatMap((env) => watchSourceDeclarations(env.watch).map((s) => s.language)));
+  const metricOnly = [...languages].filter(measuresOnly);
+  return [
+    '',
+    '**Where each query is asked.** Each environment answers from named sources, and a check names the one it ' +
+      "reads with `source`. A check that names none reads the environment's only source, so where an " +
+      'environment declares more than one, name it — otherwise that environment reads the check as unknown. An ' +
+      'environment without the source a check names reads it as unknown there, and that is not a refusal.',
+    '',
+    ...listed,
+    '',
+    'A source **run by the harness costs nothing**: it is asked on a schedule for as long as the window is open. ' +
+      "A source **run by the operator costs a person's time**, and is for a question no other telemetry can " +
+      'answer — never for convenience.',
+    ...(metricOnly.length === 0
+      ? []
+      : [
+          '',
+          `A ${metricOnly.join(' or ')} source takes **measures only**: the harness cannot read whether such a ` +
+            'query aggregates, so a signal there is read as unknown. Write the count as a measure with an `under`.',
+        ]),
+  ];
+}
+
 export function watchNote(environments: readonly WatchedEnvironment[]): string {
+  if (!watchHintRequired(environments)) return '';
   const watched = environments.filter((env) => env.watch !== undefined);
-  if (watched.length === 0) return '';
   const lines = [
     '',
     '',
-    '## After it ships',
+    '## How we will know it worked',
     '',
-    'Beside `validation` — which asks whether the goal was met — the plan document takes a `watch` block, ' +
-      'which asks whether the thing is behaving once it is deployed. Declare a `signal` for anything that ' +
-      'should stop happening, or should never start: an exception, a failure, a retry, a log line only ' +
-      'written when something has gone wrong.',
+    'Beside `validation` — which asks whether the goal was met — the plan document takes a `watchHint`, which ' +
+      'says what a running system would show, once this is deployed, if the work did what it claimed. It is ' +
+      '**required** here, and it is words, not queries: the checks that read telemetry are written after the ' +
+      'work is delivered, against the code that actually shipped, by whoever assesses it. Do not write a ' +
+      '`watch` block.',
     '',
-    '**For a defect this is knowable now, before the fix is.** The bug report *is* the signal — a ticket ' +
-      'reading "job X keeps timing out in proc Y" contains its own post-deploy check, and that check can be ' +
-      'written, and proven to fire, before a line of the fix exists.',
+    'Give it one of two shapes:',
     '',
-    'A signal query returns **one row per occurrence** and the harness counts the rows against `tolerate` — ' +
-      'so do not aggregate it. `| count` or a bare `| summarize` answers one row whatever the number is, ' +
-      'which reads as exactly one occurrence on every reading for ever; both queries are refused at ' +
-      'submission. Return the matching rows and let `tolerate` say how many are allowed.',
+    '- `{"intents": [{"kind": "signal", "source": "logs", "says": "The statement job stops timing out", ' +
+      '"why": "~37 timeouts a day today; the ticket is about exactly these"}]}` — one intent per thing worth ' +
+      'watching. A **signal** is something that should stop happening, or never start: an exception, a ' +
+      'failure, a retry, a log line only written when something has gone wrong. A **measure** is one number ' +
+      'that should get better, or no worse: a duration, a percentile, a rate. `source` is where you would ' +
+      "expect to read it — your best guess at the environment's telemetry, binding nothing. `says` is the " +
+      'outcome in a plain sentence; `why` is optional.',
+    '- `{"none": "Docs-only change: nothing running behaves differently"}` — nothing running changes, so ' +
+      'there is nothing to watch. **The reason is required.** A refactor, a docs change or a build fix is a ' +
+      'perfectly good `none`; a check forced onto one could only ever read clean, which is worse than none.',
     '',
-    'Every signal needs a `presence` query: a second query whose only job is to prove the code path runs at ' +
-      'all. A query naming an operation that does not exist answers zero rows, zero rows looks exactly like a ' +
-      'healthy release, and that is the direction that reads as success — so without one the harness would ' +
-      'report your fix verified on the strength of a typo.',
+    '**For a defect the intent is knowable now, before the fix is.** The bug report *is* the signal — a ' +
+      'ticket reading "job X keeps timing out in proc Y" contains its own intent: job X stops timing out.',
     '',
-    'Every query carries `{since}`, bounding it to the period being watched — `| where timestamp > ' +
-      'datetime({since})`, with your own timestamp column. The harness substitutes the moment the work ' +
-      'arrived on the environment; a query without it answers about the whole retention period, which counts ' +
-      'the very occurrences the work is meant to stop and reads as regressed for ever. It is refused at ' +
-      'submission, both queries of a signal and a measure alike.',
-    '',
-    'Both queries are run once against the environment the moment you submit, and you are told what each ' +
-      'answered. A query that resolves nothing comes back to you here, where it is cheap.',
-    '',
-    'Declaring nothing is a legitimate answer. A refactor, a docs change or a build fix has nothing running ' +
-      'to watch, and an empty watch is not the same claim as a clean one.',
+    'The operator ticks this before they approve the plan: it is what they agree "worked" will mean, so ' +
+      'write it for them to read.',
     '',
     `Environments whose telemetry can be asked: ${watched.map((env) => env.name).join(', ')}.`,
   ];
-  return [...lines, ...watchedEnvironmentLines(watched)].join('\n');
+  return [...lines, ...watchSourceLines(watched), ...watchedSchemaLines(watched)].join('\n');
 }
 
 export function watchDeclareNote(environments: readonly WatchedEnvironment[]): string {
@@ -177,6 +217,8 @@ export function watchDeclareNote(environments: readonly WatchedEnvironment[]): s
       'column — which the harness replaces with the moment the work arrived on that environment. Without it ' +
       'the query answers about the whole retention period and counts the occurrences your fix was for, ' +
       'reporting a regression on the strength of the defect it fixed. It is refused without one.',
+    '',
+    UNTIL_EXPLAINED,
     '',
     'Use it too where the fix changed what the right question is. A timeout fixed by adding a retry does ' +
       'not stop producing timeouts — the honest signal becomes "the job fails after retries", and only you ' +

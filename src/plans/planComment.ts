@@ -76,7 +76,7 @@ function narrative(plan: Plan): string {
   const sections: string[] = [];
   if (plan.diagnosis) sections.push(`**What's wrong**\n\n${plan.diagnosis}`);
   if (plan.approach) sections.push(`**What we'll do**\n\n${plan.approach}`);
-  if (plan.verification) sections.push(`**How we'll know it worked**\n\n${plan.verification}`);
+  if (plan.verification) sections.push(`**How we'll verify it**\n\n${plan.verification}`);
   if (plan.alternatives) sections.push(`**Considered and rejected**\n\n${plan.alternatives}`);
   if (plan.outOfScope) sections.push(`**Deliberately out of scope**\n\n${plan.outOfScope}`);
   if (plan.evidence.length > 0) {

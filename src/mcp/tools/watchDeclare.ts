@@ -3,10 +3,19 @@ import { issueOriginHead, issueOriginNumber } from '../../issueOrigins.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
 import { WatchSchema, watchCheckInputs } from '../../validation/watchDocument.js';
+import { UNTIL_EXPLAINED } from '../../validation/watchQueryShape.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
+
+const SourceField = z
+  .string()
+  .describe(
+    'The environment source this check reads, by name — the list under the watch notes in your prompt. ' +
+      'Leave it out where every environment has only one source.',
+  )
+  .optional();
 
 const WatchDeclareInput = z.object({
   note: z
@@ -31,7 +40,7 @@ const WatchDeclareInput = z.object({
               'carry "{since}", bounding it to the period being watched — "| where timestamp > ' +
               'datetime({since})", with your own timestamp column — which the harness replaces with the ' +
               'moment the work arrived on the environment. Without it the query answers about the whole ' +
-              'retention period and counts the occurrences your fix was for; it is refused.',
+              `retention period and counts the occurrences your fix was for; it is refused. ${UNTIL_EXPLAINED}`,
           ),
         presence: z
           .string()
@@ -52,6 +61,7 @@ const WatchDeclareInput = z.object({
           )
           .optional(),
         why: z.string().describe('Why this is the signal that matters.').optional(),
+        source: SourceField,
       }),
     )
     .describe(
@@ -71,7 +81,7 @@ const WatchDeclareInput = z.object({
             'Answers exactly one row with a numeric "value". It carries "{since}" — "| where timestamp > ' +
               'datetime({since})", with your own timestamp column — which the harness replaces with the ' +
               'moment the work arrived, so the number is about the period being watched rather than ' +
-              'about the whole retention period. It is refused without one.',
+              `about the whole retention period. It is refused without one. ${UNTIL_EXPLAINED}`,
           ),
         expect: z
           .object({
@@ -92,6 +102,7 @@ const WatchDeclareInput = z.object({
           ),
         unit: z.string().describe('ms, %, per minute — drawn beside the number, never parsed.').optional(),
         why: z.string().optional(),
+        source: SourceField,
       }),
     )
     .describe(

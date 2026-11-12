@@ -4,6 +4,7 @@ import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { assessIssueNumber } from '../delivery/assessment.js';
 import { ValidationCheckSchema, ValidationResourceSchema } from './checkDocument.js';
 import type { ValidationCheck, ValidationPlanRecord } from '../types.js';
+import { harnessReadable } from '../environments/watchSource.js';
 
 // → docs/spec/20-validation.md#when-the-check-set-is-written
 
@@ -331,7 +332,7 @@ that is what most checks have always been.
 export function validationPlanNote(
   environments: readonly {
     name: string;
-    watch?: { observe: string };
+    watch?: Parameters<typeof harnessReadable>[0];
     validate?: {
       permits: readonly string[];
       tenant?: string;
@@ -354,8 +355,7 @@ export function validationPlanNote(
     if (validate.browser !== undefined)
       can.push('drives a browser through the project’s own suite (`browser`, `suite`, `screenshot` steps)');
     if (validate.state !== undefined) can.push('reads the deployed store (`state` steps)');
-    if ((env.watch?.observe ?? '').trim() !== '')
-      can.push('reads logs, error records and metrics (`signal` and `measure` steps)');
+    if (harnessReadable(env.watch)) can.push('reads logs, error records and metrics (`signal` and `measure` steps)');
     lines.push(
       `- **${env.name}** — permits ${validate.permits.map((kind) => `\`${kind}\``).join(', ')}` +
         (can.length === 0 ? '.' : `; ${can.join(', and ')}.`) +

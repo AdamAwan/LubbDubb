@@ -1,13 +1,15 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { GoalWatch, WatchWindow } from '../types.js';
-import type { EnvironmentObserver } from './observer.js';
+import { observationAsk, type EnvironmentObserver } from './observer.js';
+import type { WatchPeriod } from './watchResult.js';
 import type { EnvironmentConfig } from './policy.js';
 import { watchFindings, watchWindowReadings } from './watchFinding.js';
 import { watchCheckVerdict } from './watchVerdict.js';
 import { dueWindows, openableArrivals, settlingWindows, watchWindowMs } from './watchWindow.js';
-import { exposureFloor, exposureShortfall, watchSince } from './exposure.js';
+import { exposureFloor, exposureShortfall, watchPeriod } from './exposure.js';
 import { landedCommits } from './landings.js';
+import { resolveWatchSource } from './watchSource.js';
 
 // → docs/spec/24-environments.md
 
@@ -136,9 +138,10 @@ export class WatchDesk {
         continue;
       }
       if (window === null) continue;
+      const period = watchPeriod(window, new Date(this.now()).toISOString());
       for (const check of mine) {
         try {
-          await this.readCheck(environment, window, check, commits);
+          await this.readCheck(environment, window, check, period, commits);
         } catch (err) {
           errors?.record({
             source: 'cycle',
@@ -192,33 +195,34 @@ export class WatchDesk {
     environment: EnvironmentConfig,
     window: WatchWindow,
     check: GoalWatch,
+    period: WatchPeriod,
     commits: readonly string[],
   ): Promise<void> {
-    const command = environment.watch!.observe;
-    const since = watchSince(window);
+    const resolved = resolveWatchSource(environment, check);
+    if (resolved.source === null) {
+      this.deps.store.watches.recordWatchReading({
+        goalRef: window.goalRef,
+        environment: window.environment,
+        checkId: check.id,
+        value: null,
+        verdict: 'unknown',
+        rows: null,
+        detail: resolved.refusal,
+      });
+      return;
+    }
+    const ask = { ...observationAsk(environment.name, resolved.source, check.id, period), commits };
     const presence =
       check.presence === null
         ? null
-        : await this.deps.observer.observe({
-            environment: environment.name,
-            command,
-            checkId: check.id,
-            query: check.presence,
-            kind: 'presence',
-            since,
-            commits,
-          });
+        : await this.deps.observer.observe({ ...ask, query: check.presence, kind: 'presence' });
     const silent = presence !== null && (presence.rows === null || presence.rows.length === 0);
     const reading = silent
       ? presence!
       : await this.deps.observer.observe({
-          environment: environment.name,
-          command,
-          checkId: check.id,
+          ...ask,
           query: check.query,
           kind: check.kind === 'measure' ? 'measure' : 'signal',
-          since,
-          commits,
         });
     const verdict = watchCheckVerdict({ check, environment: environment.name, presence, reading });
     this.deps.store.watches.recordWatchReading({

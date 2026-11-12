@@ -92,7 +92,8 @@ test('a measure is meant to aggregate and is left alone', () => {
         {
           id: 'orders-p95',
           title: 'p95',
-          query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
+          query:
+            'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = percentile(duration, 95)',
           expect: { noWorseThan: 'baseline' },
         },
       ],

@@ -113,6 +113,7 @@ function plan(): Plan {
     openQuestions: null,
     document: null,
     evidence: [],
+    watchHint: null,
     statusCommentRef: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',

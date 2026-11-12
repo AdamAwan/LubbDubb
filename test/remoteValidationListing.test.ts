@@ -164,7 +164,7 @@ function seed(b: Bench, checks: { check: ValidationCheckInput; area: string; exp
     amendNote: '',
   });
   store.verdicts.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
-  store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED });
+  store.environments.recordGoalLanding({ prNumber: 40, goalRef: 'issue:12', sha: LANDED, mergedAt: null });
   store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
   store.remoteValidation.saveRemoteSheetRows(
     'issue:12',

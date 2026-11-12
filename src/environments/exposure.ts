@@ -1,5 +1,6 @@
 import type { WatchWindow } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
+import type { WatchPeriod } from './watchResult.js';
 
 // → docs/spec/29-post-deploy-watch.md#exposure
 
@@ -31,9 +32,9 @@ export function commitsVariable(commits: readonly string[]): string {
   return commits.join(' ');
 }
 
-/** The instant a window's queries are bounded by: exposure where one was reached, else the arrival. */
-export function watchSince(window: WatchWindow): string {
-  return window.exposedAt ?? window.openedAt;
+/** A window's period: from exposure where one was reached, else the arrival, to `now`. */
+export function watchPeriod(window: WatchWindow, now: string): WatchPeriod {
+  return { since: window.exposedAt ?? window.openedAt, until: now };
 }
 
 export function parseExposure(stdout: string, commits: readonly string[]): ExposureReading {

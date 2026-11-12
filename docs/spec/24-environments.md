@@ -266,8 +266,9 @@ whose `sha` is its **carrier's**: the merge commit of the pull request whose hea
 into, followed down the stack until a rung that landed on the integration branch. The carrier is found
 from the world (the pull request whose `branch` is this one's `baseBranch`) and, when the closed
 window has forgotten both, from the work graph's `baseRef`, which persists. It runs on the desk
-**after** `reconcile`, and takes the carrier's `on_integration` with the commit, since it is the same
-commit. A carrier the clone places off the integration branch carries nothing.
+**after** `reconcile`, and takes the carrier's `on_integration` and `merged_at` with the commit, since it
+is the same commit and that merge is when the stacked work reached the integration branch. A carrier
+the clone places off the integration branch carries nothing.
 
 - **Nothing to carry yet is not a landing.** A stacked merge whose carrier has not landed is skipped
   and asked about again next pulse; the graph keeps the edge after the closed window lets it go.

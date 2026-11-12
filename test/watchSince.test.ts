@@ -43,6 +43,7 @@ const SIGNAL: GoalWatchInput = {
   expectBaseline: false,
   unit: null,
   why: null,
+  source: null,
 };
 
 const FIRING = {
@@ -97,7 +98,13 @@ test('a window’s reading is bounded to the arrival that opened it', async () =
     [window.openedAt],
     'the instant the work arrived, and not the instant the pass ran',
   );
-  const put = preparedQuery(SIGNAL.query, window.openedAt, SIGNAL.id, 'signal');
+  const put = preparedQuery(
+    SIGNAL.query,
+    { since: window.openedAt, until: new Date().toISOString() },
+    SIGNAL.id,
+    'signal',
+    'kql',
+  );
   assert.ok(put.query?.includes(`datetime(${window.openedAt})`), 'substituted before it reaches a shell');
   assert.ok(!put.query?.includes('{since}'));
   system.store.close();

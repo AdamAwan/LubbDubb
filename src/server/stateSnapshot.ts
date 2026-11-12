@@ -37,6 +37,7 @@ import { buildAskQueue, type AskSnapshot } from '../asks/queue.js';
 import { askInputs, descriptionFeedback, inbox, undescribedParts } from './stateAsks.js';
 import type { AskRow } from '../asks/askRow.js';
 import type { SetupReading } from '../setup/reading.js';
+import { watchSourceDeclarations } from '../environments/watchSource.js';
 
 // → docs/spec/16-http-api.md
 
@@ -195,6 +196,7 @@ function harnessSection(
         name: env.name,
         opens: [...(env.arrival?.opens ?? [])],
         watched: env.watch !== undefined,
+        watchSources: watchSourceDeclarations(env.watch),
         validates: env.validate !== undefined,
       })),
       heartbeatIntervalMs: config.heartbeatIntervalMs,

@@ -22,7 +22,7 @@ function arrival(over: Partial<GoalArrival> = {}): GoalArrival {
 }
 
 function env(over: Partial<CockpitEnvironment> = {}): CockpitEnvironment {
-  return { name: 'staging', opens: [], watched: false, validates: true, ...over };
+  return { name: 'staging', opens: [], watched: false, watchSources: [], validates: true, ...over };
 }
 
 function reach(over: Partial<GoalEnvironmentReachView> = {}): GoalEnvironmentReachView {

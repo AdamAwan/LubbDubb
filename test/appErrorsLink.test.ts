@@ -135,7 +135,7 @@ test('the route hint is the last resort, and only on a unique match', () => {
 });
 
 function landing(goalRef: string, sha: string, recordedAgo: number): GoalLanding {
-  return { prNumber: sha.length, goalRef, sha, recordedAt: at(recordedAgo), onIntegration: true };
+  return { prNumber: sha.length, goalRef, sha, recordedAt: at(recordedAgo), onIntegration: true, mergedAt: null };
 }
 
 function reach(sha: string, status: EnvironmentReading['status'], observedAgo: number): EnvironmentReading {

@@ -7627,7 +7627,8 @@ button and nowhere on the sheet saying where the boxes are.
 
 `diagnosis` and `approach` **side by side**, not stacked: a long "what's wrong" used to push "what
 we'll do" off the first screen, and the two answer different questions. `verification` sits under the
-approach, since "how we'll know it worked" is part of what is being agreed to. **`evidence` is not
+approach, labelled _How we'll verify it_, since how the goal is checked is part of what is being agreed
+to — not _How we'll know it worked_, which is the [watch hint](#the-watch-digest)'s. **`evidence` is not
 drawn here.** The band is the plan in the reader's own terms, and a list of file paths under
 "what's wrong" is the one thing on it that only somebody with the checkout open can read — it
 crowded out the prose that everybody can. The citations stay on the plan record and in the
@@ -7811,6 +7812,17 @@ the failure worth designing against is the two drifting into describing one chec
 surfaces.
 
 ### The watch digest
+
+> **Not yet built:** the plan sheet stops drawing executable checks, and the pending-change control
+> below moves to the Signals card, where the assessor's set is accepted after `delivered`. The goal
+> page gains an outcome card above the Watch pane, with **Discuss in Claude**.
+> → [29](29-post-deploy-watch.md#who-writes-it-and-when), [29](29-post-deploy-watch.md#the-outcome)
+
+`WatchHintDigest` (`web/src/components/WatchHintDigest.tsx`) draws the plan's **watch hint** first, as
+a _How we'll know it worked_ section: each intent's kind and source as chips, then what it `says`, its
+`why` muted beneath — or _Nothing to watch_ and the `none` reason. It is the agreement the approval's
+`watch` caveat box asks the operator to tick, which the card draws beside the risks; a plan from
+before hints draws nothing. → [29](29-post-deploy-watch.md#the-operator-ticks-the-hint)
 
 `WatchDigest` (`web/src/components/WatchDigest.tsx`) — what a running system would have to show for
 this work to have done what it claimed, drawn under the validation digest because it is the later

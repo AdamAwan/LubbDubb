@@ -1,11 +1,20 @@
 import { z } from 'zod';
 import { strictObject } from '../schemaErrors.js';
 import type { GoalWatchDeclaration, GoalWatchInput } from '../types.js';
-import { aggregatingQueryRefusal, aggregatingTail, carriesSince, missingSinceRefusal } from './watchQueryShape.js';
+import {
+  aggregatingQueryRefusal,
+  aggregatingTail,
+  carriesSince,
+  carriesUntil,
+  missingSinceRefusal,
+  missingUntilRefusal,
+} from './watchQueryShape.js';
 
 // → docs/spec/20-validation.md
 
 const MAX_SIGNALS = 20;
+
+const SourceSchema = z.string().regex(/^\S+$/, 'names one of the environment\'s watch sources, e.g. "logs"').optional();
 
 const WatchSignalSchema = strictObject(
   {
@@ -18,8 +27,9 @@ const WatchSignalSchema = strictObject(
     presence: z.string().min(1),
     tolerate: z.number().int().min(0).default(0),
     why: z.string().min(1).optional(),
+    source: SourceSchema,
   },
-  'a signal declares only id/title/query/presence/tolerate/why',
+  'a signal declares only id/title/query/presence/tolerate/why/source',
 );
 
 const WatchExpectSchema = strictObject(
@@ -46,8 +56,9 @@ const WatchMeasureSchema = strictObject(
     expect: WatchExpectSchema,
     unit: z.string().min(1).optional(),
     why: z.string().min(1).optional(),
+    source: SourceSchema,
   },
-  'a measure declares only id/title/query/expect/unit/why',
+  'a measure declares only id/title/query/expect/unit/why/source',
 );
 
 function refuseQueryShape(
@@ -73,6 +84,12 @@ function refuseQueryShape(
         message: `${kind} "${check.id}": ${missingSinceRefusal(field)}`,
       });
   }
+  if (kind === 'measure' && !carriesUntil(check.query))
+    ctx.addIssue({
+      code: 'custom',
+      path: [...path, 'query'],
+      message: `measure "${check.id}": ${missingUntilRefusal()}`,
+    });
 }
 
 export const WatchSchema = strictObject(
@@ -106,11 +123,11 @@ export const WatchCheckSchema: z.ZodType<GoalWatchDeclaration, unknown> = z
   .discriminatedUnion('kind', [
     strictObject(
       { ...WatchSignalSchema.shape, kind: z.literal('signal') },
-      'a signal declares only kind/id/title/query/presence/tolerate/why',
+      'a signal declares only kind/id/title/query/presence/tolerate/why/source',
     ),
     strictObject(
       { ...WatchMeasureSchema.shape, kind: z.literal('measure') },
-      'a measure declares only kind/id/title/query/expect/unit/why',
+      'a measure declares only kind/id/title/query/expect/unit/why/source',
     ),
   ])
   .superRefine((check, ctx) => {
@@ -132,6 +149,7 @@ export function watchCheckInput(check: GoalWatchDeclaration, seq: number): GoalW
       expectBaseline: false,
       unit: null,
       why: check.why ?? null,
+      source: check.source ?? null,
     };
   return {
     id: check.id,
@@ -146,6 +164,7 @@ export function watchCheckInput(check: GoalWatchDeclaration, seq: number): GoalW
     expectBaseline: check.expect.noWorseThan === 'baseline',
     unit: check.unit ?? null,
     why: check.why ?? null,
+    source: check.source ?? null,
   };
 }
 

@@ -159,6 +159,8 @@ export interface McpToolDeps {
   prReply?: PrReplyDesk;
   filing?: TicketFiler;
   watch?: WatchDryRunner;
+  /** → docs/spec/29-post-deploy-watch.md#the-planner-at-plan-time-writes-a-hint. Absent is not required. */
+  watchHintRequired?: boolean;
   state?: Pick<StateQueryDesk, 'configured' | 'declare' | 'dryRun'>;
   localValidations?: () => LocalValidationDesk;
   /**

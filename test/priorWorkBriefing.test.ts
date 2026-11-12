@@ -66,6 +66,7 @@ function planRow(fields: Partial<Plan> = {}): Plan {
     verification: null,
     evidence: [],
     document: null,
+    watchHint: null,
     statusCommentRef: null,
     createdAt: '2026-07-30T08:00:00.000Z',
     updatedAt: '2026-07-30T09:00:00.000Z',

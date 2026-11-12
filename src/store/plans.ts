@@ -16,6 +16,7 @@ import type {
   PlanPartInput,
   PlanRevision,
   PlanStatus,
+  WatchHint,
 } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import { labelsById, type StoreContext } from './context.js';
@@ -49,6 +50,7 @@ export const PLAN_COLUMNS: ColumnMigrations = {
     evidence: 'TEXT',
     document: 'TEXT',
     discussing: 'INTEGER NOT NULL DEFAULT 0',
+    watch_hint: 'TEXT',
   },
   plan_atoms: {
     touches: 'TEXT',
@@ -110,6 +112,7 @@ export class PlanStore {
       verification: kept.verification,
       evidence: input.evidence ?? existing?.evidence ?? [],
       document: kept.document,
+      watchHint: existing?.watchHint ?? null,
       statusCommentRef: kept.statusCommentRef,
       createdAt: existing?.createdAt ?? ts,
       updatedAt: ts,
@@ -465,6 +468,10 @@ export class PlanStore {
     const next = reason ?? row.reason;
     this.ctx.prep(`UPDATE plans SET status=?, reason=?, updated_at=? WHERE id=?`).run(status, next, updatedAt, id);
     return { ...rowToPlan(row), status, reason: next, updatedAt };
+  }
+
+  setPlanWatchHint(id: string, hint: WatchHint): void {
+    this.ctx.prep(`UPDATE plans SET watch_hint=? WHERE id=?`).run(JSON.stringify(hint), id);
   }
 
   setPlanStatusComment(id: string, ref: string): Plan | null {

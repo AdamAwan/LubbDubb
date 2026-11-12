@@ -1,6 +1,7 @@
 import type { EnvironmentGate, RemoteRowKind } from '../types.js';
 import { QUERY_URL_TOKENS } from './watchQueryUrl.js';
 import { SINCE_TOKEN } from '../appErrors/report.js';
+import { WATCH_SOURCE_LANGUAGES, WATCH_SOURCE_RUNNERS, type WatchSourceConfig } from './watchSource.js';
 
 // → docs/spec/24-environments.md
 
@@ -45,7 +46,8 @@ interface EnvironmentValidateBrowser {
 }
 
 interface EnvironmentWatch {
-  observe: string;
+  observe?: string;
+  sources?: Record<string, WatchSourceConfig>;
   schema?: string;
   describe?: string;
   forMs?: number;
@@ -238,11 +240,7 @@ function validateWatch(env: EnvironmentConfig, where: string): void {
   }
   if (typeof watch !== 'object' || watch === null || Array.isArray(watch))
     throw new Error(`${where}: "watch" must be an object — {"observe": "...", "schema": "..."}.`);
-  if (typeof watch.observe !== 'string' || watch.observe.trim() === '')
-    throw new Error(
-      `${where}: "watch.observe" must be a non-empty command that answers a declared query. ` +
-        'An empty one leaves every check on this environment unanswerable forever.',
-    );
+  validateWatchAnswers(watch, where);
   if (watch.describe !== undefined && (typeof watch.describe !== 'string' || watch.describe.trim() === ''))
     throw new Error(`${where}: "watch.describe" must be a non-empty command, or be left out.`);
   if (watch.forMs !== undefined && !isPositiveMs(watch.forMs))
@@ -252,6 +250,67 @@ function validateWatch(env: EnvironmentConfig, where: string): void {
   validateWatchQueryUrl(watch.queryUrl, where);
   if (watch.holds !== undefined) validateWatchHolds(watch.holds, where);
   if (watch.exposure !== undefined) validateWatchExposure(watch.exposure, where);
+}
+
+function validateWatchAnswers(watch: EnvironmentWatch, where: string): void {
+  if (watch.sources !== undefined) {
+    validateWatchSources(watch, where);
+    return;
+  }
+  if (typeof watch.observe !== 'string' || watch.observe.trim() === '')
+    throw new Error(
+      `${where}: "watch.observe" must be a non-empty command that answers a declared query, or "watch.sources" ` +
+        'must name the sources this environment answers from. An empty one leaves every check on this ' +
+        'environment unanswerable forever.',
+    );
+}
+
+function validateWatchSources(watch: EnvironmentWatch, where: string): void {
+  if (watch.observe !== undefined)
+    throw new Error(
+      `${where}: "watch" declares both "observe" and "sources". "observe" is the shorthand for one source, so ` +
+        'the two are two answers to one question — move the command into a source and drop "observe".',
+    );
+  if (watch.queryUrl !== undefined)
+    throw new Error(
+      `${where}: "watch.queryUrl" beside "watch.sources" is read by nothing — a link is a source's own, so put ` +
+        'it on the source whose queries it runs.',
+    );
+  const sources = watch.sources;
+  if (typeof sources !== 'object' || sources === null || Array.isArray(sources))
+    throw new Error(`${where}: "watch.sources" must be an object naming each source — {"logs": {...}}.`);
+  const names = Object.keys(sources);
+  if (names.length === 0)
+    throw new Error(
+      `${where}: "watch.sources" is empty. It reads as a watch and can answer nothing — name a source, or drop ` +
+        'the "watch" block.',
+    );
+  for (const name of names) validateWatchSource(name, sources[name]!, `${where} "watch.sources.${name}"`);
+}
+
+function validateWatchSource(name: string, source: WatchSourceConfig, where: string): void {
+  if (name.trim() === '' || /\s/.test(name))
+    throw new Error(`${where}: a source name must be a non-empty word — it is what a check names.`);
+  if (typeof source !== 'object' || source === null || Array.isArray(source))
+    throw new Error(`${where}: must be an object — {"language": "kql", "runBy": "harness", "observe": "..."}.`);
+  if (!WATCH_SOURCE_LANGUAGES.includes(source.language))
+    throw new Error(
+      `${where}: "language" is ${JSON.stringify(source.language)}, and a source's language is one of ` +
+        `${WATCH_SOURCE_LANGUAGES.join(' / ')} — it is what the refusals on a query's shape read.`,
+    );
+  if (!WATCH_SOURCE_RUNNERS.includes(source.runBy))
+    throw new Error(`${where}: "runBy" must be ${WATCH_SOURCE_RUNNERS.join(' or ')} — who can put a query to it.`);
+  if (source.runBy === 'harness' && (typeof source.observe !== 'string' || source.observe.trim() === ''))
+    throw new Error(
+      `${where}: a source the harness runs needs a non-empty "observe" command. Without one every check that ` +
+        'names it is unanswerable forever.',
+    );
+  if (source.runBy === 'operator' && source.observe !== undefined)
+    throw new Error(
+      `${where}: a source run by the operator declares no "observe" — the harness never spawns anything for ` +
+        'it, so the command would be read by nothing. Make it "runBy": "harness", or drop the command.',
+    );
+  validateWatchQueryUrl(source.queryUrl, where, 'queryUrl');
 }
 
 function validateWatchExposure(exposure: EnvironmentWatchExposure, where: string): void {
@@ -290,13 +349,13 @@ function isPositiveMs(value: unknown): boolean {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
-function validateWatchQueryUrl(queryUrl: string | undefined, where: string): void {
+function validateWatchQueryUrl(queryUrl: string | undefined, where: string, field = 'watch.queryUrl'): void {
   if (queryUrl === undefined) return;
   if (typeof queryUrl !== 'string' || queryUrl.trim() === '')
-    throw new Error(`${where}: "watch.queryUrl" must be a non-empty URL template, or be left out.`);
+    throw new Error(`${where}: "${field}" must be a non-empty URL template, or be left out.`);
   if (!QUERY_URL_TOKENS.some((token) => queryUrl.includes(token)))
     throw new Error(
-      `${where}: "watch.queryUrl" carries none of ${QUERY_URL_TOKENS.join(' / ')}, so every check would link to ` +
+      `${where}: "${field}" carries none of ${QUERY_URL_TOKENS.join(' / ')}, so every check would link to ` +
         'the same page with nothing of its own query in it.',
     );
 }

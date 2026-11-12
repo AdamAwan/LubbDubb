@@ -96,6 +96,7 @@ function submittedPlanDocument(args: Record<string, unknown>): Record<string, un
     parts: args.parts ?? [],
     validation: args.validation,
     watch: args.watch,
+    watchHint: args.watchHint,
   };
 }
 

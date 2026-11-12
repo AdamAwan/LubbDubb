@@ -111,6 +111,7 @@ function plan(over: Partial<Plan> & { id: string; originRef: string }): Plan {
     verification: null,
     evidence: [],
     document: null,
+    watchHint: null,
     statusCommentRef: null,
     createdAt: '2026-07-31T00:00:00.000Z',
     updatedAt: '2026-07-31T00:00:00.000Z',

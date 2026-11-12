@@ -1,4 +1,5 @@
 import type { ValidationCheck, ValidationStep, ValidationStepKind } from '../types.js';
+import { harnessReadable } from '../environments/watchSource.js';
 
 // → docs/spec/20-validation.md#the-test-plan
 
@@ -23,7 +24,7 @@ export interface StepCapabilities {
   browser: boolean;
   /** Some environment declares `validate.state.run`. */
   state: boolean;
-  /** Some environment declares a `watch.observe` command. */
+  /** Some environment declares a watch source the harness runs. */
   observe: boolean;
   /** Some environment names a tenant — a literal, a variable, or an `ensureTenant` command. */
   tenant: boolean;
@@ -39,7 +40,7 @@ export interface StepCapabilities {
 export const NO_STEP_CAPABILITIES: StepCapabilities = { browser: false, state: false, observe: false, tenant: false };
 
 interface CapabilityEnvironment {
-  watch?: { observe?: string };
+  watch?: Parameters<typeof harnessReadable>[0];
   validate?: {
     tenant?: string;
     tenantEnv?: string;
@@ -58,7 +59,7 @@ export function stepCapabilities(environments: readonly CapabilityEnvironment[])
     if (typeof validate.state?.run === 'string' && validate.state.run.trim() !== '') caps.state = true;
     if (validate.tenant !== undefined || validate.tenantEnv !== undefined || validate.ensureTenant !== undefined)
       caps.tenant = true;
-    if (typeof env.watch?.observe === 'string' && env.watch.observe.trim() !== '') caps.observe = true;
+    if (harnessReadable(env.watch)) caps.observe = true;
   }
   return caps;
 }
@@ -96,7 +97,8 @@ function stepFault(kind: ValidationStepKind, caps: StepCapabilities): string | n
     case 'measure':
       return caps.observe
         ? null
-        : 'no environment declares a "watch.observe" command, so nothing here reads logs, error records or metrics.';
+        : 'no environment declares a watch source the harness runs — a "watch.observe" command, or a "harness" ' +
+            'source in "watch.sources" — so nothing here reads logs, error records or metrics.';
   }
 }
 

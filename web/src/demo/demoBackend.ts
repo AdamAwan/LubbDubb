@@ -1427,7 +1427,7 @@ class DemoServer {
       expectOver: check.kind === 'measure' ? (check.expect.over ?? null) : null,
       expectBaseline: check.kind === 'measure' && check.expect.noWorseThan === 'baseline',
       unit: check.kind === 'measure' ? (check.unit ?? null) : null,
-      why: check.why ?? null,
+      ...annotations(check),
       baselineValue: null,
       baselineAt: null,
       live: true,
@@ -5759,4 +5759,8 @@ const demoClaimed = new Set<number>();
 
 function claimedBy(number: number): string[] {
   return demoClaimed.has(number) ? ['You'] : [];
+}
+
+function annotations(check: GoalWatchDeclaration): { why: string | null; source: string | null } {
+  return { why: check.why ?? null, source: check.source ?? null };
 }

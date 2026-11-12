@@ -111,7 +111,7 @@ function establishedHallway(now: number): { store: Store; desk: EnvironmentDesk;
   let clock = new Date(now - 7 * 24 * 60 * 60_000).toISOString();
   const store = new Store(':memory:', () => clock);
   for (let n = 1; n <= 12; n += 1) {
-    store.environments.recordGoalLanding({ prNumber: n, goalRef: `issue:${n}`, sha: `sha${n}` });
+    store.environments.recordGoalLanding({ prNumber: n, goalRef: `issue:${n}`, sha: `sha${n}`, mergedAt: null });
     store.environments.markLandingIntegration(n, true);
     store.environments.recordEnvironmentReach({
       sha: `sha${n}`,
@@ -122,7 +122,7 @@ function establishedHallway(now: number): { store: Store; desk: EnvironmentDesk;
     store.environments.recordGoalArrival({ goalRef: `issue:${n}`, environment: 'hallway', arrivedAt: clock });
     store.environments.markArrivalAnnounced(`issue:${n}`, 'hallway');
   }
-  store.environments.recordGoalLanding({ prNumber: 99, goalRef: 'issue:99', sha: 'sha99' });
+  store.environments.recordGoalLanding({ prNumber: 99, goalRef: 'issue:99', sha: 'sha99', mergedAt: null });
   store.environments.markLandingIntegration(99, false);
   clock = new Date(now).toISOString();
 

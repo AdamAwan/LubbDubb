@@ -208,9 +208,30 @@ test('no environments configured means no reach column at all', () => {
 
 test('the last landing is the newest under any of the Feature’s goals', () => {
   const landings: GoalLanding[] = [
-    { prNumber: 1, goalRef: 'issue:1', sha: 'a', recordedAt: '2026-02-01T00:00:00.000Z', onIntegration: null },
-    { prNumber: 2, goalRef: 'issue:2', sha: 'b', recordedAt: '2026-03-01T00:00:00.000Z', onIntegration: null },
-    { prNumber: 3, goalRef: 'issue:99', sha: 'c', recordedAt: '2026-04-01T00:00:00.000Z', onIntegration: null },
+    {
+      prNumber: 1,
+      goalRef: 'issue:1',
+      sha: 'a',
+      recordedAt: '2026-02-01T00:00:00.000Z',
+      onIntegration: null,
+      mergedAt: null,
+    },
+    {
+      prNumber: 2,
+      goalRef: 'issue:2',
+      sha: 'b',
+      recordedAt: '2026-03-01T00:00:00.000Z',
+      onIntegration: null,
+      mergedAt: null,
+    },
+    {
+      prNumber: 3,
+      goalRef: 'issue:99',
+      sha: 'c',
+      recordedAt: '2026-04-01T00:00:00.000Z',
+      onIntegration: null,
+      mergedAt: null,
+    },
   ];
   const board = build({ items: [item({ number: 1 }), item({ number: 2 })], landings });
 
@@ -220,10 +241,38 @@ test('the last landing is the newest under any of the Feature’s goals', () => 
 
 test('the landings are quoted newest first, each carrying its goal, and cut at FEATURE_LANDINGS', () => {
   const landings: GoalLanding[] = [
-    { prNumber: 10, goalRef: 'issue:1', sha: 'a', recordedAt: '2026-02-01T00:00:00.000Z', onIntegration: null },
-    { prNumber: 30, goalRef: 'issue:2', sha: 'c', recordedAt: '2026-04-01T00:00:00.000Z', onIntegration: null },
-    { prNumber: 20, goalRef: 'issue:1', sha: 'b', recordedAt: '2026-03-01T00:00:00.000Z', onIntegration: null },
-    { prNumber: 99, goalRef: 'issue:99', sha: 'z', recordedAt: '2026-05-01T00:00:00.000Z', onIntegration: null },
+    {
+      prNumber: 10,
+      goalRef: 'issue:1',
+      sha: 'a',
+      recordedAt: '2026-02-01T00:00:00.000Z',
+      onIntegration: null,
+      mergedAt: null,
+    },
+    {
+      prNumber: 30,
+      goalRef: 'issue:2',
+      sha: 'c',
+      recordedAt: '2026-04-01T00:00:00.000Z',
+      onIntegration: null,
+      mergedAt: null,
+    },
+    {
+      prNumber: 20,
+      goalRef: 'issue:1',
+      sha: 'b',
+      recordedAt: '2026-03-01T00:00:00.000Z',
+      onIntegration: null,
+      mergedAt: null,
+    },
+    {
+      prNumber: 99,
+      goalRef: 'issue:99',
+      sha: 'z',
+      recordedAt: '2026-05-01T00:00:00.000Z',
+      onIntegration: null,
+      mergedAt: null,
+    },
   ];
   const board = build({ items: [item({ number: 1 }), item({ number: 2 })], landings });
 
@@ -239,6 +288,7 @@ test('the landings are quoted newest first, each carrying its goal, and cut at F
     sha: `s${i}`,
     recordedAt: `2026-01-01T00:00:${String(i).padStart(2, '0')}.000Z`,
     onIntegration: null,
+    mergedAt: null,
   }));
   const busy = build({ items: [item({ number: 1 })], landings: many });
   assert.equal(busy.features[0]?.landings.length, FEATURE_LANDINGS);
@@ -248,8 +298,22 @@ test('the landings are quoted newest first, each carrying its goal, and cut at F
 
 test('the orphan bucket carries its own landings', () => {
   const landings: GoalLanding[] = [
-    { prNumber: 1, goalRef: 'issue:1', sha: 'a', recordedAt: '2026-02-01T00:00:00.000Z', onIntegration: null },
-    { prNumber: 2, goalRef: 'issue:7', sha: 'b', recordedAt: '2026-03-01T00:00:00.000Z', onIntegration: null },
+    {
+      prNumber: 1,
+      goalRef: 'issue:1',
+      sha: 'a',
+      recordedAt: '2026-02-01T00:00:00.000Z',
+      onIntegration: null,
+      mergedAt: null,
+    },
+    {
+      prNumber: 2,
+      goalRef: 'issue:7',
+      sha: 'b',
+      recordedAt: '2026-03-01T00:00:00.000Z',
+      onIntegration: null,
+      mergedAt: null,
+    },
   ];
   const board = build({ items: [item({ number: 1 }), item({ number: 7, parent: null })], landings });
 

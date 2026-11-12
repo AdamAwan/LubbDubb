@@ -149,6 +149,10 @@ survivable:
 | After the verdict, before the set | Goal parked, check set owed | Rule `validation-plan` fires on the next pulse, exactly as it always did                   |
 | After both                        | Parked and authored         | Nothing further; `validation-plan` sees an authored set and stands down                    |
 
+**Not yet built: a third output.** After `validation_plan`, the assessor writes the goal's
+post-deploy watch with `watch_plan`, on the same ordering argument and with its own catch-up rule,
+`watch-plan`, ranked directly below `validation-plan`. → [29](29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks)
+
 So **rule `validation-plan` stays**, and is now the catch-up rather than the ordinary path. Removing it
 would put the check set behind a turn that has to reach its end, which is the one thing a crashed,
 killed or capped agent cannot promise. It costs nothing when the fold works: its gate is already
@@ -732,7 +736,8 @@ not have.
 
 **Built.** `stepCapabilities` folds what every configured environment declares, once, and `resolveSteps`
 answers each step off it: `browser`, `suite` and `screenshot` need a `validate.browser` block, `state`
-needs `validate.state.run`, `signal` and `measure` need `watch.observe`, and `manual` is a person's by
+needs `validate.state.run`, `signal` and `measure` need a watch source the harness runs — `watch.observe`, or a `harness` source in
+`watch.sources` ([29](29-post-deploy-watch.md#sources)) — and `manual` is a person's by
 definition. A `browser` step needs a **tenant** as well, because unlike the others it acts, and the
 harness never generates or infers a tenant identifier
 ([36](36-remote-validation.md#tenants)). A step the fleet cannot carry comes back to a person **naming

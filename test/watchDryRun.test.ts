@@ -25,6 +25,8 @@ const TEST_UK: EnvironmentConfig = {
   watch: { observe: './scripts/telemetry.sh testUk', schema: 'Structured logs land in `traces`.' },
 };
 
+const WATCH_HINT = { intents: [{ kind: 'signal', source: 'traces', says: 'Job X stops timing out' }] };
+
 const SIGNAL = {
   id: 'no-timeouts',
   title: 'Job X stops timing out',
@@ -72,6 +74,7 @@ async function submit(system: System, agent: Agent, watch: unknown) {
   const result = (await session!.call('plan_submit', {
     reason: 'One part.',
     parts: [{ slug: 'fix', title: 'Fix the proc', scope: 'src/db' }],
+    watchHint: WATCH_HINT,
     watch,
   })) as ToolResultText;
   return {
@@ -232,7 +235,8 @@ test('a check an amendment stopped declaring stops being asked about', async () 
 const MEASURE = {
   id: 'orders-p95',
   title: 'The orders proc is no slower than it was',
-  query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
+  query:
+    'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = percentile(duration, 95)',
   expect: { noWorseThan: 'baseline' as const },
   unit: 'ms',
 };
@@ -285,14 +289,24 @@ test('an amended measure re-takes its baseline rather than keeping the old one',
 
   await submit(system, agent, {
     measures: [
-      { ...MEASURE, query: 'requests | where timestamp > datetime({since}) | summarize value = avg(duration)' },
+      {
+        ...MEASURE,
+        query:
+          'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = avg(duration)',
+      },
     ],
   });
   const after = system.store.watches.listGoalWatches()[0]!;
-  assert.equal(after.query, 'requests | where timestamp > datetime({since}) | summarize value = avg(duration)');
+  assert.equal(
+    after.query,
+    'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = avg(duration)',
+  );
   assert.deepEqual(
     observer.asked.filter((a) => a.kind === 'measure').map((a) => a.query),
-    [MEASURE.query, 'requests | where timestamp > datetime({since}) | summarize value = avg(duration)'],
+    [
+      MEASURE.query,
+      'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = avg(duration)',
+    ],
     'the amended query was put to the environment, not assumed to answer as its predecessor did',
   );
   assert.ok(after.baselineAt !== null, 'and the reading it answered with is the new baseline');
@@ -358,7 +372,9 @@ test('the planner’s watch guidance is appended, and is empty where nothing dec
   assert.equal(watchNote([{ name: 'testUk' }]), '');
   const note = watchNote([TEST_UK]);
   assert.match(note, /testUk/);
-  assert.match(note, /presence/);
+  assert.match(note, /`watchHint`/);
+  assert.match(note, /The reason is required/);
+  assert.doesNotMatch(note, /presence/, 'the planner writes words, not queries');
   assert.match(note, /Structured logs land in/);
 });
 

@@ -167,6 +167,7 @@ function sheet(input: {
           verification: null,
           evidence: [],
           document: null,
+          watchHint: null,
           statusCommentRef: null,
           createdAt: 'then',
           updatedAt: 'then',

@@ -39,20 +39,26 @@ export function aggregatingQueryRefusal(field: 'query' | 'presence', operator: s
 }
 
 /**
- * The one substitution a watch query carries: the instant the reading is about.
- * Declared here beside the refusal that requires it, so the token the author is
- * told to write and the token the harness replaces cannot come to disagree.
+ * The two substitutions a watch query carries: the instants the reading is about.
+ * Declared here beside the refusals that require them, so the tokens the author is
+ * told to write and the tokens the harness replaces cannot come to disagree.
  *
  * @public written by the author, substituted by `preparedQuery`
  */
 export const SINCE_TOKEN = '{since}';
 
+const UNTIL_TOKEN = '{until}';
+
 export function carriesSince(query: string): boolean {
   return query.includes(SINCE_TOKEN);
 }
 
-export function withSince(query: string, since: string): string {
-  return query.replaceAll(SINCE_TOKEN, since);
+export function carriesUntil(query: string): boolean {
+  return query.includes(UNTIL_TOKEN);
+}
+
+export function withPeriod(query: string, since: string, until: string): string {
+  return query.replaceAll(SINCE_TOKEN, since).replaceAll(UNTIL_TOKEN, until);
 }
 
 export function missingSinceRefusal(field: 'query' | 'presence'): string {
@@ -68,6 +74,18 @@ export function missingSinceRefusal(field: 'query' | 'presence'): string {
     `the ${field} carries no "${SINCE_TOKEN}", so nothing bounds it to the period being watched. ${why} ` +
     `Bound it yourself, naming your own timestamp column — "| where timestamp > datetime(${SINCE_TOKEN})" — ` +
     'and the harness substitutes the instant the reading is about: the moment the work arrived on that ' +
-    'environment for a watch reading, and a window before now for the dry run that takes the baseline.'
+    'environment for a watch reading, and one window before the merge for the dry run that takes the baseline.'
   );
+}
+
+/** The one account of `{until}` every server-side text gives: the refusal, `watch_declare` and both planning notes. */
+export const UNTIL_EXPLAINED =
+  `A measure's query ends its period with "${UNTIL_TOKEN}" — "| where timestamp > datetime(${SINCE_TOKEN}) and ` +
+  `timestamp <= datetime(${UNTIL_TOKEN})" — which the harness replaces with now for a watch reading and with the ` +
+  'moment the goal merged for the dry run that takes the baseline, so the number the work has to beat is read ' +
+  'over the window before the change and never over the change itself. A measure without it is refused; a ' +
+  'signal may carry it too.';
+
+export function missingUntilRefusal(): string {
+  return `the query carries no "${UNTIL_TOKEN}", so nothing ends the period a measure is read over. ${UNTIL_EXPLAINED}`;
 }

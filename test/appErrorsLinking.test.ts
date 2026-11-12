@@ -69,9 +69,9 @@ function group(
 
 function seed(system: System): void {
   const env = system.store.environments;
-  env.recordGoalLanding({ prNumber: 1, goalRef: 'issue:412', sha: A });
-  env.recordGoalLanding({ prNumber: 2, goalRef: 'issue:415', sha: B });
-  env.recordGoalLanding({ prNumber: 3, goalRef: 'issue:420', sha: C });
+  env.recordGoalLanding({ prNumber: 1, goalRef: 'issue:412', sha: A, mergedAt: null });
+  env.recordGoalLanding({ prNumber: 2, goalRef: 'issue:415', sha: B, mergedAt: null });
+  env.recordGoalLanding({ prNumber: 3, goalRef: 'issue:420', sha: C, mergedAt: null });
   env.recordEnvironmentReach({ sha: A, environment: 'test', status: 'reached', detail: null });
   env.recordEnvironmentReach({ sha: B, environment: 'test', status: 'absent', detail: null });
   env.recordEnvironmentReach({ sha: C, environment: 'test', status: 'reached', detail: null });

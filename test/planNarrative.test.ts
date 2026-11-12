@@ -278,6 +278,7 @@ test('the status comment carries the planner narrative, folded, once there is on
     evidence: [{ path: 'src/cache.ts', line: 88, note: 'the stale write' }],
     document: '# Why\n\nBecause.',
     discussing: false,
+    watchHint: null,
     statusCommentRef: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
@@ -285,7 +286,7 @@ test('the status comment carries the planner narrative, folded, once there is on
   const body = renderPlanComment(plan, [part('schema', {})], '#');
   assert.match(body, /<details>/);
   assert.match(body, /What's wrong/);
-  assert.match(body, /How we'll know it worked/);
+  assert.match(body, /How we'll verify it/);
   assert.match(body, /Considered and rejected/);
   assert.match(body, /src\/cache\.ts:88/);
   assert.match(body, /The full write-up/);

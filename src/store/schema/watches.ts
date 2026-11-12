@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS goal_watches (
   proposal        TEXT,            -- an agent's pending amendment, as JSON; NULL where none is outstanding
   authored        TEXT NOT NULL DEFAULT 'plan', -- 'plan' | 'operator'; an operator's row is neither swept nor overwritten by a replan
   why        TEXT,
+  source     TEXT,                 -- the environment watch source it reads, by name; NULL reads the environment's only one
   dry_run_environment TEXT,        -- NULL while nothing has been asked
   dry_run_at          TEXT,
   dry_run_verdict     TEXT,        -- 'fires' | 'zero' | 'unknown'

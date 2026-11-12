@@ -74,6 +74,7 @@ import {
 } from './systemFoundation.js';
 import { type Fleet, buildAgentManager, buildFleet } from './systemFleet.js';
 import { buildLocalRuns } from './systemLocalRuns.js';
+import { watchHintRequired } from '../plans/planning.js';
 import {
   type IntakeDesks,
   buildIntakeDesks,
@@ -275,6 +276,7 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
     filing: (): McpToolDeps['filing'] => late.get().filing,
     prReply: (): McpToolDeps['prReply'] => late.get().executor,
     watch: (): McpToolDeps['watch'] => late.get().watchDryRun,
+    watchHintRequired: watchHintRequired(config.environments),
     state: (): McpToolDeps['state'] => late.get().stateQueries,
     localValidations: (): LocalValidationDesk => late.get().localValidations,
     remoteReadings: (): RemoteReadingDesk => late.get().remoteReadings,

@@ -1,7 +1,8 @@
-import type { GoalWatch, GoalWatchInput, WatchReadingVerdict } from '../types.js';
+import type { GoalWatch, GoalWatchInput, WatchReadingVerdict, WatchSourceDeclaration } from '../types.js';
 import { renderMarkdown } from './markdown.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
+import { WatchSourceChip } from './WatchSourceChip.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -28,10 +29,13 @@ import { Tag } from './tag.js';
  */
 export function WatchDigest({
   watches,
+  sources,
   refUrls,
   onRule,
 }: {
   watches: GoalWatch[];
+  /** The deployment's watch sources. Without them only a check that names its source draws one, by name. */
+  sources?: WatchSourceDeclaration[];
   refUrls: Record<string, string>;
   onRule: ((checkId: string, accept: boolean) => void) | null;
 }) {
@@ -47,6 +51,11 @@ export function WatchDigest({
             <div className="pm-vhead">
               <span className="pm-vtitle">{check.title}</span>
               <Tag>{check.kind}</Tag>
+              {sources !== undefined ? (
+                <WatchSourceChip source={check.source} sources={sources} />
+              ) : (
+                check.source !== null && <Tag lower>{check.source}</Tag>
+              )}
               <Tag lower title="The author's own id, and the merge key on a replan">
                 {check.id}
               </Tag>

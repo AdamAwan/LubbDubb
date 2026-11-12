@@ -132,6 +132,7 @@ import type {
   GoalWatch,
   GoalWatchKind,
   WatchReading,
+  WatchSourceDeclaration,
   WatchWindow,
   PoolFleetReading,
   StallPark,
@@ -381,6 +382,8 @@ export interface CockpitEnvironment {
   opens: EnvironmentGate[];
   /** The environment declares a `watch` block, so an arrival here opens a watch window. */
   watched: boolean;
+  /** The sources its `watch` answers from, `observe` alone read as one; empty where it declares no watch. */
+  watchSources: WatchSourceDeclaration[];
   /** The environment declares a `validate` block, so a goal's work arriving here can be run remotely. */
   validates: boolean;
 }
@@ -659,6 +662,8 @@ export interface GoalWatchCheckView {
   checkId: string;
   title: string;
   kind: GoalWatchKind;
+  /** The source the check reads on this window's environment, by name; null reads its only one. */
+  source: string | null;
   tolerate: number;
   expectUnder: number | null;
   expectOver: number | null;
@@ -1118,6 +1123,7 @@ export type {
   GoalWatchDeclaration,
   GoalWatchInput,
   GoalWatchKind,
+  WatchHint,
   StackLanding,
   StateQuery,
   TaskSummary,
@@ -1135,6 +1141,7 @@ export type {
   ViewerAssignment,
   WatchCheckVerdict,
   WatchReadingVerdict,
+  WatchSourceDeclaration,
   WorkNode,
   WorldEvent,
   WorldEventKind,

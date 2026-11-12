@@ -23,6 +23,8 @@ const TEST_UK: EnvironmentConfig = {
   watch: { observe: './scripts/telemetry.sh testUk' },
 };
 
+const WATCH_HINT = { intents: [{ kind: 'signal', source: 'traces', says: 'Job X stops timing out' }] };
+
 const SIGNAL = {
   id: 'no-timeouts',
   title: 'Job X stops timing out',
@@ -33,7 +35,8 @@ const SIGNAL = {
 const MEASURE = {
   id: 'orders-p95',
   title: 'The orders proc is no slower than it was',
-  query: 'requests | where timestamp > datetime({since}) | summarize value = percentile(duration, 95)',
+  query:
+    'requests | where timestamp > datetime({since}) and timestamp <= datetime({until}) | summarize value = percentile(duration, 95)',
   expect: { noWorseThan: 'baseline' },
   unit: 'ms',
 };
@@ -153,6 +156,7 @@ test('it merges on the slug, and a live check is untouched until the amendment i
   await session.call('plan_submit', {
     reason: 'One part.',
     parts: [{ slug: 'fix', title: 'Fix the proc', scope: 'src/db' }],
+    watchHint: WATCH_HINT,
     watch: { signals: [{ ...SIGNAL, tolerate: 0 }] },
   });
   assert.equal(system.store.watches.listGoalWatches()[0]!.dryRunRows, 1);
@@ -185,6 +189,7 @@ test("an accepted amendment clears the reading it replaced, as a planner's amend
   await planner.call('plan_submit', {
     reason: 'One part.',
     parts: [{ slug: 'fix', title: 'Fix the proc', scope: 'src/db' }],
+    watchHint: WATCH_HINT,
     watch: { signals: [SIGNAL] },
   });
   system.store.watches.recordWatchReading({

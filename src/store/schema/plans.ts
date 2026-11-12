@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS plans (
   -- additive migration, and a NOT NULL DEFAULT costs an existing database
   -- nothing.
   discussing  INTEGER NOT NULL DEFAULT 0,
+  watch_hint  TEXT,                   -- JSON {intents} | {none}; null is a plan from before hints
   status_comment_ref TEXT,            -- provider comment id, edited in place
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL

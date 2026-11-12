@@ -368,6 +368,7 @@ function sheet(input: { parts: PlanPartView[]; atoms: PlanAtom[]; status: string
           verification: null,
           evidence: [],
           document: null,
+          watchHint: null,
           statusCommentRef: null,
           createdAt: 'then',
           updatedAt: 'then',
