@@ -232,6 +232,7 @@ export class Store {
   constructor(dbPath: string, clock: Clock = systemClock) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
+    this.db.pragma('auto_vacuum = INCREMENTAL');
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     migrate(this.db, clock);
@@ -304,6 +305,12 @@ export class Store {
   close(): void {
     this.transcripts.flushAll();
     this.db.close();
+  }
+
+  reclaimFreePages(pages: number): number {
+    if (this.db.pragma('auto_vacuum', { simple: true }) !== 2) return 0;
+    this.db.exec(`PRAGMA incremental_vacuum(${String(Math.max(1, Math.floor(pages)))})`);
+    return this.db.pragma('freelist_count', { simple: true }) as number;
   }
 
   sumUsageCostSince(sinceIso: string): number {

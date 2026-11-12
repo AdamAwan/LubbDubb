@@ -189,6 +189,33 @@ export class AgentStore {
     return row.n;
   }
 
+  listRetiredAgentIds(input: {
+    before: string;
+    heldTaskIds: readonly string[];
+    heldAgentIds: readonly string[];
+    after: string;
+    limit: number;
+  }): string[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT id FROM agents
+         WHERE status NOT IN ${LIVE_SQL}
+           AND COALESCE(ended_at, started_at) < ?
+           AND task_id NOT IN (SELECT value FROM json_each(?))
+           AND id NOT IN (SELECT value FROM json_each(?))
+           AND id > ?
+         ORDER BY id LIMIT ?`,
+      )
+      .all(
+        input.before,
+        JSON.stringify(input.heldTaskIds),
+        JSON.stringify(input.heldAgentIds),
+        input.after,
+        input.limit,
+      ) as { id: string }[];
+    return rows.map((r) => r.id);
+  }
+
   recordFlag(agentId: string, input: AgentFlagInput): AgentFlag {
     const existing = this.ctx.prep(`SELECT id FROM agent_flags WHERE agent_id=? AND ref=?`).get(agentId, input.ref) as
       { id: string } | undefined;

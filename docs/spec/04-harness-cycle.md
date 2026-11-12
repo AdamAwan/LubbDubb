@@ -579,7 +579,8 @@ There is one entry type, because a desk is a sweep that runs at its own phase. A
   repeated at every call site.
   The walk **awaits every pass**, sync or async alike, and there is no flag to opt out of that. A pass
   with work the pulse must not block on starts that work itself and returns — `cloneUpkeep` does, for a
-  repack ([09](09-execution.md#the-clones-object-store)), and `botPrRisks` for its provider sweep — which keeps the
+  repack ([09](09-execution.md#the-clones-object-store)), `botPrRisks` for its provider sweep, and `retention` for the
+  batched history sweep ([14](14-persistence.md#history-retention)) — which keeps the
   decision beside the call it is about rather than in a registry flag every other pass has to be read
   against.
 - **`run(deps, at)`** — how the pass is called, through `deps.<id>?.`, so a pass the deployment does not

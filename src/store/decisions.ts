@@ -62,6 +62,15 @@ export class DecisionStore {
     };
   }
 
+  pruneDecisions(before: string, limit: number): number {
+    return this.ctx
+      .prep(
+        `DELETE FROM decisions WHERE rowid IN (
+           SELECT rowid FROM decisions WHERE created_at < ? ORDER BY created_at LIMIT ?)`,
+      )
+      .run(before, limit).changes;
+  }
+
   listDecisionsForGoal(goalRef: string, limit = 200): Decision[] {
     const rows = this.ctx
       .prep(

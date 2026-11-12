@@ -69,6 +69,7 @@ export interface PulseDeps {
   discussionPulls?: DiscussionPullDesk;
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   ejections?: { sweepExpiries(): unknown[] };
+  retention?: { run(): void };
   burn?: SpendBurnDesk;
   cloneUpkeep?: CloneUpkeepDesk;
   escalations?: {
@@ -153,6 +154,7 @@ const ENTRIES = [
     { id: 'parks', readWorld: false, run: (d) => resumeExpiredParks(d) },
     { id: 'stalls', readWorld: false, run: (d) => d.fleet?.completeExpiredStalls() },
     { id: 'ejectionExpiries', readWorld: false, run: (d) => d.ejections?.sweepExpiries() },
+    { id: 'retention', readWorld: false, run: (d) => d.retention?.run() },
   ]),
   ...phase('afterTasks', [{ id: 'reviewWaits', readWorld: false, run: (d, at) => foldReviewWaits(d, at) }]),
   ...phase('afterAgents', [
