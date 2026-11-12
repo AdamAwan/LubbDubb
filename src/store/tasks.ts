@@ -166,7 +166,7 @@ export class TaskStore {
   }
 
   compactTaskPrompts(before: string, heldTaskIds: readonly string[], limit: number): number {
-    return this.ctx
+    const changed = this.ctx
       .prep(
         `UPDATE tasks SET prompt = '' WHERE rowid IN (
            SELECT rowid FROM tasks
@@ -177,6 +177,8 @@ export class TaskStore {
            LIMIT ?)`,
       )
       .run(before, JSON.stringify(heldTaskIds), limit).changes;
+    if (changed > 0) this.summaries = null;
+    return changed;
   }
 
   findActiveTaskByOrigin(originRef: string): Task | null {
