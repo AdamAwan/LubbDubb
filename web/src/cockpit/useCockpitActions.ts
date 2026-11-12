@@ -125,7 +125,6 @@ function prActions(then: Then) {
 
 function watchActions(then: Then, refresh: Refresh) {
   return {
-    ruleWatchProposal: (issueNumber, checkId, accept) => then(api.ruleWatchProposal(issueNumber, checkId, accept)),
     acceptWatch: (issueNumber) => then(api.acceptWatch(issueNumber)),
     sendBackWatch: (issueNumber, words) => then(api.sendBackWatch(issueNumber, words)),
     saveWatchCheck: async (issueNumber, check) => {

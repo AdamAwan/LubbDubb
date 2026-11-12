@@ -17,7 +17,6 @@ function arrival(over: Partial<GoalArrival> = {}): GoalArrival {
     arrivedAt: ago(PROBE_MS),
     announcedAt: null,
     sheetedAt: null,
-    watchHeldAt: null,
     watchedAt: null,
     ...over,
   };
@@ -29,6 +28,7 @@ const open = (input: Partial<Parameters<typeof openableArrivals>[0]> = {}) =>
     environments: WATCHED,
     declared: new Set(['issue:12']),
     held: () => false,
+    acceptedAt: () => null,
     probeIntervalMs: PROBE_MS,
     now: NOW,
     ...input,
@@ -71,17 +71,25 @@ test('a fresh arrival whose watch is owed is held, not stamped', () => {
   assert.equal(considered!.settlesAt, null);
 });
 
-test('staleness is cut first: an old arrival never held is stamped whatever its watch', () => {
-  const [considered] = open({ arrivals: [arrival({ arrivedAt: ago(PROBE_MS * 3) })], held: () => true });
-  assert.equal(considered!.hold, false, 'the history walks once when the feature is turned on');
-  assert.equal(considered!.settlesAt, null);
+test('the hold comes before the staleness cut: an old arrival whose watch is owed is held, not stamped', () => {
+  const [considered] = open({ arrivals: [arrival({ arrivedAt: ago(PROBE_MS * 30) })], held: () => true });
+  assert.equal(considered!.hold, true, 'the goal record holds it, so it needs no stamp of its own');
 });
 
-test('a held arrival outlasts the guard, and opens sized from the arrival once released', () => {
-  const old = arrival({ arrivedAt: ago(PROBE_MS * 30), watchHeldAt: ago(PROBE_MS * 29) });
-  assert.equal(open({ arrivals: [old], held: () => true })[0]!.hold, true, 'still waiting on the accept');
-  const [released] = open({ arrivals: [old] });
+test('a held arrival opens sized from the arrival once its watch is accepted, with no stamp of its own', () => {
+  const old = arrival({ arrivedAt: ago(PROBE_MS * 30) });
+  const [released] = open({ arrivals: [old], acceptedAt: () => ago(PROBE_MS) });
+  assert.equal(released!.hold, false);
   assert.equal(released!.settlesAt, new Date(Date.parse(old.arrivedAt) + 48 * 60 * 60 * 1000).toISOString());
+});
+
+test('an old arrival never held, on a goal accepted long ago, is stamped and opens nothing', () => {
+  const [considered] = open({
+    arrivals: [arrival({ arrivedAt: ago(PROBE_MS * 30) })],
+    acceptedAt: () => ago(PROBE_MS * 29),
+  });
+  assert.equal(considered!.hold, false, 'the history walks once when the feature is turned on');
+  assert.equal(considered!.settlesAt, null);
 });
 
 test('a window opens per environment, so one goal travelling is watched twice', () => {

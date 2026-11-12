@@ -197,6 +197,12 @@ export class PlanStore {
     return rows.map(rowToCaveatAnswer);
   }
 
+  /** Every plan's answers on its `watch` caveat, which reach the watch author with the hint. */
+  listWatchCaveatAnswers(): PlanCaveatAnswer[] {
+    const sql = `SELECT * FROM plan_caveat_answers WHERE caveat_id='watch' ORDER BY at ASC, id ASC`;
+    return (this.ctx.prep(sql).all() as PlanCaveatAnswerRow[]).map(rowToCaveatAnswer);
+  }
+
   recordPlanAmendment(input: {
     planId: string;
     originRef: string;

@@ -178,7 +178,6 @@ function DigestSections({
   queries,
   refUrls,
   onClose,
-  onWatchProposal,
   onOpenGoal,
   issueNumber,
   sections,
@@ -213,11 +212,7 @@ function DigestSections({
               question, drawn later. Nothing renders where nothing was
               declared. */}
         <WatchHintDigest hint={plan.watchHint} refUrls={refUrls} />
-        <WatchDigest
-          watches={watches}
-          refUrls={refUrls}
-          onRule={issueNumber === null ? null : (checkId, accept) => void onWatchProposal(issueNumber, checkId, accept)}
-        />
+        <WatchDigest watches={watches} refUrls={refUrls} />
       </JumpSection>
 
       <JumpSection at="state" sections={sections}>

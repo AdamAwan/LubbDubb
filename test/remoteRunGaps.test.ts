@@ -17,7 +17,6 @@ function arrival(over: Partial<GoalArrival> = {}): GoalArrival {
     announcedAt: null,
     watchedAt: null,
     sheetedAt: null,
-    watchHeldAt: null,
     ...over,
   };
 }

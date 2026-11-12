@@ -263,11 +263,14 @@ test('a delete takes the check and its readings, and answers 404 for one that wa
   system.store.close();
 });
 
-test('the goal page carries the declarations, an agent’s unruled one included', async () => {
+test('the goal page carries the declarations, the assessor’s proposed set included', async () => {
   const system = build();
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Job X keeps timing out' });
   system.store.watches.ingestGoalWatch('issue:12', [PLANNED]);
-  system.store.watches.proposeGoalWatch('issue:12', [{ ...PLANNED, id: 'retry-loop' }], 'The retry is the new signal.');
+  system.store.watches.authorWatchPlan('issue:12', [{ ...PLANNED, id: 'retry-loop', changedFromHint: null }], {
+    note: 'The retry is the new signal.',
+    emptyReason: null,
+  });
 
   await system.harness.runCycle();
   const page = buildGoalPage(buildStateSnapshot(system) as unknown as AppState, 'issue:12', []);

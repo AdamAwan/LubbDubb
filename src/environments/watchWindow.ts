@@ -37,8 +37,8 @@ const MAX_WATCH_WINDOWS_PER_PULSE = 20;
 
 /**
  * What the window pass does with one arrival: open a window and stamp it (`settlesAt` set), stamp it
- * and open nothing (`settlesAt` null), or — `hold` — leave it unstamped for a watch still owed or
- * proposed. → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
+ * and open nothing (`settlesAt` null), or — `hold` — leave it unstamped for a watch not yet accepted.
+ * → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
  */
 interface WatchArrivalVerdict {
   arrival: GoalArrival;
@@ -47,29 +47,32 @@ interface WatchArrivalVerdict {
 }
 
 /**
- * Staleness is cut **first**: an arrival older than the guard that was never held is stamped before
- * the goal's watch is consulted at all, so turning `watch` on walks the history once. Only then is an
- * arrival whose watch is owed or proposed held — and a held arrival keeps its place past the guard, for
- * as long as authoring and the accept take, opening a window sized from the arrival once they are done.
+ * The hold is applied **before** the staleness cut, so an arrival whose goal's watch is owed, proposed or not
+ * yet asked keeps its place unstamped for as long as authoring and the accept take — it needs no stamp of its
+ * own, because the goal's record is what holds it. Once released, an arrival counts as fresh if it was
+ * confirmed within the guard **or the goal's watch was accepted within it**, which is the pass that opens the
+ * held arrival's window, sized from the arrival. Anything else past the guard is stamped and opens nothing, so
+ * turning `watch` on still walks the history once.
  */
 export function openableArrivals(input: {
   arrivals: readonly GoalArrival[];
   environments: readonly EnvironmentConfig[];
   declared: ReadonlySet<string>;
-  /** Whether this goal's watch is owed or proposed, which holds its arrival back unstamped. */
+  /** Whether this goal's watch holds its arrivals back unstamped. */
   held: (goalRef: string) => boolean;
+  /** When this goal's watch was accepted, or null. */
+  acceptedAt: (goalRef: string) => string | null;
   probeIntervalMs: number;
   now: number;
 }): WatchArrivalVerdict[] {
   const byName = new Map(input.environments.map((e) => [e.name, e]));
   const floor = input.now - input.probeIntervalMs * WATCH_WINDOW_INTERVALS;
+  const since = (at: string | null): boolean => at !== null && Date.parse(at) >= floor;
   const out: WatchArrivalVerdict[] = [];
   for (const arrival of input.arrivals) {
     if (arrival.watchedAt !== null) continue;
     const environment = byName.get(arrival.environment);
-    const seen = Date.parse(arrival.arrivedAt);
-    const fresh = Number.isFinite(seen) && (seen >= floor || arrival.watchHeldAt !== null);
-    if (environment?.watch === undefined || !fresh) {
+    if (environment?.watch === undefined) {
       out.push({ arrival, settlesAt: null, hold: false });
       continue;
     }
@@ -77,9 +80,12 @@ export function openableArrivals(input: {
       out.push({ arrival, settlesAt: null, hold: true });
       continue;
     }
+    const seen = Date.parse(arrival.arrivedAt);
+    const fresh = Number.isFinite(seen) && (since(arrival.arrivedAt) || since(input.acceptedAt(arrival.goalRef)));
     out.push({
       arrival,
-      settlesAt: input.declared.has(arrival.goalRef) ? new Date(seen + firstWindowMs(environment)).toISOString() : null,
+      settlesAt:
+        fresh && input.declared.has(arrival.goalRef) ? new Date(seen + firstWindowMs(environment)).toISOString() : null,
       hold: false,
     });
   }

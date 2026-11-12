@@ -61,6 +61,7 @@ export interface AgentManagerOptions {
   docsFolderPrefix?: string | string[];
   mcp?: McpChannel;
   watch?: WatchDryRunner;
+  /** Some environment declares a `watch`: a plan's hint is required, and the assessor's `delivered` asks for the watch. */
   watchHintRequired?: boolean;
   errors?: ErrorRecorder;
 }

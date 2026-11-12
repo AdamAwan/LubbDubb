@@ -27,6 +27,7 @@ import {
 } from '../view/localValidation.js';
 import { Disclosure, type Fold } from './goalFold.js';
 import { BareButton } from '../components/button.js';
+import { isProposed } from '../view/watchChecks.js';
 
 export const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
 
@@ -311,7 +312,7 @@ export function Signals({
 }): JSX.Element | null {
   const { issue, signals, plan, watchPlan } = page;
   if (signals.length === 0 && plan === null) return null;
-  const pending = signals.filter((c) => !c.live).length;
+  const pending = signals.filter(isProposed).length;
   return (
     <section className="cn-card" id="cn-signals">
       <h3>
@@ -341,7 +342,6 @@ export function Signals({
           refUrls={refUrls}
           onSave={(check) => actions.saveWatchCheck(issue.number, check)}
           onDelete={(checkId) => actions.deleteWatchCheck(issue.number, checkId)}
-          onRule={(checkId, accept) => actions.ruleWatchProposal(issue.number, checkId, accept)}
           onAccept={() => actions.acceptWatch(issue.number)}
           onSendBack={(words) => actions.sendBackWatch(issue.number, words)}
         />

@@ -86,7 +86,6 @@ export interface CockpitActions {
   decideRecovery(taskId: string, verdict: RecoveryVerdict): Promise<void>;
 
   replan(planId: string): Promise<void>;
-  ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<void>;
   acceptWatch(issueNumber: number): Promise<void>;
   sendBackWatch(issueNumber: number, words: string): Promise<void>;
   saveWatchCheck(issueNumber: number, check: GoalWatchDeclaration): Promise<string[]>;

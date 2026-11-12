@@ -11,6 +11,7 @@ import { hasPrPage } from './view/prPage.js';
 import { goalIssue, standsFor } from './view/goalRefs.js';
 import type { CockpitView } from './view/viewModel.js';
 import type { CockpitActions } from './cockpit/actions.js';
+import { isProposed } from './view/watchChecks.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -103,9 +104,7 @@ function PlanView({
       checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
       validationPlan={(state.validationPlans ?? []).find((r) => r.originRef === viewedPlan.originRef) ?? null}
       caveatAnswers={(state.planCaveatAnswers ?? []).filter((a) => a.planId === viewedPlan.id)}
-      watches={(state.goalWatches ?? []).filter(
-        (w) => w.originRef === viewedPlan.originRef && (w.live || w.authored !== 'assessor'),
-      )}
+      watches={(state.goalWatches ?? []).filter((w) => w.originRef === viewedPlan.originRef && !isProposed(w))}
       queries={(state.stateQueries ?? []).filter((q) => q.originRef === viewedPlan.originRef)}
       upcoming={state.upcoming?.items ?? []}
       proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
@@ -115,7 +114,6 @@ function PlanView({
       refUrls={state.refUrls}
       onClose={() => actions.viewPlan(null)}
       onReplan={(id) => actions.replan(id)}
-      onWatchProposal={(issueNumber, checkId, accept) => actions.ruleWatchProposal(issueNumber, checkId, accept)}
       onDecide={(id, verdict, note, acknowledged, answers) =>
         actions.decideProposal(id, verdict, note, acknowledged, answers)
       }

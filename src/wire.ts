@@ -1172,6 +1172,7 @@ export { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from './asks/kinds.js';
 export { PART_GROUP, PART_GROUP_WORD, type PartGroup } from './plans/partGroup.js';
 export { askGoal, type AskGoalPart } from './asks/askGoal.js';
 export { projectName, upgradeHeadline } from './asks/updateAsks.js';
+export { isProposed } from './validation/watchProposed.js';
 export type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from './ci/describeCiPolicy.js';
 export type { QueueItem } from './dispatcher/dispatcher.js';
 export type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';

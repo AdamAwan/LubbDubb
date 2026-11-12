@@ -466,7 +466,6 @@ test('sheet assembly waits for the check set however long it takes, and the guar
     announcedAt: null,
     watchedAt: null,
     sheetedAt: null,
-    watchHeldAt: null,
     ...over,
   });
   const call = (accepted: boolean, over: Partial<GoalArrival> = {}, acceptedAt: string | null = null) =>

@@ -182,7 +182,7 @@ export function goalWatchOutcome(
 
 /** One goal's checks, resolved windows and empty reason, read off the store for a route that needs one goal. */
 export function readGoalWatchRecords(store: System['store'], goalRef: string): GoalWatchRecords {
-  const checks = store.watches.listGoalWatches().filter((c) => c.originRef === goalRef);
+  const checks = store.watches.listLiveGoalWatches(goalRef);
   const windows = watchWindowReadings({
     windows: store.watches.listWatchWindows().filter((w) => w.goalRef === goalRef),
     checks,
@@ -191,10 +191,9 @@ export function readGoalWatchRecords(store: System['store'], goalRef: string): G
   const standing = watchOutcomeStanding({
     plan: store.plans.getPlanByOrigin(goalRef) ?? null,
     record: store.watches.getWatchPlanRecord(goalRef),
-    hasLiveChecks: checks.length > 0,
     landed: store.environments.listGoalLandings().some((l) => l.goalRef === goalRef),
   });
-  return { goalRef, checks, windows, ...standing };
+  return { goalRef, checks, windows, standing };
 }
 
 /**
@@ -216,19 +215,23 @@ export function buildGoalWatchOutcomes(
   const checksByGoal = groupBy(reads.goalWatches(), (c) => c.originRef);
   const windowsByGoal = groupBy(reads.watchWindows(), (w) => w.window.goalRef);
   const landed = new Set(landings.listGoalLandings().map((l) => l.goalRef));
-  const plansByGoal = new Map(reads.plans.map((p) => [p.originRef, p]));
+  const plansByGoal = new Map(reads.plans.filter((p) => landed.has(p.originRef)).map((p) => [p.originRef, p]));
   const records = new Map(reads.watchPlanRecords().map((r) => [r.goalRef, r]));
-  const goals = new Set([...checksByGoal.keys(), ...windowsByGoal.keys(), ...plansByGoal.keys(), ...records.keys()]);
+  const goals = new Set([
+    ...checksByGoal.keys(),
+    ...windowsByGoal.keys(),
+    ...plansByGoal.keys(),
+    ...[...records.keys()].filter((g) => landed.has(g)),
+  ]);
   return [...goals].flatMap((goalRef) => {
     const checks = checksByGoal.get(goalRef) ?? [];
     const outcome = goalWatchOutcome(environments, {
       goalRef,
       checks,
       windows: windowsByGoal.get(goalRef) ?? [],
-      ...watchOutcomeStanding({
+      standing: watchOutcomeStanding({
         plan: plansByGoal.get(goalRef) ?? null,
         record: records.get(goalRef) ?? null,
-        hasLiveChecks: checks.length > 0,
         landed: landed.has(goalRef),
       }),
     });

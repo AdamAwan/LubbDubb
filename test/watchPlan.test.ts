@@ -20,7 +20,16 @@ import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { instrumentationNote, watchPlanNote } from '../src/plans/planning.js';
 import { issueOriginRole } from '../src/issueOrigins.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
-import type { Agent, GoalWatchInput, Issue, IssueDelivery, Plan, PlanCaveatAnswer, TaskSummary } from '../src/types.js';
+import type {
+  Agent,
+  GoalWatchInput,
+  Issue,
+  IssueDelivery,
+  Plan,
+  PlanCaveatAnswer,
+  TaskSummary,
+  WatchPlanRecord,
+} from '../src/types.js';
 
 // → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
 
@@ -108,8 +117,10 @@ function planned(system: Pick<System, 'store'>, originRef = GOAL): void {
   ingestPlanDocument(system.store, { doc: parsed.document, originRef, title: 'Ship it' });
 }
 
+/** What the assessor's `delivered` leaves behind on a watched deployment: the delivery, and the watch owed. */
 function park(system: System): void {
   system.store.verdicts.recordDelivery({ originRef: GOAL, summary: 'every part merged', by: 'assessor' });
+  system.store.watches.oweWatchPlan(GOAL);
 }
 
 function spawnAgent(system: System, originRef: string): Agent {
@@ -149,7 +160,7 @@ test('watch_plan with no checks and no emptyReason is refused, and authors nothi
   const bare = await callTool(system, agent, 'watch_plan', { note: 'nothing changes at runtime' });
   assert.equal(bare.isError, true);
   assert.match(bare.text, /emptyReason/);
-  assert.equal(system.store.watches.getWatchPlanRecord(GOAL), null, 'a refused call writes no record');
+  assert.equal(system.store.watches.getWatchPlanRecord(GOAL)?.authoredAt, null, 'a refused call authors nothing');
 
   const said = await callTool(system, agent, 'watch_plan', {
     note: 'the hint was about the old timeout, which this refactor does not touch',
@@ -284,19 +295,38 @@ test('omission withdraws, except a check the operator wrote', async () => {
   system.store.close();
 });
 
-test('an arrival landing while the watch is owed is held, not stamped, and opens from the arrival on accept', async () => {
-  const observer = new FakeEnvironmentObserver(ANSWERS);
-  const system = build(observer);
+test('an arrival before the verdict is held, and one long past the guard while the watch is owed is held too', async () => {
+  const system = build();
   planned(system);
   arrive(system, PROBE_MS);
+  await system.harness.runCycle();
+  assert.equal(system.store.environments.listGoalArrivals()[0]?.watchedAt, null, 'a planned goal not yet delivered');
+
+  const old = build();
+  planned(old);
+  park(old);
+  arrive(old, PROBE_MS * 30);
+  await old.harness.runCycle();
+  assert.equal(
+    old.store.environments.listGoalArrivals()[0]?.watchedAt,
+    null,
+    'the hold comes before the staleness cut, so the arrival needs no stamp of its own',
+  );
+  system.store.close();
+  old.store.close();
+});
+
+test('an arrival held for an owed watch opens from the arrival once the set is accepted', async () => {
+  const system = build(new FakeEnvironmentObserver(ANSWERS));
+  planned(system);
+  park(system);
+  arrive(system, PROBE_MS * 30);
 
   await system.harness.runCycle();
   let [arrival] = system.store.environments.listGoalArrivals();
   assert.equal(arrival?.watchedAt, null, 'deferred, not stamped');
-  assert.notEqual(arrival?.watchHeldAt, null);
   assert.deepEqual(system.store.watches.listWatchWindows(), []);
 
-  park(system);
   await callTool(system, spawnAgent(system, 'issue:12:assess'), 'watch_plan', { note: 'n', signals: [SIGNAL] });
   await system.harness.runCycle();
   [arrival] = system.store.environments.listGoalArrivals();
@@ -311,15 +341,16 @@ test('an arrival landing while the watch is owed is held, not stamped, and opens
   system.store.close();
 });
 
-test('an empty watch stamps the arrival and opens nothing; a stale arrival is stamped before the watch is asked', async () => {
+test('an empty watch stamps the arrival and opens nothing; a goal never asked is stamped past the guard', async () => {
   const system = build();
   planned(system);
+  system.store.verdicts.recordDelivery({ originRef: GOAL, summary: 'every part merged', by: 'assessor' });
   arrive(system, PROBE_MS * 3);
   await system.harness.runCycle();
   assert.notEqual(
     system.store.environments.listGoalArrivals()[0]?.watchedAt,
     null,
-    'staleness is cut first, so turning the feature on walks the history once',
+    'delivered before the watch was asked of it: no record, no hold, and the history walks once',
   );
 
   const other = build();
@@ -454,8 +485,17 @@ function dispatchPrompt(actions: { type: string }[], origin: string): string | n
   return hit ? ((hit as { prompt?: string }).prompt ?? '') : null;
 }
 
+const OWED: WatchPlanRecord = {
+  goalRef: GOAL,
+  authoredAt: null,
+  note: null,
+  emptyReason: null,
+  acceptedAt: null,
+  sentBackWords: null,
+};
+
 test('an assessor whose turn ended after the check set leaves the watch owed, and rule watch-plan dispatches for it', async () => {
-  const owed = await rules().decide(ctx());
+  const owed = await rules().decide(ctx({ watchPlans: [OWED] }));
   const prompt = dispatchPrompt(owed.actions, 'issue:12:watch-plan');
   assert.ok(prompt !== null, 'a delivered goal with a plan and no watch gets an author on the next pulse');
   assert.match(prompt, /Job X stops timing out/, 'the hint is appended');
@@ -464,32 +504,26 @@ test('an assessor whose turn ended after the check set leaves the watch owed, an
 
   const written = await rules().decide(
     ctx({
-      watchPlans: [
-        {
-          goalRef: GOAL,
-          authoredAt: NOW,
-          note: 'n',
-          emptyReason: null,
-          acceptedAt: null,
-          sentBackAt: null,
-          sentBackWords: null,
-        },
-      ],
+      watchPlans: [{ ...OWED, authoredAt: NOW, note: 'n' }],
     }),
   );
   assert.equal(dispatchPrompt(written.actions, 'issue:12:watch-plan'), null, 'an authored watch stands it down');
-  const legacy = await rules().decide(ctx({ watchedGoals: [GOAL] }));
-  assert.equal(dispatchPrompt(legacy.actions, 'issue:12:watch-plan'), null, 'live checks, whoever wrote them');
-  const unwatched = await rules([{ name: 'testUk', at: 'echo unused' }]).decide(ctx());
+  const never = await rules().decide(ctx());
+  assert.equal(
+    dispatchPrompt(never.actions, 'issue:12:watch-plan'),
+    null,
+    'a goal delivered before the watch was asked of it has no record, and no author — no burst on the upgrade',
+  );
+  const unwatched = await rules([{ name: 'testUk', at: 'echo unused' }]).decide(ctx({ watchPlans: [OWED] }));
   assert.equal(dispatchPrompt(unwatched.actions, 'issue:12:watch-plan'), null, 'inert where nothing is watched');
-  const noPlan = await rules().decide(ctx({ plans: [] }));
+  const noPlan = await rules().decide(ctx({ plans: [], watchPlans: [OWED] }));
   assert.equal(dispatchPrompt(noPlan.actions, 'issue:12:watch-plan'), null);
-  const notDelivered = await rules().decide(ctx({ deliveries: [] }));
+  const notDelivered = await rules().decide(ctx({ deliveries: [], watchPlans: [OWED] }));
   assert.equal(dispatchPrompt(notDelivered.actions, 'issue:12:watch-plan'), null);
 });
 
 test('the rule goes through the candidate list, on a declared origin', async () => {
-  const full = await rules().decide(ctx({ agentHeadroom: 0 }));
+  const full = await rules().decide(ctx({ agentHeadroom: 0, watchPlans: [OWED] }));
   assert.equal(dispatchPrompt(full.actions, 'issue:12:watch-plan'), null);
   assert.deepEqual(
     (full.upcoming ?? []).filter((q) => q.rule === 'watch-plan').map((q) => q.status),
@@ -541,6 +575,11 @@ test('assess_issue repeats the ask on delivered, so an overridden prompt still h
   const res = await callTool(system, agent, 'assess_issue', { status: 'delivered', summary: 'all merged' });
   assert.equal(res.isError, false, res.text);
   assert.match(res.json()['note'] as string, /watch_plan/);
+  assert.deepEqual(
+    system.store.watches.getWatchPlanRecord(GOAL),
+    { ...OWED },
+    'the verdict writes the watch owed: a record, not the absence of one',
+  );
   await callTool(system, agent, 'watch_plan', { note: 'n', emptyReason: 'Docs only.' });
   const second = await callTool(system, spawnAgent(system, 'issue:12:assess'), 'assess_issue', {
     status: 'delivered',
@@ -568,41 +607,77 @@ test('the working agents keep one sentence about instrumentation, and are asked 
   assert.doesNotMatch(watchPlanNote([TEST_UK]), /watch_declare/);
 });
 
-test('the boot that creates watch_plans stamps every goal already carrying live checks, and only that boot', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-watch-plans-boot-'));
+test('the delivered verdict writes the watch owed only where a watch is declared, the goal is planned and unwatched', async () => {
+  const deliver = async (system: System, originRef = GOAL): Promise<void> => {
+    const res = await callTool(system, spawnAgent(system, `${originRef}:assess`), 'assess_issue', {
+      status: 'delivered',
+      summary: 'all merged',
+    });
+    assert.equal(res.isError, false, res.text);
+  };
+  const unplanned = build();
+  await deliver(unplanned);
+  assert.equal(unplanned.store.watches.getWatchPlanRecord(GOAL), null, 'no plan, no watch to owe');
+
+  const unwatched = build(new FakeEnvironmentObserver(ANSWERS), [{ name: 'testUk', at: 'echo unused' }]);
+  planned(unwatched);
+  await deliver(unwatched);
+  assert.equal(unwatched.store.watches.getWatchPlanRecord(GOAL), null, 'nothing declares a watch: never asked');
+
+  const watched = build();
+  planned(watched);
+  watched.store.watches.ingestGoalWatch(GOAL, [LIVE]);
+  await deliver(watched);
+  assert.equal(
+    watched.store.watches.getWatchPlanRecord(GOAL),
+    null,
+    'a goal already carrying live checks is not asked',
+  );
+
+  for (const system of [unplanned, unwatched, watched]) system.store.close();
+});
+
+test('every boot deletes what watch_declare left proposed, with its readings, and nothing else', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-watch-legacy-'));
   const path = join(dir, 'harness.db');
   const first = new Store(path);
   first.watches.ingestGoalWatch(GOAL, [LIVE]);
-  const deliver = (store: Store, originRef: string): void => {
-    store.verdicts.recordDelivery({ originRef, summary: 'every part merged', by: 'assessor' });
-  };
-  planned({ store: first }, 'issue:20');
-  deliver(first, 'issue:20');
-  deliver(first, 'issue:21');
-  planned({ store: first }, 'issue:22');
+  first.watches.authorWatchPlan('issue:13', [{ ...LIVE, id: 'assessed', changedFromHint: null }], {
+    note: 'n',
+    emptyReason: null,
+  });
   first.close();
   const raw = new Database(path);
-  raw.exec('DROP TABLE watch_plans');
+  raw
+    .prepare(
+      `INSERT INTO goal_watches (goal_ref, check_id, seq, kind, title, query, presence, tolerate, live, proposal,
+         authored, created_at, updated_at)
+       VALUES ('issue:12', 'declared', 2, 'signal', 'Declared', 'q', 'p', 0, 0, '{}', 'plan', ?, ?)`,
+    )
+    .run(NOW, NOW);
+  raw
+    .prepare(
+      `INSERT INTO watch_readings (goal_ref, environment, check_id, read_at, verdict)
+       VALUES ('issue:12', 'testUk', 'declared', ?, 'clean'), ('issue:12', 'testUk', 'no-timeouts', ?, 'clean')`,
+    )
+    .run(NOW, NOW);
   raw.close();
 
-  const second = new Store(path);
-  const record = second.watches.getWatchPlanRecord(GOAL);
-  assert.notEqual(record?.authoredAt, null, 'a goal that already had live checks is not owed');
-  assert.notEqual(record?.acceptedAt, null);
-  assert.equal(record?.emptyReason, null);
-  const delivered = second.watches.getWatchPlanRecord('issue:20');
-  assert.notEqual(delivered?.authoredAt, null, 'a planned goal delivered before the assessor is not owed');
-  assert.notEqual(delivered?.acceptedAt, null);
-  assert.equal(delivered?.emptyReason, 'Delivered before the assessor wrote watches');
-  assert.equal(second.watches.getWatchPlanRecord('issue:21'), null, 'a delivery with no plan has no watch to owe');
-  assert.equal(second.watches.getWatchPlanRecord('issue:22'), null, 'a planned goal not yet delivered stays owed');
-  second.watches.ingestGoalWatch('issue:13', [LIVE]);
-  planned({ store: second }, 'issue:23');
-  deliver(second, 'issue:23');
-  second.close();
-
-  const third = new Store(path);
-  assert.equal(third.watches.getWatchPlanRecord('issue:13'), null, 'a later boot stamps nothing');
-  assert.equal(third.watches.getWatchPlanRecord('issue:23'), null, 'nor a goal delivered after the table');
-  third.close();
+  for (let boot = 0; boot < 2; boot += 1) {
+    const store = new Store(path);
+    assert.deepEqual(
+      store.watches.listGoalWatches().map((c) => c.id),
+      ['no-timeouts'],
+    );
+    assert.deepEqual(
+      store.watches.listProposedGoalWatches().map((c) => c.id),
+      ['assessed'],
+      'the assessor’s proposed set is not a retired proposal',
+    );
+    assert.deepEqual(
+      store.watches.listWatchReadings().map((r) => r.checkId),
+      ['no-timeouts'],
+    );
+    store.close();
+  }
 });

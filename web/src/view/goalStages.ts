@@ -2,6 +2,7 @@ import type { GoalEnvironmentReachView, GoalGroupReach, GoalWatchView } from '..
 import type { GoalPageView, GoalPartView, GoalTrack } from './goalPage.js';
 import type { PartGroup } from '../types.js';
 import { inFlight, localValidationSaid } from './localValidation.js';
+import { isProposed } from './watchChecks.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -182,7 +183,7 @@ export function watchStage(page: GoalPageView): GoalStage {
   const windows = page.watches.filter((w) => page.obligations.watch.includes(w.environment));
   const open = windows.filter((w) => w.checks.length > 0);
   if (open.length === 0) {
-    const pending = page.signals.filter((s) => !s.live || s.proposal !== null).length;
+    const pending = page.signals.filter(isProposed).length;
     if (pending > 0) return { reading: `${pending} awaiting you`, tone: 'amber', done: null };
     if (page.signals.length === 0) return { reading: 'no signals', tone: 'grey', done: null };
     return { reading: 'not opened', tone: 'grey', done: null };

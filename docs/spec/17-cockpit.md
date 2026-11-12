@@ -1591,7 +1591,8 @@ the newest card. This is the one place a watch is reduced to a word, and the red
 one-directional: `regressed` first, then anything not `clean` reads _not read_, and only a window
 whose every check came back clean says so. A tab with space for one reading must never fold an unread
 environment into an all-clear. A goal with no window open yet reads what is true of the signals
-instead — `no signals`, `not opened`, or `2 awaiting you` where the operator owes a ruling.
+instead — `no signals`, `not opened`, or `2 awaiting you` where the assessor's set is still proposed
+(`isProposed`) and the operator owes the accept.
 → [29](29-post-deploy-watch.md#in-the-cockpit)
 
 **One dot, where an ask is waiting in that pane.** `GOAL_ASK_TAB` maps every `NeedKind` to the pane it
@@ -7853,19 +7854,12 @@ arrived. A check nothing has asked about yet says so in those words — not yet 
 not a clean reading — and a goal that declared no checks draws nothing at all, because null is a third
 fact and not a synonym for clean.
 
-**Read-only but for one control, and the exception is the whole point.** A check the working agent
-declared through the now-retired `watch_declare` arrived _after_ the approval that authorises a query to be run
-against the operator's own telemetry with the operator's own credential — so it draws as a **pending
-change** with accept and decline beside it, over the live declaration it amends, which stands
-untouched until somebody rules. Accepting applies it, clears the readings of the text it replaced, and
-runs it once against an environment; declining leaves a live check exactly as it was and drops a row
-that was never anything but a proposal. Nothing else on this sheet takes a verb, for
-`ValidationDigest`'s reason.
-
-The state lives on the check itself (`goal_watches.live` and `goal_watches.proposal`) rather than on
-the plan-amendment path: a declaration made at conclude time would otherwise put a goal's whole plan
-back through approval to carry one query, which holds the goal's own work to move a sentence about
-telemetry.
+**Read-only, with no control at all.** It once carried one: the ruling on a check the working agent
+declared through `watch_declare`, drawn as a pending change with accept and decline. That tool and its
+route are [retired](16-http-api.md#post-apiissuesnumberwatch-proposalscheckid--retired) and the rows it
+left are deleted on boot ([14](14-persistence.md#retired-watch-proposals)), so nothing on this sheet takes
+a verb, for `ValidationDigest`'s reason. What is still not live — the assessor's proposed set — is filtered
+out here by `isProposed` and accepted as a whole on the Signals card.
 
 ### The state digest
 

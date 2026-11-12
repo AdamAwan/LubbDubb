@@ -29,6 +29,7 @@ import type { PartGroup } from '../types.js';
 import { PART_GROUP } from './partGroups.js';
 import type { NeedKind, NeedRow } from './needsYou.js';
 import { orphanOf } from './orphanGoal.js';
+import { isProposed } from './watchChecks.js';
 import { belongsToGoal, closedPrs, goalIssue, ownsPr, reachesGoal } from './goalRefs.js';
 import {
   closeStage,
@@ -303,7 +304,7 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
     validation: (shipped(page) && live.length > 0) || live.some((c) => c.state !== 'unrun'),
     localValidation: page.issue.localValidation !== null,
     remoteValidation: page.remoteSheets.length > 0,
-    signals: (shipped(page) && page.signals.length > 0) || page.signals.some((s) => !s.live || s.proposal !== null),
+    signals: (shipped(page) && page.signals.length > 0) || page.signals.some(isProposed),
     environments: page.environments.some((e) => e.status !== 'absent'),
     sequence: false,
     tail: tailBegun(page),

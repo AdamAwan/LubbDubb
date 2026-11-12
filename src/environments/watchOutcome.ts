@@ -9,6 +9,7 @@ import type {
 import type { EnvironmentConfig } from './policy.js';
 import { settledWatchPeriod } from './exposure.js';
 import { watchCheckBlock, watchCheckQuery, type WatchWindowReading } from './watchFinding.js';
+import type { WatchStanding } from '../validation/watchAuthoring.js';
 
 // → docs/spec/29-post-deploy-watch.md#the-outcome
 
@@ -33,16 +34,17 @@ export function watchOutcome(input: {
   checks: readonly GoalWatch[];
   /** The goal's windows, each resolved against its checks by `watchWindowReadings`. */
   windows: readonly WatchWindowReading[];
-  /** Why the watch measures nothing, where that was the decision; null where it was not. */
-  emptyReason: string | null;
-  /** A planned goal with landed work whose watch nobody has written yet. */
-  owed: boolean;
+  /** What a goal with no live checks reads: why nothing is measured, that its watch is owed, or nothing. */
+  standing: WatchStanding;
 }): WatchOutcome | null {
   const { goalRef, checks, windows } = input;
   const watching = windows.filter((w) => w.window.settledAt === null).map((w) => w.window.environment);
   if (checks.length === 0) {
-    if (input.emptyReason !== null) return answer(goalRef, 'none', { reason: input.emptyReason });
-    return input.owed ? answer(goalRef, 'unwritten', {}) : null;
+    const { standing } = input;
+    if (standing === null) return null;
+    return standing.kind === 'none'
+      ? answer(goalRef, 'none', { reason: standing.reason })
+      : answer(goalRef, 'unwritten', {});
   }
   const settled = windows
     .filter((w) => w.window.settledAt !== null)

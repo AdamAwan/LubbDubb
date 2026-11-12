@@ -22,7 +22,6 @@ function arrival(over: Partial<GoalArrival> & { environment: string }): GoalArri
     announcedAt: null,
     watchedAt: null,
     sheetedAt: null,
-    watchHeldAt: null,
     ...over,
   };
 }

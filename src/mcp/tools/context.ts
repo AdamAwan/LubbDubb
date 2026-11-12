@@ -160,9 +160,12 @@ export interface McpToolDeps {
   prReply?: PrReplyDesk;
   filing?: TicketFiler;
   watch?: WatchDryRunner;
-  /** → docs/spec/29-post-deploy-watch.md#the-planner-at-plan-time-writes-a-hint. Absent is not required. */
+  /**
+   * Some environment declares a `watch`: the one answer the plan's hint, `assess_issue`'s reply and `watch_plan`'s
+   * gate read. → docs/spec/29-post-deploy-watch.md#the-planner-at-plan-time-writes-a-hint. Absent is *none*.
+   */
   watchHintRequired?: boolean;
-  /** The configured environments, for `watch_plan`'s gate and source refusals. Absent is *none watched*. */
+  /** The configured environments, for `watch_plan`'s source refusals. */
   watchEnvironments?: Parameters<typeof watchSourceRefusal>[0];
   state?: Pick<StateQueryDesk, 'configured' | 'declare' | 'dryRun'>;
   localValidations?: () => LocalValidationDesk;

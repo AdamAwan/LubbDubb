@@ -1455,11 +1455,19 @@ environment declares a `watch` — read off `watchPlanNote` being non-empty, so 
   `watch-plan/issue/<n>`, origin `issue:<n>:watch-plan`, classified **evidence**. Which origins may
   write the whole watch is declared once, in `watchAuthoringIssue` (`src/validation/watchAuthoring.ts`):
   this one and `issue:<n>:assess`.
-- Fires for a goal **parked as delivered** that **has a plan** and whose watch is **not authored**
-  (`watchAuthored`): no `watch_plans` stamp, and either a send-back on the record or no live checks.
+- Fires for a goal **parked as delivered** that **has a plan** and whose watch is **owed** (`watchOwed`):
+  a `watch_plans` row with no `authored_at`. The row is written by the assessor's `delivered` verdict, or
+  un-authored by a send-back; a goal with **no row** was never asked — delivered before the assessor wrote
+  watches, while nothing declared one, or already carrying live checks — and is never dispatched for, so
+  taking the build sends no author to every goal ever delivered.
 - The prompt is `watch-plan`; the plan's `watchHint`, the operator's words on its `watch` tick, any
-  send-back words and the deployment's sources are **appended** (`watchAuthoringBriefing`).
+  send-back words and the deployment's sources are **appended** (`watchBriefing`, the one the assessor's
+  appendix uses too).
+- Shares its loop with `validation-plan` (`dispatchDeliveredAuthor`, `src/dispatcher/rules/deliveredAuthor.ts`):
+  a delivered goal with a plan still owed an output only a reader of the merged code can write.
 - Fails silent, as `validation-plan` does.
+- The pulse reads `watch_plans`, the live-watched goal refs and the `watch` caveat answers only where some
+  environment declares a `watch` (`buildDispatchInputs`' `watched`); elsewhere the rule is inert anyway.
 
 ## `validation-plan-approval` — putting the check set to you
 

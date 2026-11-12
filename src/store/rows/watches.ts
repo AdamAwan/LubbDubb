@@ -1,11 +1,4 @@
-import type {
-  GoalWatch,
-  GoalWatchKind,
-  GoalWatchProposal,
-  WatchPlanRecord,
-  WatchReadingVerdict,
-  WatchWindow,
-} from '../../types.js';
+import type { GoalWatch, GoalWatchKind, WatchPlanRecord, WatchReadingVerdict, WatchWindow } from '../../types.js';
 
 // → docs/spec/14-persistence.md
 
@@ -15,7 +8,6 @@ export interface WatchPlanRow {
   note: string | null;
   empty_reason: string | null;
   accepted_at: string | null;
-  sent_back_at: string | null;
   sent_back_words: string | null;
 }
 
@@ -26,7 +18,6 @@ export function hydratePlan(row: WatchPlanRow): WatchPlanRecord {
     note: row.note,
     emptyReason: row.empty_reason,
     acceptedAt: row.accepted_at,
-    sentBackAt: row.sent_back_at,
     sentBackWords: row.sent_back_words,
   };
 }
@@ -81,7 +72,6 @@ export interface GoalWatchRow {
   baseline_value: number | null;
   baseline_at: string | null;
   live: number;
-  proposal: string | null;
   authored: string;
   why: string | null;
   source: string | null;
@@ -137,7 +127,6 @@ export function hydrate(row: GoalWatchRow): GoalWatch {
     baselineValue: row.baseline_value,
     baselineAt: row.baseline_at,
     live: row.live === 1,
-    proposal: row.proposal === null ? null : (JSON.parse(row.proposal) as GoalWatchProposal),
     authored: row.authored === 'operator' || row.authored === 'assessor' ? row.authored : 'plan',
     changedFromHint: row.changed_from_hint ?? null,
     dryRunEnvironment: row.dry_run_environment,

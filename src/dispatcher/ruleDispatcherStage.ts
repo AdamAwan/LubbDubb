@@ -255,7 +255,7 @@ export function watchLookups(
 ): Pick<StageContext, 'watchPlans' | 'watchedGoals' | 'watchTickWords'> {
   const tickWords = new Map<string, string[]>();
   for (const a of ctx.watchTickAnswers ?? []) {
-    if (a.caveatId !== 'watch' || a.answer.trim() === '') continue;
+    if (a.answer.trim() === '') continue;
     tickWords.set(a.planId, [...(tickWords.get(a.planId) ?? []), a.answer]);
   }
   return {

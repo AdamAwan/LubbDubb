@@ -347,6 +347,7 @@ function buildHarness(
     issuePickup: fleet.issuePickup,
     branchReaps: intake.branchReaps,
     environments: envs.environments,
+    watched: watchHintRequired(config.environments),
     appErrors: envs.appErrors,
     appErrorTracker: envs.appErrorTracker,
     remoteValidation: envs.remoteValidation,

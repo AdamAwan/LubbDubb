@@ -53,6 +53,8 @@ interface HarnessDeps extends PulseDeps {
   issuePickup?: IssuePickupPolicy;
   localRun?: { noteAlive(): void };
   remoteRuns?: () => RemoteRunBrief[];
+  /** Some environment declares a `watch`; the pulse reads the watch's records only then. */
+  watched?: boolean;
   /** → docs/spec/40-discussions.md */
   goalIntake?: () => GoalIntake;
   recovery?: { pendingCount(): number };
@@ -330,30 +332,34 @@ export class Harness extends EventEmitter {
 
     this.at('the dispatch decision');
     const plan = await this.deps.dispatcher.decide(
-      buildDispatchInputs(store, {
-        world: dispatchWorld,
-        retainedIssues: retainedIssues.map((i) => i.number),
-        hiddenPrs,
-        tasks: r.tasks,
-        agents: r.agents,
-        queuedJobs: r.queuedJobs,
-        plans: r.plans,
-        planParts: r.planParts,
-        conclusions: r.conclusions,
-        deliveries: r.deliveries,
-        deliverySignals: r.deliverySignals,
-        shortfalls: r.shortfalls,
-        appraisals: r.appraisals,
-        retrospectiveOrigins: r.retrospectiveOrigins,
-        recentDecisions: r.recentDecisions,
-        prReviews,
-        prReviewRoutes,
-        featureStandings,
-        remoteRuns: this.deps.remoteRuns?.() ?? [],
-        modelPins: this.deps.modelPins,
-        agentHeadroom: r.headroom,
-        discussion: r.intake.discussion,
-      }),
+      buildDispatchInputs(
+        store,
+        {
+          world: dispatchWorld,
+          retainedIssues: retainedIssues.map((i) => i.number),
+          hiddenPrs,
+          tasks: r.tasks,
+          agents: r.agents,
+          queuedJobs: r.queuedJobs,
+          plans: r.plans,
+          planParts: r.planParts,
+          conclusions: r.conclusions,
+          deliveries: r.deliveries,
+          deliverySignals: r.deliverySignals,
+          shortfalls: r.shortfalls,
+          appraisals: r.appraisals,
+          retrospectiveOrigins: r.retrospectiveOrigins,
+          recentDecisions: r.recentDecisions,
+          prReviews,
+          prReviewRoutes,
+          featureStandings,
+          remoteRuns: this.deps.remoteRuns?.() ?? [],
+          modelPins: this.deps.modelPins,
+          agentHeadroom: r.headroom,
+          discussion: r.intake.discussion,
+        },
+        this.deps.watched,
+      ),
     );
 
     this.settlePlan(cycleId, plan, world, r);

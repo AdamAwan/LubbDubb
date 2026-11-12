@@ -19,6 +19,7 @@ import { watchClearedGoals, watchWindowReadings } from '../src/environments/watc
 import { watchOutcome, watchOutcomeNote } from '../src/environments/watchOutcome.js';
 import { buildGoalWatchOutcomes } from '../src/server/stateEnvironmentViews.js';
 import { hintEmptyReason } from '../src/plans/watchHint.js';
+import type { WatchStanding } from '../src/validation/watchAuthoring.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type {
   GoalLanding,
@@ -60,7 +61,6 @@ function check(id: string, over: Partial<GoalWatch> = {}): GoalWatch {
     baselineValue: null,
     baselineAt: null,
     live: true,
-    proposal: null,
     authored: 'plan',
     changedFromHint: null,
     ...over,
@@ -102,16 +102,14 @@ function fold(input: {
   checks?: GoalWatch[];
   windows?: WatchWindow[];
   readings?: WatchReading[];
-  emptyReason?: string | null;
-  owed?: boolean;
+  standing?: WatchStanding;
 }): WatchOutcome | null {
   const checks = (input.checks ?? []).filter((c) => c.originRef === GOAL);
   return watchOutcome({
     goalRef: GOAL,
     checks,
     windows: resolve(checks, input.windows ?? [], input.readings ?? []),
-    emptyReason: input.emptyReason ?? null,
-    owed: input.owed ?? false,
+    standing: input.standing ?? null,
   });
 }
 
@@ -208,7 +206,7 @@ test('the newest reading on a window is the one that stands', () => {
 });
 
 test('a watch decided empty reads nothing measured with its reason; no checks and no reason is no outcome', () => {
-  const none = fold({ emptyReason: 'A copy change: nothing a running system says would move.' });
+  const none = fold({ standing: { kind: 'none', reason: 'A copy change: nothing a running system says would move.' } });
   assert.deepEqual(none, {
     goalRef: GOAL,
     outcome: 'none',
@@ -265,9 +263,9 @@ test('the assessor’s stated none is the reason; an owed watch on landed work r
     note: 'A refactor.',
     emptyReason: 'Nothing running behaves differently.',
     acceptedAt: null,
-    sentBackAt: null,
     sentBackWords: null,
   };
+  const owed: WatchPlanRecord = { ...record, authoredAt: null, note: null, emptyReason: null };
   const outcomes = (hint: Plan['watchHint'], records: WatchPlanRecord[], landings: GoalLanding[]) =>
     buildGoalWatchOutcomes(
       [OPEN],
@@ -283,14 +281,11 @@ test('the assessor’s stated none is the reason; an owed watch on landed work r
   assert.deepEqual(outcomes({ none: 'A copy change.' }, [record], [landing]), [
     ['none', 'Nothing was measured', 'Nothing running behaves differently.', false],
   ]);
-  assert.deepEqual(outcomes(intents, [], [landing]), [['unwritten', 'Not yet written', null, false]]);
-  assert.deepEqual(outcomes(intents, [], []), [], 'an owed watch before anything merged has no outcome yet');
+  assert.deepEqual(outcomes(intents, [owed], [landing]), [['unwritten', 'Not yet written', null, false]]);
+  assert.deepEqual(outcomes(intents, [owed], []), [], 'an owed watch before anything merged has no outcome yet');
+  assert.deepEqual(outcomes(intents, [], [landing]), [], 'a watch never asked for is not owed, and reads nothing');
   assert.deepEqual(
-    outcomes(
-      intents,
-      [{ ...record, authoredAt: null, emptyReason: null, sentBackAt: '2026-11-03T00:00:00.000Z' }],
-      [landing],
-    ),
+    outcomes(intents, [{ ...owed, sentBackWords: 'Too broad.' }], [landing]),
     [['unwritten', 'Not yet written', null, false]],
     'a watch sent back is owed again',
   );

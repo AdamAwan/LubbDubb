@@ -398,7 +398,6 @@ test('a reading that has not sat long enough, and a goal already arrived, are no
           announcedAt: null,
           watchedAt: null,
           sheetedAt: null,
-          watchHeldAt: null,
         },
       ],
       now: Date.parse('2026-01-03T00:00:00.000Z'),
@@ -1280,7 +1279,6 @@ test('a gate is opened by whichever environment declaring it the goal reaches fi
       announcedAt: null,
       watchedAt: null,
       sheetedAt: null,
-      watchHeldAt: null,
     },
   ];
   assert.equal(openedGoals('close_out', envs, arrived('testIe'), [])?.has('issue:12'), true);

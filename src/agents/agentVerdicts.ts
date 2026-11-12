@@ -16,6 +16,7 @@ import { goalFingerprint } from '../intake/appraisal.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import { issueOrigin } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
+import { watchAskedOnDelivery } from '../validation/watchAuthoring.js';
 import type { AgentEmitter, AgentManagerOptions } from './agentContract.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -85,6 +86,7 @@ export function recordAssessment(
       agentId,
       taskId: task.id,
     });
+    oweWatch(ctx, origin.issueOrigin);
     ctx.events.emit('assessment', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
     return { ok: true, issueOrigin: origin.issueOrigin, verdict };
   }
@@ -138,6 +140,20 @@ export function recordAssessment(
   });
   ctx.events.emit('assessment', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
   return { ok: true, issueOrigin: origin.issueOrigin, verdict };
+}
+
+/** The watch becomes owed on the assessor's `delivered`, and only where it is asked. → 29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks */
+function oweWatch(ctx: VerdictContext, goalRef: string): void {
+  if (ctx.opts.watchHintRequired !== true) return;
+  const { watches, plans } = ctx.store;
+  if (
+    watchAskedOnDelivery({
+      record: watches.getWatchPlanRecord(goalRef),
+      hasLiveChecks: watches.listLiveGoalWatches(goalRef).length > 0,
+      planned: plans.getPlanByOrigin(goalRef) !== null,
+    })
+  )
+    watches.oweWatchPlan(goalRef);
 }
 
 export function recordGoalMet(

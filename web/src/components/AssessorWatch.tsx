@@ -4,6 +4,7 @@ import { AsyncButton } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
+import { isProposed } from '../view/watchChecks.js';
 
 // → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
 
@@ -29,7 +30,7 @@ export function AssessorWatch({
   const [words, setWords] = useState<string | null>(null);
   if (record === null) return null;
   if (record.authoredAt === null)
-    return record.sentBackAt === null ? null : (
+    return record.sentBackWords === null ? null : (
       <div className="cn-sheet-gate">
         <span className="cn-sub">
           Sent back — <i>{record.sentBackWords}</i>. An agent is writing it again with your words.
@@ -111,33 +112,23 @@ function Answers({
 }
 
 /**
- * Who wrote a check and where it stands: the operator's own, an agent's pending declaration, the
- * assessor's proposed set, and where the assessor said a check departs from the plan's hint.
+ * Who wrote a check and where it stands: the operator's own, the assessor's proposed set, and whether the
+ * assessor said it departs from the plan's hint — its words are the row's own paragraph, so the chip only marks it.
  *
  * @public drawn in each Signals row's head
  */
 export function AuthorChips({ check }: { check: GoalWatch }) {
-  const proposed = !check.live && check.authored === 'assessor';
   return (
     <>
       {check.authored === 'operator' && (
         <Tag title="Yours. A replan neither removes this nor writes over it.">yours</Tag>
       )}
-      {!check.live && !proposed && (
-        <Tag tone="amber" fill title="Declared by the agent that did the work, and not yet run">
-          awaiting you
-        </Tag>
-      )}
-      {proposed && (
+      {isProposed(check) && (
         <Tag tone="amber" fill title="Written by the assessor; it runs once the set is accepted">
           proposed
         </Tag>
       )}
-      {check.changedFromHint !== null && (
-        <Tag tone="violet" title={check.changedFromHint}>
-          changed from plan
-        </Tag>
-      )}
+      {check.changedFromHint !== null && <Tag tone="violet">changed from plan</Tag>}
     </>
   );
 }

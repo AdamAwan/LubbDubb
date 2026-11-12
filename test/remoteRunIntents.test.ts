@@ -497,7 +497,6 @@ test('a sheet is drawn once its checks are written, before anyone has accepted t
     announcedAt: null,
     watchedAt: null,
     sheetedAt: null,
-    watchHeldAt: null,
   };
   const step = (checkSet: { accepted: boolean; acceptedAt: string | null; authoredAt: string | null }) =>
     arrivalSheetStep({ arrival, validates: true, checkSet: () => checkSet, probeIntervalMs: 60_000, now: NOW });

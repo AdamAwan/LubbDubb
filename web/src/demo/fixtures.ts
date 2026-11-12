@@ -1900,7 +1900,6 @@ export function buildDemoState(): DemoSeed {
         announcedAt: ago(6),
         watchedAt: ago(6),
         sheetedAt: ago(6),
-        watchHeldAt: null,
       },
       {
         goalRef: 'issue:395',
@@ -1909,7 +1908,6 @@ export function buildDemoState(): DemoSeed {
         announcedAt: ago(2),
         watchedAt: null,
         sheetedAt: ago(2),
-        watchHeldAt: null,
       },
       {
         goalRef: 'issue:398',
@@ -1918,7 +1916,6 @@ export function buildDemoState(): DemoSeed {
         announcedAt: ago(66),
         watchedAt: ago(66),
         sheetedAt: ago(66),
-        watchHeldAt: null,
       },
       {
         goalRef: 'issue:398',
@@ -1927,7 +1924,6 @@ export function buildDemoState(): DemoSeed {
         announcedAt: ago(20),
         watchedAt: null,
         sheetedAt: ago(20),
-        watchHeldAt: null,
       },
       {
         goalRef: 'issue:364',
@@ -1936,7 +1932,6 @@ export function buildDemoState(): DemoSeed {
         announcedAt: ago(52),
         watchedAt: null,
         sheetedAt: ago(52),
-        watchHeldAt: null,
       },
     ],
     environmentHealth: [
@@ -3525,7 +3520,6 @@ export function buildDemoState(): DemoSeed {
         baselineValue: null,
         baselineAt: null,
         live: true,
-        proposal: null,
         authored: 'plan',
         changedFromHint: null,
       },
@@ -3553,33 +3547,24 @@ export function buildDemoState(): DemoSeed {
         baselineValue: null,
         baselineAt: null,
         live: false,
-        authored: 'plan',
-        changedFromHint: null,
-        proposal: {
-          at: ago(2),
-          note:
-            'I put the ledger write inside the refund transaction, so p95 is the number that would move if it ' +
-            'costs anything. Nothing existed to compare against before, which is why this is a baseline rather ' +
-            'than a threshold.',
-          declaration: {
-            id: 'refund-p95',
-            seq: 2,
-            kind: 'measure',
-            title: 'Issuing a refund is no slower than it was',
-            query: "requests | where name == 'POST /api/refunds' | summarize value = percentile(duration, 95)",
-            presence: null,
-            tolerate: 0,
-            expectUnder: null,
-            expectOver: null,
-            expectBaseline: true,
-            unit: 'ms',
-            why: 'The fix writes the ledger entry inside the refund transaction; if that costs anything it shows here first.',
-            source: null,
-          },
-        },
+        authored: 'assessor',
+        changedFromHint:
+          'The plan asked for refunds to stop disagreeing; the ledger write moved into the transaction, so its cost is worth a number too.',
       },
     ],
-    watchPlans: [],
+    watchPlans: [
+      {
+        goalRef: 'issue:395',
+        authoredAt: ago(2),
+        note:
+          'I put the ledger write inside the refund transaction, so p95 is the number that would move if it ' +
+          'costs anything. Nothing existed to compare against before, which is why this is a baseline rather ' +
+          'than a threshold.',
+        emptyReason: null,
+        acceptedAt: null,
+        sentBackWords: null,
+      },
+    ],
     jobs: [],
     schedules: [
       {

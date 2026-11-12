@@ -34,7 +34,6 @@ export interface PlanModalProps {
   refUrls: Record<string, string>;
   onClose: () => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
-  onWatchProposal: (issueNumber: number, checkId: string, accept: boolean) => Promise<unknown> | unknown;
   onDecide: (
     id: string,
     verdict: 'accept' | 'reject',

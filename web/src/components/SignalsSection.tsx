@@ -9,10 +9,10 @@ import type {
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { Button } from './button.js';
-
 import { measuresOnlyRefusal, WatchSourcePicker } from './WatchSourceChip.js';
 import { AssessorWatch } from './AssessorWatch.js';
 import { SignalRow } from './SignalRow.js';
+import { isProposed } from '../view/watchChecks.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -28,7 +28,7 @@ import { SignalRow } from './SignalRow.js';
  * is wrong for as long as it stands, and the plan is not being re-opened.
  *
  * **A saved check runs against an environment in the same call**, exactly as
- * accepting an agent's declaration does, and the refusals it comes back with are
+ * the assessor's `watch_plan` does, and the refusals it comes back with are
  * drawn on the form that caused them. That is what stops the surface being a place
  * to write queries nobody has proved resolve.
  *
@@ -41,7 +41,6 @@ export function SignalsSection({
   refUrls,
   onSave,
   onDelete,
-  onRule,
   onAccept,
   onSendBack,
 }: {
@@ -53,7 +52,6 @@ export function SignalsSection({
   refUrls: Record<string, string>;
   onSave: (check: GoalWatchDeclaration) => Promise<string[]>;
   onDelete: (checkId: string) => Promise<void>;
-  onRule: (checkId: string, accept: boolean) => Promise<void>;
   onAccept: () => Promise<void>;
   onSendBack: (words: string) => Promise<void>;
 }) {
@@ -64,7 +62,7 @@ export function SignalsSection({
     <div className="cn-sig">
       <AssessorWatch
         record={watchPlan}
-        proposed={signals.filter((c) => !c.live && c.authored === 'assessor').length}
+        proposed={signals.filter(isProposed).length}
         refUrls={refUrls}
         onAccept={onAccept}
         onSendBack={onSendBack}
@@ -88,7 +86,6 @@ export function SignalsSection({
             refUrls={refUrls}
             onEdit={() => setOpen(check.id)}
             onDelete={() => onDelete(check.id)}
-            onRule={onRule}
           />
         ),
       )}

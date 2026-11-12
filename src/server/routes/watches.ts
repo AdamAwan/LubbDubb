@@ -13,17 +13,11 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
   const { system, hub } = ctx;
   const { store } = system;
 
-  const ProposalParams = IssueNumberParams.extend({ checkId: z.string().min(1, 'checkId is required') });
-
-  const RulingBody = z.object({
-    accept: z.boolean({
-      error: 'accept is required — true to run this check, false to decline it',
-    }),
-  });
+  const CheckParams = IssueNumberParams.extend({ checkId: z.string().min(1, 'checkId is required') });
 
   app.put(
     '/api/issues/:number/watch/checks/:checkId',
-    checked({ params: ProposalParams, body: WatchCheckSchema }, async ({ params, body, reply }) => {
+    checked({ params: CheckParams, body: WatchCheckSchema }, async ({ params, body, reply }) => {
       if (body.id !== params.checkId)
         return reply.code(400).send({ error: `the body declares "${body.id}" and the path names "${params.checkId}"` });
       const input = watchCheckInput(body, 0);
@@ -40,25 +34,11 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
 
   app.delete(
     '/api/issues/:number/watch/checks/:checkId',
-    checked({ params: ProposalParams }, ({ params, reply }) => {
+    checked({ params: CheckParams }, ({ params, reply }) => {
       const gone = store.watches.deleteGoalWatch(issueOrigin(params.number), params.checkId);
       if (!gone) return reply.code(404).send({ error: 'no such check on that goal' });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true };
-    }),
-  );
-
-  app.post(
-    '/api/issues/:number/watch-proposals/:checkId',
-    checked({ params: ProposalParams, body: RulingBody }, async ({ params, body, reply }) => {
-      const origin = issueOrigin(params.number);
-      const ruled = store.watches.ruleOnWatchProposal(origin, params.checkId, body.accept);
-      if (ruled === null && body.accept)
-        return reply.code(404).send({ error: 'no pending watch declaration on that check' });
-      hub.broadcast({ type: 'world:changed' });
-      const refusals = body.accept ? await system.watch.run(origin) : [];
-      hub.broadcast({ type: 'world:changed' });
-      return { ok: true, check: ruled, dryRun: refusals };
     }),
   );
 

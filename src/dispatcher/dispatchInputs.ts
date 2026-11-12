@@ -32,7 +32,8 @@ type PulseReadings = Pick<
   | 'discussion'
 >;
 
-export function buildDispatchInputs(store: Store, pulse: PulseReadings): DispatchContext {
+/** `watched`: some environment declares a `watch`. Where none does, the watch's three reads are skipped. */
+export function buildDispatchInputs(store: Store, pulse: PulseReadings, watched = false): DispatchContext {
   const proposals = store.escalations.listProposals();
   const signals = rejectionSignalQuery(proposals);
   const featureStandings = pulse.featureStandings ?? [];
@@ -48,9 +49,13 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
     planAmendments: store.plans.listPendingPlanAmendments(),
     validationChecks: store.validation.listAllValidationChecks(),
     validationPlans: store.validation.listValidationPlanRecords(),
-    watchPlans: store.watches.listWatchPlanRecords(),
-    watchedGoals: [...new Set(store.watches.listGoalWatches().map((c) => c.originRef))],
-    watchTickAnswers: store.plans.listAllPlanCaveatAnswers().filter((a) => a.caveatId === 'watch'),
+    ...(watched
+      ? {
+          watchPlans: store.watches.listWatchPlanRecords(),
+          watchedGoals: store.watches.listWatchedGoalRefs(),
+          watchTickAnswers: store.plans.listWatchCaveatAnswers(),
+        }
+      : {}),
     localRun: store.localRuns.liveLocalRun(),
     botPrRiskRun: store.botPrRisks.pendingRun(),
     localValidations: [

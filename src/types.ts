@@ -1817,12 +1817,6 @@ export interface GoalArrival {
   announcedAt: string | null;
   watchedAt: string | null;
   sheetedAt: string | null;
-  /**
-   * When the watch pass first held this arrival back for a watch still owed or proposed. Null is
-   * *never held*. What lets a held arrival outlast the freshness guard it already passed.
-   * → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
-   */
-  watchHeldAt: string | null;
 }
 
 export type GoalWatchKind = 'signal' | 'measure';
@@ -1891,8 +1885,8 @@ export interface GoalWatch extends GoalWatchInput {
   dryRunDetail: string | null;
   baselineValue: number | null;
   baselineAt: string | null;
+  /** False while the assessor's set awaits the operator's accept. */
   live: boolean;
-  proposal: GoalWatchProposal | null;
   authored: GoalWatchAuthor;
   /**
    * The assessor's own account of where this check departs from the plan's hint, or null where it
@@ -1909,21 +1903,14 @@ type GoalWatchAuthor = 'plan' | 'operator' | 'assessor';
  */
 export interface WatchPlanRecord {
   goalRef: string;
-  /** Null is *owed*: nothing has written this goal's watch yet, or the operator sent it back. */
+  /** Null is *owed*: asked for and not written yet, or sent back. No record at all is *never asked*. */
   authoredAt: string | null;
   note: string | null;
   emptyReason: string | null;
   /** Null on an authored watch is a set still proposed: nothing in it runs on a schedule. */
   acceptedAt: string | null;
-  sentBackAt: string | null;
-  /** The operator's words on the last send-back, handed to the next author. */
+  /** The operator's words on the last send-back, handed to the next author; null where it was never sent back. */
   sentBackWords: string | null;
-}
-
-export interface GoalWatchProposal {
-  at: string;
-  note: string;
-  declaration: GoalWatchInput;
 }
 
 export type StateQueryAuthor = 'plan' | 'agent' | 'operator';

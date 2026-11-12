@@ -24,57 +24,78 @@ export function watchAuthoringIssue(originRef: string | null): number | null {
 }
 
 /**
- * Whether a goal's watch is written. An authored record is; a record the operator sent back is not,
- * whatever rows stand; and a goal with no record but live checks — a plan-time `watch` block, the
- * operator's own checks, anything from before `watch_plans` — is left alone, whoever wrote them.
+ * Whether a goal's watch is owed: asked for — a `watch_plans` row, written when the assessor's `delivered`
+ * verdict is recorded — and not written yet, or sent back. No record is _never asked_, which is every goal from
+ * before the assessor wrote watches and every goal delivered while nothing declared one. The one reading the
+ * rule, `assess_issue`, `watch_plan`, the arrival hold and the outcome share.
+ * → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
  */
-export function watchAuthored(input: { record: WatchPlanRecord | null; hasLiveChecks: boolean }): boolean {
-  if (input.record?.authoredAt != null) return true;
-  if (input.record?.sentBackAt != null) return false;
-  return input.hasLiveChecks;
+export function watchOwed(input: { record: WatchPlanRecord | null; planned: boolean }): boolean {
+  return input.planned && input.record !== null && input.record.authoredAt === null;
 }
 
 /**
- * What the outcome fold is told about a goal with no live checks: the authored watch's empty reason,
- * else the plan hint's `none`, else whether the watch is still owed — and nothing at all before the goal
- * has landed work, when _nothing measured_ would describe a watch with nothing to measure yet.
+ * Whether a `delivered` verdict asks for this goal's watch: a planned goal never asked before and carrying no
+ * checks, or one whose watch is owed already. What the assessor's appendix is rendered on and what the verdict
+ * writes the owed record on, so the turn is never asked for what the record would not then expect.
+ */
+export function watchAskedOnDelivery(input: {
+  record: WatchPlanRecord | null;
+  hasLiveChecks: boolean;
+  planned: boolean;
+}): boolean {
+  return input.record === null ? input.planned && !input.hasLiveChecks : watchOwed(input);
+}
+
+/**
+ * What the outcome fold is told about a goal with no live checks: why nothing is measured — the authored
+ * watch's empty reason, else the plan hint's `none` — or that the watch is still owed. Nothing at all
+ * before the goal has landed work, when _nothing measured_ would describe a watch with nothing to measure yet.
  * → docs/spec/29-post-deploy-watch.md#the-outcome
  */
+export type WatchStanding = { kind: 'none'; reason: string } | { kind: 'owed' } | null;
+
 export function watchOutcomeStanding(input: {
   plan: Pick<Plan, 'watchHint'> | null;
   record: WatchPlanRecord | null;
-  hasLiveChecks: boolean;
   landed: boolean;
-}): { emptyReason: string | null; owed: boolean } {
-  if (!input.landed) return { emptyReason: null, owed: false };
-  if (input.record?.authoredAt != null) return { emptyReason: input.record.emptyReason, owed: false };
+}): WatchStanding {
+  if (!input.landed) return null;
+  const { record } = input;
+  if (record?.authoredAt != null)
+    return record.emptyReason === null ? null : { kind: 'none', reason: record.emptyReason };
   const hinted = hintEmptyReason(input.plan?.watchHint);
-  if (hinted !== null) return { emptyReason: hinted, owed: false };
-  return { emptyReason: null, owed: input.plan !== null && !watchAuthored(input) };
+  if (hinted !== null) return { kind: 'none', reason: hinted };
+  return watchOwed({ record, planned: input.plan !== null }) ? { kind: 'owed' } : null;
 }
 
 /**
- * Why the window pass holds a goal's arrival back, or null where it does not: the watch is **owed**
- * (a planned goal nobody has written it for yet) or **proposed** (written, checks in it, not yet
- * accepted). An authored empty watch holds nothing — there is nothing to open a window on.
+ * Why the window pass holds a goal's arrival back, or null where it does not: the watch is **owed**,
+ * **proposed** (written, checks in it, not yet accepted), or — for a planned goal not delivered yet and
+ * carrying no checks — **undelivered**, since the assessor asks for it only on `delivered` and a fast
+ * deployment arrives first. An authored empty watch holds nothing: there is nothing to open a window on.
+ * The plan and the delivery are thunks, read only where the record leaves the answer open.
  * → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
  */
 export function watchHold(input: {
   record: WatchPlanRecord | null;
   hasLiveChecks: boolean;
-  planned: boolean;
   proposedChecks: number;
-}): 'owed' | 'proposed' | null {
+  planned: () => boolean;
+  delivered: () => boolean;
+}): 'owed' | 'proposed' | 'undelivered' | null {
   const { record } = input;
   if (record?.authoredAt != null) return record.acceptedAt === null && input.proposedChecks > 0 ? 'proposed' : null;
-  if (!input.planned) return null;
-  return watchAuthored(input) ? null : 'owed';
+  if (record !== null) return watchOwed({ record, planned: input.planned() }) ? 'owed' : null;
+  if (input.hasLiveChecks || input.delivered() || !input.planned()) return null;
+  return 'undelivered';
 }
 
 /**
  * The assessor's third output, **appended** to the rendered `issue-assess` prompt after the check set's
- * fold and never interpolated, for the reason everything an agent must read is. Rendered only for a
- * goal with a plan and no authored watch, where some environment declares a `watch`.
+ * fold and never interpolated, for the reason everything an agent must read is. Rendered only where some
+ * environment declares a `watch`, for a goal with a plan whose watch is not authored — the assessor is
+ * deciding the verdict, so the record that makes it owed is not written yet.
  */
 export function assessWatchNote(): string {
   return `\n\n---\n

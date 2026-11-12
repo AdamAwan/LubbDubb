@@ -3,7 +3,8 @@ import { assessBranch, assessOrigin, hasPriorWork } from '../../delivery/assessm
 import { issueOrigin } from '../../plans/planning.js';
 import { planInFlight } from '../../plans/parts.js';
 import { assessAuthoringNote, authoringBriefing, checkSetAuthored } from '../../validation/authoring.js';
-import { assessWatchNote, watchAuthored, watchAuthoringBriefing } from '../../validation/watchAuthoring.js';
+import { assessWatchNote, watchAskedOnDelivery } from '../../validation/watchAuthoring.js';
+import { watchBriefing } from './deliveredAuthor.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import type { Plan } from '../../types.js';
 import type { RawAction, StageContext } from './context.js';
@@ -29,23 +30,15 @@ function authoringAppendix(s: StageContext, root: string, plan: Plan): string {
 }
 
 /**
- * The assessor's third output: the post-deploy watch, where some environment declares one and nobody
- * has written it. Appended after the check set's fold, so the order the prompt asks for is the order
- * the turn is safe in. → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
+ * The assessor's third output: the post-deploy watch, where some environment declares one and a
+ * `delivered` verdict would ask for it. Appended after the check set's fold, so the order the prompt asks
+ * for is the order the turn is safe in. → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
  */
 function watchAppendix(s: StageContext, root: string, plan: Plan): string {
   if (s.watchPlanNote === '') return '';
   const record = s.watchPlans.get(root) ?? null;
-  if (watchAuthored({ record, hasLiveChecks: s.watchedGoals.has(root) })) return '';
-  return (
-    assessWatchNote() +
-    watchAuthoringBriefing({
-      hint: plan.watchHint,
-      tickWords: s.watchTickWords.get(plan.id) ?? [],
-      sentBackWords: record?.sentBackAt != null ? record.sentBackWords : null,
-      environments: s.watchPlanNote,
-    })
-  );
+  if (!watchAskedOnDelivery({ record, hasLiveChecks: s.watchedGoals.has(root), planned: true })) return '';
+  return assessWatchNote() + watchBriefing(s, plan, record);
 }
 
 export function issueAssess(s: StageContext): void {

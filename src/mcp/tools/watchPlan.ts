@@ -3,11 +3,11 @@ import { issueOrigin } from '../../plans/planning.js';
 import { toolSchema } from '../schema.js';
 import { WatchSchema, watchCheckInputs } from '../../validation/watchDocument.js';
 import { UNTIL_EXPLAINED } from '../../validation/watchQueryShape.js';
-import { watchAuthoringIssue } from '../../validation/watchAuthoring.js';
+import { watchAuthoringIssue, watchOwed } from '../../validation/watchAuthoring.js';
 import { watchSourceRefusal } from '../../environments/watchSource.js';
 import { toolError } from '../protocol.js';
 import type { McpToolDeps, ToolFactory } from './context.js';
-import type { GoalWatchInput } from '../../types.js';
+import type { GoalWatch, GoalWatchInput } from '../../types.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -146,27 +146,22 @@ export const watchPlan: ToolFactory = ({ deps, task, ok }) => ({
     'running behaves differently, and it carries an emptyReason.',
   inputSchema: toolSchema(WatchPlanInput),
   handler: async (args) => {
-    const environments = deps.watchEnvironments ?? [];
-    const issueNumber = watchAuthoringIssue(task.originRef);
-    const standing = standingRefusal(deps, environments, issueNumber, task.originRef);
-    if (standing !== null) return toolError(standing);
-    const origin = issueOrigin(issueNumber!);
+    const standing = goalStanding(deps, task.originRef);
+    if ('refusal' in standing) return toolError(standing.refusal);
+    const { origin, live } = standing;
     const declared = declaration(args);
     if ('error' in declared) return toolError(declared.error);
     const { checks, note, emptyReason } = declared;
-    const operators = new Set(
-      deps.store.watches
-        .listGoalWatches()
-        .filter((c) => c.originRef === origin && c.authored === 'operator')
-        .map((c) => c.id),
-    );
+    const operators = new Set(live.filter((c) => c.authored === 'operator').map((c) => c.id));
     const taken = checks.filter((c) => operators.has(c.id)).map((c) => c.id);
     if (taken.length > 0)
       return toolError(
         `${taken.join(', ')} ${taken.length === 1 ? 'is' : 'are'} the operator's own check id. Their checks stand ` +
           'whatever you declare; give yours a different id, or leave it out.',
       );
-    const refusals = checks.map((c) => watchSourceRefusal(environments, c)).filter((r): r is string => r !== null);
+    const refusals = checks
+      .map((c) => watchSourceRefusal(deps.watchEnvironments ?? [], c))
+      .filter((r): r is string => r !== null);
     if (refusals.length > 0) return toolError(`Watch rejected: ${refusals.join('; ')}`);
     deps.store.watches.authorWatchPlan(origin, checks, { note, emptyReason: checks.length === 0 ? emptyReason : null });
     const dryRun = (await deps.watch?.run(origin)) ?? [];
@@ -174,45 +169,56 @@ export const watchPlan: ToolFactory = ({ deps, task, ok }) => ({
   },
 });
 
-/** Why this dispatch may not write this goal's watch now, or null where it may. */
-function standingRefusal(
+/**
+ * The goal this dispatch may write the watch for, with its live checks — or why it may not now: the watch is
+ * owed, or written and still proposed, which a second call in the same turn replaces.
+ */
+function goalStanding(
   deps: McpToolDeps,
-  environments: NonNullable<McpToolDeps['watchEnvironments']>,
-  issueNumber: number | null,
   originRef: string | null,
-): string | null {
-  if (!environments.some((env) => env.watch !== undefined))
-    return (
-      'No environment on this deployment declares a `watch`, so a query written here would be put to nothing. ' +
-      'Say what is worth watching in your verdict instead.'
-    );
+): { origin: string; live: GoalWatch[] } | { refusal: string } {
+  if (deps.watchHintRequired !== true)
+    return {
+      refusal:
+        'No environment on this deployment declares a `watch`, so a query written here would be put to nothing. ' +
+        'Say what is worth watching in your verdict instead.',
+    };
+  const issueNumber = watchAuthoringIssue(originRef);
   if (issueNumber === null)
-    return (
-      `watch_plan declares the whole post-deploy watch for a goal, and only two dispatches may: the assessor ` +
-      `that has just answered "delivered" for it, and the agent sent to write the watch. This task's origin ` +
-      `is ${originRef ?? '(none)'}, which is neither. If you added a log line, a metric or an exception ` +
-      'that says whether this is behaving, say so in the pull request description — the assessor reads it.'
-    );
+    return {
+      refusal:
+        `watch_plan declares the whole post-deploy watch for a goal, and only two dispatches may: the assessor ` +
+        `that has just answered "delivered" for it, and the agent sent to write the watch. This task's origin ` +
+        `is ${originRef ?? '(none)'}, which is neither. If you added a log line, a metric or an exception ` +
+        'that says whether this is behaving, say so in the pull request description — the assessor reads it.',
+    };
   const origin = issueOrigin(issueNumber);
-  if (deps.store.verdicts.getDelivery(origin) === null)
-    return (
-      `Issue #${issueNumber} has no standing delivery, so there is nothing to write a watch against yet. The ` +
-      'watch is written once, against code that is not going to move again — call assess_issue first, and ' +
-      'write it only if that verdict is "delivered".'
-    );
-  const record = deps.store.watches.getWatchPlanRecord(origin);
-  if (record !== null && record.authoredAt !== null && record.acceptedAt !== null)
-    return (
-      `Issue #${issueNumber}'s watch is already written and accepted. The operator edits it on the goal's ` +
-      'own page; there is nothing for you to declare.'
-    );
-  const live = deps.store.watches.listGoalWatches().filter((c) => c.originRef === origin);
-  if (record?.sentBackAt == null && live.some((c) => c.authored !== 'operator'))
-    return (
-      `Issue #${issueNumber} already carries a live watch, written before the assessor authored them. It ` +
-      'stands as it is; the operator edits it on the goal page.'
-    );
-  return null;
+  const { store } = deps;
+  if (store.verdicts.getDelivery(origin) === null)
+    return {
+      refusal:
+        `Issue #${issueNumber} has no standing delivery, so there is nothing to write a watch against yet. The ` +
+        'watch is written once, against code that is not going to move again — call assess_issue first, and ' +
+        'write it only if that verdict is "delivered".',
+    };
+  const record = store.watches.getWatchPlanRecord(origin);
+  const proposed = record?.authoredAt != null && record.acceptedAt === null;
+  if (proposed || watchOwed({ record, planned: store.plans.getPlanByOrigin(origin) !== null }))
+    return { origin, live: store.watches.listLiveGoalWatches(origin) };
+  if (record === null)
+    return {
+      refusal:
+        `Issue #${issueNumber}'s post-deploy watch was never asked for — it was delivered before the assessor ` +
+        'wrote watches, while no environment declared one, or already carrying live checks. Nothing is owed; ' +
+        'there is nothing for you to declare.',
+    };
+  return {
+    refusal:
+      record.authoredAt !== null
+        ? `Issue #${issueNumber}'s watch is already written and accepted. The operator edits it on the goal's ` +
+          'own page; there is nothing for you to declare.'
+        : `Issue #${issueNumber} has no plan, so there is no hint to write a watch against.`,
+  };
 }
 
 type Declared = {

@@ -111,6 +111,7 @@ import { isContainerType } from '../issueGroups.js';
 import { inFlight } from '../view/localValidation.js';
 import { planCaveatsOf } from '../planCaveats.js';
 import { buildGoalPage } from '../view/goalPage.js';
+import { isProposed } from '../view/watchChecks.js';
 
 const DEMO_ASSIGNEES: PrPerson[] = [
   { id: 'priya', name: 'Priya Natarajan' },
@@ -1396,26 +1397,12 @@ class DemoServer {
     );
   }
 
-  async ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<{ ok: true }> {
-    const origin = `issue:${issueNumber}`;
-    const watches = this.state.goalWatches ?? [];
-    const check = watches.find((w) => w.originRef === origin && w.id === checkId);
-    if (check?.proposal) {
-      if (!accept && !check.live) this.state.goalWatches = watches.filter((w) => w !== check);
-      else if (accept) Object.assign(check, check.proposal.declaration, { live: true, proposal: null });
-      else check.proposal = null;
-      this.dirty();
-    }
-    return { ok: true };
-  }
-
   async acceptWatch(issueNumber: number): Promise<{ ok: true }> {
     const goalRef = `issue:${issueNumber}`;
     const record = (this.state.watchPlans ?? []).find((r) => r.goalRef === goalRef);
     if (record?.authoredAt != null && record.acceptedAt === null) {
       record.acceptedAt = new Date().toISOString();
-      for (const w of this.state.goalWatches ?? [])
-        if (w.originRef === goalRef && !w.live && w.authored === 'assessor') w.live = true;
+      for (const w of this.state.goalWatches ?? []) if (w.originRef === goalRef && isProposed(w)) w.live = true;
       this.dirty();
     }
     return { ok: true };
@@ -1424,7 +1411,7 @@ class DemoServer {
   async sendBackWatch(issueNumber: number, words: string): Promise<{ ok: true }> {
     const record = (this.state.watchPlans ?? []).find((r) => r.goalRef === `issue:${issueNumber}`);
     if (record?.authoredAt != null && record.acceptedAt === null) {
-      Object.assign(record, { authoredAt: null, sentBackAt: new Date().toISOString(), sentBackWords: words });
+      Object.assign(record, { authoredAt: null, sentBackWords: words });
       this.dirty();
     }
     return { ok: true };
@@ -1452,7 +1439,6 @@ class DemoServer {
       baselineValue: null,
       baselineAt: null,
       live: true,
-      proposal: null,
       authored: 'operator',
       changedFromHint: null,
       dryRunEnvironment: null,
@@ -5010,8 +4996,6 @@ export const demoApi = {
     getServer().markRemoteNotHere(issueNumber, environment, note),
   reseedRemoteTenant: (issueNumber: number, environment: string) =>
     getServer().reseedRemoteTenant(issueNumber, environment),
-  ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
-    getServer().ruleWatchProposal(issueNumber, checkId, accept),
   acceptWatch: (issueNumber: number) => getServer().acceptWatch(issueNumber),
   sendBackWatch: (issueNumber: number, words: string) => getServer().sendBackWatch(issueNumber, words),
   saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) => getServer().saveWatchCheck(issueNumber, check),

@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS goal_watches (
   unit            TEXT,            -- what the number is in; drawn, never parsed
   baseline_value  REAL,            -- the *before*, taken at declaration. NULL means never taken.
   baseline_at     TEXT,
-  live            INTEGER NOT NULL DEFAULT 1,  -- 0 while an agent's declaration awaits the operator
-  proposal        TEXT,            -- an agent's pending amendment, as JSON; NULL where none is outstanding
+  live            INTEGER NOT NULL DEFAULT 1,  -- 0 while the assessor's set awaits the operator's accept
+  proposal        TEXT,            -- retired with watch_declare and read by nothing; left in place, never dropped
   authored        TEXT NOT NULL DEFAULT 'plan', -- 'plan' | 'operator' | 'assessor'; an operator's row is neither swept nor overwritten by a replan
   changed_from_hint TEXT,          -- the assessor's account of where this check departs from the plan's hint; NULL where it says none
   why        TEXT,
@@ -77,17 +77,15 @@ CREATE TABLE IF NOT EXISTS watch_readings (
 
 -- A goal's post-deploy watch as the assessor wrote it with watch_plan, and what the
 -- operator did with it (see WatchStore). validation_plans' shape, one subsystem over.
--- authored_at NULL means *owed*, which holds a fresh arrival back until the set is
--- written and accepted -- a null that means something, so the boot that creates this
--- table stamps every goal already carrying live checks as authored and accepted.
+-- A row is written owed (authored_at NULL) when the assessor's delivered verdict is
+-- recorded; no row means the watch was never asked for, which is every goal from before.
 CREATE TABLE IF NOT EXISTS watch_plans (
   goal_ref        TEXT PRIMARY KEY,   -- issue:<n>
   authored_at     TEXT,               -- NULL is owed: never written, or sent back
   note            TEXT,               -- where the checks departed from the plan's hint, and why
   empty_reason    TEXT,               -- why nothing was declared; NULL where checks were
   accepted_at     TEXT,               -- NULL on an authored watch is a set still proposed
-  sent_back_at    TEXT,               -- the operator's last send-back
-  sent_back_words TEXT,               -- what they said, handed to the next author
+  sent_back_words TEXT,               -- the operator's last send-back, handed to the next author
   updated_at      TEXT NOT NULL
 );
 `;

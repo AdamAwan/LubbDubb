@@ -15,7 +15,8 @@ import { REPO_ROOT as ROOT } from './support/paths.js';
  * demo's fake server derives it with the harness's own code, and the cockpit shares its wording —
  * and the tables that name an ask's kind and place a goal's parts, and the goal an ask is about, which
  * `ask_next`'s card reads too — and the answers an investigation's findings take, so the cockpit
- * offers exactly the ones the route accepts.
+ * offers exactly the ones the route accepts — and which watch checks are still proposed, so the Signals card
+ * and the window pass cannot disagree about what the operator is yet to accept.
  */
 const RUNTIME_MODULES: string[] = [
   './asks/queue.js',
@@ -25,6 +26,7 @@ const RUNTIME_MODULES: string[] = [
   './asks/askGoal.js',
   './plans/partGroup.js',
   './intake/investigationResolutions.js',
+  './validation/watchProposed.js',
 ];
 
 test('the contract passes through runtime from the declared modules and no others', () => {

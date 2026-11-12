@@ -1,7 +1,6 @@
 import type {
   GoalWatch,
   GoalWatchInput,
-  GoalWatchProposal,
   WatchCheckVerdict,
   WatchReading,
   WatchReadingVerdict,
@@ -43,32 +42,17 @@ export const WATCH_COLUMNS: ColumnMigrations = {
   watch_plans: {},
 };
 
-const DELIVERED_BEFORE_THE_ASSESSOR = 'Delivered before the assessor wrote watches';
-
 /**
- * Every goal already carrying live checks when `watch_plans` is created was authorised under the plan
- * approval that preceded it, and every planned goal already delivered without any was delivered before
- * anything wrote watches. Null `authored_at` is *owed*, so without this each would dispatch `watch-plan`
- * and hold its next arrival. Run only on the boot that creates the table: a pass on every boot would
- * stamp the watch an operator is being asked about right now.
- * → docs/spec/14-persistence.md#when-a-null-means-something
+ * Every boot: drop what `watch_declare` left proposed (`live=0`, `authored='plan'`) and the readings taken
+ * against it. Nothing reads or rules on such a row since the tool was retired, and the predicate is
+ * idempotent, so a further pass deletes nothing. → docs/spec/14-persistence.md#retired-watch-proposals
  */
-export function stampWatchPlansFromBeforeTheAssessor(
-  db: Database.Database,
-  now: string,
-  plannedAndDelivered: readonly string[],
-): void {
+export function deleteRetiredWatchProposals(db: Database.Database): void {
   db.prepare(
-    `INSERT OR IGNORE INTO watch_plans (goal_ref, authored_at, note, empty_reason, accepted_at, sent_back_at,
-                                        sent_back_words, updated_at)
-     SELECT DISTINCT goal_ref, @now, NULL, NULL, @now, NULL, NULL, @now FROM goal_watches WHERE live=1`,
-  ).run({ now });
-  const stamp = db.prepare(
-    `INSERT OR IGNORE INTO watch_plans (goal_ref, authored_at, note, empty_reason, accepted_at, sent_back_at,
-                                        sent_back_words, updated_at)
-     VALUES (@goalRef, @now, NULL, @reason, @now, NULL, NULL, @now)`,
-  );
-  for (const goalRef of plannedAndDelivered) stamp.run({ goalRef, now, reason: DELIVERED_BEFORE_THE_ASSESSOR });
+    `DELETE FROM watch_readings WHERE EXISTS (SELECT 1 FROM goal_watches w WHERE w.goal_ref = watch_readings.goal_ref
+       AND w.check_id = watch_readings.check_id AND w.live = 0 AND w.authored = 'plan')`,
+  ).run();
+  db.prepare(`DELETE FROM goal_watches WHERE live = 0 AND authored = 'plan'`).run();
 }
 
 export class WatchStore {
@@ -79,17 +63,16 @@ export class WatchStore {
       const keep = new Set(checks.map((c) => c.id));
       const mine = new Set<string>();
       for (const row of this.ctx
-        .prep(`SELECT check_id, authored, live FROM goal_watches WHERE goal_ref=?`)
+        .prep(`SELECT check_id, authored FROM goal_watches WHERE goal_ref=?`)
         .all(originRef) as {
         check_id: string;
         authored: string;
-        live: number;
       }[]) {
         if (row.authored === 'operator' || row.authored === 'assessor') {
           mine.add(row.check_id);
           continue;
         }
-        if (row.live === 0 || keep.has(row.check_id)) continue;
+        if (keep.has(row.check_id)) continue;
         this.ctx.prep(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
         this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
       }
@@ -100,12 +83,12 @@ export class WatchStore {
             `INSERT OR REPLACE INTO goal_watches
                (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
                 expect_under, expect_over, expect_baseline, unit, why, source,
-                baseline_value, baseline_at, live, proposal, authored,
+                baseline_value, baseline_at, live, authored,
                 dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
                 created_at, updated_at)
              VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
                 @expectUnder, @expectOver, @expectBaseline, @unit, @why, @source,
-                NULL, NULL, 1, NULL, 'plan',
+                NULL, NULL, 1, 'plan',
                 NULL, NULL, NULL, NULL, NULL, NULL, @now, @now)`,
           )
           .run({ ...check, expectBaseline: check.expectBaseline ? 1 : 0, goalRef: originRef, now: this.ctx.now() });
@@ -153,100 +136,29 @@ export class WatchStore {
     return rows.map((r) => ({ authored: r.authored, createdAt: r.created_at }));
   }
 
+  /** One goal's live checks. */
+  listLiveGoalWatches(originRef: string): GoalWatch[] {
+    return (
+      this.ctx
+        .prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND live=1 ORDER BY seq`)
+        .all(originRef) as GoalWatchRow[]
+    ).map(hydrate);
+  }
+
+  /** The goals carrying at least one live check, whoever wrote it. */
+  listWatchedGoalRefs(): string[] {
+    return (
+      this.ctx.prep(`SELECT DISTINCT goal_ref FROM goal_watches WHERE live=1 ORDER BY goal_ref`).all() as {
+        goal_ref: string;
+      }[]
+    ).map((r) => r.goal_ref);
+  }
+
+  /** The assessor's sets still awaiting the operator's accept. */
   listProposedGoalWatches(): GoalWatch[] {
     return (
       this.ctx.prep(`SELECT * FROM goal_watches WHERE live=0 ORDER BY goal_ref, seq`).all() as GoalWatchRow[]
     ).map(hydrate);
-  }
-
-  proposeGoalWatch(originRef: string, checks: readonly GoalWatchInput[], note: string): { proposed: string[] } {
-    const now = this.ctx.now();
-    this.ctx.db.transaction(() => {
-      const seqBase =
-        (
-          this.ctx.prep(`SELECT MAX(seq) AS top FROM goal_watches WHERE goal_ref=?`).get(originRef) as {
-            top: number | null;
-          }
-        ).top ?? 0;
-      for (const [index, check] of checks.entries()) {
-        const declaration: GoalWatchInput = { ...check, seq: seqBase + index + 1 };
-        const proposal: GoalWatchProposal = { at: now, note, declaration };
-        const existing = this.ctx
-          .prep(`SELECT check_id FROM goal_watches WHERE goal_ref=? AND check_id=?`)
-          .get(originRef, check.id);
-        if (existing) {
-          this.ctx
-            .prep(`UPDATE goal_watches SET proposal=?, updated_at=? WHERE goal_ref=? AND check_id=?`)
-            .run(JSON.stringify(proposal), now, originRef, check.id);
-          continue;
-        }
-        this.ctx
-          .prep(
-            `INSERT INTO goal_watches
-               (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
-                expect_under, expect_over, expect_baseline, unit, why, source,
-                baseline_value, baseline_at, live, proposal, authored,
-                dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
-                created_at, updated_at)
-             VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
-                @expectUnder, @expectOver, @expectBaseline, @unit, @why, @source,
-                NULL, NULL, 0, @proposal, 'plan',
-                NULL, NULL, NULL, NULL, NULL, NULL, @now, @now)`,
-          )
-          .run({
-            ...declaration,
-            expectBaseline: declaration.expectBaseline ? 1 : 0,
-            proposal: JSON.stringify(proposal),
-            goalRef: originRef,
-            now,
-          });
-      }
-    })();
-    return { proposed: checks.map((c) => c.id) };
-  }
-
-  ruleOnWatchProposal(originRef: string, checkId: string, accept: boolean): GoalWatch | null {
-    const row = this.ctx.prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`).get(originRef, checkId) as
-      GoalWatchRow | undefined;
-    if (row === undefined || row.proposal === null) return null;
-    const proposal = JSON.parse(row.proposal) as GoalWatchProposal;
-    const now = this.ctx.now();
-    this.ctx.db.transaction(() => {
-      if (!accept) {
-        if (row.live === 0) {
-          this.ctx.prep(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
-          return;
-        }
-        this.ctx
-          .prep(`UPDATE goal_watches SET proposal=NULL, updated_at=? WHERE goal_ref=? AND check_id=?`)
-          .run(now, originRef, checkId);
-        return;
-      }
-      this.ctx
-        .prep(
-          `UPDATE goal_watches
-              SET kind=@kind, title=@title, query=@query, presence=@presence, tolerate=@tolerate,
-                  expect_under=@expectUnder, expect_over=@expectOver, expect_baseline=@expectBaseline,
-                  unit=@unit, why=@why, source=@source, live=1, proposal=NULL,
-                  baseline_value=NULL, baseline_at=NULL,
-                  dry_run_environment=NULL, dry_run_at=NULL, dry_run_verdict=NULL,
-                  dry_run_presence=NULL, dry_run_rows=NULL, dry_run_detail=NULL, updated_at=@now
-            WHERE goal_ref=@goalRef AND check_id=@checkId`,
-        )
-        .run({
-          ...proposal.declaration,
-          source: proposal.declaration.source ?? null,
-          expectBaseline: proposal.declaration.expectBaseline ? 1 : 0,
-          goalRef: originRef,
-          checkId,
-          now,
-        });
-      this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
-    })();
-    const after = this.ctx
-      .prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
-      .get(originRef, checkId) as GoalWatchRow | undefined;
-    return after === undefined ? null : hydrate(after);
   }
 
   saveOperatorWatch(originRef: string, check: Omit<GoalWatchInput, 'seq'>): GoalWatch {
@@ -265,12 +177,12 @@ export class WatchStore {
           `INSERT OR REPLACE INTO goal_watches
              (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
               expect_under, expect_over, expect_baseline, unit, why, source,
-              baseline_value, baseline_at, live, proposal, authored,
+              baseline_value, baseline_at, live, authored,
               dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
               created_at, updated_at)
            VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
               @expectUnder, @expectOver, @expectBaseline, @unit, @why, @source,
-              @baselineValue, @baselineAt, 1, NULL, 'operator',
+              @baselineValue, @baselineAt, 1, 'operator',
               @dryRunEnvironment, @dryRunAt, @dryRunVerdict, @dryRunPresence, @dryRunRows, @dryRunDetail,
               @createdAt, @now)`,
         )
@@ -303,23 +215,19 @@ export class WatchStore {
   }
 
   /**
-   * The checks a dry run puts to an environment: the live ones, and the assessor's set while it is
-   * still proposed — the dry run is the one thing a proposal is allowed to do before the accept.
+   * The checks a dry run puts to an environment: every one on the goal, the assessor's set while it is
+   * still proposed included — the dry run is the one thing a proposal is allowed to do before the accept.
    * → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
    */
   listDryRunWatches(originRef: string): GoalWatch[] {
     return (
-      this.ctx
-        .prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND (live=1 OR authored='assessor') ORDER BY seq`)
-        .all(originRef) as GoalWatchRow[]
+      this.ctx.prep(`SELECT * FROM goal_watches WHERE goal_ref=? ORDER BY seq`).all(originRef) as GoalWatchRow[]
     ).map(hydrate);
   }
 
   /**
-   * `watch_plan`'s write: the whole watch, proposed. Every row on the goal that is neither the
-   * operator's own nor live is replaced — an earlier call's set, a sent-back set, a pending
-   * `watch_declare` row — and the declared checks land `live=0`, `authored='assessor'`. The tool has
-   * already refused a goal whose watch is live. → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
+   * `watch_plan`'s write: the whole watch, proposed. Every row on the goal that is not live is replaced —
+   * an earlier call's set, a sent-back set — and the declared checks land `live=0`, `authored='assessor'`. → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
    */
   authorWatchPlan(
     originRef: string,
@@ -331,36 +239,51 @@ export class WatchStore {
       this.ctx
         .prep(
           `DELETE FROM watch_readings WHERE goal_ref=? AND check_id IN
-             (SELECT check_id FROM goal_watches WHERE goal_ref=? AND live=0 AND authored<>'operator')`,
+             (SELECT check_id FROM goal_watches WHERE goal_ref=? AND live=0)`,
         )
         .run(originRef, originRef);
-      this.ctx.prep(`DELETE FROM goal_watches WHERE goal_ref=? AND live=0 AND authored<>'operator'`).run(originRef);
+      this.ctx.prep(`DELETE FROM goal_watches WHERE goal_ref=? AND live=0`).run(originRef);
       for (const check of checks)
         this.ctx
           .prep(
             `INSERT INTO goal_watches
                (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
                 expect_under, expect_over, expect_baseline, unit, why, source, changed_from_hint,
-                baseline_value, baseline_at, live, proposal, authored,
+                baseline_value, baseline_at, live, authored,
                 dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
                 created_at, updated_at)
              VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
                 @expectUnder, @expectOver, @expectBaseline, @unit, @why, @source, @changedFromHint,
-                NULL, NULL, 0, NULL, 'assessor',
+                NULL, NULL, 0, 'assessor',
                 NULL, NULL, NULL, NULL, NULL, NULL, @now, @now)`,
           )
           .run({ ...check, expectBaseline: check.expectBaseline ? 1 : 0, goalRef: originRef, now });
-      this.ctx
-        .prep(
-          `INSERT INTO watch_plans (goal_ref, authored_at, note, empty_reason, accepted_at, sent_back_at,
-                                    sent_back_words, updated_at)
-           VALUES (@goalRef, @now, @note, @emptyReason, NULL, NULL, NULL, @now)
-           ON CONFLICT(goal_ref) DO UPDATE SET authored_at=excluded.authored_at, note=excluded.note,
-             empty_reason=excluded.empty_reason, accepted_at=NULL, updated_at=excluded.updated_at`,
-        )
-        .run({ goalRef: originRef, now, ...input });
+      this.writePlan({
+        goalRef: originRef,
+        authoredAt: now,
+        ...input,
+        acceptedAt: null,
+        sentBackWords: this.getWatchPlanRecord(originRef)?.sentBackWords ?? null,
+      });
     })();
     return this.getWatchPlanRecord(originRef) as WatchPlanRecord;
+  }
+
+  /**
+   * The obligation, written when the assessor's `delivered` verdict is recorded on a goal the watch is asked
+   * of. A goal that already has a record keeps it: a re-delivery re-asks only where something un-authored the
+   * watch on purpose. → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
+   */
+  oweWatchPlan(originRef: string): void {
+    if (this.getWatchPlanRecord(originRef) !== null) return;
+    this.writePlan({
+      goalRef: originRef,
+      authoredAt: null,
+      note: null,
+      emptyReason: null,
+      acceptedAt: null,
+      sentBackWords: null,
+    });
   }
 
   /**
@@ -373,10 +296,8 @@ export class WatchStore {
     if (record === null || record.authoredAt === null || record.acceptedAt !== null) return null;
     const now = this.ctx.now();
     this.ctx.db.transaction(() => {
-      this.ctx
-        .prep(`UPDATE goal_watches SET live=1, updated_at=? WHERE goal_ref=? AND live=0 AND authored='assessor'`)
-        .run(now, originRef);
-      this.ctx.prep(`UPDATE watch_plans SET accepted_at=?, updated_at=? WHERE goal_ref=?`).run(now, now, originRef);
+      this.ctx.prep(`UPDATE goal_watches SET live=1, updated_at=? WHERE goal_ref=? AND live=0`).run(now, originRef);
+      this.writePlan({ ...record, acceptedAt: now });
     })();
     return this.getWatchPlanRecord(originRef);
   }
@@ -389,10 +310,7 @@ export class WatchStore {
   sendBackWatchPlan(originRef: string, words: string): WatchPlanRecord | null {
     const record = this.getWatchPlanRecord(originRef);
     if (record === null || record.authoredAt === null || record.acceptedAt !== null) return null;
-    const now = this.ctx.now();
-    this.ctx
-      .prep(`UPDATE watch_plans SET authored_at=NULL, sent_back_at=?, sent_back_words=?, updated_at=? WHERE goal_ref=?`)
-      .run(now, words, now, originRef);
+    this.writePlan({ ...record, authoredAt: null, sentBackWords: words });
     return this.getWatchPlanRecord(originRef);
   }
 
@@ -403,6 +321,19 @@ export class WatchStore {
 
   listWatchPlanRecords(): WatchPlanRecord[] {
     return (this.ctx.prep(`SELECT * FROM watch_plans ORDER BY goal_ref`).all() as WatchPlanRow[]).map(hydratePlan);
+  }
+
+  /** The one write `watch_plans` has: every column, from a whole record. */
+  private writePlan(record: WatchPlanRecord): void {
+    this.ctx
+      .prep(
+        `INSERT INTO watch_plans (goal_ref, authored_at, note, empty_reason, accepted_at, sent_back_words, updated_at)
+         VALUES (@goalRef, @authoredAt, @note, @emptyReason, @acceptedAt, @sentBackWords, @now)
+         ON CONFLICT(goal_ref) DO UPDATE SET authored_at=excluded.authored_at, note=excluded.note,
+           empty_reason=excluded.empty_reason, accepted_at=excluded.accepted_at,
+           sent_back_words=excluded.sent_back_words, updated_at=excluded.updated_at`,
+      )
+      .run({ ...record, now: this.ctx.now() });
   }
 
   private nextWatchSeq(originRef: string): number {

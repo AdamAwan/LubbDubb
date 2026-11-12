@@ -73,28 +73,33 @@ export class WatchDesk {
   private open(): void {
     const { store, errors } = this.deps;
     try {
-      const declared = new Set(store.watches.listGoalWatches().map((c) => c.originRef));
+      const arrivals = store.environments.listGoalArrivals().filter((a) => a.watchedAt === null);
+      if (arrivals.length === 0) return;
+      const declared = new Set(store.watches.listWatchedGoalRefs());
       const records = new Map(store.watches.listWatchPlanRecords().map((r) => [r.goalRef, r]));
-      const proposed = store.watches.listProposedGoalWatches().filter((c) => c.authored === 'assessor');
+      const proposed = new Map<string, number>();
+      for (const c of store.watches.listProposedGoalWatches())
+        proposed.set(c.originRef, (proposed.get(c.originRef) ?? 0) + 1);
+      let delivered: Set<string> | null = null;
       const held = (goalRef: string): boolean =>
         watchHold({
           record: records.get(goalRef) ?? null,
           hasLiveChecks: declared.has(goalRef),
-          planned: store.plans.getPlanByOrigin(goalRef) !== null,
-          proposedChecks: proposed.filter((c) => c.originRef === goalRef).length,
+          proposedChecks: proposed.get(goalRef) ?? 0,
+          planned: () => store.plans.getPlanByOrigin(goalRef) !== null,
+          delivered: () =>
+            (delivered ??= new Set(store.verdicts.listDeliveries().map((d) => d.originRef))).has(goalRef),
         }) !== null;
       for (const { arrival, settlesAt, hold } of openableArrivals({
-        arrivals: store.environments.listGoalArrivals(),
+        arrivals,
         environments: this.deps.environments,
         declared,
         held,
+        acceptedAt: (goalRef) => records.get(goalRef)?.acceptedAt ?? null,
         probeIntervalMs: this.deps.probeIntervalMs,
         now: this.now(),
       })) {
-        if (hold) {
-          store.environments.markArrivalWatchHeld(arrival.goalRef, arrival.environment);
-          continue;
-        }
+        if (hold) continue;
         if (settlesAt !== null)
           store.watches.openWatchWindow({
             goalRef: arrival.goalRef,
