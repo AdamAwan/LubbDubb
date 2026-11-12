@@ -1222,9 +1222,10 @@ No body. **Discuss in Claude** on a post-deploy watch's outcome: writes one `not
 discussion file through `System.discussions`, authored `LubbDubb (watch)` — the outcome, each check's
 expectation, its before and after, its query in a fence named by its source's language, and the goal's
 merged pull requests — and answers `{ok, entry, path}`; the cockpit then opens `/lubbdubb:discuss <n>`.
-The outcome is folded by `watchOutcome`, the same fold `/api/state` ships. **409** with discussions off
-(`discussionsDir` is what turns them on), and **409** where the outcome is anything but _It made
-something worse_ or _Couldn't tell_ — there is nothing for a conversation to decide about a watch that
+The outcome is built by `goalWatchOutcome`, the same per-goal builder `/api/state` ships, gate
+included. **409** with discussions off (`discussionsDir` is what turns them on), and **409** where the
+outcome is not `discussable` — anything but _It made something worse_ or _Couldn't tell_, or no
+outcome at all because no environment declares a `watch` — there is nothing for a conversation to decide about a watch that
 worked or has not settled. It writes no `WorldEvent` and changes no hold; it broadcasts `dirty` for
 `goals` and `queue`, as a desktop discussion write does. → [29](29-post-deploy-watch.md#discussing-an-outcome)
 

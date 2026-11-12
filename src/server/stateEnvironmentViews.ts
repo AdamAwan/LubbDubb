@@ -17,7 +17,6 @@ import type {
   ValidationCheck,
   TaskSummary,
   WatchOutcome,
-  WatchReading,
   WorkNode,
 } from '../types.js';
 import type {
@@ -32,7 +31,9 @@ import { allGoalReach } from '../environments/reach.js';
 import { arrivalSheetStep } from '../environments/watchWindow.js';
 import { environmentGateHold } from '../environments/arrival.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
-import { hintEmptyReason, watchOutcome } from '../environments/watchOutcome.js';
+import { watchOutcome } from '../environments/watchOutcome.js';
+import { watchWindowReadings, type WatchWindowReading } from '../environments/watchFinding.js';
+import { hintEmptyReason } from '../plans/watchHint.js';
 
 // → docs/spec/16-http-api.md
 
@@ -135,20 +136,19 @@ function sheetFold(sheet: RemoteSheetView | undefined): string | null {
   );
 }
 
+function watched(environments: readonly EnvironmentConfig[]): boolean {
+  return environments.some((e) => e.watch !== undefined);
+}
+
+/** Every goal's windows, each check carrying the reading `watchWindowReadings` decided stands. */
 export function buildGoalWatchWindows(
-  store: System['store'],
   environments: EnvironmentConfig[],
-  readGoalWatches: () => GoalWatch[],
+  resolved: () => WatchWindowReading[],
 ): GoalWatchView[] {
-  if (!environments.some((e) => e.watch !== undefined)) return [];
-  const windows = store.watches.listWatchWindows();
-  if (windows.length === 0) return [];
-  const newest = new Map<string, WatchReading>();
-  for (const r of store.watches.listWatchReadings()) newest.set(`${r.goalRef} ${r.environment} ${r.checkId}`, r);
-  const checksByGoal = groupBy(readGoalWatches(), (c) => c.originRef);
-  return windows.map((window) => ({
+  if (!watched(environments)) return [];
+  return resolved().map(({ window, checks }) => ({
     ...window,
-    checks: (checksByGoal.get(window.goalRef) ?? []).map((c) => ({
+    checks: checks.map(({ check: c, reading }) => ({
       checkId: c.id,
       title: c.title,
       kind: c.kind,
@@ -159,34 +159,58 @@ export function buildGoalWatchWindows(
       expectBaseline: c.expectBaseline,
       unit: c.unit,
       baselineValue: c.baselineValue,
-      reading: newest.get(`${window.goalRef} ${window.environment} ${c.id}`) ?? null,
+      reading,
     })),
   }));
 }
 
+type GoalWatchRecords = Parameters<typeof watchOutcome>[0];
+
+/**
+ * One goal's watch rolled up to one answer — the one builder the snapshot and the discuss route both
+ * call. Null where no environment declares a `watch`, for the windows' reason.
+ * → docs/spec/29-post-deploy-watch.md#the-outcome
+ */
+export function goalWatchOutcome(
+  environments: readonly EnvironmentConfig[],
+  goal: GoalWatchRecords,
+): WatchOutcome | null {
+  return watched(environments) ? watchOutcome(goal) : null;
+}
+
+/** One goal's checks, resolved windows and empty reason, read off the store for a route that needs one goal. */
+export function readGoalWatchRecords(store: System['store'], goalRef: string): GoalWatchRecords {
+  const checks = store.watches.listGoalWatches().filter((c) => c.originRef === goalRef);
+  const windows = watchWindowReadings({
+    windows: store.watches.listWatchWindows().filter((w) => w.goalRef === goalRef),
+    checks,
+    readings: store.watches.listWatchReadings().filter((r) => r.goalRef === goalRef),
+  });
+  return { goalRef, checks, windows, emptyReason: hintEmptyReason(store.plans.getPlanByOrigin(goalRef)?.watchHint) };
+}
+
 /**
  * Each goal's watch rolled up to one answer, folded here once so the goal page and anything else that
- * draws it read the same one. Absent where no environment declares a `watch`, for the windows' reason.
+ * draws it read the same one, off the windows the window view was resolved from.
  * → docs/spec/29-post-deploy-watch.md#the-outcome
  */
 export function buildGoalWatchOutcomes(
-  store: System['store'],
   environments: EnvironmentConfig[],
   readGoalWatches: () => GoalWatch[],
+  resolved: () => WatchWindowReading[],
   plans: readonly Plan[],
 ): WatchOutcome[] {
-  if (!environments.some((e) => e.watch !== undefined)) return [];
-  const checks = readGoalWatches();
-  const windows = store.watches.listWatchWindows();
-  const readings = store.watches.listWatchReadings();
-  const emptyReasons = new Map(plans.map((p) => [p.originRef, hintEmptyReason(p.watchHint)]));
-  const goals = new Set([...checks.map((c) => c.originRef), ...windows.map((w) => w.goalRef), ...emptyReasons.keys()]);
+  if (!watched(environments)) return [];
+  const checksByGoal = groupBy(readGoalWatches(), (c) => c.originRef);
+  const windowsByGoal = groupBy(resolved(), (w) => w.window.goalRef);
+  const hints = new Map(plans.map((p) => [p.originRef, hintEmptyReason(p.watchHint)]));
+  const emptyReasons = new Map([...hints].filter((e): e is [string, string] => e[1] !== null));
+  const goals = new Set([...checksByGoal.keys(), ...windowsByGoal.keys(), ...emptyReasons.keys()]);
   return [...goals].flatMap((goalRef) => {
-    const outcome = watchOutcome({
+    const outcome = goalWatchOutcome(environments, {
       goalRef,
-      checks,
-      windows,
-      readings,
+      checks: checksByGoal.get(goalRef) ?? [],
+      windows: windowsByGoal.get(goalRef) ?? [],
       emptyReason: emptyReasons.get(goalRef) ?? null,
     });
     return outcome === null ? [] : [outcome];

@@ -37,6 +37,11 @@ export function watchPeriod(window: WatchWindow, now: string): WatchPeriod {
   return { since: window.exposedAt ?? window.openedAt, until: now };
 }
 
+/** A settled window's whole period: from exposure or the arrival to when it settled, or was due to. */
+export function settledWatchPeriod(window: WatchWindow): WatchPeriod {
+  return watchPeriod(window, window.settledAt ?? window.settlesAt);
+}
+
 export function parseExposure(stdout: string, commits: readonly string[]): ExposureReading {
   const text = stdout.trim();
   if (text === '') return unexposed('the exposure probe exited 0 and printed nothing');

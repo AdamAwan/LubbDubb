@@ -2,9 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { DISCUSSION_AUTHORS, DISCUSSIONS_OFF } from '../../discussions/discussionFile.js';
 import { readDiscussion } from '../../discussions/related.js';
 import { discussionSubject } from '../../discussions/subject.js';
-import { hintEmptyReason, watchOutcome, watchOutcomeNote } from '../../environments/watchOutcome.js';
+import { goalMergedPrs } from '../../environments/landings.js';
+import { watchOutcomeNote } from '../../environments/watchOutcome.js';
 import { issueOrigin } from '../../plans/planning.js';
 import type { DiscussionReading } from '../../wire.js';
+import { goalWatchOutcome, readGoalWatchRecords } from '../stateEnvironmentViews.js';
 import { checked, IssueNumberParams } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -26,36 +28,18 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IssueNumberParams }, ({ params, reply }) => {
       if (!system.discussions.enabled) return reply.code(409).send({ error: DISCUSSIONS_OFF });
       const { store, config } = system;
-      const goalRef = issueOrigin(params.number);
-      const checks = store.watches.listGoalWatches();
-      const windows = store.watches.listWatchWindows();
-      const outcome = watchOutcome({
-        goalRef,
-        checks,
-        windows,
-        readings: store.watches.listWatchReadings(),
-        emptyReason: hintEmptyReason(store.plans.getPlanByOrigin(goalRef)?.watchHint),
-      });
-      if (outcome?.outcome !== 'worse' && outcome?.outcome !== 'unknown')
+      const goal = readGoalWatchRecords(store, issueOrigin(params.number));
+      const outcome = goalWatchOutcome(config.environments, goal);
+      if (outcome?.discussable !== true)
         return reply.code(409).send({
           error: 'only a watch that made something worse, or could not tell, is put to a discussion',
         });
       const world = store.world.getWorldBaseline();
-      const titles = new Map((world?.closedPullRequests ?? []).map((p) => [p.number, p.title]));
-      const numbers = [
-        ...new Set(
-          store.environments
-            .listGoalLandings()
-            .filter((l) => l.goalRef === goalRef)
-            .map((l) => l.prNumber),
-        ),
-      ];
       const body = watchOutcomeNote({
         outcome,
-        checks,
-        windows,
+        windows: goal.windows,
         environments: config.environments,
-        pullRequests: numbers.map((number) => ({ number, title: titles.get(number) ?? null })),
+        pullRequests: goalMergedPrs(goal.goalRef, store.environments.listGoalLandings(), world),
       });
       const written = system.discussions.add(
         discussionSubject(world?.issues ?? [], params.number, config.issueContainerTypes),

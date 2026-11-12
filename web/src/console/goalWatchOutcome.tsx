@@ -1,17 +1,18 @@
 import type { JSX } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { GoalWatchView, WatchCheckVerdict, WatchOutcome, WatchOutcomeCheck } from '../types.js';
+import type { WatchCheckVerdict, WatchOutcome, WatchOutcomeCheck } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { Icon } from '../components/icons.js';
+import type { TagTone } from '../components/tag.js';
 
 // → docs/spec/29-post-deploy-watch.md#the-outcome
 
-const HEADLINE: Record<WatchOutcome['outcome'], string> = {
-  worked: 'It worked',
-  worse: 'It made something worse',
-  unknown: 'Couldn’t tell',
-  none: 'Nothing was measured',
-  watching: 'Watching',
+const TONE: Record<WatchOutcome['outcome'], TagTone> = {
+  worked: 'green',
+  worse: 'red',
+  unknown: 'amber',
+  none: 'grey',
+  watching: 'grey',
 };
 
 /** Which checks each answer draws, in order, and the words over each group after the first. */
@@ -34,26 +35,16 @@ const GROUPS: Record<'worked' | 'worse' | 'unknown', { verdict: WatchCheckVerdic
  */
 export function WatchOutcomeCard({
   outcome,
-  windows,
-  issueNumber,
-  discussions,
-  desktopFolder,
-  actions,
+  ...acts
 }: {
   outcome: WatchOutcome | null;
-  windows: GoalWatchView[];
-  issueNumber: number;
-  /** `discussionsDir` is set; without it there is no Discuss button, not a disabled one. */
-  discussions: boolean;
-  desktopFolder: string;
-  actions: CockpitActions;
-}): JSX.Element | null {
+} & Omit<ActsProps, 'outcome'>): JSX.Element | null {
   if (outcome === null) return null;
   const answer = outcome.outcome;
   return (
-    <section className={`cn-card cn-outcome ${answer}`} id="cn-watch-outcome">
+    <section className={`cn-card cn-outcome cn-t-${TONE[answer]}`} id="cn-watch-outcome">
       <h3>
-        {HEADLINE[answer]}
+        {outcome.headline}
         {outcome.watching.length > 0 && answer !== 'watching' && (
           <span className="cn-more">still watching {outcome.watching.join(', ')}</span>
         )}
@@ -76,50 +67,37 @@ export function WatchOutcomeCard({
               </div>
             );
           })}
-          <Acts
-            outcome={outcome}
-            windows={windows}
-            issueNumber={issueNumber}
-            discussions={discussions}
-            desktopFolder={desktopFolder}
-            actions={actions}
-          />
+          <Acts outcome={outcome} {...acts} />
         </>
       )}
     </section>
   );
 }
 
-function Acts({
-  outcome,
-  windows,
-  issueNumber,
-  discussions,
-  desktopFolder,
-  actions,
-}: {
+interface ActsProps {
   outcome: WatchOutcome;
-  windows: GoalWatchView[];
   issueNumber: number;
+  /** `discussionsDir` is set; without it there is no Discuss button, not a disabled one. */
   discussions: boolean;
   desktopFolder: string;
   actions: CockpitActions;
-}): JSX.Element | null {
-  const extendable = outcome.outcome === 'unknown' ? windows.filter((w) => w.settledAt !== null) : [];
-  const discussable = discussions && (outcome.outcome === 'worse' || outcome.outcome === 'unknown');
-  if (extendable.length === 0 && !discussable) return null;
+}
+
+function Acts({ outcome, issueNumber, discussions, desktopFolder, actions }: ActsProps): JSX.Element | null {
+  const discussable = discussions && outcome.discussable;
+  if (outcome.extendable.length === 0 && !discussable) return null;
   const n = String(issueNumber);
   return (
     <div className="cn-outcome-acts">
-      {extendable.map((w) => (
+      {outcome.extendable.map((environment) => (
         <AsyncButton
-          key={w.environment}
+          key={environment}
           size="small"
           usage="watch.defer"
-          onClick={() => actions.extendWatch(issueNumber, w.environment)}
-          title={`Re-open ${w.environment}'s settled window and watch on from now. The readings it already took stay where they are.`}
+          onClick={() => actions.extendWatch(issueNumber, environment)}
+          title={`Re-open ${environment}'s settled window and watch on from now. The readings it already took stay where they are.`}
         >
-          extend {w.environment}
+          extend {environment}
         </AsyncButton>
       ))}
       {discussable && (

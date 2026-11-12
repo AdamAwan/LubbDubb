@@ -2249,12 +2249,18 @@ export interface WatchOutcomeCheck {
 export interface WatchOutcome {
   goalRef: string;
   outcome: WatchOutcomeKind;
+  /** The answer in words, as the card and the discussion note both say it. */
+  headline: string;
   /** Every check, whatever it settled as — a regressed one never hides a clean one. */
   checks: WatchOutcomeCheck[];
   /** Why nothing was measured, for `none`. */
   reason: string | null;
   /** Environments whose window is still open. */
   watching: string[];
+  /** `worse` or `unknown`: an answer a person decides the meaning of, which Discuss in Claude is offered for. */
+  discussable: boolean;
+  /** Environments whose settled window Extend re-opens: every settled one, for `unknown`; none otherwise. */
+  extendable: string[];
 }
 
 export interface EnvironmentGateRelease {

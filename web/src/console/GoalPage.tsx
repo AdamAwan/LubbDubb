@@ -381,7 +381,6 @@ function WatchPane({
     <>
       <WatchOutcomeCard
         outcome={page.watchOutcome}
-        windows={page.watches}
         issueNumber={page.issue.number}
         discussions={view.state.config.discussions}
         desktopFolder={view.state.config.desktopFolder}

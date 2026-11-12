@@ -3,75 +3,98 @@ import type {
   WatchCheckVerdict,
   WatchOutcome,
   WatchOutcomeCheck,
-  WatchHint,
   WatchReading,
   WatchWindow,
 } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
-import { declaredSource } from './watchSource.js';
-import { withPeriod } from '../validation/watchQueryShape.js';
+import { settledWatchPeriod } from './exposure.js';
+import { watchCheckBlock, watchCheckQuery, type WatchWindowReading } from './watchFinding.js';
 
 // → docs/spec/29-post-deploy-watch.md#the-outcome
 
 const HOUR_MS = 60 * 60 * 1000;
 
-/** Why the watch measures nothing, as the plan's hint stated it; null where it named something to watch. */
-export function hintEmptyReason(hint: WatchHint | null | undefined): string | null {
-  return hint !== null && hint !== undefined && 'none' in hint ? hint.none : null;
-}
+const HEADLINE: Record<WatchOutcome['outcome'], string> = {
+  worked: 'It worked',
+  worse: 'It made something worse',
+  unknown: 'Couldn’t tell',
+  none: 'Nothing was measured',
+  watching: 'Still watching',
+};
 
+/**
+ * One goal's watch rolled up to one answer, folded over the readings `watchWindowReadings` decided stand —
+ * never a second opinion on which reading that is.
+ */
 export function watchOutcome(input: {
   goalRef: string;
   /** The goal's live checks. */
   checks: readonly GoalWatch[];
-  windows: readonly WatchWindow[];
-  /** Oldest first; the last reading per environment and check is the one that stands. */
-  readings: readonly WatchReading[];
+  /** The goal's windows, each resolved against its checks by `watchWindowReadings`. */
+  windows: readonly WatchWindowReading[];
   /** Why the watch measures nothing, where that was the decision; null where it was not. */
   emptyReason: string | null;
 }): WatchOutcome | null {
-  const { goalRef } = input;
-  const checks = input.checks.filter((c) => c.originRef === goalRef);
-  const windows = input.windows.filter((w) => w.goalRef === goalRef);
-  const watching = windows.filter((w) => w.settledAt === null).map((w) => w.environment);
+  const { goalRef, checks, windows } = input;
+  const watching = windows.filter((w) => w.window.settledAt === null).map((w) => w.window.environment);
   if (checks.length === 0) {
     if (input.emptyReason === null) return null;
-    return { goalRef, outcome: 'none', checks: [], reason: input.emptyReason, watching: [] };
+    return answer(goalRef, 'none', { reason: input.emptyReason });
   }
   const settled = windows
-    .filter((w) => w.settledAt !== null)
-    .sort((a, b) => (b.settledAt ?? '').localeCompare(a.settledAt ?? ''));
+    .filter((w) => w.window.settledAt !== null)
+    .sort((a, b) => (b.window.settledAt ?? '').localeCompare(a.window.settledAt ?? ''));
   if (settled.length === 0) {
     if (windows.length === 0) return null;
-    return { goalRef, outcome: 'watching', checks: [], reason: null, watching };
+    return answer(goalRef, 'watching', { watching });
   }
-  const newest = new Map<string, WatchReading>();
-  for (const r of input.readings) if (r.goalRef === goalRef) newest.set(`${r.environment} ${r.checkId}`, r);
-  const folded = checks.map((check) => foldCheck(check, settled, newest));
+  const folded = checks.map((check) => foldCheck(check, settled));
   const outcome = folded.some((c) => c.verdict === 'regressed')
     ? 'worse'
     : folded.every((c) => c.verdict === 'clean')
       ? 'worked'
       : 'unknown';
-  return { goalRef, outcome, checks: folded, reason: null, watching };
+  return answer(goalRef, outcome, {
+    checks: folded,
+    watching,
+    extendable: outcome === 'unknown' ? settled.map((w) => w.window.environment) : [],
+  });
 }
 
-function foldCheck(
-  check: GoalWatch,
-  settled: readonly WatchWindow[],
-  newest: ReadonlyMap<string, WatchReading>,
-): WatchOutcomeCheck {
-  const read = settled.map((window) => ({ window, reading: newest.get(`${window.environment} ${check.id}`) ?? null }));
-  const pick = (verdict: WatchCheckVerdict): (typeof read)[number] | undefined =>
-    read.find((r) => r.reading?.verdict === verdict);
+function answer(
+  goalRef: string,
+  outcome: WatchOutcome['outcome'],
+  over: Partial<Pick<WatchOutcome, 'checks' | 'reason' | 'watching' | 'extendable'>>,
+): WatchOutcome {
+  return {
+    goalRef,
+    outcome,
+    headline: HEADLINE[outcome],
+    checks: [],
+    reason: null,
+    watching: [],
+    discussable: outcome === 'worse' || outcome === 'unknown',
+    extendable: [],
+    ...over,
+  };
+}
+
+function foldCheck(check: GoalWatch, settled: readonly WatchWindowReading[]): WatchOutcomeCheck {
+  const read = settled.map(({ window, checks }) => ({
+    window,
+    reading: checks.find((c) => c.check.id === check.id)?.reading ?? null,
+  }));
+  const pick = (verdict: WatchCheckVerdict): { window: WatchWindow; reading: WatchReading } | undefined => {
+    for (const { window, reading } of read) if (reading?.verdict === verdict) return { window, reading };
+    return undefined;
+  };
   const chosen = pick('regressed') ?? pick('clean');
-  if (chosen?.reading) {
+  if (chosen) {
     const { window, reading } = chosen;
     return {
       ...base(check),
       verdict: reading.verdict,
       environment: window.environment,
-      before: check.kind === 'measure' ? check.baselineValue : check.dryRunRows,
       after: check.kind === 'measure' ? reading.value : reading.rows,
       windowHours: windowHours(window),
       reason: reading.verdict === 'regressed' ? reading.detail : null,
@@ -86,52 +109,50 @@ function foldCheck(
     ...base(check),
     verdict: 'unknown',
     environment: null,
-    before: check.kind === 'measure' ? check.baselineValue : check.dryRunRows,
     after: null,
     windowHours: null,
     reason: reasons.join('; '),
   };
 }
 
-function base(check: GoalWatch): Pick<WatchOutcomeCheck, 'checkId' | 'title' | 'kind' | 'unit'> {
-  return { checkId: check.id, title: check.title, kind: check.kind, unit: check.unit };
+function base(check: GoalWatch): Pick<WatchOutcomeCheck, 'checkId' | 'title' | 'kind' | 'unit' | 'before'> {
+  return {
+    checkId: check.id,
+    title: check.title,
+    kind: check.kind,
+    unit: check.unit,
+    before: check.kind === 'measure' ? check.baselineValue : check.dryRunRows,
+  };
 }
 
 function windowHours(window: WatchWindow): number | null {
-  const from = Date.parse(window.exposedAt ?? window.openedAt);
-  const to = Date.parse(window.settledAt ?? window.settlesAt);
+  const { since, until } = settledWatchPeriod(window);
+  const from = Date.parse(since);
+  const to = Date.parse(until);
   if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return null;
   return Math.round((to - from) / HOUR_MS);
 }
 
-const OUTCOME_SAID: Record<WatchOutcome['outcome'], string> = {
-  worked: 'It worked',
-  worse: 'It made something worse',
-  unknown: "Couldn't tell",
-  none: 'Nothing was measured',
-  watching: 'Still watching',
-};
-
 /**
  * The note **Discuss in Claude** writes to the goal's discussion file: the outcome, and per check what it
- * expected, before and after, and its query in a fence named by its source's language.
+ * expected, before and after, and its query written as the bench row writes one.
  * → docs/spec/29-post-deploy-watch.md#discussing-an-outcome
  */
 export function watchOutcomeNote(input: {
   outcome: WatchOutcome;
-  checks: readonly GoalWatch[];
-  windows: readonly WatchWindow[];
+  /** The goal's windows, as the outcome was folded from. */
+  windows: readonly WatchWindowReading[];
   environments: readonly EnvironmentConfig[];
   pullRequests: readonly { number: number; title: string | null }[];
 }): string {
   const { outcome } = input;
   const lines = [
-    `**The post-deploy watch says: ${OUTCOME_SAID[outcome.outcome]}.** These are the environments' own answers; ` +
+    `**The post-deploy watch says: ${outcome.headline}.** These are the environments' own answers; ` +
       'nothing has interpreted them, and a number that moved may have been moved by something else that shipped.',
     '',
   ];
   for (const folded of outcome.checks) {
-    const check = input.checks.find((c) => c.originRef === outcome.goalRef && c.id === folded.checkId);
+    const check = input.windows.flatMap((w) => w.checks).find((c) => c.check.id === folded.checkId)?.check;
     if (check !== undefined) lines.push(...checkNote(folded, check, input.windows, input.environments));
   }
   const prs = input.pullRequests.map((p) => (p.title ? `#${String(p.number)} ${p.title}` : `#${String(p.number)}`));
@@ -142,35 +163,31 @@ export function watchOutcomeNote(input: {
 function checkNote(
   folded: WatchOutcomeCheck,
   check: GoalWatch,
-  windows: readonly WatchWindow[],
+  windows: readonly WatchWindowReading[],
   environments: readonly EnvironmentConfig[],
 ): string[] {
   const unit = check.unit === null ? '' : ` ${check.unit}`;
   const number = (n: number | null): string => (n === null ? 'not read' : `${String(n)}${unit}`);
   const on = folded.environment === null ? '' : ` on ${folded.environment}`;
   const over = folded.windowHours === null ? '' : ` over ${String(folded.windowHours)}h`;
-  const window = windows.find((w) => w.goalRef === check.originRef && w.environment === folded.environment);
-  const query =
-    window === undefined
-      ? check.query
-      : withPeriod(check.query, window.exposedAt ?? window.openedAt, window.settledAt ?? window.settlesAt);
-  const environment =
-    environments.find((e) => e.name === folded.environment) ?? environments.find((e) => e.watch !== undefined);
-  const language = declaredSource(environment?.watch, check.source)?.language ?? 'kql';
-  return [
-    `### ${check.title} — ${folded.verdict}${on}`,
-    '',
-    `**Expected:** ${expectation(check, unit)}`,
-    `**Before → after:** ${number(folded.before)} → ${number(folded.after)}${on}${over}` +
-      (check.kind === 'signal' ? ' (rows: the dry run before the merge, then the window)' : ''),
-    ...(folded.reason === null ? [] : [`**Reading:** ${folded.reason}`]),
-    ...(check.why === null ? [] : [`**Why it was declared:** ${check.why}`]),
-    '',
-    '```' + language,
-    query,
-    '```',
-    '',
-  ];
+  const window = windows.find((w) => w.window.settledAt !== null && w.window.environment === folded.environment);
+  return watchCheckBlock({
+    heading: `${check.title} — ${folded.verdict}${on}`,
+    body: [
+      `**Expected:** ${expectation(check, unit)}`,
+      `**Before → after:** ${number(folded.before)} → ${number(folded.after)}${on}${over}` +
+        (check.kind === 'signal' ? ' (rows: the dry run before the merge, then the window)' : ''),
+      ...(folded.reason === null ? [] : [`**Reading:** ${folded.reason}`]),
+    ],
+    why: check.why,
+    lead: null,
+    environment: folded.environment,
+    query: watchCheckQuery(
+      check,
+      environments.find((e) => e.name === folded.environment),
+      window === undefined ? null : settledWatchPeriod(window.window),
+    ),
+  });
 }
 
 function expectation(check: GoalWatch, unit: string): string {

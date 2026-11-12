@@ -2357,32 +2357,16 @@ a.cn-qbody {
   padding-left: 8px;
 }
 /* The outcome a goal's Watch pane opens on: one answer above every check, drawn in
-   the hue of the answer. `unknown` is amber for `.cn-watch-row`'s reason, and
-   nothing measured and still watching are the deliberately-not-a-verdict grey.
+   the hue of the answer through the shared tone classes — `cn-t-amber` for couldn't
+   tell, as `.cn-watch-row` draws `unknown`, and `cn-t-grey` for nothing measured and
+   still watching, the deliberately-not-a-verdict tone.
    → docs/spec/29-post-deploy-watch.md#the-outcome */
 .cn-outcome {
-  border-left: 3px solid var(--cn-inert);
+  background: var(--cn-tone-fill);
+  border-left: 3px solid var(--cn-tone-line);
 }
-.cn-outcome.worked {
-  background: var(--cn-green-fill);
-  border-left-color: var(--cn-green-line);
-}
-.cn-outcome.worse {
-  background: var(--cn-red-fill);
-  border-left-color: var(--cn-red-line);
-}
-.cn-outcome.unknown {
-  background: var(--cn-amber-fill);
-  border-left-color: var(--cn-amber-line);
-}
-.cn-outcome.worked > h3 {
-  color: var(--cn-green-ink);
-}
-.cn-outcome.worse > h3 {
-  color: var(--cn-red-ink);
-}
-.cn-outcome.unknown > h3 {
-  color: var(--cn-amber-ink);
+.cn-outcome > h3 {
+  color: var(--cn-tone-ink);
 }
 .cn-outcome > .cn-sub {
   display: block;

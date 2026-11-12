@@ -215,6 +215,10 @@ export function buildDemoState(): DemoSeed {
   const now = Date.now();
   const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
   const ahead = (mins: number) => new Date(now + mins * 60_000).toISOString();
+  const REFUND_SLOW = 'Writing the ledger entry in the same transaction costs about 800ms on a multi-line order.';
+  const SINK_UNREACHABLE =
+    'The log sink has not been reachable since the retention change; a signal cannot report clean while its ' +
+    'presence query is silent.';
   const state: AppState = {
     config: {
       /* The deployment's own shape, which is what the goal page's obligation tabs are derived
@@ -2180,17 +2184,65 @@ export function buildDemoState(): DemoSeed {
     ],
     environmentGroups: [],
     featureSequences: [],
-    /* A watch window opens on an arrival, so these too belong only to delivered goals. #395's has one
-       regressed reading. */
-    goalWatchOutcomes: [{ goalRef: 'issue:395', outcome: 'watching', checks: [], reason: null, watching: ['staging'] }],
+    /* A watch window opens on an arrival, so these too belong only to delivered goals. #395's has
+       settled with one regressed reading, which is what its outcome says. */
+    goalWatchOutcomes: [
+      {
+        goalRef: 'issue:395',
+        outcome: 'worse',
+        headline: 'It made something worse',
+        checks: [
+          {
+            checkId: 'no-unbalanced-ledger-writes',
+            title: 'No refund is written without its ledger entry',
+            kind: 'signal',
+            verdict: 'clean',
+            environment: 'staging',
+            before: 41,
+            after: 0,
+            unit: null,
+            windowHours: 50,
+            reason: null,
+          },
+          {
+            checkId: 'refund-p95',
+            title: 'Issuing a refund is no slower at p95',
+            kind: 'measure',
+            verdict: 'regressed',
+            environment: 'staging',
+            before: 410,
+            after: 1240,
+            unit: 'ms',
+            windowHours: 50,
+            reason: REFUND_SLOW,
+          },
+          {
+            checkId: 'no-refund-retries',
+            title: 'Nobody is retrying a refund by hand',
+            kind: 'signal',
+            verdict: 'unknown',
+            environment: null,
+            before: null,
+            after: null,
+            unit: null,
+            windowHours: null,
+            reason: `staging: ${SINK_UNREACHABLE}`,
+          },
+        ],
+        reason: null,
+        watching: [],
+        discussable: true,
+        extendable: [],
+      },
+    ],
     goalWatchWindows: [
       {
         goalRef: 'issue:395',
         environment: 'staging',
-        openedAt: ago(6),
-        settlesAt: ago(-42),
-        settledAt: null,
-        extendedAt: ago(3),
+        openedAt: ago(50 * 60),
+        settlesAt: ago(2),
+        settledAt: ago(1),
+        extendedAt: ago(26 * 60),
         exposedAt: null,
         checks: [
           {
@@ -2208,7 +2260,7 @@ export function buildDemoState(): DemoSeed {
               goalRef: 'issue:395',
               environment: 'staging',
               checkId: 'no-unbalanced-ledger-writes',
-              readAt: ago(0.4),
+              readAt: ago(3),
               verdict: 'clean',
               rows: 0,
               value: null,
@@ -2230,11 +2282,11 @@ export function buildDemoState(): DemoSeed {
               goalRef: 'issue:395',
               environment: 'staging',
               checkId: 'refund-p95',
-              readAt: ago(0.4),
+              readAt: ago(3),
               verdict: 'regressed',
               rows: null,
               value: 1240,
-              detail: 'Writing the ledger entry in the same transaction costs about 800ms on a multi-line order.',
+              detail: REFUND_SLOW,
             },
           },
           {
@@ -2252,13 +2304,11 @@ export function buildDemoState(): DemoSeed {
               goalRef: 'issue:395',
               environment: 'staging',
               checkId: 'no-refund-retries',
-              readAt: ago(0.4),
+              readAt: ago(3),
               verdict: 'unknown',
               rows: null,
               value: null,
-              detail:
-                'The log sink has not been reachable since the retention change; a signal cannot report clean ' +
-                'while its presence query is silent.',
+              detail: SINK_UNREACHABLE,
             },
           },
         ],

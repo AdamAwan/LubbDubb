@@ -15,8 +15,9 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
-import { watchClearedGoals } from '../src/environments/watchFinding.js';
-import { hintEmptyReason, watchOutcome, watchOutcomeNote } from '../src/environments/watchOutcome.js';
+import { watchClearedGoals, watchWindowReadings } from '../src/environments/watchFinding.js';
+import { watchOutcome, watchOutcomeNote } from '../src/environments/watchOutcome.js';
+import { hintEmptyReason } from '../src/plans/watchHint.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { GoalWatch, WatchCheckVerdict, WatchOutcome, WatchReading, WatchWindow } from '../src/types.js';
 
@@ -92,13 +93,17 @@ function fold(input: {
   readings?: WatchReading[];
   emptyReason?: string | null;
 }): WatchOutcome | null {
+  const checks = (input.checks ?? []).filter((c) => c.originRef === GOAL);
   return watchOutcome({
     goalRef: GOAL,
-    checks: input.checks ?? [],
-    windows: input.windows ?? [],
-    readings: input.readings ?? [],
+    checks,
+    windows: resolve(checks, input.windows ?? [], input.readings ?? []),
     emptyReason: input.emptyReason ?? null,
   });
+}
+
+function resolve(checks: GoalWatch[], windows: WatchWindow[], readings: WatchReading[]) {
+  return watchWindowReadings({ windows, checks, readings });
 }
 
 test('any check settled regressed on any environment reads made something worse, and still names the clean ones', () => {
@@ -194,9 +199,12 @@ test('a watch decided empty reads nothing measured with its reason; no checks an
   assert.deepEqual(none, {
     goalRef: GOAL,
     outcome: 'none',
+    headline: 'Nothing was measured',
     checks: [],
     reason: 'A copy change: nothing a running system says would move.',
     watching: [],
+    discussable: false,
+    extendable: [],
   });
   assert.equal(fold({}), null, 'null is not clean, and not nothing measured either');
   assert.equal(fold({ checks: [check('a')] }), null, 'nothing has arrived, so there is no window to answer from');
@@ -220,17 +228,21 @@ test('the note carries the outcome, each expectation, before and after, the quer
     check('p95', { kind: 'measure', title: 'BuildStatement p95', expectUnder: 1500, unit: 'ms', baselineValue: 1840 }),
   ];
   const windows = [window('liveUk', true)];
-  const outcome = fold({
-    checks,
-    windows,
-    readings: [reading('liveUk', 'p95', 'regressed', { value: 2100, detail: 'too slow' })],
-  })!;
+  const readings = [reading('liveUk', 'p95', 'regressed', { value: 2100, detail: 'too slow' })];
+  const outcome = fold({ checks, windows, readings })!;
   const note = watchOutcomeNote({
     outcome,
-    checks,
-    windows,
+    windows: resolve(checks, windows, readings),
     environments: [
-      { name: 'liveUk', at: 'echo', watch: { sources: { db: { observe: 'x', language: 'sql', runBy: 'harness' } } } },
+      {
+        name: 'liveUk',
+        at: 'echo',
+        watch: {
+          sources: {
+            db: { observe: 'x', language: 'sql', runBy: 'harness', queryUrl: 'https://db.example/?q={query}' },
+          },
+        },
+      },
     ],
     pullRequests: [
       { number: 40, title: 'Index the statement table' },
@@ -242,7 +254,23 @@ test('the note carries the outcome, each expectation, before and after, the quer
   assert.match(note, /1840 ms → 2100 ms on liveUk over 48h/);
   assert.match(note, /```sql\n/);
   assert.match(note, /datetime\(2026-11-01T00:00:00.000Z\)/, 'the query carries the window it was read over');
+  assert.match(note, /datetime\(2026-11-03T00:00:00.000Z\)/, 'to the moment the window settled');
+  assert.match(note, /\[Run it on liveUk ↗\]\(https:\/\/db\.example\/\?q=/);
   assert.match(note, /#40 Index the statement table, #41\./);
+});
+
+test('the outcome decides once what is discussed and what is extended', () => {
+  const worked = fold({
+    checks: [check('a')],
+    windows: [window('liveUk', true)],
+    readings: [reading('liveUk', 'a', 'clean')],
+  });
+  assert.equal(worked?.discussable, false);
+  assert.deepEqual(worked.extendable, []);
+  const unknown = fold({ checks: [check('a')], windows: [window('liveUk', true), window('testUk', false)] });
+  assert.equal(unknown?.discussable, true);
+  assert.deepEqual(unknown.extendable, ['liveUk'], 'only a settled window is extended');
+  assert.equal(unknown.headline, 'Couldn’t tell');
 });
 
 const OPEN: EnvironmentConfig = { name: 'testUk', at: 'echo unused', watch: { observe: './telemetry.sh' } };
@@ -382,6 +410,9 @@ test('the outcome card draws no Discuss button without discussionsDir, rather th
   const outcome: WatchOutcome = {
     goalRef: GOAL,
     outcome: 'unknown',
+    headline: 'Couldn’t tell',
+    discussable: true,
+    extendable: ['liveUk'],
     checks: [
       {
         checkId: 'a',
@@ -403,7 +434,6 @@ test('the outcome card draws no Discuss button without discussionsDir, rather th
     renderToStaticMarkup(
       createElement(WatchOutcomeCard, {
         outcome,
-        windows: [{ ...window('liveUk', true), checks: [] }],
         issueNumber: 12,
         discussions,
         desktopFolder: '/repo',
@@ -419,8 +449,14 @@ test('the outcome card draws no Discuss button without discussionsDir, rather th
   assert.doesNotMatch(
     renderToStaticMarkup(
       createElement(WatchOutcomeCard, {
-        outcome: { ...outcome, outcome: 'worked', checks: [{ ...outcome.checks[0]!, verdict: 'clean' }] },
-        windows: [],
+        outcome: {
+          ...outcome,
+          outcome: 'worked',
+          headline: 'It worked',
+          discussable: false,
+          extendable: [],
+          checks: [{ ...outcome.checks[0]!, verdict: 'clean' }],
+        },
         issueNumber: 12,
         discussions: true,
         desktopFolder: '/repo',

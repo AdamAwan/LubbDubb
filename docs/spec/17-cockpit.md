@@ -7819,11 +7819,13 @@ surfaces.
 
 The goal page's **Watch** pane opens on the **outcome card** (`web/src/console/goalWatchOutcome.tsx`),
 above the Signals card and the window's own: the goal's watch rolled up to one answer, folded once on
-the server (`CockpitState.goalWatchOutcomes`) and drawn in that answer's hue from the existing tone
-tokens — green, red, amber, and the inert grey for _Nothing was measured_ and _Watching_. It names what
-passed beside what did not, and every check is still drawn on the cards below it. _Couldn't tell_
-carries an **extend** per settled window; _It made something worse_ and _Couldn't tell_ carry
-**Discuss in Claude**, drawn only where `discussionsDir` is set, never disabled.
+the server (`CockpitState.goalWatchOutcomes`) and drawn in that answer's hue through the shared tone
+classes — `cn-t-green`, `cn-t-red`, `cn-t-amber`, and `cn-t-grey` for _Nothing was measured_ and
+_Still watching_ — with one `.cn-outcome` rule reading `--cn-tone-*`. Its headline is the outcome's own
+`headline`, never a second wording kept in the cockpit. It names what passed beside what did not, and
+every check is still drawn on the cards below it. The card draws an **extend** per environment in the
+outcome's `extendable` and **Discuss in Claude** where it is `discussable` — the server decided both —
+the latter only where `discussionsDir` is set, never disabled.
 → [29](29-post-deploy-watch.md#the-outcome), [29](29-post-deploy-watch.md#discussing-an-outcome)
 
 `WatchHintDigest` (`web/src/components/WatchHintDigest.tsx`) draws the plan's **watch hint** first, as

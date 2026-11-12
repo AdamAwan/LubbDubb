@@ -198,7 +198,9 @@ reading on past the merge widens that question without turning it into a false o
 A window's period is `watchPeriod` (`src/environments/exposure.ts`), taken once per window per pass,
 so every check read in that pass shares one `{until}`. A finding's bench row draws the query through
 the same helper, with `{until}` at the reading that regressed (`watchWindowReadings`,
-`src/environments/watchFinding.ts`).
+`src/environments/watchFinding.ts`). A _settled_ window's whole period — to the moment it settled — is
+`settledWatchPeriod` beside it, which the [outcome](#the-outcome) reads for its window length and its
+discussion note's query; nothing else re-derives either end.
 
 ### A signal query returns rows, never a count
 
@@ -1035,7 +1037,13 @@ The goal page opens on one answer, drawn above everything else the watch shows,
 because the question an operator brings to a delivered goal is _did it work_, and until now the
 answer was a set of per-check rows to read and fold in their head. A pure fold, `watchOutcome`
 (`src/environments/watchOutcome.ts`), over the goal's settled windows, their newest reading per
-environment and check, and the reason a watch was decided empty:
+environment and check, and the reason a watch was decided empty.
+
+**Which reading stands is decided once.** The fold takes each window already resolved by
+`watchWindowReadings` (`src/environments/watchFinding.ts`) — the same resolution the bench row, the
+close-out's sentence and the cockpit's window view read — and never keeps a newest-reading map of its
+own. Two copies of "the newest reading" are two answers waiting to disagree: the card saying _It worked_
+above a window drawn regressed.
 
 | Outcome                     | When                                                                                       | Drawn                   |
 | --------------------------- | ------------------------------------------------------------------------------------------ | ----------------------- |
@@ -1052,14 +1060,23 @@ environment and `clean` on another counts as clean; `unknown` on all of them is 
 tell, and an environment whose window settled without reading the check says so in those words.
 
 The fold takes the empty reason as a string, `emptyReason`, rather than reading where it came from.
-Today it is the plan hint's `none` (`hintEmptyReason`). **Not yet built:** the assessor's
+Today it is the plan hint's `none` (`hintEmptyReason`, `src/plans/watchHint.ts`). **Not yet built:** the assessor's
 [stated `none`](#declaring-nothing-is-a-legitimate-answer) — `watch_plan`'s `emptyReason` — is the
 reason once it lands, and a goal that has a plan but whose watch is still owed reads _not yet written_,
 which is not the same as nothing measured.
 
 It ships on `/api/state` as `CockpitState.goalWatchOutcomes`, one per goal with an outcome, folded
-once on the server (`buildGoalWatchOutcomes`) and absent where no environment declares a `watch`, for
-the windows' own reason.
+once on the server and absent where no environment declares a `watch`, for the windows' own reason.
+`goalWatchOutcome` (`src/server/stateEnvironmentViews.ts`) is the one per-goal builder, gate included;
+the snapshot's `buildGoalWatchOutcomes` calls it per goal off the windows it already resolved for the
+window view, and the [discuss route](#discussing-an-outcome) calls it for its one goal — so the route
+can never put to a discussion an outcome the cockpit does not draw.
+
+The outcome carries what follows from it, decided in the fold so nothing downstream decides it again:
+`headline`, the answer in words that the card and the discussion note both say (_It worked_, _It made
+something worse_, _Couldn’t tell_, _Nothing was measured_, _Still watching_); `discussable`, true for
+_It made something worse_ and _Couldn’t tell_; and `extendable`, the environments whose settled window
+_Extend_ re-opens — every settled one for _Couldn’t tell_, none otherwise.
 
 **The headline says what was measured, in numbers.** _Statement failures 37/day → 0; BuildStatement
 p95 1,840 → 1,190 ms on liveUk over 48h._ For a measure that is before → after. For a signal it is
@@ -1093,7 +1110,12 @@ The click writes a `note` to the goal's discussion file ([40](40-discussions.md)
 `DiscussionFiles`, authored `LubbDubb (watch)` (`POST /api/discussions/:number/watch-outcome`,
 composed by `watchOutcomeNote`): the outcome, each check's expectation, its before and after, its query
 in a fence named by its source's language with the period of the window it was judged on filled in,
-and the goal's merged pull requests (its landings). It refuses any other outcome. It then opens
+and the goal's merged pull requests (its landings, `goalMergedPrs` in `src/environments/landings.ts`).
+Each check is written by `watchCheckBlock`, the block the [bench row](#the-bench-row) writes a check
+with, so the note carries the same heading, fence and `Run it on <environment> ↗` link. A check that
+read `unknown` everywhere was judged on no one window, so its fence holds the declaration's own text
+and no link — never a source borrowed from another environment. It refuses any outcome that is not
+`discussable`. It then opens
 `/lubbdubb:discuss <n>` through the Discussion tab's existing deep link. The conversation starts from
 the numbers, and the operator's Claude has the repository and, often, the credential to run the query
 again. It ends one of three ways, all through what discussions already do:
