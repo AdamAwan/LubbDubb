@@ -16,6 +16,7 @@ import type {
   PlanPart,
   ValidationCheck,
   TaskSummary,
+  WatchOutcome,
   WatchReading,
   WorkNode,
 } from '../types.js';
@@ -31,6 +32,7 @@ import { allGoalReach } from '../environments/reach.js';
 import { arrivalSheetStep } from '../environments/watchWindow.js';
 import { environmentGateHold } from '../environments/arrival.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
+import { hintEmptyReason, watchOutcome } from '../environments/watchOutcome.js';
 
 // → docs/spec/16-http-api.md
 
@@ -160,6 +162,35 @@ export function buildGoalWatchWindows(
       reading: newest.get(`${window.goalRef} ${window.environment} ${c.id}`) ?? null,
     })),
   }));
+}
+
+/**
+ * Each goal's watch rolled up to one answer, folded here once so the goal page and anything else that
+ * draws it read the same one. Absent where no environment declares a `watch`, for the windows' reason.
+ * → docs/spec/29-post-deploy-watch.md#the-outcome
+ */
+export function buildGoalWatchOutcomes(
+  store: System['store'],
+  environments: EnvironmentConfig[],
+  readGoalWatches: () => GoalWatch[],
+  plans: readonly Plan[],
+): WatchOutcome[] {
+  if (!environments.some((e) => e.watch !== undefined)) return [];
+  const checks = readGoalWatches();
+  const windows = store.watches.listWatchWindows();
+  const readings = store.watches.listWatchReadings();
+  const emptyReasons = new Map(plans.map((p) => [p.originRef, hintEmptyReason(p.watchHint)]));
+  const goals = new Set([...checks.map((c) => c.originRef), ...windows.map((w) => w.goalRef), ...emptyReasons.keys()]);
+  return [...goals].flatMap((goalRef) => {
+    const outcome = watchOutcome({
+      goalRef,
+      checks,
+      windows,
+      readings,
+      emptyReason: emptyReasons.get(goalRef) ?? null,
+    });
+    return outcome === null ? [] : [outcome];
+  });
 }
 
 /**

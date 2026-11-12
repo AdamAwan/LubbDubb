@@ -330,6 +330,7 @@ const realApi = {
     del<{ ok: true }>(`/api/issues/${issueNumber}/watch/checks/${encodeURIComponent(checkId)}`),
   extendWatch: (issueNumber: number, environment: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/watch/${encodeURIComponent(environment)}/extend`),
+  discussWatchOutcome: (issueNumber: number) => post<{ ok: true }>(`/api/discussions/${issueNumber}/watch-outcome`),
   getPlanHistory: (planId: string) => authFetch(`/api/plans/${planId}/history`).then((r) => json<PlanHistory>(r)),
   setValidation: (
     issueNumber: number,

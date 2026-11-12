@@ -1216,6 +1216,18 @@ each story's for a feature, leaving out a file with neither. It reads through `S
 alone, so it writes nothing and a file it cannot read is recorded and answered as absent. A number that
 is not an integer is a 400 (`IssueNumberParams`). → [40](40-discussions.md#in-the-cockpit)
 
+### `POST /api/discussions/:number/watch-outcome`
+
+No body. **Discuss in Claude** on a post-deploy watch's outcome: writes one `note` to the goal's
+discussion file through `System.discussions`, authored `LubbDubb (watch)` — the outcome, each check's
+expectation, its before and after, its query in a fence named by its source's language, and the goal's
+merged pull requests — and answers `{ok, entry, path}`; the cockpit then opens `/lubbdubb:discuss <n>`.
+The outcome is folded by `watchOutcome`, the same fold `/api/state` ships. **409** with discussions off
+(`discussionsDir` is what turns them on), and **409** where the outcome is anything but _It made
+something worse_ or _Couldn't tell_ — there is nothing for a conversation to decide about a watch that
+worked or has not settled. It writes no `WorldEvent` and changes no hold; it broadcasts `dirty` for
+`goals` and `queue`, as a desktop discussion write does. → [29](29-post-deploy-watch.md#discussing-an-outcome)
+
 ### `GET /api/retrospectives/:ref`
 
 One goal's write-up in full, by `issue:<n>` ref. Fetched when a reader opens it rather than shipped

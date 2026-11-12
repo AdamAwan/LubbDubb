@@ -28,6 +28,7 @@ import { type IssueReadsOn, issueReads } from './stateIssueReads.js';
 import {
   buildEnvironmentHealth,
   buildEnvironmentReach,
+  buildGoalWatchOutcomes,
   buildGoalWatchWindows,
   buildRemoteSheets,
   tenantCommandViews,
@@ -269,6 +270,7 @@ function goalsSection(
   | 'environmentHealth'
   | 'environmentGroups'
   | 'goalWatchWindows'
+  | 'goalWatchOutcomes'
   | 'environmentArrivals'
   | 'remoteSheets'
   | 'stackLandings'
@@ -326,6 +328,7 @@ function goalsSection(
       .filter((band) => band.declared)
       .map(({ name, environments: members }) => ({ name, environments: members })),
     goalWatchWindows: buildGoalWatchWindows(store, environments, r.goalWatches),
+    goalWatchOutcomes: buildGoalWatchOutcomes(store, environments, r.goalWatches, r.plans),
     environmentArrivals: arrivals.slice(0, 50),
     remoteSheets: remoteSheets(),
     stackLandings: stackLandingViews(r, prByNumber, stackRungPrs),

@@ -41,6 +41,7 @@ export const DISCUSSIONS_OFF = 'Discussions are off: discussionsDir is not set i
 export const DISCUSSION_AUTHORS = {
   operatorViaClaude: 'operator (via Claude)',
   claudeSuggested: 'Claude (suggested)',
+  watch: 'LubbDubb (watch)',
   agent: (rule: string, taskId: string): string => `agent ${rule}#${taskId}`,
   tracker: (login: string): string => `@${login} (tracker)`,
 } as const;

@@ -90,6 +90,8 @@ export interface CockpitActions {
   saveWatchCheck(issueNumber: number, check: GoalWatchDeclaration): Promise<string[]>;
   deleteWatchCheck(issueNumber: number, checkId: string): Promise<void>;
   extendWatch(issueNumber: number, environment: string): Promise<void>;
+  /** Writes the watch's outcome to the goal's discussion file, then opens `/lubbdubb:discuss <n>`. */
+  discussWatchOutcome(issueNumber: number, folder: string): Promise<void>;
   setValidation(issueNumber: number, checkId: string, act: ValidationAct): Promise<void>;
   viewPlan(planId: string | null): void;
   regroupPlanView(on: boolean): void;

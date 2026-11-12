@@ -4993,6 +4993,7 @@ export const demoApi = {
   saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) => getServer().saveWatchCheck(issueNumber, check),
   deleteWatchCheck: (issueNumber: number, checkId: string) => getServer().deleteWatchCheck(issueNumber, checkId),
   extendWatch: (issueNumber: number, environment: string) => getServer().extendWatch(issueNumber, environment),
+  discussWatchOutcome: (_issueNumber: number) => Promise.resolve({ ok: true as const }),
   getPlanHistory: (planId: string) => Promise.resolve(demoPlanHistory(planId)),
   setValidation: (issueNumber: number, checkId: string, act: ValidationAct) =>
     getServer().setValidation(issueNumber, checkId, act),

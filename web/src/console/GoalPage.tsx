@@ -40,6 +40,7 @@ import { Header } from './goalHeader.js';
 import { LocalValidation, RemoteValidation, RunStrip, Signals, TenantBanner } from './goalRunners.js';
 import { PlanWaves } from './goalPlan.js';
 import { Environments, REACH_TONE, WatchWindow } from './goalEnvironments.js';
+import { WatchOutcomeCard } from './goalWatchOutcome.js';
 import { watchSourceChoices } from '../components/WatchSourceChip.js';
 import { Instructions, Reference, Sequence, Spend, Tail, Ticket } from './goalCards.js';
 
@@ -378,6 +379,14 @@ function WatchPane({
   const window = page.watches.find((w) => w.environment === showing);
   return (
     <>
+      <WatchOutcomeCard
+        outcome={page.watchOutcome}
+        windows={page.watches}
+        issueNumber={page.issue.number}
+        discussions={view.state.config.discussions}
+        desktopFolder={view.state.config.desktopFolder}
+        actions={actions}
+      />
       <ObligationPicker page={page} tab="watch" showing={showing} actions={actions} />
       <Signals
         page={page}

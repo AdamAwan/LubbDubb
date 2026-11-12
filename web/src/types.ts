@@ -234,6 +234,8 @@ export type {
   RemoteSheetRowView,
   RemoteTenantView,
   WatchCheckVerdict,
+  WatchOutcome,
+  WatchOutcomeCheck,
   WatchReadingVerdict,
   WatchSourceDeclaration,
   WorldEvent,
