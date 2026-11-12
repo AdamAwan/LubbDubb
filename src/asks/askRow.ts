@@ -24,6 +24,7 @@ export type AskKind =
   | 'validate'
   | 'validation_plan'
   | 'watch'
+  | 'watch_reading'
   | 'unwatched'
   | 'burn'
   | 'limit'

@@ -94,6 +94,7 @@ function reading(
     rows: verdict === 'unknown' ? null : 0,
     value: null,
     detail: verdict === 'unknown' ? `the watch could not read ${environment}` : null,
+    readBy: 'harness',
     ...over,
   };
 }

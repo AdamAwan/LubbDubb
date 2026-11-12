@@ -1142,6 +1142,12 @@ class DemoServer {
     return { ok: true };
   }
 
+  async answerWatchAsk(id: string, answer: string): Promise<{ ok: true; recorded: string }> {
+    this.state.watchAsks = (this.state.watchAsks ?? []).filter((a) => a.taskId !== id);
+    this.settleHumanTask(id, 'done', `Answered by the operator — ${answer.trim().slice(0, 40)}`);
+    return { ok: true, recorded: 'answered' };
+  }
+
   async extendWatch(issueNumber: number, environment: string): Promise<{ ok: true }> {
     const window = (this.state.goalWatchWindows ?? []).find(
       (w) => w.goalRef === `issue:${issueNumber}` && w.environment === environment,
@@ -5001,6 +5007,7 @@ export const demoApi = {
   saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) => getServer().saveWatchCheck(issueNumber, check),
   deleteWatchCheck: (issueNumber: number, checkId: string) => getServer().deleteWatchCheck(issueNumber, checkId),
   extendWatch: (issueNumber: number, environment: string) => getServer().extendWatch(issueNumber, environment),
+  answerWatchAsk: (id: string, answer: string, _presence: string | null) => getServer().answerWatchAsk(id, answer),
   discussWatchOutcome: (_issueNumber: number) => Promise.resolve({ ok: true as const }),
   getPlanHistory: (planId: string) => Promise.resolve(demoPlanHistory(planId)),
   setValidation: (issueNumber: number, checkId: string, act: ValidationAct) =>

@@ -43,6 +43,7 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
   );
 
   registerAuthoredWatch(app, ctx);
+  registerWatchAsks(app, ctx);
 
   const ExtendParams = IssueNumberParams.extend({ environment: z.string().min(1, 'environment is required') });
 
@@ -72,9 +73,11 @@ function registerAuthoredWatch(app: FastifyInstance, { system, hub }: RouteConte
   app.post(
     '/api/issues/:number/watch/accept',
     checked({ params: IssueNumberParams }, ({ params, reply }) => {
-      const record = store.watches.acceptWatchPlan(issueOrigin(params.number));
+      const origin = issueOrigin(params.number);
+      const record = store.watches.acceptWatchPlan(origin);
       if (record === null)
         return reply.code(409).send({ error: 'that goal has no written watch waiting to be accepted' });
+      system.watchAsks.askBaselines(origin);
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, watch: record };
     }),
@@ -95,6 +98,30 @@ function registerAuthoredWatch(app: FastifyInstance, { system, hub }: RouteConte
         return reply.code(409).send({ error: 'that goal has no written watch waiting to be accepted' });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, watch: record };
+    }),
+  );
+}
+
+/**
+ * A person's answer to a reading only they can take, pasted on its bench row — through the object the
+ * desktop `watch_reading` tool answers through. → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
+ */
+function registerWatchAsks(app: FastifyInstance, { system, hub }: RouteContext): void {
+  const AskParams = z.object({ id: z.string().min(1, 'id is required') });
+  const AnswerBody = z.object({
+    answer: z
+      .string({ error: "answer is required — the rows the query returned, as JSON, or a measure's one number" })
+      .trim()
+      .min(1, "answer is required — the rows the query returned, as JSON, or a measure's one number"),
+    presence: z.string().optional(),
+  });
+  app.post(
+    '/api/watch-asks/:id/answer',
+    checked({ params: AskParams, body: AnswerBody }, ({ params, body, reply }) => {
+      const answered = system.watchAsks.answer(params.id, { answer: body.answer, presence: body.presence ?? null });
+      if (!answered.ok) return reply.code(answered.status).send({ error: answered.error });
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true, recorded: answered.recorded };
     }),
   );
 }

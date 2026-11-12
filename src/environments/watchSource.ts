@@ -67,13 +67,15 @@ function measuresOnlyRefusal(environment: string, source: WatchSource): string {
   );
 }
 
-const OPERATOR_SOURCE_UNREAD = 'operator-run sources are not read yet';
-
-type ResolvedSource = { source: WatchSource & { observe: string }; refusal: null } | { source: null; refusal: string };
+type ResolvedSource =
+  | { source: WatchSource & { observe: string }; refusal: null; operator: null }
+  | { source: null; refusal: string; operator: WatchSource | null };
 
 /**
- * The source a check reads on one environment, or **why it reads nothing there** — which is `unknown` on
- * that environment, never clean and never a refusal of the whole watch.
+ * The source a check reads on one environment, or **why the harness reads nothing there** — which is
+ * `unknown` on that environment, never clean and never a refusal of the whole watch. A source only a
+ * person can run comes back as `operator`: the harness spawns nothing for it and asks instead.
+ * → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
  */
 export function resolveWatchSource(
   environment: { name: string; watch?: WatchSourcesConfig },
@@ -81,18 +83,25 @@ export function resolveWatchSource(
 ): ResolvedSource {
   const sources = watchSources(environment.watch);
   const source = pickSource(environment.name, sources, check.source);
-  if (typeof source === 'string') return { source: null, refusal: source };
+  if (typeof source === 'string') return { source: null, refusal: source, operator: null };
+  if (check.kind === 'signal' && measuresOnly(source.language))
+    return { source: null, refusal: measuresOnlyRefusal(environment.name, source), operator: null };
   if (source.runBy === 'operator')
     return {
       source: null,
-      refusal: `\`${source.name}\` on ${environment.name} is run by the operator, and ${OPERATOR_SOURCE_UNREAD}`,
+      refusal:
+        `\`${source.name}\` on ${environment.name} is run by the operator: the harness puts no query to it, ` +
+        'and asks a person for the reading instead',
+      operator: source,
     };
-  if (check.kind === 'signal' && measuresOnly(source.language))
-    return { source: null, refusal: measuresOnlyRefusal(environment.name, source) };
   const observe = source.observe ?? '';
   if (observe.trim() === '')
-    return { source: null, refusal: `\`${source.name}\` on ${environment.name} declares no observe command` };
-  return { source: { ...source, observe }, refusal: null };
+    return {
+      source: null,
+      refusal: `\`${source.name}\` on ${environment.name} declares no observe command`,
+      operator: null,
+    };
+  return { source: { ...source, observe }, refusal: null, operator: null };
 }
 
 function pickSource(environment: string, sources: readonly WatchSource[], named: string | null): WatchSource | string {

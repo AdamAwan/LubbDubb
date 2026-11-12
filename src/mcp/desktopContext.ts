@@ -26,6 +26,7 @@ import type { RemoteSheetView, StateSection, UpcomingPlan } from '../wire.js';
 import type { RemoteIntentDesk } from '../validation/remote/intent.js';
 import type { RemoteRunDesk } from '../validation/remote/run.js';
 import type { McpTool } from './protocol.js';
+import type { WatchAsks } from '../environments/watchAsks.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -58,6 +59,8 @@ export interface DesktopToolDeps {
   prAssign(): PrAssignDesk;
   runCycle(): Promise<void>;
   remoteValidation(): DesktopRemoteValidation;
+  /** The readings only a person can take — the object the cockpit's paste box answers through. */
+  watchAsks(): Pick<WatchAsks, 'open' | 'answer'>;
 
   runtimeControl: RuntimeControl;
   harness(): { upcoming: UpcomingPlan | null; inFlightCycle: CycleStanding | null };

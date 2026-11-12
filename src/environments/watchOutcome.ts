@@ -38,7 +38,7 @@ export function watchOutcome(input: {
   standing: WatchStanding;
 }): WatchOutcome | null {
   const { goalRef, checks, windows } = input;
-  const watching = windows.filter((w) => w.window.settledAt === null).map((w) => w.window.environment);
+  const watching = windows.filter((w) => w.window.settledAt === null || w.awaiting).map((w) => w.window.environment);
   if (checks.length === 0) {
     const { standing } = input;
     if (standing === null) return null;
@@ -47,7 +47,7 @@ export function watchOutcome(input: {
       : answer(goalRef, 'unwritten', {});
   }
   const settled = windows
-    .filter((w) => w.window.settledAt !== null)
+    .filter((w) => w.window.settledAt !== null && !w.awaiting)
     .sort((a, b) => (b.window.settledAt ?? '').localeCompare(a.window.settledAt ?? ''));
   if (settled.length === 0) {
     if (windows.length === 0) return null;
@@ -223,6 +223,11 @@ function checkNote(
       window === undefined ? null : settledWatchPeriod(window.window),
     ),
   });
+}
+
+/** What a check declared, in words: the bench row and the discussion note both say it this way. */
+export function watchExpectation(check: GoalWatch): string {
+  return expectation(check, check.unit === null ? '' : ` ${check.unit}`);
 }
 
 function expectation(check: GoalWatch, unit: string): string {

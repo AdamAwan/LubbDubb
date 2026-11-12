@@ -91,6 +91,8 @@ export interface CockpitActions {
   saveWatchCheck(issueNumber: number, check: GoalWatchDeclaration): Promise<string[]>;
   deleteWatchCheck(issueNumber: number, checkId: string): Promise<void>;
   extendWatch(issueNumber: number, environment: string): Promise<void>;
+  /** A person's answer to a reading only they can take. → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run */
+  answerWatchAsk(id: string, answer: string, presence: string | null): Promise<void>;
   /** Writes the watch's outcome to the goal's discussion file; the link that calls it opens `/lubbdubb:discuss <n>` itself. */
   discussWatchOutcome(issueNumber: number): Promise<void>;
   setValidation(issueNumber: number, checkId: string, act: ValidationAct): Promise<void>;

@@ -1,7 +1,6 @@
 import type { System } from '../system/system.js';
 import type { Config } from '../config/config.js';
-import type { StateSection } from '../wire.js';
-import type { CockpitState, OpenPullRequest, PullRequest } from '../wire.js';
+import type { CockpitState, OpenPullRequest, PullRequest, StateSection } from '../wire.js';
 import { truncateAreaPaths } from '../intake/placement.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
@@ -270,6 +269,7 @@ function goalsSection(
   | 'environmentHealth'
   | 'environmentGroups'
   | 'goalWatchWindows'
+  | 'watchAsks'
   | 'goalWatchOutcomes'
   | 'environmentArrivals'
   | 'remoteSheets'
@@ -328,6 +328,7 @@ function goalsSection(
       .filter((band) => band.declared)
       .map(({ name, environments: members }) => ({ name, environments: members })),
     goalWatchWindows: buildGoalWatchWindows(environments, r.watchWindows),
+    watchAsks: r.system.watchAsks.open({ asks: r.watchAsks(), checks: r.goalWatches() }),
     goalWatchOutcomes: buildGoalWatchOutcomes(environments, r, store.environments),
     environmentArrivals: arrivals.slice(0, 50),
     remoteSheets: remoteSheets(),

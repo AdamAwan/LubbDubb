@@ -631,7 +631,8 @@ export type RemedyInput = Omit<Remedy, 'id' | 'createdAt' | 'updatedAt'>;
 
 export type HumanTaskStatus = 'open' | 'done' | 'declined';
 
-export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch' | 'unwatched' | 'outcome';
+export type HumanTaskKind =
+  'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch' | 'watch_reading' | 'unwatched' | 'outcome';
 
 export interface HumanTask {
   id: string;
@@ -2234,6 +2235,25 @@ export interface WatchReading {
   rows: number | null;
   value: number | null;
   detail: string | null;
+  /** Who took it: the harness's own observation, or a person's answer to an ask. */
+  readBy: WatchSourceRunner;
+}
+
+/**
+ * One reading only a person can take: the baseline before the merge, or the window's closing reading.
+ * → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
+ */
+export type WatchAskKind = 'baseline' | 'closing';
+
+/** A `watch_reading` bench row and what it asks: one check, on one environment, over one period. */
+export interface WatchAsk {
+  taskId: string;
+  goalRef: string;
+  checkId: string;
+  environment: string;
+  ask: WatchAskKind;
+  since: string;
+  until: string;
 }
 
 /**

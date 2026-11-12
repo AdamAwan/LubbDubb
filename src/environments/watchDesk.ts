@@ -11,6 +11,7 @@ import { exposureFloor, exposureShortfall, watchPeriod } from './exposure.js';
 import { landedCommits } from './landings.js';
 import { resolveWatchSource } from './watchSource.js';
 import { watchHold } from '../validation/watchAuthoring.js';
+import type { WatchAsks } from './watchAsks.js';
 
 // → docs/spec/24-environments.md
 
@@ -20,6 +21,8 @@ interface WatchDeskDeps {
   observer: EnvironmentObserver;
   probeIntervalMs: number;
   watchIntervalMs: number;
+  /** The readings only a person can take: asked for as windows close, settled as grace runs out. */
+  asks: Pick<WatchAsks, 'pass'>;
   errors?: ErrorRecorder;
   now?: () => number;
 }
@@ -36,6 +39,7 @@ export class WatchDesk {
     if (!this.deps.environments.some((e) => e.watch !== undefined)) return;
     this.open();
     this.settle();
+    this.deps.asks.pass();
     await this.read();
     this.file();
   }
@@ -215,6 +219,7 @@ export class WatchDesk {
     commits: readonly string[],
   ): Promise<void> {
     const resolved = resolveWatchSource(environment, check);
+    if (resolved.operator !== null) return;
     if (resolved.source === null) {
       this.deps.store.watches.recordWatchReading({
         goalRef: window.goalRef,

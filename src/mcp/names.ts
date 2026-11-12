@@ -248,6 +248,7 @@ export const DESKTOP_TOOL_NAMES = [
   'validation_report',
   'remote_validation_read',
   'remote_validation_run',
+  'watch_reading',
   'plan_read',
   'plan_amend',
   'sequence_read',

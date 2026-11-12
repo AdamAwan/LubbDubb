@@ -3,6 +3,7 @@ import type {
   EnvironmentGate,
   GoalWatch,
   HumanTask,
+  WatchAsk,
   WatchCheckVerdict,
   WatchReading,
   WatchSourceLanguage,
@@ -65,11 +66,18 @@ interface RegressedCheck {
 interface WatchCheckReading {
   check: GoalWatch;
   reading: WatchReading | null;
+  /** A person is asked for this window's closing reading of it, and has not answered yet. */
+  waitingOnYou: boolean;
 }
 
 export interface WatchWindowReading {
   window: WatchWindow;
   verdict: WatchWindowVerdict;
+  /**
+   * Some check's closing reading is asked of a person and still in grace: the window has not settled
+   * for the outcome. → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
+   */
+  awaiting: boolean;
   /** Every one of the goal's checks, in declared order, with its standing reading here. */
   checks: WatchCheckReading[];
   regressed: RegressedCheck[];
@@ -88,18 +96,25 @@ export function watchWindowReadings(input: {
   checks: readonly GoalWatch[];
   readings: readonly WatchReading[];
   environments?: readonly EnvironmentConfig[];
+  /** The `watch_reading` asks still open; only a closing one holds a window. */
+  waiting?: readonly WatchAsk[];
 }): WatchWindowReading[] {
   const newest = new Map<string, WatchReading>();
   for (const r of input.readings) newest.set(`${r.goalRef} ${r.environment} ${r.checkId}`, r);
+  const waiting = new Set(
+    (input.waiting ?? []).filter((a) => a.ask === 'closing').map((a) => `${a.goalRef} ${a.environment} ${a.checkId}`),
+  );
   const checksByGoal = groupBy(input.checks, (c) => c.originRef);
   return input.windows.map((window) => {
     const checks = (checksByGoal.get(window.goalRef) ?? []).map((check) => ({
       check,
       reading: newest.get(`${window.goalRef} ${window.environment} ${check.id}`) ?? null,
+      waitingOnYou: waiting.has(`${window.goalRef} ${window.environment} ${check.id}`),
     }));
     return {
       window,
       verdict: watchWindowVerdict(checks.map((c) => c.reading?.verdict ?? null)),
+      awaiting: checks.some((c) => c.waitingOnYou),
       checks,
       regressed: checks.flatMap(({ check, reading }) => {
         if (reading?.verdict !== 'regressed') return [];

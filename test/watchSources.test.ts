@@ -266,7 +266,7 @@ test('a check naming no source on an environment declaring several reads unknown
   assert.equal(resolveWatchSource(LOGS_ONLY, { source: null, kind: 'signal' }).source?.name, 'logs');
 });
 
-test('an operator-run source spawns nothing yet, and its checks read unknown saying so', async () => {
+test('an operator-run source spawns nothing, and the harness records no reading of it on the schedule', async () => {
   const observer = new FakeEnvironmentObserver(ANSWERS);
   const operator: EnvironmentConfig = {
     name: 'liveUk',
@@ -279,9 +279,11 @@ test('an operator-run source spawns nothing yet, and its checks read unknown say
   await system.harness.runCycle();
 
   assert.deepEqual(observer.asked, []);
-  const [reading] = system.store.watches.listWatchReadings();
-  assert.equal(reading?.verdict, 'unknown');
-  assert.match(reading?.detail ?? '', /operator-run sources are not read yet/);
+  assert.deepEqual(
+    system.store.watches.listWatchReadings(),
+    [],
+    'a person is asked for it when the window closes, never read unknown on every interval in between',
+  );
   system.store.close();
 });
 
@@ -419,6 +421,7 @@ test("the bench row fences each query in its source's language, and links throug
     rows: 3,
     value: null,
     detail: 'it fired',
+    readBy: 'harness' as const,
   });
   const [step] = watchFindings({
     readings: watchWindowReadings({

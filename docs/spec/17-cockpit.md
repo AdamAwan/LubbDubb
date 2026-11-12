@@ -1297,6 +1297,15 @@ list built the same way names exactly what the count counted. Built from `config
 `unwatched`, and the ask would name issues the sentence above it never counted.
 → [06](06-issue-pickup.md), [25](25-supply.md)
 
+**`watch_reading` — a box for what the query returned.** A post-deploy watch check on a source only a
+person can run is asked on the rail: the desk's detail is the query itself, period filled in and fenced
+in its language with the link to run it, and under it `WatchReadingAsk` (`web/src/console/taskAsks.tsx`)
+draws a box for the rows — or a measure's one number — a second for a signal's presence rows, and
+**Record the reading**. It reads which box to draw off `CockpitState.watchAsks`, the server's own list,
+and posts to the route the desktop `watch_reading` tool's object shares, so a paste and an answer from
+Claude are one write. Done and Decline stay, for somebody who will not run it.
+→ [29](29-post-deploy-watch.md#a-source-only-the-operator-can-run)
+
 **`assigned` — what is waiting on the pull request.** Somebody put a pull request on the operator
 where the fleet cannot see it, so the ask is an index of what that costs: the threads still open or
 reopened, read through `buildPrPage`, the pull request page's own reading, so the two cannot disagree

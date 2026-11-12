@@ -131,9 +131,11 @@ import type {
   StackLanding,
   GoalWatch,
   GoalWatchKind,
+  WatchAsk,
   WatchOutcome,
   WatchReading,
   WatchSourceDeclaration,
+  WatchSourceLanguage,
   WatchWindow,
   PoolFleetReading,
   StallPark,
@@ -498,6 +500,8 @@ export interface CockpitState {
    */
   environmentGroups: EnvironmentGroupView[];
   goalWatchWindows: GoalWatchView[];
+  /** The readings only a person can take, still asked for. → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run */
+  watchAsks: WatchAskView[];
   /** Each goal's watch rolled up to one answer. → docs/spec/29-post-deploy-watch.md#the-outcome */
   goalWatchOutcomes: WatchOutcome[];
   featureSequences: FeatureSequence[];
@@ -680,6 +684,25 @@ export interface GoalWatchCheckView {
   unit: string | null;
   baselineValue: number | null;
   reading: WatchReading | null;
+  /** This window's closing reading of the check is asked of a person, who has not answered yet. */
+  waitingOnYou: boolean;
+}
+
+/**
+ * An open `watch_reading` ask with everything needed to answer it: the query as it will be judged, with
+ * the period filled in, in its source's language. → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
+ */
+export interface WatchAskView extends WatchAsk {
+  checkTitle: string;
+  kind: GoalWatchKind;
+  source: string;
+  language: WatchSourceLanguage;
+  query: string;
+  /** A signal's presence query, period filled in: the person is asked both questions. Null for a measure. */
+  presence: string | null;
+  queryUrl: string | null;
+  /** When an unanswered closing ask settles the check `unknown`; null for a baseline. */
+  closesAt: string | null;
 }
 
 export interface AgentTranscript {

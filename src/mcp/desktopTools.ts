@@ -5,6 +5,7 @@ import { DESKTOP_SEQUENCE_TOOLS } from './desktopSequence.js';
 import { DESKTOP_FEATURE_TOOLS } from './desktopFeature.js';
 import { DESKTOP_DISCUSSION_TOOLS } from './desktopDiscussion.js';
 import { DESKTOP_REMOTE_TOOLS } from './desktopRemote.js';
+import { DESKTOP_WATCH_TOOLS } from './desktopWatch.js';
 import { issueOrigin } from '../plans/planning.js';
 import { describeLocalRun } from '../localRun/describe.js';
 import { retroDossier } from '../retro/dossier.js';
@@ -503,6 +504,7 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   validation_claim: validationClaim,
   validation_report: validationReport,
   ...DESKTOP_REMOTE_TOOLS,
+  ...DESKTOP_WATCH_TOOLS,
   plan_read: planRead,
   plan_amend: planAmend,
   ...DESKTOP_SEQUENCE_TOOLS,
