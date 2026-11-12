@@ -6,6 +6,7 @@ import { scalarShaped, unanswered, type WatchPeriod, type WatchResult } from './
 import { carriesUntil, missingUntilRefusal } from '../validation/watchQueryShape.js';
 import { watchWindowMs } from './watchWindow.js';
 import { goalMergedAt } from './landings.js';
+import { resolveWatchSource, watchSources } from './watchSource.js';
 
 // → docs/spec/24-environments.md
 
@@ -29,17 +30,16 @@ export class WatchDryRun implements WatchDryRunner {
 
   /** @public the seam `plan_submit` and the plan-file drain both reach it through */
   async run(originRef: string): Promise<string[]> {
-    const environment = dryRunEnvironment(this.deps.environments);
-    if (environment === null) return [];
+    if (!this.deps.environments.some((env) => watchSources(env.watch).length > 0)) return [];
     const checks = this.deps.store.watches.listGoalWatches().filter((c) => c.originRef === originRef);
     const merged = goalMergedAt(this.deps.store.environments.listGoalLandings(), originRef);
-    const period = this.period(environment, merged);
     const refusals: string[] = [];
     for (const check of checks) {
+      const environment = dryRunEnvironment(this.deps.environments, check.source);
       const reading =
         merged !== null && check.kind === 'measure' && !carriesUntil(check.query)
           ? readingOf(environment, check, unanswered(missingUntilRefusal()))
-          : await this.read(environment, check, period);
+          : await this.read(environment, check, this.period(environment, merged));
       this.deps.store.watches.recordWatchDryRun(originRef, check.id, { environment: environment.name, ...reading });
       if (reading.detail !== null) refusals.push(`${check.id}: ${reading.detail}`);
     }
@@ -52,16 +52,19 @@ export class WatchDryRun implements WatchDryRunner {
   }
 
   private async read(environment: EnvironmentConfig, check: GoalWatch, period: WatchPeriod): Promise<DryRunReading> {
-    const command = environment.watch!.observe;
+    const resolved = resolveWatchSource(environment, check);
+    if (resolved.source === null)
+      return { verdict: 'unknown', presence: null, rows: null, value: null, detail: resolved.refusal };
+    const ask = {
+      environment: environment.name,
+      command: resolved.source.observe,
+      source: resolved.source.name,
+      language: resolved.source.language,
+      checkId: check.id,
+      ...period,
+    };
     if (check.presence !== null) {
-      const probe = await this.deps.observer.observe({
-        environment: environment.name,
-        command,
-        checkId: check.id,
-        query: check.presence,
-        kind: 'presence',
-        ...period,
-      });
+      const probe = await this.deps.observer.observe({ ...ask, query: check.presence, kind: 'presence' });
       const presence = verdictOf(probe);
       if (presence === 'unknown')
         return {
@@ -84,12 +87,9 @@ export class WatchDryRun implements WatchDryRunner {
         };
     }
     const result = await this.deps.observer.observe({
-      environment: environment.name,
-      command,
-      checkId: check.id,
+      ...ask,
       query: check.query,
       kind: check.kind === 'measure' ? 'measure' : 'signal',
-      ...period,
     });
     return readingOf(environment, check, result);
   }
@@ -146,6 +146,13 @@ function verdictOf(result: WatchResult): WatchReadingVerdict {
   return result.rows.length === 0 ? 'zero' : 'fires';
 }
 
-function dryRunEnvironment(environments: readonly EnvironmentConfig[]): EnvironmentConfig | null {
-  return environments.find((env) => env.watch !== undefined && env.watch.observe.trim() !== '') ?? null;
+/**
+ * The first environment that declares the check's source — or, for a check naming none, the first that
+ * watches at all. Where none declares it, the first watched environment, which reads it `unknown` and
+ * names the source it lacks.
+ */
+function dryRunEnvironment(environments: readonly EnvironmentConfig[], source: string | null): EnvironmentConfig {
+  const watched = environments.filter((env) => watchSources(env.watch).length > 0);
+  if (source === null) return watched[0]!;
+  return watched.find((env) => watchSources(env.watch).some((s) => s.name === source)) ?? watched[0]!;
 }

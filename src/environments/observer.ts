@@ -8,6 +8,7 @@ import {
   type WatchResult,
 } from './watchResult.js';
 import { firstLine } from '../primitives.js';
+import type { WatchSourceLanguage } from '../types.js';
 import { commitsVariable, parseExposure, unexposed, type ExposureReading, type ExposureRequest } from './exposure.js';
 
 // → docs/spec/24-environments.md
@@ -15,6 +16,9 @@ import { commitsVariable, parseExposure, unexposed, type ExposureReading, type E
 export interface EnvironmentObservationRequest extends WatchPeriod {
   environment: string;
   command: string;
+  /** The source's name, passed so one wrapper can serve several; and its language, which says how the id is echoed. */
+  source: string;
+  language: WatchSourceLanguage;
   checkId: string;
   query: string;
   kind: WatchQueryKind;
@@ -36,13 +40,14 @@ export class CommandEnvironmentObserver implements EnvironmentObserver {
   ) {}
 
   observe(request: EnvironmentObservationRequest): Promise<WatchResult> {
-    const prepared = preparedQuery(request.query, request, request.checkId, request.kind);
+    const prepared = preparedQuery(request.query, request, request.checkId, request.kind, request.language);
     if (prepared.query === null) return Promise.resolve(unanswered(prepared.refusal));
     return this.run(
       request.command,
       {
         LUBBDUBB_ENVIRONMENT: request.environment,
         LUBBDUBB_WATCH_ID: request.checkId,
+        LUBBDUBB_WATCH_SOURCE: request.source,
         LUBBDUBB_WATCH_QUERY: prepared.query,
         LUBBDUBB_WATCH_SINCE: request.since,
         LUBBDUBB_WATCH_UNTIL: request.until,

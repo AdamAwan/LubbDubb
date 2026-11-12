@@ -19,6 +19,7 @@ const CHECK: GoalWatch = {
   expectBaseline: false,
   unit: null,
   why: null,
+  source: null,
   dryRunEnvironment: null,
   dryRunAt: null,
   dryRunVerdict: null,

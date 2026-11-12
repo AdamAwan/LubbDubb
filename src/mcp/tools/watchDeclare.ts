@@ -53,6 +53,13 @@ const WatchDeclareInput = z.object({
           )
           .optional(),
         why: z.string().describe('Why this is the signal that matters.').optional(),
+        source: z
+          .string()
+          .describe(
+            'The environment source this check reads, by name — the list under the watch notes in your prompt. ' +
+              'Leave it out where every environment has only one source.',
+          )
+          .optional(),
       }),
     )
     .describe(
@@ -93,6 +100,13 @@ const WatchDeclareInput = z.object({
           ),
         unit: z.string().describe('ms, %, per minute — drawn beside the number, never parsed.').optional(),
         why: z.string().optional(),
+        source: z
+          .string()
+          .describe(
+            'The environment source this check reads, by name — the list under the watch notes in your prompt. ' +
+              'Leave it out where every environment has only one source.',
+          )
+          .optional(),
       }),
     )
     .describe(

@@ -40,6 +40,7 @@ import { Header } from './goalHeader.js';
 import { LocalValidation, RemoteValidation, RunStrip, Signals, TenantBanner } from './goalRunners.js';
 import { PlanWaves } from './goalPlan.js';
 import { Environments, REACH_TONE, WatchWindow } from './goalEnvironments.js';
+import { watchSourceChoices } from '../components/WatchSourceChip.js';
 import { Instructions, Reference, Sequence, Spend, Tail, Ticket } from './goalCards.js';
 
 // → docs/spec/17-cockpit.md
@@ -344,7 +345,13 @@ function ClosePane({
       </div>
       <Reference page={page} view={view} fold={folds.record} />
       {goalPaneOf(page, 'signals') === 'close' && (
-        <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
+        <Signals
+          page={page}
+          sources={watchSourceChoices(view.state.config.environments)}
+          actions={actions}
+          refUrls={view.state.refUrls}
+          fold={folds.signals}
+        />
       )}
     </>
   );
@@ -372,10 +379,17 @@ function WatchPane({
   return (
     <>
       <ObligationPicker page={page} tab="watch" showing={showing} actions={actions} />
-      <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
+      <Signals
+        page={page}
+        sources={watchSourceChoices(view.state.config.environments)}
+        actions={actions}
+        refUrls={view.state.refUrls}
+        fold={folds.signals}
+      />
       <WatchWindow
         watch={window}
         environment={showing}
+        sources={view.state.config.environments.find((e) => e.name === showing)?.watchSources ?? []}
         issueNumber={page.issue.number}
         now={view.now}
         actions={actions}

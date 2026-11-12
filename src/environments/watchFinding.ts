@@ -1,9 +1,18 @@
 import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
-import type { EnvironmentGate, GoalWatch, HumanTask, WatchCheckVerdict, WatchReading, WatchWindow } from '../types.js';
+import type {
+  EnvironmentGate,
+  GoalWatch,
+  HumanTask,
+  WatchCheckVerdict,
+  WatchReading,
+  WatchSourceLanguage,
+  WatchWindow,
+} from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 import { watchQueryUrl } from './watchQueryUrl.js';
 import { withPeriod } from '../validation/watchQueryShape.js';
 import { watchPeriod } from './exposure.js';
+import { declaredSource } from './watchSource.js';
 
 // → docs/spec/24-environments.md
 
@@ -27,6 +36,8 @@ interface RegressedCheck {
   said: string;
   why: string | null;
   query: string;
+  /** The fence's info string: the language of the source the check read. */
+  language: WatchSourceLanguage;
   queryUrl: string | null;
 }
 
@@ -62,16 +73,18 @@ export function watchWindowReadings(input: {
         if (reading?.verdict !== 'regressed') return [];
         const { since, until } = watchPeriod(window, reading.readAt);
         const query = withPeriod(check.query, since, until);
+        const source = declaredSource(
+          input.environments?.find((e) => e.name === window.environment)?.watch,
+          check.source,
+        );
         return [
           {
             title: check.title,
             said: reading.detail ?? 'it read outside what the check declared',
             why: check.why,
             query,
-            queryUrl: watchQueryUrl(
-              input.environments?.find((e) => e.name === window.environment)?.watch?.queryUrl,
-              query,
-            ),
+            language: source?.language ?? 'kql',
+            queryUrl: watchQueryUrl(source?.queryUrl, query),
           },
         ];
       }),
@@ -143,7 +156,7 @@ function checkBlock(check: RegressedCheck, environment: string): string[] {
     `**To see the rows yourself**, this is the query the watch put to ${environment}, with the instant the ` +
       'work arrived filled in where the declaration carried its time bound:',
     '',
-    '```kql',
+    '```' + check.language,
     check.query,
     '```',
     '',

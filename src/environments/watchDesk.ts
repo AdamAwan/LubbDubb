@@ -9,6 +9,7 @@ import { watchCheckVerdict } from './watchVerdict.js';
 import { dueWindows, openableArrivals, settlingWindows, watchWindowMs } from './watchWindow.js';
 import { exposureFloor, exposureShortfall, watchPeriod } from './exposure.js';
 import { landedCommits } from './landings.js';
+import { resolveWatchSource } from './watchSource.js';
 
 // → docs/spec/24-environments.md
 
@@ -197,30 +198,39 @@ export class WatchDesk {
     period: WatchPeriod,
     commits: readonly string[],
   ): Promise<void> {
-    const command = environment.watch!.observe;
+    const resolved = resolveWatchSource(environment, check);
+    if (resolved.source === null) {
+      this.deps.store.watches.recordWatchReading({
+        goalRef: window.goalRef,
+        environment: window.environment,
+        checkId: check.id,
+        value: null,
+        verdict: 'unknown',
+        rows: null,
+        detail: resolved.refusal,
+      });
+      return;
+    }
+    const ask = {
+      environment: environment.name,
+      command: resolved.source.observe,
+      source: resolved.source.name,
+      language: resolved.source.language,
+      checkId: check.id,
+      ...period,
+      commits,
+    };
     const presence =
       check.presence === null
         ? null
-        : await this.deps.observer.observe({
-            environment: environment.name,
-            command,
-            checkId: check.id,
-            query: check.presence,
-            kind: 'presence',
-            ...period,
-            commits,
-          });
+        : await this.deps.observer.observe({ ...ask, query: check.presence, kind: 'presence' });
     const silent = presence !== null && (presence.rows === null || presence.rows.length === 0);
     const reading = silent
       ? presence!
       : await this.deps.observer.observe({
-          environment: environment.name,
-          command,
-          checkId: check.id,
+          ...ask,
           query: check.query,
           kind: check.kind === 'measure' ? 'measure' : 'signal',
-          ...period,
-          commits,
         });
     const verdict = watchCheckVerdict({ check, environment: environment.name, presence, reading });
     this.deps.store.watches.recordWatchReading({

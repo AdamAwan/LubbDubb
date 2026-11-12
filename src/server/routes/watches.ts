@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { watchWindowMs } from '../../environments/watchWindow.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { WatchCheckSchema, watchCheckInput } from '../../validation/watchDocument.js';
+import { watchSourceRefusal } from '../../environments/watchSource.js';
 import { checked, IssueNumberParams } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -24,8 +25,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: ProposalParams, body: WatchCheckSchema }, async ({ params, body, reply }) => {
       if (body.id !== params.checkId)
         return reply.code(400).send({ error: `the body declares "${body.id}" and the path names "${params.checkId}"` });
+      const input = watchCheckInput(body, 0);
+      const refusal = watchSourceRefusal(system.config.environments, input);
+      if (refusal !== null) return reply.code(400).send({ error: refusal });
       const origin = issueOrigin(params.number);
-      const check = store.watches.saveOperatorWatch(origin, watchCheckInput(body, 0));
+      const check = store.watches.saveOperatorWatch(origin, input);
       hub.broadcast({ type: 'world:changed' });
       const dryRun = await system.watch.run(origin);
       hub.broadcast({ type: 'world:changed' });

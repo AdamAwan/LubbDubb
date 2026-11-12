@@ -150,6 +150,7 @@ export function buildGoalWatchWindows(
       checkId: c.id,
       title: c.title,
       kind: c.kind,
+      source: c.source,
       tolerate: c.tolerate,
       expectUnder: c.expectUnder,
       expectOver: c.expectOver,

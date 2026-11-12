@@ -16,17 +16,18 @@ what to watch for, and never judges a reading.** Both are declared, up front, by
 know — and everything from the declaration onwards is a scripted pass with no model in it.
 
 > **Partly built.** The windows, the readings, the verdict, the bench row, the Signals card,
-> [the watch hint and its tick at approval](#the-planner-at-plan-time-writes-a-hint), and
-> [`{until}` and the baseline that ends at the merge](#until-and-the-baseline-that-ends-at-the-merge) are built.
-> **Not yet built**, and each section that describes them says so:
+> [the watch hint and its tick at approval](#the-planner-at-plan-time-writes-a-hint),
+> [`{until}` and the baseline that ends at the merge](#until-and-the-baseline-that-ends-at-the-merge) and
+> [sources](#sources) are built. **Not yet built**, and each section that describes them says so:
 > [authoring the watch on `delivered`](#the-assessor-on-delivered-writes-the-checks) and
 > [the accept that releases it](#the-operator-accepts-the-set); [the assessor's stated `none`](#declaring-nothing-is-a-legitimate-answer);
-> [sources](#sources) and [the source only the operator can run](#a-source-only-the-operator-can-run);
+> [the source only the operator can run](#a-source-only-the-operator-can-run);
 > [the outcome](#the-outcome) and [discussing it in Claude](#discussing-an-outcome).
 > **What runs today instead:** the planner is asked for the hint and not for checks, but a plan document's
-> executable `watch` block still parses and is dry-run at submission; the working agent amends them with `watch_declare` at conclude time; each
-> environment has one `observe` command; and the goal page draws every check's verdict with no
-> headline. Remove each item from this list in the change that builds it.
+> executable `watch` block still parses and is dry-run at submission; the working agent amends them with
+> `watch_declare` at conclude time; a check reading an `operator` source is `unknown`, because nothing
+> asks a person for it; and the goal page draws every check's verdict with no headline. Remove each item
+> from this list in the change that builds it.
 
 ## What it is not
 
@@ -610,16 +611,16 @@ back to it — `arrival.opens: []`'s refusal, one document over.
 scripted fake for the tests. One method: **run this query against this environment and give me back
 what it said.**
 
-`CommandEnvironmentObserver` runs the operator's `observe` command in a shell in `repoRoot`, exactly
-as `CommandEnvironmentProber` runs `at` (`src/environments/prober.ts`).
+`CommandEnvironmentObserver` runs the `observe` command of the [source](#sources) a check reads, in a
+shell in `repoRoot`, exactly as `CommandEnvironmentProber` runs `at` (`src/environments/prober.ts`).
 
 ### The query is passed by environment variable, and its return is verified
 
-`LUBBDUBB_ENVIRONMENT`, `LUBBDUBB_WATCH_ID`, `LUBBDUBB_WATCH_QUERY`, `LUBBDUBB_WATCH_SINCE` and
-`LUBBDUBB_WATCH_UNTIL`. The operator's command is two lines and reads the query out of the variable.
-`{since}` and `{until}` are already substituted in what `LUBBDUBB_WATCH_QUERY` carries — a wrapper has
-nothing to fill in, and the instants are passed beside it only so one that assembles its own query can
-say what period it read.
+`LUBBDUBB_ENVIRONMENT`, `LUBBDUBB_WATCH_ID`, `LUBBDUBB_WATCH_SOURCE` (the source's name, so one
+wrapper can serve several), `LUBBDUBB_WATCH_QUERY`, `LUBBDUBB_WATCH_SINCE` and `LUBBDUBB_WATCH_UNTIL`.
+The operator's command is two lines and reads the query out of the variable. `{since}` and `{until}` are
+already substituted in what `LUBBDUBB_WATCH_QUERY` carries — a wrapper has nothing to fill in, and the
+instants are passed beside it only so one that assembles its own query can say what period it read.
 
 A window's reading also carries **`LUBBDUBB_WATCH_COMMITS`**: the goal's landed commits, the ones its
 arrival was confirmed on, space-separated. It names _the change_ rather than the build deployed now,
@@ -638,15 +639,16 @@ answer a wider question — the prompt-template failure in another costume
 ([05](05-dispatcher.md#prompt-templates)). A per-goal query is unavoidably a parameter, so instead of
 avoiding the failure the harness makes it **observable**:
 
-- the harness appends its own projection to the query it hands over, carrying the check's id
-  (`idProjection`, `src/environments/watchResult.ts`);
+- the harness appends its own projection to a `kql` query it hands over, carrying the check's id
+  (`idProjection`, `src/environments/watchResult.ts`), and a wrapper for any other language echoes
+  `LUBBDUBB_WATCH_ID` into each row;
 - a result that does not carry that id back is not an answer. It is `unknown`, with the detail _the
   command answered without the query it was given_.
 
-The projection is written as a pipeline segment — `| extend lubbdubbWatchId = "<id>"` — because the
-queries these environments answer are pipeline queries. That is the one place the harness has an
-opinion about a query language, and it is escapable: an operator whose telemetry is not can echo
-`LUBBDUBB_WATCH_ID` from the wrapper instead, and the verification is identical either way.
+The projection is written as a pipeline segment — `| extend lubbdubbWatchId = "<id>"` — and is
+appended only where the source's language is `kql` ([what a language changes](#what-a-language-changes)).
+That is the one place the harness has an opinion about a query language: every other source's wrapper
+echoes `LUBBDUBB_WATCH_ID` itself, and the verification is identical either way.
 Interpolating the id is safe where interpolating the query is not, and for a stated reason: the id is
 the check's own slug, which the document schema holds to kebab-case, while the query is
 agent-authored and reaches the shell only as a variable's value.
@@ -699,8 +701,7 @@ and the dry run is the backstop that means none of them has to be complete:
 
 ## Sources
 
-**Not yet built.** Everything above says _the_ `observe` command, and today an environment has one.
-Real telemetry is not one thing. On the deployment this was built for, App Insights is reachable with
+Everything above says _the_ `observe` command, which is one source. Real telemetry is not one thing. On the deployment this was built for, App Insights is reachable with
 the `az` login the harness already runs under, and the SQL database behind it is not, because its
 credential is a person's. So an environment declares **sources**, and a check names the one it reads.
 
@@ -730,17 +731,33 @@ managed identity next quarter changes `runBy` from `operator` to `harness`, gain
 nothing else in the subsystem moves.
 
 **`observe` alone is the shorthand for one source**: `{ "logs": { "language": "kql", "runBy":
-"harness", "observe": … } }`. Every configuration written before sources keeps working, and a check
-with no `source` reads the environment's only one. `validateEnvironments` refuses an environment
-declaring both `observe` and `sources`, a `harness` source with no `observe`, an `operator` source
-with one, and a language not in the list below.
+"harness", "observe": …, "queryUrl": watch.queryUrl } }`. Every configuration written before sources
+keeps working, and a check with no `source` reads the environment's only one. The shorthand is read in
+one place — `watchSources` (`src/environments/watchSource.ts`) — and every reader of a watch's commands
+goes through it, so nothing downstream sees `observe` and `sources` as two spellings.
+`validateEnvironments` refuses an environment declaring both `observe` and `sources`, an empty
+`sources`, a `harness` source with no `observe`, an `operator` source with one, a language not in the
+list below, and a `watch.queryUrl` beside `sources` — a link there would be read by nothing, since each
+source carries its own.
 
 **A check names a source by name, and each environment maps names to its own commands.** `logs` on
 `testUk` and on `liveUk` are different commands against different workspaces, and that is the point:
 the check is the question and the source says where to ask it. An environment that does not declare
 the source a check names does not read that check. On that environment the check is `unknown`, with
 the reason _liveEu has no `sql` source_. That is never a clean reading and never a refusal of the
-whole watch.
+whole watch. A check naming **no** source on an environment that declares more than one is `unknown`
+there too, naming the sources it could have meant — the harness does not pick one. Both are answered by
+`resolveWatchSource` (`src/environments/watchSource.ts`), which the window's reading and the dry run
+share; the column is `goal_watches.source`, written by all three writers.
+
+The [dry run](#the-dry-run) puts each check to the **first environment that declares its source** — for
+a check naming none, the first that watches at all — so a `sql` check on a deployment where only
+`liveUk` has SQL is proved against `liveUk`.
+
+**Until [the operator's source](#a-source-only-the-operator-can-run) is built, a check reading an
+`operator` source is `unknown`** on that environment, with the reason _operator-run sources are not
+read yet_, and nothing is spawned for it. That is the configuration shape accepted ahead of the
+behaviour, so a deployment can declare its SQL source now; no reading of it is ever clean.
 
 ### What a language changes
 
@@ -760,19 +777,35 @@ and the refusal only works where the harness can read the query's tail. A metric
 nature, so in PromQL a signal's "count of occurrences" is a measure with an `under` anyway, and it
 should be written as one.
 
+Where that is refused depends on whether the configuration is to hand, because a language belongs to
+an environment's source and not to the check. The operator's own edit
+(`PUT /api/issues/:number/watch/checks/:checkId`) runs beside the configuration, so a signal naming a
+`promql` or `other` source is refused there with a 400 (`watchSourceRefusal`), and the form refuses it
+before it is sent. The plan document's `watch` block and `watch_declare` are parsed by `WatchSchema`,
+which sees no configuration, so such a signal is stored — and **read `unknown` on each environment where
+the source is measures-only**, saying so, with nothing put to the source. The dry run is that reading, so
+its refusal comes back to the author at submission.
+
 **The id projection is appended only to `kql`.** It is a pipeline segment and means nothing to
 another language, so every other harness-run source relies on the wrapper echoing
 `LUBBDUBB_WATCH_ID` into each row. That was the escape hatch for a non-pipeline language before
 sources existed, and verification is identical either way. `LUBBDUBB_WATCH_SOURCE` is passed beside
 the query, so one wrapper can serve several sources.
 
-The fence on the bench row and the Signals card takes the source's language as its info string,
-` ```sql `, so the copy control and the wrap follow the language.
+The fence on the bench row takes the source's language as its info string, ` ```sql `, so the copy
+control and the wrap follow the language; the source's own `queryUrl` is the link under it. The Signals
+card and the Watch card draw a **source chip** beside each check — `logs · kql`, dashed where a person
+runs it, amber where the check names a source nothing declares or names none where there are several
+(`web/src/components/WatchSourceChip.tsx`); the Watch card reads the chip against its own environment's
+sources. The plan sheet draws the name of a source a check names. The operator's add and edit form
+offers a source picker where the deployment declares more than one.
 
 **The authoring prompt lists each environment's sources with their language and who runs them**, and
-says plainly that a `harness` source costs nothing and an `operator` source costs a person two
-readings per environment. An `operator` source is for a question no telemetry can answer, not for
-convenience.
+says plainly that a `harness` source costs nothing and an `operator` source costs a person's time —
+two readings per environment, once [that is built](#a-source-only-the-operator-can-run). An `operator`
+source is for a question no telemetry can answer, not for convenience. It is appended to `watchNote` and
+`watchDeclareNote` (`src/plans/planning.ts`) beside each environment's `schema`, never interpolated, and
+names the measures-only languages where any environment declares one.
 
 ### A source only the operator can run
 
@@ -1121,7 +1154,8 @@ a window can regress on several checks at once, and until the titles were headin
 ended and the next began was a thing an operator worked out from the wording. The heading is what the
 row's own stylesheet rules between.
 
-The query goes in a fence that **names its language** — ` ```kql ` — which is what earns it the copy
+The query goes in a fence that **names its language** — ` ```kql `, or whatever language the check's
+[source](#sources) declares — which is what earns it the copy
 control and the one-operator-per-line wrap
 ([17](17-cockpit.md#a-fence-that-names-a-language-carries-a-copy-control)). The fence body is the query **as it was put to the environment** — the
 declaration's own text with `{since}` substituted for the instant the work arrived, which is what makes
@@ -1131,7 +1165,8 @@ hand an operator a query the harness never put to the environment. A dialect oth
 
 #### Running it, where the environment said where
 
-`watch.queryUrl` on the environment is a **URL template** an operator writes once, carrying `{query}`
+`queryUrl` on the check's [source](#sources) — `watch.queryUrl` beside the `observe` shorthand — is a
+**URL template** an operator writes once, carrying `{query}`
 (URL-encoded) or `{queryGzip}` (gzipped, base64'd, then URL-encoded — the shape the Azure portal's
 Logs deep link wants). Filled per check by `watchQueryUrl` (`src/environments/watchQueryUrl.ts`), it
 becomes a `Run it on <environment> ↗` link under the fence.
@@ -1227,10 +1262,10 @@ number in front of a person.
 
 ## Configuring an environment
 
-**Not yet built:** `watch.sources` in place of `watch.observe`, as set out in [Sources](#sources), and
-`watch.operatorGraceMs`, default 72 hours, for [operator-run sources](#a-source-only-the-operator-can-run).
-`observe` stays valid as the shorthand for one `kql` source run by the harness, so the example below
-is still a correct configuration.
+`watch.sources` may stand in place of `watch.observe`, as set out in [Sources](#sources); `observe`
+stays valid as the shorthand for one `kql` source run by the harness, so the example below is still a
+correct configuration. **Not yet built:** `watch.operatorGraceMs`, default 72 hours, for
+[operator-run sources](#a-source-only-the-operator-can-run).
 
 ```jsonc
 {
@@ -1298,11 +1333,12 @@ paragraph: a hint has no query to scope. → [Exposure](#exposure)
 
 → [17](17-cockpit.md). Four surfaces and one changed reading.
 
-**Not yet built**, in this section: the Signals card's proposed set with **Accept**, **Edit** and **Send back**; source chips on
-every check; the operator-reading asks; and the outcome card at the top of the goal page, with
+**Not yet built**, in this section: the Signals card's proposed set with **Accept**, **Edit** and
+**Send back**; the operator-reading asks; and the outcome card at the top of the goal page, with
 **Discuss in Claude**. Each is described where it belongs above
 ([the hint](#the-planner-at-plan-time-writes-a-hint), [the accept](#the-operator-accepts-the-set),
-[sources](#sources), [the outcome](#the-outcome)). What follows is what runs today.
+[the operator's source](#a-source-only-the-operator-can-run), [the outcome](#the-outcome)). Source chips
+are built and described [with sources](#what-a-language-changes). What follows is what runs today.
 
 **The plan sheet draws the hint** as a _How we'll know it worked_ section above the checks
 (`web/src/components/WatchHintDigest.tsx`): each intent with its kind and source as chips, what it
@@ -1476,6 +1512,10 @@ an oversight: null there means _not considered yet_, and an arrival considered f
 opens a window only if its confirming reading is fresh — so a database full of nulls is walked once,
 stamped, and opens nothing for work that shipped in March.
 
+`goal_watches.source` is the check's [source](#sources), by name, declared in `WATCH_COLUMNS`. Null
+means _the environment's only source_, which is exactly what every row written before sources read, so
+it needs no backfill.
+
 `watch_windows.settled_at` null means **still watching**, which is a null that means something: a
 column added to it later, without the gated backfill, would reopen every settled window on the boot
 an operator takes the build ([14](14-persistence.md#when-a-null-means-something)). `extended_at` is
@@ -1507,8 +1547,6 @@ by `setPlanWatchHint` from `ingestPlanDocument`, and only when the document carr
   every delivered goal on the deployment would read _owed_ and dispatch an assessor. That is a null
   that means something ([14](14-persistence.md#when-a-null-means-something)), so the stamp is gated on
   the table being created.
-- **`goal_watches.source`**, a `ColumnMigrations` entry. Null means _the environment's only source_,
-  which is exactly what every row written before sources read, so no backfill is needed.
 - **`watch_readings.read_by`**, `'harness'` or `'operator'`, a `ColumnMigrations` entry. Null reads as
   `'harness'`, which every earlier reading was.
 
@@ -1565,6 +1603,12 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   `watchNote` is appended, and accepted with neither where it is not; the approval is held until the
   `watch` caveat is ticked, and a plan with no hint raises none; `plans.watch_hint` reaches a database
   from before it (`test/watchHint.test.ts`).
+- a check naming a source its environment lacks reads `unknown` there, with the source named; a check
+  naming none where there are several does too; an `operator` source spawns nothing and reads `unknown`;
+  a `promql` source refuses a signal at the operator's edit and reads it `unknown`; the id projection is
+  appended to `kql` alone; `LUBBDUBB_WATCH_SOURCE` reaches the command; the bench row's fence takes the
+  source's language; `goal_watches.source` reaches a database from before it; and `validateEnvironments`
+  refuses each source shape that would read nothing (`test/watchSources.test.ts`).
 
 **Not yet built**, and owed by the changes that build each piece:
 
@@ -1576,8 +1620,6 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   it before then;
 - an arrival landing while the watch is owed is **deferred, not stamped**, and opens a window sized
   from the arrival when the set is accepted;
-- a check naming a source its environment lacks reads `unknown` there, with the source named;
-- a `promql` source refuses a signal;
 - an `operator` source spawns nothing, files one `watch_reading` ask per check per environment per
   ask, and an unanswered closing ask settles `unknown` after `operatorGraceMs`;
 - `watchOutcome`: any `regressed` reads _made something worse_ and still names the clean checks;

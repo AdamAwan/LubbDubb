@@ -24,6 +24,7 @@ export const WATCH_COLUMNS: ColumnMigrations = {
     live: 'INTEGER NOT NULL DEFAULT 1',
     proposal: 'TEXT',
     authored: "TEXT NOT NULL DEFAULT 'plan'",
+    source: 'TEXT',
   },
   watch_readings: { value: 'REAL' },
   watch_windows: { extended_at: 'TEXT', exposed_at: 'TEXT' },
@@ -56,12 +57,12 @@ export class WatchStore {
           .prep(
             `INSERT OR REPLACE INTO goal_watches
                (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
-                expect_under, expect_over, expect_baseline, unit, why,
+                expect_under, expect_over, expect_baseline, unit, why, source,
                 baseline_value, baseline_at, live, proposal, authored,
                 dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
                 created_at, updated_at)
              VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
-                @expectUnder, @expectOver, @expectBaseline, @unit, @why,
+                @expectUnder, @expectOver, @expectBaseline, @unit, @why, @source,
                 NULL, NULL, 1, NULL, 'plan',
                 NULL, NULL, NULL, NULL, NULL, NULL, @now, @now)`,
           )
@@ -141,12 +142,12 @@ export class WatchStore {
           .prep(
             `INSERT INTO goal_watches
                (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
-                expect_under, expect_over, expect_baseline, unit, why,
+                expect_under, expect_over, expect_baseline, unit, why, source,
                 baseline_value, baseline_at, live, proposal, authored,
                 dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
                 created_at, updated_at)
              VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
-                @expectUnder, @expectOver, @expectBaseline, @unit, @why,
+                @expectUnder, @expectOver, @expectBaseline, @unit, @why, @source,
                 NULL, NULL, 0, @proposal, 'plan',
                 NULL, NULL, NULL, NULL, NULL, NULL, @now, @now)`,
           )
@@ -184,7 +185,7 @@ export class WatchStore {
           `UPDATE goal_watches
               SET kind=@kind, title=@title, query=@query, presence=@presence, tolerate=@tolerate,
                   expect_under=@expectUnder, expect_over=@expectOver, expect_baseline=@expectBaseline,
-                  unit=@unit, why=@why, live=1, proposal=NULL,
+                  unit=@unit, why=@why, source=@source, live=1, proposal=NULL,
                   baseline_value=NULL, baseline_at=NULL,
                   dry_run_environment=NULL, dry_run_at=NULL, dry_run_verdict=NULL,
                   dry_run_presence=NULL, dry_run_rows=NULL, dry_run_detail=NULL, updated_at=@now
@@ -192,6 +193,7 @@ export class WatchStore {
         )
         .run({
           ...proposal.declaration,
+          source: proposal.declaration.source ?? null,
           expectBaseline: proposal.declaration.expectBaseline ? 1 : 0,
           goalRef: originRef,
           checkId,
@@ -211,17 +213,21 @@ export class WatchStore {
       const row = this.ctx
         .prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
         .get(originRef, check.id) as GoalWatchRow | undefined;
-      const asked = row !== undefined && row.query === check.query && row.presence === check.presence;
+      const asked =
+        row !== undefined &&
+        row.query === check.query &&
+        row.presence === check.presence &&
+        row.source === check.source;
       this.ctx
         .prep(
           `INSERT OR REPLACE INTO goal_watches
              (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
-              expect_under, expect_over, expect_baseline, unit, why,
+              expect_under, expect_over, expect_baseline, unit, why, source,
               baseline_value, baseline_at, live, proposal, authored,
               dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
               created_at, updated_at)
            VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
-              @expectUnder, @expectOver, @expectBaseline, @unit, @why,
+              @expectUnder, @expectOver, @expectBaseline, @unit, @why, @source,
               @baselineValue, @baselineAt, 1, NULL, 'operator',
               @dryRunEnvironment, @dryRunAt, @dryRunVerdict, @dryRunPresence, @dryRunRows, @dryRunDetail,
               @createdAt, @now)`,
@@ -394,6 +400,7 @@ interface GoalWatchRow {
   proposal: string | null;
   authored: string;
   why: string | null;
+  source: string | null;
   dry_run_environment: string | null;
   dry_run_at: string | null;
   dry_run_verdict: string | null;
@@ -441,6 +448,7 @@ function hydrate(row: GoalWatchRow): GoalWatch {
     expectBaseline: row.expect_baseline === 1,
     unit: row.unit,
     why: row.why,
+    source: row.source,
     baselineValue: row.baseline_value,
     baselineAt: row.baseline_at,
     live: row.live === 1,

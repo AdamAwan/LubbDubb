@@ -1821,6 +1821,19 @@ export interface GoalArrival {
 
 export type GoalWatchKind = 'signal' | 'measure';
 
+/** The query language a watch source answers in. → docs/spec/29-post-deploy-watch.md#what-a-language-changes */
+export type WatchSourceLanguage = 'kql' | 'sql' | 'promql' | 'other';
+
+/** Who can put a query to a watch source: the harness on a schedule, or only a person. */
+export type WatchSourceRunner = 'harness' | 'operator';
+
+/** One of an environment's watch sources as it is declared: a name, a language and who runs it. */
+export interface WatchSourceDeclaration {
+  name: string;
+  language: WatchSourceLanguage;
+  runBy: WatchSourceRunner;
+}
+
 export type WatchReadingVerdict = 'fires' | 'zero' | 'unknown';
 
 export type GoalWatchDeclaration =
@@ -1832,6 +1845,7 @@ export type GoalWatchDeclaration =
       presence: string;
       tolerate: number;
       why?: string;
+      source?: string;
     }
   | {
       kind: 'measure';
@@ -1841,6 +1855,7 @@ export type GoalWatchDeclaration =
       expect: { under?: number; over?: number; noWorseThan?: 'baseline' };
       unit?: string;
       why?: string;
+      source?: string;
     };
 
 export interface GoalWatchInput {
@@ -1856,6 +1871,8 @@ export interface GoalWatchInput {
   expectBaseline: boolean;
   unit: string | null;
   why: string | null;
+  /** The environment source it reads, by name; null reads the environment's only source. */
+  source: string | null;
 }
 
 export interface GoalWatch extends GoalWatchInput {

@@ -736,7 +736,8 @@ not have.
 
 **Built.** `stepCapabilities` folds what every configured environment declares, once, and `resolveSteps`
 answers each step off it: `browser`, `suite` and `screenshot` need a `validate.browser` block, `state`
-needs `validate.state.run`, `signal` and `measure` need `watch.observe`, and `manual` is a person's by
+needs `validate.state.run`, `signal` and `measure` need a watch source the harness runs — `watch.observe`, or a `harness` source in
+`watch.sources` ([29](29-post-deploy-watch.md#sources)) — and `manual` is a person's by
 definition. A `browser` step needs a **tenant** as well, because unlike the others it acts, and the
 harness never generates or infers a tenant identifier
 ([36](36-remote-validation.md#tenants)). A step the fleet cannot carry comes back to a person **naming

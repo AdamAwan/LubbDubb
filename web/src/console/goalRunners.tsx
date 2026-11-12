@@ -2,7 +2,7 @@ import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView } from '../view/goalPage.js';
-import type { Agent, Issue } from '../types.js';
+import type { Agent, Issue, WatchSourceDeclaration } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { Icon } from '../components/icons.js';
 import { CONTROL_CLASS } from '../components/controls.js';
@@ -298,11 +298,13 @@ function alertConsequence(alert: TenantAlert): string {
 
 export function Signals({
   page,
+  sources,
   actions,
   refUrls,
   fold,
 }: {
   page: GoalPageView;
+  sources: WatchSourceDeclaration[];
   actions: CockpitActions;
   refUrls: Record<string, string>;
   fold: Fold;
@@ -334,6 +336,7 @@ export function Signals({
       {fold.open && (
         <SignalsSection
           signals={signals}
+          sources={sources}
           refUrls={refUrls}
           onSave={(check) => actions.saveWatchCheck(issue.number, check)}
           onDelete={(checkId) => actions.deleteWatchCheck(issue.number, checkId)}

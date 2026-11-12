@@ -51,6 +51,7 @@ function measure(query: string): GoalWatchInput {
     expectBaseline: true,
     unit: 'ms',
     why: null,
+    source: null,
   };
 }
 
@@ -166,6 +167,7 @@ test('before the merge, a measure without {until} still takes its baseline over 
     { since: '2026-01-01T00:00:00.000Z', until: '2026-01-02T00:00:00.000Z' },
     'orders-p95',
     'measure',
+    'kql',
   );
   assert.ok(window.query !== null, 'and its window readings are unchanged');
   system.store.close();
@@ -182,6 +184,8 @@ test('the observe command is handed LUBBDUBB_WATCH_UNTIL, and the query arrives 
     const result = await observer.observe({
       environment: 'testUk',
       command: `node -e '${echo}'`,
+      source: 'logs',
+      language: 'kql',
       checkId: 'no-timeouts',
       query: 'traces | where timestamp > datetime({since}) and timestamp <= datetime({until})',
       kind: 'signal',

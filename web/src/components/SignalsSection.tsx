@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { GoalWatch, GoalWatchDeclaration, GoalWatchKind } from '../types.js';
+import type { GoalWatch, GoalWatchDeclaration, GoalWatchKind, WatchSourceDeclaration } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { expectation, WatchReadingLine } from './WatchDigest.js';
@@ -7,6 +7,7 @@ import { renderMarkdown } from './markdown.js';
 import { HeadRow } from './panel.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
+import { measuresOnlyRefusal, WatchSourceChip, WatchSourcePicker } from './WatchSourceChip.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -30,12 +31,15 @@ import { Tag } from './tag.js';
  */
 export function SignalsSection({
   signals,
+  sources,
   refUrls,
   onSave,
   onDelete,
   onRule,
 }: {
   signals: GoalWatch[];
+  /** Every source a watched environment declares; the form offers a choice only where there is one to make. */
+  sources: WatchSourceDeclaration[];
   refUrls: Record<string, string>;
   onSave: (check: GoalWatchDeclaration) => Promise<string[]>;
   onDelete: (checkId: string) => Promise<void>;
@@ -52,6 +56,7 @@ export function SignalsSection({
             key={check.id}
             initial={check}
             taken={taken}
+            sources={sources}
             onSave={onSave}
             onClose={() => setOpen(null)}
             onDelete={() => onDelete(check.id)}
@@ -60,6 +65,7 @@ export function SignalsSection({
           <SignalRow
             key={check.id}
             check={check}
+            sources={sources}
             refUrls={refUrls}
             onEdit={() => setOpen(check.id)}
             onDelete={() => onDelete(check.id)}
@@ -68,7 +74,14 @@ export function SignalsSection({
         ),
       )}
       {(open === 'signal' || open === 'measure') && (
-        <CheckForm kind={open} taken={taken} onSave={onSave} onClose={() => setOpen(null)} onDelete={null} />
+        <CheckForm
+          kind={open}
+          taken={taken}
+          sources={sources}
+          onSave={onSave}
+          onClose={() => setOpen(null)}
+          onDelete={null}
+        />
       )}
       <div className="cn-sig-add">
         <Button
@@ -95,12 +108,14 @@ export function SignalsSection({
 
 function SignalRow({
   check,
+  sources,
   refUrls,
   onEdit,
   onDelete,
   onRule,
 }: {
   check: GoalWatch;
+  sources: WatchSourceDeclaration[];
   refUrls: Record<string, string>;
   onEdit: () => void;
   onDelete: () => Promise<void>;
@@ -114,6 +129,7 @@ function SignalRow({
         <HeadRow className="cn-sig-head">
           <b className="cn-name">{check.title}</b>
           <Tag>{check.kind}</Tag>
+          <WatchSourceChip source={check.source} sources={sources} />
           <Tag lower title="The author’s own id, and the merge key every writer folds on">
             {check.id}
           </Tag>
@@ -183,6 +199,7 @@ interface Draft {
   baseline: boolean;
   unit: string;
   why: string;
+  source: string;
 }
 
 function draftOf(check: GoalWatch): Draft {
@@ -198,6 +215,7 @@ function draftOf(check: GoalWatch): Draft {
     baseline: check.expectBaseline,
     unit: check.unit ?? '',
     why: check.why ?? '',
+    source: check.source ?? '',
   };
 }
 
@@ -214,6 +232,7 @@ function blankDraft(kind: GoalWatchKind): Draft {
     baseline: kind === 'measure',
     unit: '',
     why: '',
+    source: '',
   };
 }
 
@@ -221,6 +240,7 @@ function CheckForm({
   initial,
   kind,
   taken,
+  sources,
   onSave,
   onClose,
   onDelete,
@@ -228,6 +248,7 @@ function CheckForm({
   initial?: GoalWatch;
   kind?: GoalWatchKind;
   taken: Set<string>;
+  sources: WatchSourceDeclaration[];
   onSave: (check: GoalWatchDeclaration) => Promise<string[]>;
   onClose: () => void;
   onDelete: (() => Promise<void>) | null;
@@ -236,9 +257,12 @@ function CheckForm({
   const [refusals, setRefusals] = useState<string[]>([]);
   const set: SetField = (key, value) => setDraft((d) => ({ ...d, [key]: value }));
 
-  const refusal = refuse(draft, taken, initial !== undefined);
+  const refusal = refuse(draft, taken, initial !== undefined) ?? measuresOnlyRefusal(draft.kind, draft.source, sources);
   const rereads =
-    initial !== undefined && (initial.query !== draft.query || (initial.presence ?? '') !== draft.presence);
+    initial !== undefined &&
+    (initial.query !== draft.query ||
+      (initial.presence ?? '') !== draft.presence ||
+      (initial.source ?? '') !== draft.source);
 
   return (
     <form
@@ -250,6 +274,9 @@ function CheckForm({
       <span className="cn-sig-stripe" />
       <div className="cn-sig-form">
         <CommonFields draft={draft} set={set} editing={initial !== undefined} />
+        {(sources.length > 1 || draft.source !== '') && (
+          <WatchSourcePicker value={draft.source} sources={sources} onChange={(value) => set('source', value)} />
+        )}
         {draft.kind === 'signal' ? <SignalFields draft={draft} set={set} /> : <MeasureFields draft={draft} set={set} />}
         <label className="cn-sig-field">
           <span>Why (optional)</span>
@@ -475,7 +502,10 @@ function unbounded(field: 'query' | 'presence'): string {
 }
 
 function declaration(draft: Draft): GoalWatchDeclaration {
-  const why = draft.why.trim() === '' ? {} : { why: draft.why.trim() };
+  const why = {
+    ...(draft.why.trim() === '' ? {} : { why: draft.why.trim() }),
+    ...(draft.source === '' ? {} : { source: draft.source }),
+  };
   if (draft.kind === 'signal')
     return {
       kind: 'signal',

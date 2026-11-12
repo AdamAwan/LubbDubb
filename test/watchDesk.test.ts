@@ -42,6 +42,7 @@ const SIGNAL: GoalWatchInput = {
   expectBaseline: false,
   unit: null,
   why: null,
+  source: null,
 };
 
 function build(
