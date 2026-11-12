@@ -27,7 +27,7 @@ import {
 } from '../view/localValidation.js';
 import { Disclosure, type Fold } from './goalFold.js';
 import { BareButton } from '../components/button.js';
-import { isProposed } from '../view/watchChecks.js';
+import { awaitingAccept } from '../view/goalStages.js';
 
 export const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
 
@@ -312,7 +312,7 @@ export function Signals({
 }): JSX.Element | null {
   const { issue, signals, plan, watchPlan } = page;
   if (signals.length === 0 && plan === null) return null;
-  const pending = signals.filter(isProposed).length;
+  const pending = awaitingAccept(signals, watchPlan);
   return (
     <section className="cn-card" id="cn-signals">
       <h3>

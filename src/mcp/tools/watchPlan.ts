@@ -152,12 +152,12 @@ export const watchPlan: ToolFactory = ({ deps, task, ok }) => ({
     const declared = declaration(args);
     if ('error' in declared) return toolError(declared.error);
     const { checks, note, emptyReason } = declared;
-    const operators = new Set(live.filter((c) => c.authored === 'operator').map((c) => c.id));
-    const taken = checks.filter((c) => operators.has(c.id)).map((c) => c.id);
+    const held = new Set(live.map((c) => c.id));
+    const taken = checks.filter((c) => held.has(c.id)).map((c) => c.id);
     if (taken.length > 0)
       return toolError(
-        `${taken.join(', ')} ${taken.length === 1 ? 'is' : 'are'} the operator's own check id. Their checks stand ` +
-          'whatever you declare; give yours a different id, or leave it out.',
+        `${taken.join(', ')} ${taken.length === 1 ? 'is' : 'are'} already a live check on this goal — the ` +
+          "operator's own, or the plan's. Those stand whatever you declare; give yours a different id, or leave it out.",
       );
     const refusals = checks
       .map((c) => watchSourceRefusal(deps.watchEnvironments ?? [], c))

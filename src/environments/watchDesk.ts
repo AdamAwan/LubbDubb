@@ -77,15 +77,11 @@ export class WatchDesk {
       if (arrivals.length === 0) return;
       const declared = new Set(store.watches.listWatchedGoalRefs());
       const records = new Map(store.watches.listWatchPlanRecords().map((r) => [r.goalRef, r]));
-      const proposed = new Map<string, number>();
-      for (const c of store.watches.listProposedGoalWatches())
-        proposed.set(c.originRef, (proposed.get(c.originRef) ?? 0) + 1);
       let delivered: Set<string> | null = null;
       const held = (goalRef: string): boolean =>
         watchHold({
           record: records.get(goalRef) ?? null,
           hasLiveChecks: declared.has(goalRef),
-          proposedChecks: proposed.get(goalRef) ?? 0,
           planned: () => store.plans.getPlanByOrigin(goalRef) !== null,
           delivered: () =>
             (delivered ??= new Set(store.verdicts.listDeliveries().map((d) => d.originRef))).has(goalRef),

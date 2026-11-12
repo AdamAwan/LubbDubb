@@ -452,7 +452,8 @@ see what became of it. It requires **`emptyReason`** on a call declaring no chec
 with no standing delivery, so `more_work` writes nothing, and the code a check would be written
 against cannot move under it. It writes only where the watch is owed, or authored and still proposed —
 a second call in the same turn — and refuses a goal never asked (no row) and one whose watch is already
-accepted, which is the operator's to edit; and a check id the operator already holds. Each check may carry **`changedFromHint`**, the assessor's own sentence on how
+accepted, which is the operator's to edit; and a check id a live check already holds — the operator's
+own, or a plan-time `watch` block's, whose row the set's insert would otherwise collide with. Each check may carry **`changedFromHint`**, the assessor's own sentence on how
 it departs from an intent; it is stored on the row (`goal_watches.changed_from_hint`) and is what draws
 the _changed from plan_ chip. The assessor says it rather than the harness guessing it: matching a
 query to a prose intent is a judgement, and the one party that made the departure is the one that can
@@ -503,7 +504,7 @@ the arrival pass (`openableArrivals`, `src/environments/watchWindow.ts`) applies
 staleness cut, keyed on the goal's own record (`watchHold`): an arrival whose goal's watch is **owed** or
 **proposed**, or whose goal has a plan, no live checks and **no delivery yet** — the verdict that will ask
 for the watch is still to come — is left unstamped. The goal's record is what holds it, so a held arrival
-needs no stamp of its own however long authoring and the accept take. Once released, an arrival is fresh
+needs no stamp of its own however long authoring and the accept take. **Proposed is read off the record** — authored, not accepted, not empty — never off a count of proposed rows, because an operator who edits every proposed check makes each one live and theirs, and a count would lift the hold with nothing accepted and lose the arrival. Once released, an arrival is fresh
 if it was confirmed within the guard **or the goal's watch was accepted within it** (`acceptedAt`), and
 anything else past the guard is stamped and opens nothing — a goal delivered before the watch was asked of
 it has no record and no hold, so turning the feature on still walks the history once. When the set is

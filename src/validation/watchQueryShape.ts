@@ -78,7 +78,7 @@ export function missingSinceRefusal(field: 'query' | 'presence'): string {
   );
 }
 
-/** The one account of `{until}` every server-side text gives: the refusal, `watch_declare` and both planning notes. */
+/** The one account of `{until}` every server-side text gives: the refusal, `watch_plan` and both planning notes. */
 export const UNTIL_EXPLAINED =
   `A measure's query ends its period with "${UNTIL_TOKEN}" — "| where timestamp > datetime(${SINCE_TOKEN}) and ` +
   `timestamp <= datetime(${UNTIL_TOKEN})" — which the harness replaces with now for a watch reading and with the ` +

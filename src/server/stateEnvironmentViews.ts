@@ -36,6 +36,7 @@ import type { EnvironmentConfig } from '../environments/policy.js';
 import { watchOutcome } from '../environments/watchOutcome.js';
 import { watchWindowReadings, type WatchWindowReading } from '../environments/watchFinding.js';
 import { watchOutcomeStanding } from '../validation/watchAuthoring.js';
+import { watchHintRequired } from '../plans/planning.js';
 
 // → docs/spec/16-http-api.md
 
@@ -138,16 +139,12 @@ function sheetFold(sheet: RemoteSheetView | undefined): string | null {
   );
 }
 
-function watched(environments: readonly EnvironmentConfig[]): boolean {
-  return environments.some((e) => e.watch !== undefined);
-}
-
 /** Every goal's windows, each check carrying the reading `watchWindowReadings` decided stands. */
 export function buildGoalWatchWindows(
   environments: EnvironmentConfig[],
   resolved: () => WatchWindowReading[],
 ): GoalWatchView[] {
-  if (!watched(environments)) return [];
+  if (!watchHintRequired(environments)) return [];
   return resolved().map(({ window, checks }) => ({
     ...window,
     checks: checks.map(({ check: c, reading }) => ({
@@ -177,7 +174,7 @@ export function goalWatchOutcome(
   environments: readonly EnvironmentConfig[],
   goal: GoalWatchRecords,
 ): WatchOutcome | null {
-  return watched(environments) ? watchOutcome(goal) : null;
+  return watchHintRequired(environments) ? watchOutcome(goal) : null;
 }
 
 /** One goal's checks, resolved windows and empty reason, read off the store for a route that needs one goal. */
@@ -211,7 +208,7 @@ export function buildGoalWatchOutcomes(
   },
   landings: { listGoalLandings(): readonly GoalLanding[] },
 ): WatchOutcome[] {
-  if (!watched(environments)) return [];
+  if (!watchHintRequired(environments)) return [];
   const checksByGoal = groupBy(reads.goalWatches(), (c) => c.originRef);
   const windowsByGoal = groupBy(reads.watchWindows(), (w) => w.window.goalRef);
   const landed = new Set(landings.listGoalLandings().map((l) => l.goalRef));

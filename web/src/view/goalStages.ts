@@ -1,4 +1,4 @@
-import type { GoalEnvironmentReachView, GoalGroupReach, GoalWatchView } from '../types.js';
+import type { GoalEnvironmentReachView, GoalGroupReach, GoalWatch, GoalWatchView, WatchPlanRecord } from '../types.js';
 import type { GoalPageView, GoalPartView, GoalTrack } from './goalPage.js';
 import type { PartGroup } from '../types.js';
 import { inFlight, localValidationSaid } from './localValidation.js';
@@ -179,11 +179,16 @@ function reachStage(page: GoalPageView): GoalStage {
  * what is true of the signals instead — a window that never opened and one that opened and read
  * nothing are different answers. → docs/spec/17-cockpit.md#the-panes
  */
+/** The proposed checks still the operator's to accept: none once a send-back has un-authored the set. */
+export function awaitingAccept(signals: readonly GoalWatch[], record: WatchPlanRecord | null): number {
+  return record?.authoredAt != null && record.acceptedAt === null ? signals.filter(isProposed).length : 0;
+}
+
 export function watchStage(page: GoalPageView): GoalStage {
   const windows = page.watches.filter((w) => page.obligations.watch.includes(w.environment));
   const open = windows.filter((w) => w.checks.length > 0);
   if (open.length === 0) {
-    const pending = page.signals.filter(isProposed).length;
+    const pending = awaitingAccept(page.signals, page.watchPlan);
     if (pending > 0) return { reading: `${pending} awaiting you`, tone: 'amber', done: null };
     if (page.signals.length === 0) return { reading: 'no signals', tone: 'grey', done: null };
     return { reading: 'not opened', tone: 'grey', done: null };

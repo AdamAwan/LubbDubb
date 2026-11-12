@@ -80,12 +80,11 @@ export function watchOutcomeStanding(input: {
 export function watchHold(input: {
   record: WatchPlanRecord | null;
   hasLiveChecks: boolean;
-  proposedChecks: number;
   planned: () => boolean;
   delivered: () => boolean;
 }): 'owed' | 'proposed' | 'undelivered' | null {
   const { record } = input;
-  if (record?.authoredAt != null) return record.acceptedAt === null && input.proposedChecks > 0 ? 'proposed' : null;
+  if (record?.authoredAt != null) return record.acceptedAt === null && record.emptyReason === null ? 'proposed' : null;
   if (record !== null) return watchOwed({ record, planned: input.planned() }) ? 'owed' : null;
   if (input.hasLiveChecks || input.delivered() || !input.planned()) return null;
   return 'undelivered';

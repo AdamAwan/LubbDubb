@@ -122,7 +122,7 @@ export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
         (parsed.verdict === 'delivered' && checkSetOwed(deps, result.issueOrigin)
           ? 'One thing is still owed: this goal has no validation check set, and you are standing in the ' +
             'delivered code it is written against. Declare it now with validation_plan — the whole set in ' +
-            'one call — and then finish. If you cannot, say so and stop: a validation planner is dispatched ' +
+            'one call. If you cannot, say so and stop: a validation planner is dispatched ' +
             'for a delivered goal that has none, so nothing is lost. '
           : '') +
         (parsed.verdict === 'delivered' && watchOwedAfter(deps, result.issueOrigin) ? WATCH_OWED : '') +
