@@ -263,7 +263,7 @@ function VerdictSection({
           <div className="pm-prose">{renderMarkdown(headline, refUrls)}</div>
           {plan.verification && (
             <div className="pm-verify">
-              <b>How we&rsquo;ll know it worked</b>
+              <b>How we&rsquo;ll verify it</b>
               {renderMarkdown(plan.verification, refUrls)}
             </div>
           )}

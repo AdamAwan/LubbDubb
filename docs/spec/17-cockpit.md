@@ -7627,7 +7627,8 @@ button and nowhere on the sheet saying where the boxes are.
 
 `diagnosis` and `approach` **side by side**, not stacked: a long "what's wrong" used to push "what
 we'll do" off the first screen, and the two answer different questions. `verification` sits under the
-approach, since "how we'll know it worked" is part of what is being agreed to. **`evidence` is not
+approach, labelled _How we'll verify it_, since how the goal is checked is part of what is being agreed
+to — not _How we'll know it worked_, which is the [watch hint](#the-watch-digest)'s. **`evidence` is not
 drawn here.** The band is the plan in the reader's own terms, and a list of file paths under
 "what's wrong" is the one thing on it that only somebody with the checkout open can read — it
 crowded out the prose that everybody can. The citations stay on the plan record and in the
