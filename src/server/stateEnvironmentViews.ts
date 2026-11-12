@@ -203,8 +203,12 @@ export function buildGoalWatchOutcomes(
   if (!watched(environments)) return [];
   const checksByGoal = groupBy(readGoalWatches(), (c) => c.originRef);
   const windowsByGoal = groupBy(resolved(), (w) => w.window.goalRef);
-  const hints = new Map(plans.map((p) => [p.originRef, hintEmptyReason(p.watchHint)]));
-  const emptyReasons = new Map([...hints].filter((e): e is [string, string] => e[1] !== null));
+  const emptyReasons = new Map(
+    plans.flatMap((p) => {
+      const reason = hintEmptyReason(p.watchHint);
+      return reason === null ? [] : [[p.originRef, reason] as const];
+    }),
+  );
   const goals = new Set([...checksByGoal.keys(), ...windowsByGoal.keys(), ...emptyReasons.keys()]);
   return [...goals].flatMap((goalRef) => {
     const outcome = goalWatchOutcome(environments, {

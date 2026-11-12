@@ -140,6 +140,8 @@ function windowHours(window: WatchWindow): number | null {
  */
 export function watchOutcomeNote(input: {
   outcome: WatchOutcome;
+  /** The goal's live checks, as the outcome was folded from. */
+  checks: readonly GoalWatch[];
   /** The goal's windows, as the outcome was folded from. */
   windows: readonly WatchWindowReading[];
   environments: readonly EnvironmentConfig[];
@@ -152,7 +154,7 @@ export function watchOutcomeNote(input: {
     '',
   ];
   for (const folded of outcome.checks) {
-    const check = input.windows.flatMap((w) => w.checks).find((c) => c.check.id === folded.checkId)?.check;
+    const check = input.checks.find((c) => c.id === folded.checkId);
     if (check !== undefined) lines.push(...checkNote(folded, check, input.windows, input.environments));
   }
   const prs = input.pullRequests.map((p) => (p.title ? `#${String(p.number)} ${p.title}` : `#${String(p.number)}`));

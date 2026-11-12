@@ -232,6 +232,7 @@ test('the note carries the outcome, each expectation, before and after, the quer
   const outcome = fold({ checks, windows, readings })!;
   const note = watchOutcomeNote({
     outcome,
+    checks,
     windows: resolve(checks, windows, readings),
     environments: [
       {

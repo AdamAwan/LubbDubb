@@ -37,6 +37,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const world = store.world.getWorldBaseline();
       const body = watchOutcomeNote({
         outcome,
+        checks: goal.checks,
         windows: goal.windows,
         environments: config.environments,
         pullRequests: goalMergedPrs(goal.goalRef, store.environments.listGoalLandings(), world),
