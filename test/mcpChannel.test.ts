@@ -174,9 +174,11 @@ test('a retired name is answered, so an override that still names one is not a d
       tool.description,
       name.startsWith('review_pack_')
         ? /nothing replaces them/
-        : RETIRED_FEATURE_TOOLS.has(name)
-          ? /nothing replaces it/
-          : /conclude_work with status "blocked"/,
+        : name === 'watch_declare'
+          ? /retired: .*watch_plan/
+          : RETIRED_FEATURE_TOOLS.has(name)
+            ? /nothing replaces it/
+            : /conclude_work with status "blocked"/,
       'the refusal names the door that replaced it, or says there is none',
     );
   }

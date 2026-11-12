@@ -1409,6 +1409,27 @@ class DemoServer {
     return { ok: true };
   }
 
+  async acceptWatch(issueNumber: number): Promise<{ ok: true }> {
+    const goalRef = `issue:${issueNumber}`;
+    const record = (this.state.watchPlans ?? []).find((r) => r.goalRef === goalRef);
+    if (record?.authoredAt != null && record.acceptedAt === null) {
+      record.acceptedAt = new Date().toISOString();
+      for (const w of this.state.goalWatches ?? [])
+        if (w.originRef === goalRef && !w.live && w.authored === 'assessor') w.live = true;
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  async sendBackWatch(issueNumber: number, words: string): Promise<{ ok: true }> {
+    const record = (this.state.watchPlans ?? []).find((r) => r.goalRef === `issue:${issueNumber}`);
+    if (record?.authoredAt != null && record.acceptedAt === null) {
+      Object.assign(record, { authoredAt: null, sentBackAt: new Date().toISOString(), sentBackWords: words });
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   async saveWatchCheck(issueNumber: number, check: GoalWatchDeclaration): Promise<{ ok: true; dryRun: string[] }> {
     const originRef = `issue:${issueNumber}`;
     const watches = this.state.goalWatches ?? [];
@@ -1433,6 +1454,7 @@ class DemoServer {
       live: true,
       proposal: null,
       authored: 'operator',
+      changedFromHint: null,
       dryRunEnvironment: null,
       dryRunAt: null,
       dryRunVerdict: null,
@@ -4990,6 +5012,8 @@ export const demoApi = {
     getServer().reseedRemoteTenant(issueNumber, environment),
   ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
     getServer().ruleWatchProposal(issueNumber, checkId, accept),
+  acceptWatch: (issueNumber: number) => getServer().acceptWatch(issueNumber),
+  sendBackWatch: (issueNumber: number, words: string) => getServer().sendBackWatch(issueNumber, words),
   saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) => getServer().saveWatchCheck(issueNumber, check),
   deleteWatchCheck: (issueNumber: number, checkId: string) => getServer().deleteWatchCheck(issueNumber, checkId),
   extendWatch: (issueNumber: number, environment: string) => getServer().extendWatch(issueNumber, environment),

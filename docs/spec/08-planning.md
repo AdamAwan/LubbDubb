@@ -440,9 +440,11 @@ is `acceptance`'s business, not validation's.
 required wherever `watchNote` is appended, meaning wherever some environment declares a `watch` —
 `watchHintRequired`, handed to `validatePlanDocument` by the planner's two submission paths — and a
 hint with both shapes or neither is refused wherever one appears. It carries no query. The `watch`
-block, executable post-deploy checks written at plan time, still parses but is no longer asked for;
-**not yet built:** it goes, and the queries are written by the assessor on `delivered`, against merged
-code, because a design that changes in review makes a plan-time query wrong.
+block, executable post-deploy checks written at plan time, still parses but is no longer asked for:
+the queries are written by the assessor on `delivered` with `watch_plan`, against merged code, because a
+design that changes in review makes a plan-time query wrong
+([29](29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks)). **Not yet built:** the
+block itself goes.
 → [29](29-post-deploy-watch.md#the-planner-at-plan-time-writes-a-hint)
 
 `parsePlanDocument(raw)` parses JSON then validates; `validatePlanDocument(value)` validates an
@@ -956,7 +958,8 @@ paragraph above. This box is not a warning being acknowledged. It is the operato
 anything is built, what the goal's [outcome](29-post-deploy-watch.md#the-outcome) will be measured
 against, and its detail is different on every plan. `planCaveats` raises it from the stored
 `plan.watchHint`, so it raises nothing for a plan from before hints, nor — since no hint is asked for
-there — on a deployment where no environment declares a `watch`.
+there — on a deployment where no environment declares a `watch`. The words an operator writes on the
+tick reach the watch's author, appended beneath the hint as input.
 → [29](29-post-deploy-watch.md#the-operator-ticks-the-hint)
 
 `outOfScope` and `alternatives` are deliberately **not** caveats. Both are the planner being explicit

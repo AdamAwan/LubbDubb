@@ -30,6 +30,7 @@ type PromptId =
   | 'feature-resequence'
   | 'feature-summary'
   | 'validation-plan'
+  | 'watch-plan'
   | 'validation-check'
   | 'validation-plan-approval'
   | 'validation-failed'

@@ -277,6 +277,7 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
     prReply: (): McpToolDeps['prReply'] => late.get().executor,
     watch: (): McpToolDeps['watch'] => late.get().watchDryRun,
     watchHintRequired: watchHintRequired(config.environments),
+    watchEnvironments: config.environments,
     state: (): McpToolDeps['state'] => late.get().stateQueries,
     localValidations: (): LocalValidationDesk => late.get().localValidations,
     remoteReadings: (): RemoteReadingDesk => late.get().remoteReadings,

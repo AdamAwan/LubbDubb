@@ -382,6 +382,7 @@ function plansSection(
   | 'validationPlans'
   | 'validationResources'
   | 'goalWatches'
+  | 'watchPlans'
   | 'stateQueries'
 > {
   const { store, openPrNumbers } = r;
@@ -396,6 +397,7 @@ function plansSection(
     validationPlans: r.validationPlanRecords(),
     validationResources: r.wireValidationResources(),
     goalWatches: [...r.goalWatches(), ...store.watches.listProposedGoalWatches()],
+    watchPlans: store.watches.listWatchPlanRecords(),
     stateQueries: store.remoteValidation.listStateQueries(),
   };
 }

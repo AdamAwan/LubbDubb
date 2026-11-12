@@ -103,7 +103,9 @@ function PlanView({
       checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
       validationPlan={(state.validationPlans ?? []).find((r) => r.originRef === viewedPlan.originRef) ?? null}
       caveatAnswers={(state.planCaveatAnswers ?? []).filter((a) => a.planId === viewedPlan.id)}
-      watches={(state.goalWatches ?? []).filter((w) => w.originRef === viewedPlan.originRef)}
+      watches={(state.goalWatches ?? []).filter(
+        (w) => w.originRef === viewedPlan.originRef && (w.live || w.authored !== 'assessor'),
+      )}
       queries={(state.stateQueries ?? []).filter((q) => q.originRef === viewedPlan.originRef)}
       upcoming={state.upcoming?.items ?? []}
       proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}

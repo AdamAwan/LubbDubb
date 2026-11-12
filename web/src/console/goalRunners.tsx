@@ -309,7 +309,7 @@ export function Signals({
   refUrls: Record<string, string>;
   fold: Fold;
 }): JSX.Element | null {
-  const { issue, signals, plan } = page;
+  const { issue, signals, plan, watchPlan } = page;
   if (signals.length === 0 && plan === null) return null;
   const pending = signals.filter((c) => !c.live).length;
   return (
@@ -336,11 +336,14 @@ export function Signals({
       {fold.open && (
         <SignalsSection
           signals={signals}
+          watchPlan={watchPlan}
           sources={sources}
           refUrls={refUrls}
           onSave={(check) => actions.saveWatchCheck(issue.number, check)}
           onDelete={(checkId) => actions.deleteWatchCheck(issue.number, checkId)}
           onRule={(checkId, accept) => actions.ruleWatchProposal(issue.number, checkId, accept)}
+          onAccept={() => actions.acceptWatch(issue.number)}
+          onSendBack={(words) => actions.sendBackWatch(issue.number, words)}
         />
       )}
     </section>

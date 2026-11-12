@@ -16,7 +16,9 @@ import type { ColumnMigrations } from './migrate.js';
 // → docs/spec/14-persistence.md
 
 export const ENVIRONMENT_COLUMNS: ColumnMigrations = {
-  goal_arrivals: { watched_at: 'TEXT', sheeted_at: 'TEXT' },
+  // `watch_held_at` null means *never held*, true of every row from before it — no backfill.
+  // → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
+  goal_arrivals: { watched_at: 'TEXT', sheeted_at: 'TEXT', watch_held_at: 'TEXT' },
   goal_landings: { on_integration: 'TEXT', merged_at: 'TEXT' },
 };
 
@@ -123,7 +125,15 @@ export class EnvironmentStore {
       announcedAt: r.announced_at,
       watchedAt: r.watched_at,
       sheetedAt: r.sheeted_at,
+      watchHeldAt: r.watch_held_at,
     }));
+  }
+
+  /** Held back for a watch still owed or proposed; stamped once, so the hold outlasts the freshness guard. */
+  markArrivalWatchHeld(goalRef: string, environment: string): void {
+    this.ctx
+      .prep(`UPDATE goal_arrivals SET watch_held_at=? WHERE goal_ref=? AND environment=? AND watch_held_at IS NULL`)
+      .run(this.ctx.now(), goalRef, environment);
   }
 
   markArrivalWatched(goalRef: string, environment: string): void {
@@ -269,6 +279,7 @@ interface ArrivalRow {
   announced_at: string | null;
   watched_at: string | null;
   sheeted_at: string | null;
+  watch_held_at: string | null;
 }
 
 interface ReleaseRow {

@@ -190,18 +190,17 @@ export function watchNote(environments: readonly WatchedEnvironment[]): string {
   return [...lines, ...watchSourceLines(watched), ...watchedSchemaLines(watched)].join('\n');
 }
 
-export function watchDeclareNote(environments: readonly WatchedEnvironment[]): string {
+/**
+ * What a watch author — the assessor on `delivered`, or rule `watch-plan`'s catch-up — must know about
+ * this deployment's telemetry to write a query that resolves. Empty where no environment declares a
+ * `watch`, which is also the gate both read. → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
+ */
+export function watchPlanNote(environments: readonly WatchedEnvironment[]): string {
   const watched = environments.filter((env) => env.watch !== undefined);
   if (watched.length === 0) return '';
   const lines = [
     '',
-    '',
-    '## After it ships',
-    '',
-    'If you added a log line, an exception, a metric or a counter that says whether this is behaving, ' +
-      'declare the watch that reads it with the `watch_declare` tool before you conclude. You are the only ' +
-      'party that knows the message template, the operation name and the property you wrote — a planner ' +
-      'could not have guessed them, and nothing downstream can recover them.',
+    '## Writing a check',
     '',
     'Two kinds. A **signal** returns one row per occurrence of something that should not be happening, and ' +
       'the harness counts the rows against `tolerate` — do not aggregate the query: `| count` answers one ' +
@@ -210,27 +209,37 @@ export function watchDeclareNote(environments: readonly WatchedEnvironment[]): s
       'operation that does not exist answers zero rows, which looks exactly like a healthy release; a ' +
       'presence query must not aggregate either, since a count can never answer zero. A ' +
       '**measure** asks for one number and declares either a threshold or `noWorseThan: "baseline"`, which ' +
-      'is the right shape for an optimisation: the same query is run the moment the operator accepts it, ' +
-      'and that reading is what your work has to beat.',
+      'is the right shape for an optimisation: the same query is run over the period before the merge as ' +
+      'you record it, and that reading is what the work has to beat.',
     '',
     'Every query carries `{since}` — `| where timestamp > datetime({since})`, with your own timestamp ' +
       'column — which the harness replaces with the moment the work arrived on that environment. Without it ' +
-      'the query answers about the whole retention period and counts the occurrences your fix was for, ' +
+      'the query answers about the whole retention period and counts the occurrences the fix was for, ' +
       'reporting a regression on the strength of the defect it fixed. It is refused without one.',
     '',
     UNTIL_EXPLAINED,
     '',
-    'Use it too where the fix changed what the right question is. A timeout fixed by adding a retry does ' +
-      'not stop producing timeouts — the honest signal becomes "the job fails after retries", and only you ' +
-      "are holding the diff that says so. It merges on the check's id, so naming one leaves the rest alone.",
-    '',
-    'Nothing you declare runs until the operator accepts it: the query goes to their telemetry with their ' +
-      'credential, so it lands on the plan sheet as a pending change. Declaring nothing is a legitimate ' +
-      'answer — a refactor or a docs change has nothing running to watch.',
+    'Write against what the merged code actually emits: the message template, the operation name, the ' +
+      'property. The pull request descriptions say where an agent added a log line, a metric or an exception ' +
+      'that says whether this is behaving. A timeout fixed by adding a retry does not stop producing ' +
+      'timeouts — the honest signal becomes "the job fails after retries".',
     '',
     `Environments whose telemetry can be asked: ${watched.map((env) => env.name).join(', ')}.`,
   ];
   return [...lines, ...watchedEnvironmentLines(watched)].join('\n');
+}
+
+/**
+ * The one sentence the working agents keep about the watch, appended to `plan-part` and the pull-request
+ * fix prompts and never interpolated. Empty where no environment declares a `watch`.
+ * → docs/spec/29-post-deploy-watch.md#while-the-work-happens-nothing-is-asked
+ */
+export function instrumentationNote(environments: readonly WatchedEnvironment[]): string {
+  if (!watchHintRequired(environments)) return '';
+  return (
+    '\n\nIf you added a log line, a metric or an exception that says whether this is behaving, say so in the ' +
+    'pull request description.'
+  );
 }
 
 /**

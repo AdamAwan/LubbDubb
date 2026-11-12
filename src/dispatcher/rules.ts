@@ -10,6 +10,8 @@ export interface RuleConditions {
   review: boolean;
   sequencer: boolean;
   remoteValidation: boolean;
+  /** Some environment declares a `watch`. */
+  watch: boolean;
 }
 
 export interface DispatchRule {
@@ -270,6 +272,15 @@ const RULES = [
     name: 'Delivered goal has no validation check set',
     description:
       "A goal the harness has parked as delivered, whose validation check set nobody has written, gets one code agent in a read-only checkout of the default branch to write it. Authoring is deliberately late: a planner writes against code that does not exist yet, so every check it writes is a guess about a screen, a command or a table the second part may move — and `delivered` is the first moment nothing further is coming, which the last merged pull request is not, because the assessor may answer `more_work` and send the goal back round. What the plan carries instead is a prose **hint**, read by an operator at the approval gate and handed to this agent as input along with what any `coverage` part built and what the deployment can actually drive. The agent declares the whole set in one call and says where it departed from the hint; declaring nothing is a complete answer and carries a reason, because null with no account of itself is indistinguishable from an agent that did nothing. It ranks directly above `validate-check`, on that rule's own argument one step earlier: it produces the input every other validation rule reads, and validation's standing promise is that it blocks nothing — so it sits below every rule that produces product work. A goal carrying a plan-time set is left alone only while somebody is halfway through it — any check on it passed, failed, waived, deferred, claimed or handed to the fleet — because re-authoring supersedes checks and withdraws readings. A plan-time set whose live checks are every one of them unrun has no reading to lose and is re-authored against the merged code: those rows carry no steps and so no area, and counted as an authored set they would leave the goal manual for ever with nothing red. An agent that crashes or spends its attempt cap leaves the goal exactly as delivered with no escalation — the goal is parked either way, and a check set nobody wrote is a bench row that says so. It runs only where `validation.checkSets` is on: authoring is the half of validation that writes rather than reads, and a deployment still working out what the approval card asks for turns it off and keeps everything else — the bench, the hand-over, a plan-time set — exactly as it was.",
+  },
+
+  {
+    id: 'watch-plan',
+    kind: 'rule',
+    enabled: (c) => c.watch,
+    name: 'Delivered goal has no post-deploy watch',
+    description:
+      "A goal the harness has parked as delivered, with a plan, whose post-deploy watch nobody has written, gets one code agent in a read-only checkout of the default branch to write it with `watch_plan`. It is the catch-up for the assessor, which writes the watch itself in the turn it answers `delivered`, after the check set — so it fires only when that turn ended first. The watch is written this late on purpose: a query written at plan time is a guess about code that does not exist yet, and the merged code is the first place the message template, the operation name and the shape of the fix are all known. The plan's watch hint and the operator's words on its tick are handed to the agent as an input, not an instruction, and a watch the operator sent back comes back here with their words appended. A goal already carrying live checks — a plan-time `watch` block, the operator's own — is left alone. It ranks directly below `validation-plan`, on that rule's argument: it produces an input and blocks nothing. Inert where no environment declares a `watch`.",
   },
 
   {

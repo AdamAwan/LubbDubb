@@ -48,6 +48,9 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings): Dispatc
     planAmendments: store.plans.listPendingPlanAmendments(),
     validationChecks: store.validation.listAllValidationChecks(),
     validationPlans: store.validation.listValidationPlanRecords(),
+    watchPlans: store.watches.listWatchPlanRecords(),
+    watchedGoals: [...new Set(store.watches.listGoalWatches().map((c) => c.originRef))],
+    watchTickAnswers: store.plans.listAllPlanCaveatAnswers().filter((a) => a.caveatId === 'watch'),
     localRun: store.localRuns.liveLocalRun(),
     botPrRiskRun: store.botPrRisks.pendingRun(),
     localValidations: [

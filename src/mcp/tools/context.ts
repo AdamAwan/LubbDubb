@@ -25,6 +25,7 @@ import type { ActionSink } from '../../sink/actionSink.js';
 import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { WatchDryRunner } from '../../environments/watchDryRun.js';
+import type { watchSourceRefusal } from '../../environments/watchSource.js';
 import type { StateQueryDesk } from '../../validation/remote/stateQueries.js';
 import type { RemoteReadingDesk } from '../../validation/remote/readings.js';
 import type { RemoteListingDesk } from '../../validation/remote/listing.js';
@@ -161,6 +162,8 @@ export interface McpToolDeps {
   watch?: WatchDryRunner;
   /** → docs/spec/29-post-deploy-watch.md#the-planner-at-plan-time-writes-a-hint. Absent is not required. */
   watchHintRequired?: boolean;
+  /** The configured environments, for `watch_plan`'s gate and source refusals. Absent is *none watched*. */
+  watchEnvironments?: Parameters<typeof watchSourceRefusal>[0];
   state?: Pick<StateQueryDesk, 'configured' | 'declare' | 'dryRun'>;
   localValidations?: () => LocalValidationDesk;
   /**

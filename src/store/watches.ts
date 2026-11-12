@@ -1,14 +1,25 @@
 import type {
   GoalWatch,
   GoalWatchInput,
-  GoalWatchKind,
   GoalWatchProposal,
   WatchCheckVerdict,
   WatchReading,
   WatchReadingVerdict,
+  WatchPlanRecord,
   WatchWindow,
 } from '../types.js';
+import type Database from 'better-sqlite3';
 import type { StoreContext } from './context.js';
+import {
+  hydrate,
+  hydratePlan,
+  hydrateWindow,
+  keptAnswers,
+  type GoalWatchRow,
+  type WatchPlanRow,
+  type WatchReadingRow,
+  type WatchWindowRow,
+} from './rows/watches.js';
 import type { ColumnMigrations } from './migrate.js';
 
 // → docs/spec/14-persistence.md
@@ -25,10 +36,27 @@ export const WATCH_COLUMNS: ColumnMigrations = {
     proposal: 'TEXT',
     authored: "TEXT NOT NULL DEFAULT 'plan'",
     source: 'TEXT',
+    changed_from_hint: 'TEXT',
   },
   watch_readings: { value: 'REAL' },
   watch_windows: { extended_at: 'TEXT', exposed_at: 'TEXT' },
+  watch_plans: {},
 };
+
+/**
+ * Every goal already carrying live checks when `watch_plans` is created was authorised under the plan
+ * approval that preceded it. Null `authored_at` is *owed*, so without this every such goal would
+ * read owed, dispatch an assessor and hold its next arrival. Run only on the boot that creates the
+ * table: a pass on every boot would stamp the watch an operator is being asked about right now.
+ * → docs/spec/14-persistence.md#when-a-null-means-something
+ */
+export function stampWatchPlansFromBeforeTheAssessor(db: Database.Database, now: string): void {
+  db.prepare(
+    `INSERT OR IGNORE INTO watch_plans (goal_ref, authored_at, note, empty_reason, accepted_at, sent_back_at,
+                                        sent_back_words, updated_at)
+     SELECT DISTINCT goal_ref, @now, NULL, NULL, @now, NULL, NULL, @now FROM goal_watches WHERE live=1`,
+  ).run({ now });
+}
 
 export class WatchStore {
   constructor(private readonly ctx: StoreContext) {}
@@ -38,16 +66,17 @@ export class WatchStore {
       const keep = new Set(checks.map((c) => c.id));
       const mine = new Set<string>();
       for (const row of this.ctx
-        .prep(`SELECT check_id, authored FROM goal_watches WHERE goal_ref=? AND live=1`)
+        .prep(`SELECT check_id, authored, live FROM goal_watches WHERE goal_ref=?`)
         .all(originRef) as {
         check_id: string;
         authored: string;
+        live: number;
       }[]) {
-        if (row.authored === 'operator') {
+        if (row.authored === 'operator' || row.authored === 'assessor') {
           mine.add(row.check_id);
           continue;
         }
-        if (keep.has(row.check_id)) continue;
+        if (row.live === 0 || keep.has(row.check_id)) continue;
         this.ctx.prep(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
         this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
       }
@@ -260,6 +289,109 @@ export class WatchStore {
     })();
   }
 
+  /**
+   * The checks a dry run puts to an environment: the live ones, and the assessor's set while it is
+   * still proposed — the dry run is the one thing a proposal is allowed to do before the accept.
+   * → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
+   */
+  listDryRunWatches(originRef: string): GoalWatch[] {
+    return (
+      this.ctx
+        .prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND (live=1 OR authored='assessor') ORDER BY seq`)
+        .all(originRef) as GoalWatchRow[]
+    ).map(hydrate);
+  }
+
+  /**
+   * `watch_plan`'s write: the whole watch, proposed. Every row on the goal that is neither the
+   * operator's own nor live is replaced — an earlier call's set, a sent-back set, a pending
+   * `watch_declare` row — and the declared checks land `live=0`, `authored='assessor'`. The tool has
+   * already refused a goal whose watch is live. → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks
+   */
+  authorWatchPlan(
+    originRef: string,
+    checks: readonly (GoalWatchInput & { changedFromHint: string | null })[],
+    input: { note: string; emptyReason: string | null },
+  ): WatchPlanRecord {
+    const now = this.ctx.now();
+    this.ctx.db.transaction(() => {
+      this.ctx
+        .prep(
+          `DELETE FROM watch_readings WHERE goal_ref=? AND check_id IN
+             (SELECT check_id FROM goal_watches WHERE goal_ref=? AND live=0 AND authored<>'operator')`,
+        )
+        .run(originRef, originRef);
+      this.ctx.prep(`DELETE FROM goal_watches WHERE goal_ref=? AND live=0 AND authored<>'operator'`).run(originRef);
+      for (const check of checks)
+        this.ctx
+          .prep(
+            `INSERT INTO goal_watches
+               (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
+                expect_under, expect_over, expect_baseline, unit, why, source, changed_from_hint,
+                baseline_value, baseline_at, live, proposal, authored,
+                dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
+                created_at, updated_at)
+             VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
+                @expectUnder, @expectOver, @expectBaseline, @unit, @why, @source, @changedFromHint,
+                NULL, NULL, 0, NULL, 'assessor',
+                NULL, NULL, NULL, NULL, NULL, NULL, @now, @now)`,
+          )
+          .run({ ...check, expectBaseline: check.expectBaseline ? 1 : 0, goalRef: originRef, now });
+      this.ctx
+        .prep(
+          `INSERT INTO watch_plans (goal_ref, authored_at, note, empty_reason, accepted_at, sent_back_at,
+                                    sent_back_words, updated_at)
+           VALUES (@goalRef, @now, @note, @emptyReason, NULL, NULL, NULL, @now)
+           ON CONFLICT(goal_ref) DO UPDATE SET authored_at=excluded.authored_at, note=excluded.note,
+             empty_reason=excluded.empty_reason, accepted_at=NULL, updated_at=excluded.updated_at`,
+        )
+        .run({ goalRef: originRef, now, ...input });
+    })();
+    return this.getWatchPlanRecord(originRef) as WatchPlanRecord;
+  }
+
+  /**
+   * The operator's accept: the proposed set goes live, together, and the record is stamped. Null where
+   * nothing is authored and waiting. The dry run and baseline the proposal already took are kept —
+   * they are readings of that same question. → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
+   */
+  acceptWatchPlan(originRef: string): WatchPlanRecord | null {
+    const record = this.getWatchPlanRecord(originRef);
+    if (record === null || record.authoredAt === null || record.acceptedAt !== null) return null;
+    const now = this.ctx.now();
+    this.ctx.db.transaction(() => {
+      this.ctx
+        .prep(`UPDATE goal_watches SET live=1, updated_at=? WHERE goal_ref=? AND live=0 AND authored='assessor'`)
+        .run(now, originRef);
+      this.ctx.prep(`UPDATE watch_plans SET accepted_at=?, updated_at=? WHERE goal_ref=?`).run(now, now, originRef);
+    })();
+    return this.getWatchPlanRecord(originRef);
+  }
+
+  /**
+   * The operator's send-back: the stamp comes off and their words are kept for the next author. The
+   * proposed rows stay, as the account of what was refused, until the next `watch_plan` replaces them.
+   * → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
+   */
+  sendBackWatchPlan(originRef: string, words: string): WatchPlanRecord | null {
+    const record = this.getWatchPlanRecord(originRef);
+    if (record === null || record.authoredAt === null || record.acceptedAt !== null) return null;
+    const now = this.ctx.now();
+    this.ctx
+      .prep(`UPDATE watch_plans SET authored_at=NULL, sent_back_at=?, sent_back_words=?, updated_at=? WHERE goal_ref=?`)
+      .run(now, words, now, originRef);
+    return this.getWatchPlanRecord(originRef);
+  }
+
+  getWatchPlanRecord(originRef: string): WatchPlanRecord | null {
+    const row = this.ctx.prep(`SELECT * FROM watch_plans WHERE goal_ref=?`).get(originRef) as WatchPlanRow | undefined;
+    return row === undefined ? null : hydratePlan(row);
+  }
+
+  listWatchPlanRecords(): WatchPlanRecord[] {
+    return (this.ctx.prep(`SELECT * FROM watch_plans ORDER BY goal_ref`).all() as WatchPlanRow[]).map(hydratePlan);
+  }
+
   private nextWatchSeq(originRef: string): number {
     const { top } = this.ctx.prep(`SELECT MAX(seq) AS top FROM goal_watches WHERE goal_ref=?`).get(originRef) as {
       top: number | null;
@@ -345,120 +477,4 @@ export class WatchStore {
       detail: r.detail,
     }));
   }
-}
-
-interface WatchWindowRow {
-  goal_ref: string;
-  environment: string;
-  opened_at: string;
-  settles_at: string;
-  settled_at: string | null;
-  extended_at: string | null;
-  exposed_at: string | null;
-}
-
-function hydrateWindow(row: WatchWindowRow): WatchWindow {
-  return {
-    goalRef: row.goal_ref,
-    environment: row.environment,
-    openedAt: row.opened_at,
-    settlesAt: row.settles_at,
-    settledAt: row.settled_at,
-    extendedAt: row.extended_at,
-    exposedAt: row.exposed_at,
-  };
-}
-
-interface WatchReadingRow {
-  goal_ref: string;
-  environment: string;
-  check_id: string;
-  read_at: string;
-  verdict: string;
-  rows_read: number | null;
-  value: number | null;
-  detail: string | null;
-}
-
-interface GoalWatchRow {
-  goal_ref: string;
-  created_at: string;
-  check_id: string;
-  seq: number;
-  kind: string;
-  title: string;
-  query: string;
-  presence: string | null;
-  tolerate: number;
-  expect_under: number | null;
-  expect_over: number | null;
-  expect_baseline: number;
-  unit: string | null;
-  baseline_value: number | null;
-  baseline_at: string | null;
-  live: number;
-  proposal: string | null;
-  authored: string;
-  why: string | null;
-  source: string | null;
-  dry_run_environment: string | null;
-  dry_run_at: string | null;
-  dry_run_verdict: string | null;
-  dry_run_presence: string | null;
-  dry_run_rows: number | null;
-  dry_run_detail: string | null;
-}
-
-function keptAnswers(row: GoalWatchRow | null) {
-  if (row === null)
-    return {
-      baselineValue: null,
-      baselineAt: null,
-      dryRunEnvironment: null,
-      dryRunAt: null,
-      dryRunVerdict: null,
-      dryRunPresence: null,
-      dryRunRows: null,
-      dryRunDetail: null,
-    };
-  return {
-    baselineValue: row.baseline_value,
-    baselineAt: row.baseline_at,
-    dryRunEnvironment: row.dry_run_environment,
-    dryRunAt: row.dry_run_at,
-    dryRunVerdict: row.dry_run_verdict,
-    dryRunPresence: row.dry_run_presence,
-    dryRunRows: row.dry_run_rows,
-    dryRunDetail: row.dry_run_detail,
-  };
-}
-
-function hydrate(row: GoalWatchRow): GoalWatch {
-  return {
-    originRef: row.goal_ref,
-    id: row.check_id,
-    seq: row.seq,
-    kind: row.kind as GoalWatchKind,
-    title: row.title,
-    query: row.query,
-    presence: row.presence,
-    tolerate: row.tolerate,
-    expectUnder: row.expect_under,
-    expectOver: row.expect_over,
-    expectBaseline: row.expect_baseline === 1,
-    unit: row.unit,
-    why: row.why,
-    source: row.source,
-    baselineValue: row.baseline_value,
-    baselineAt: row.baseline_at,
-    live: row.live === 1,
-    proposal: row.proposal === null ? null : (JSON.parse(row.proposal) as GoalWatchProposal),
-    authored: row.authored === 'operator' ? 'operator' : 'plan',
-    dryRunEnvironment: row.dry_run_environment,
-    dryRunAt: row.dry_run_at,
-    dryRunVerdict: row.dry_run_verdict as WatchReadingVerdict | null,
-    dryRunPresence: row.dry_run_presence as WatchReadingVerdict | null,
-    dryRunRows: row.dry_run_rows,
-    dryRunDetail: row.dry_run_detail,
-  };
 }

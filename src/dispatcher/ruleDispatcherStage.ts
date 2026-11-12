@@ -249,6 +249,22 @@ export function cycleLookups(
   };
 }
 
+/** What the watch's author reads off the pulse. → docs/spec/29-post-deploy-watch.md#the-assessor-on-delivered-writes-the-checks */
+export function watchLookups(
+  ctx: DispatchContext,
+): Pick<StageContext, 'watchPlans' | 'watchedGoals' | 'watchTickWords'> {
+  const tickWords = new Map<string, string[]>();
+  for (const a of ctx.watchTickAnswers ?? []) {
+    if (a.caveatId !== 'watch' || a.answer.trim() === '') continue;
+    tickWords.set(a.planId, [...(tickWords.get(a.planId) ?? []), a.answer]);
+  }
+  return {
+    watchPlans: new Map((ctx.watchPlans ?? []).map((r) => [r.goalRef, r])),
+    watchedGoals: new Set(ctx.watchedGoals ?? []),
+    watchTickWords: tickWords,
+  };
+}
+
 export function workItemGates(pickup: IssuePickupPolicy): Pick<StageContext, 'workItemStates' | 'workItemInProgress'> {
   const pickupStates = effectivePickupStates(pickup);
   return {

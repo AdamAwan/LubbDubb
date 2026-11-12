@@ -7813,10 +7813,11 @@ surfaces.
 
 ### The watch digest
 
-> **Not yet built:** the plan sheet stops drawing executable checks, and the pending-change control
-> below moves to the Signals card, where the assessor's set is accepted after `delivered`. The goal
-> page gains an outcome card above the Watch pane, with **Discuss in Claude**.
-> → [29](29-post-deploy-watch.md#who-writes-it-and-when), [29](29-post-deploy-watch.md#the-outcome)
+The assessor's watch, written after `delivered`, is **not** drawn here: it is proposed and accepted on
+the goal page's Signals card ([29](29-post-deploy-watch.md#the-operator-accepts-the-set)), and the
+sheet filters its unaccepted rows out. **Not yet built:** the plan sheet stops drawing executable checks
+altogether once no planner writes a `watch` block, and the goal page gains an outcome card above the
+Watch pane, with **Discuss in Claude**. → [29](29-post-deploy-watch.md#the-outcome)
 
 `WatchHintDigest` (`web/src/components/WatchHintDigest.tsx`) draws the plan's **watch hint** first, as
 a _How we'll know it worked_ section: each intent's kind and source as chips, then what it `says`, its
@@ -7838,7 +7839,7 @@ not a clean reading — and a goal that declared no checks draws nothing at all,
 fact and not a synonym for clean.
 
 **Read-only but for one control, and the exception is the whole point.** A check the working agent
-declared through `watch_declare` arrived _after_ the approval that authorises a query to be run
+declared through the now-retired `watch_declare` arrived _after_ the approval that authorises a query to be run
 against the operator's own telemetry with the operator's own credential — so it draws as a **pending
 change** with accept and decline beside it, over the live declaration it amends, which stands
 untouched until somebody rules. Accepting applies it, clears the readings of the text it replaced, and

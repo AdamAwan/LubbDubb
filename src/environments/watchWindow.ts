@@ -35,15 +35,29 @@ const WATCH_WINDOW_INTERVALS = 2;
 
 const MAX_WATCH_WINDOWS_PER_PULSE = 20;
 
+/**
+ * What the window pass does with one arrival: open a window and stamp it (`settlesAt` set), stamp it
+ * and open nothing (`settlesAt` null), or — `hold` — leave it unstamped for a watch still owed or
+ * proposed. → docs/spec/29-post-deploy-watch.md#the-operator-accepts-the-set
+ */
 interface WatchArrivalVerdict {
   arrival: GoalArrival;
   settlesAt: string | null;
+  hold: boolean;
 }
 
+/**
+ * Staleness is cut **first**: an arrival older than the guard that was never held is stamped before
+ * the goal's watch is consulted at all, so turning `watch` on walks the history once. Only then is an
+ * arrival whose watch is owed or proposed held — and a held arrival keeps its place past the guard, for
+ * as long as authoring and the accept take, opening a window sized from the arrival once they are done.
+ */
 export function openableArrivals(input: {
   arrivals: readonly GoalArrival[];
   environments: readonly EnvironmentConfig[];
   declared: ReadonlySet<string>;
+  /** Whether this goal's watch is owed or proposed, which holds its arrival back unstamped. */
+  held: (goalRef: string) => boolean;
   probeIntervalMs: number;
   now: number;
 }): WatchArrivalVerdict[] {
@@ -54,11 +68,19 @@ export function openableArrivals(input: {
     if (arrival.watchedAt !== null) continue;
     const environment = byName.get(arrival.environment);
     const seen = Date.parse(arrival.arrivedAt);
-    const fresh = Number.isFinite(seen) && seen >= floor;
-    const watchable = environment?.watch !== undefined && input.declared.has(arrival.goalRef);
+    const fresh = Number.isFinite(seen) && (seen >= floor || arrival.watchHeldAt !== null);
+    if (environment?.watch === undefined || !fresh) {
+      out.push({ arrival, settlesAt: null, hold: false });
+      continue;
+    }
+    if (input.held(arrival.goalRef)) {
+      out.push({ arrival, settlesAt: null, hold: true });
+      continue;
+    }
     out.push({
       arrival,
-      settlesAt: watchable && fresh ? new Date(seen + firstWindowMs(environment)).toISOString() : null,
+      settlesAt: input.declared.has(arrival.goalRef) ? new Date(seen + firstWindowMs(environment)).toISOString() : null,
+      hold: false,
     });
   }
   return out;

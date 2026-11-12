@@ -22,6 +22,7 @@ import type {
   ValidationCheckView,
   ValidationPlanRecord,
   ValidationResourceView,
+  WatchPlanRecord,
 } from '../types.js';
 import type { PartGroup } from '../types.js';
 import { PART_GROUP } from './partGroups.js';
@@ -86,6 +87,8 @@ export interface GoalPageView {
   remoteSheets: RemoteSheetView[];
   watches: GoalWatchView[];
   signals: GoalWatch[];
+  /** The assessor's watch record: its note, its emptyReason, and whether it is accepted. */
+  watchPlan: WatchPlanRecord | null;
   sequence: FeatureSequence | null;
   /**
    * Which environment carries each obligation, from the deployment's own declaration rather
@@ -233,11 +236,15 @@ function goalReach(
   };
 }
 
-function goalWatchRecords(state: AppState, ref: string): Pick<GoalPageView, 'remoteSheets' | 'watches' | 'signals'> {
+function goalWatchRecords(
+  state: AppState,
+  ref: string,
+): Pick<GoalPageView, 'remoteSheets' | 'watches' | 'signals' | 'watchPlan'> {
   return {
     remoteSheets: (state.remoteSheets ?? []).filter((s) => s.goalRef === ref),
     watches: (state.goalWatchWindows ?? []).filter((w) => w.goalRef === ref),
     signals: (state.goalWatches ?? []).filter((w) => w.originRef === ref),
+    watchPlan: (state.watchPlans ?? []).find((r) => r.goalRef === ref) ?? null,
   };
 }
 

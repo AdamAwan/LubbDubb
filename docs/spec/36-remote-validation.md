@@ -637,7 +637,7 @@ others do not:
 - **The working agent, at conclude time**, through `state_declare` — the writer that matters. The
   query depends on what was actually built: which table took the new column, which row the change
   writes. A planner reading the repository as it stood **before** the work cannot know that, and
-  nothing downstream can recover it. Like `watch_declare` it merges on the slug, adds and amends, and
+  nothing downstream can recover it. Like the retired `watch_declare` it merges on the slug, adds and amends, and
   **withdraws nothing**; a check that should go is the operator's to delete.
 - **The operator, at any point**, from the goal's own page — and the operator is the only party that
   can make one runnable at all.
@@ -680,8 +680,8 @@ and returns nonsense is caught here, and only here.
 - **`presence` gets the same treatment**, for the reason it exists: an unapproved presence query
   cannot distinguish a healthy release from a query naming a column that is not there.
 
-A watch check takes no approval here. It has the watch's own — an agent's `watch_declare` proposal is
-not live until an operator accepts it ([29](29-post-deploy-watch.md#the-dry-run)) — and that one
+A watch check takes no approval here. It has the watch's own — the assessor's `watch_plan` set is
+not live until an operator accepts it ([29](29-post-deploy-watch.md#the-operator-accepts-the-set)) — and that one
 consent is all it needs, because the window is the only thing that runs it. There used to be a second
 key, an approval of its digest against each sheet's environment; it went with the rows it gated
 ([The watch is not on the sheet](#the-watch-is-not-on-the-sheet)).
@@ -2127,10 +2127,10 @@ Two notes are appended to prompts that already exist, both rendered strings rath
   `stateDeclareNote` in `src/plans/planning.ts`, computed in `src/system/system.ts`, threaded through
   `RuleContext` and appended to the `plan-part` rendering (it was also appended to `issue-pickup`'s,
   until that rule was retired), so nothing under
-  `src/dispatcher/` imports `src/validation/remote/`. `watchDeclareNote`'s
+  `src/dispatcher/` imports `src/validation/remote/`. the retired `watchDeclareNote`'s
   arrangement exactly ([29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)) — but
   **appended only where some environment declares a `validate.state` executor**, which is where that
-  arrangement is deliberately departed from. `watch_declare`'s note is unconditional and can afford
+  arrangement is deliberately departed from. `watch_declare`'s note was unconditional and could afford
   to be, because a watch declared on a deployment with no `observe` draws no surface and costs a line
   of prompt. This one would cost the same line on every dispatch on every deployment, to collect
   queries **nothing can ever run**, and the collecting is the harm: a goal page listing questions

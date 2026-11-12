@@ -36,7 +36,8 @@ export function ciFailingConcern(
             ciVerdict.dispatch.map((m) => m.name),
           ) +
           remedyAskNote('ci') +
-          dependencyCiBrief(pr, ctx.botPrRisks?.find((r) => r.prNumber === pr.number) ?? null),
+          dependencyCiBrief(pr, ctx.botPrRisks?.find((r) => r.prNumber === pr.number) ?? null) +
+          s.instrumentationNote,
         dispatchReason: ciDispatchReason(pr.number, ciVerdict),
         note: `CI is now failing on PR #${pr.number} — investigate and push a fix.${ciFailureNote(ciVerdict)}`,
         originTitle: pr.title,

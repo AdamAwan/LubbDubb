@@ -31,6 +31,7 @@ const CHECK: GoalWatch = {
   live: true,
   proposal: null,
   authored: 'plan',
+  changedFromHint: null,
 };
 
 const MEASURE: GoalWatch = {
