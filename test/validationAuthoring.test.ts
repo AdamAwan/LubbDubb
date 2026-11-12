@@ -136,6 +136,7 @@ function plan(): Plan {
     verification: null,
     evidence: [],
     document: null,
+    watchHint: null,
     statusCommentRef: null,
     createdAt: NOW,
     updatedAt: NOW,

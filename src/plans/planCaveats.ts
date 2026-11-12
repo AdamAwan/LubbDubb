@@ -1,10 +1,11 @@
 import type { Issue, Plan, PlanCaveat, PlanPart, Proposal, PullRequest } from '../types.js';
 import { unclaimedIssuePrs, wedgeReasons } from './planWedge.js';
+import { watchHintDetail } from './watchHint.js';
 
 // → docs/spec/08-planning.md
 
 export function planCaveats(
-  plan: Pick<Plan, 'risks' | 'openQuestions'>,
+  plan: Pick<Plan, 'risks' | 'openQuestions' | 'watchHint'>,
   issue: Issue,
   parts: PlanPart[],
   openPrs: PullRequest[],
@@ -39,6 +40,12 @@ export function planCaveats(
       id: 'risks',
       label: 'Risks the planner named',
       detail: risks,
+    });
+  if (plan.watchHint)
+    caveats.push({
+      id: 'watch',
+      label: 'How we’ll know it worked',
+      detail: watchHintDetail(plan.watchHint),
     });
   return caveats;
 }

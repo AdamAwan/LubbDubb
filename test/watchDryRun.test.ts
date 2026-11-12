@@ -25,6 +25,8 @@ const TEST_UK: EnvironmentConfig = {
   watch: { observe: './scripts/telemetry.sh testUk', schema: 'Structured logs land in `traces`.' },
 };
 
+const WATCH_HINT = { intents: [{ kind: 'signal', source: 'traces', says: 'Job X stops timing out' }] };
+
 const SIGNAL = {
   id: 'no-timeouts',
   title: 'Job X stops timing out',
@@ -72,6 +74,7 @@ async function submit(system: System, agent: Agent, watch: unknown) {
   const result = (await session!.call('plan_submit', {
     reason: 'One part.',
     parts: [{ slug: 'fix', title: 'Fix the proc', scope: 'src/db' }],
+    watchHint: WATCH_HINT,
     watch,
   })) as ToolResultText;
   return {
@@ -369,7 +372,9 @@ test('the planner’s watch guidance is appended, and is empty where nothing dec
   assert.equal(watchNote([{ name: 'testUk' }]), '');
   const note = watchNote([TEST_UK]);
   assert.match(note, /testUk/);
-  assert.match(note, /presence/);
+  assert.match(note, /`watchHint`/);
+  assert.match(note, /The reason is required/);
+  assert.doesNotMatch(note, /presence/, 'the planner writes words, not queries');
   assert.match(note, /Structured logs land in/);
 });
 

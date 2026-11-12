@@ -15,6 +15,7 @@ import type {
   PlanRevision,
   PlanStatus,
 } from '../../types.js';
+import { storedWatchHint } from '../../plans/watchHint.js';
 
 export interface PlanRow {
   id: string;
@@ -31,6 +32,7 @@ export interface PlanRow {
   verification: string | null | undefined;
   evidence: string | null | undefined;
   document: string | null | undefined;
+  watch_hint: string | null | undefined;
   status_comment_ref: string | null;
   created_at: string;
   updated_at: string;
@@ -115,6 +117,7 @@ export function rowToPlan(r: PlanRow): Plan {
     verification: r.verification ?? null,
     evidence: parseEvidence(r.evidence),
     document: r.document ?? null,
+    watchHint: storedWatchHint(r.watch_hint),
     statusCommentRef: r.status_comment_ref,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

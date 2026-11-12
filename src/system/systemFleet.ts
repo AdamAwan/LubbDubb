@@ -6,7 +6,14 @@ import { AgentManager } from '../agents/agentManager.js';
 import { EscalationInbox } from '../escalation/escalationInbox.js';
 import { ProposalDesk } from '../proposals/proposalDesk.js';
 import { StackLandingDesk } from '../stacks/landingDesk.js';
-import { screenCheckNote, stateDeclareNote, testPartNote, watchDeclareNote, watchNote } from '../plans/planning.js';
+import {
+  screenCheckNote,
+  stateDeclareNote,
+  testPartNote,
+  watchDeclareNote,
+  watchHintRequired,
+  watchNote,
+} from '../plans/planning.js';
 import { validationPlanNote } from '../validation/authoring.js';
 import { PermissionDesk } from '../agents/permissionDesk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
@@ -104,6 +111,7 @@ export function buildAgentManager(
     docsFolderPrefix: config.docsFolderPrefix,
     mcp,
     watch: { run: (originRef: string): Promise<string[]> => late.get().watchDryRun.run(originRef) },
+    watchHintRequired: watchHintRequired(config.environments),
     errors,
   });
   return { sequenceWatchPolicy, featureBoard, agents };

@@ -88,6 +88,10 @@ Refused unless the caller's origin is a planning origin (`planOriginIssue(task.o
 with the **same** `PlanDocumentSchema` the file path uses; on rejection the reason is returned and
 **nothing is written**, so the caller retries against an unchanged plan graph. On success it routes
 through the shared `ingestPlanDocument`, and reports `{accepted, status, retired}`.
+Wherever some environment declares a `watch`, a document with no `watchHint` is refused here and on the
+file path alike — `watchHintRequired`, the test that makes `watchNote` non-empty, reaches both as
+`validatePlanDocument`'s option rather than as a second copy of the rule.
+→ [29](29-post-deploy-watch.md#the-planner-at-plan-time-writes-a-hint)
 
 **Every field of the document is on the schema, and the handler passes each one through.** The
 handler builds the document field by field rather than forwarding `args`, which is what keeps the

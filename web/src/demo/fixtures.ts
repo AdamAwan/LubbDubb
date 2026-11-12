@@ -2468,6 +2468,7 @@ export function buildDemoState(): DemoSeed {
           '## Why three PRs\n\n' +
           'Each part is independently reviewable and each one leaves the shop taking money — the client alone is ' +
           'unreferenced; the payment part alone changes who takes the charge without touching what comes back.',
+        watchHint: null,
         statusCommentRef: 'issue:390:comment:8391',
         createdAt: ago(300),
         updatedAt: ago(6),
@@ -2526,6 +2527,22 @@ export function buildDemoState(): DemoSeed {
           '## The one thing I am unsure about\n\n' +
           'An edition that goes out of print leaves a saved row pointing at nothing buyable. I keep it and draw ' +
           'it as unavailable; dropping it silently is the other reading.',
+        watchHint: {
+          intents: [
+            {
+              kind: 'signal',
+              source: 'logs',
+              says: 'No abandoned-basket email goes to a customer whose only basket line was a saved book',
+              why: 'the ticket is about exactly these emails; the expiry sweep logs each one it sends',
+            },
+            {
+              kind: 'measure',
+              source: 'metrics',
+              says: 'Baskets expiring overnight fall, and orders do not',
+              why: null,
+            },
+          ],
+        },
         statusCommentRef: 'issue:333:comment:8471',
         createdAt: ago(14),
         updatedAt: ago(14),
@@ -2545,6 +2562,7 @@ export function buildDemoState(): DemoSeed {
         verification: null,
         evidence: [],
         document: null,
+        watchHint: null,
         statusCommentRef: null,
         createdAt: ago(40),
         updatedAt: ago(30),
@@ -2607,6 +2625,7 @@ export function buildDemoState(): DemoSeed {
           '## The one thing I am unsure about\n\n' +
           'A refund the provider reverses days later leaves an entry with nothing behind it, and without a ' +
           'webhook there is no way to hear about it.',
+        watchHint: null,
         statusCommentRef: 'issue:395:comment:8455',
         createdAt: ago(4320),
         updatedAt: ago(200),

@@ -225,13 +225,46 @@ export const PLAN_DOCUMENT_SHAPE = {
         .optional(),
     })
     .describe(
-      'What a running system would have to show, once this is deployed, for the work to have done what it ' +
-        'claimed. The layer above "validation": that asks whether the goal was met, this asks whether the thing ' +
-        'is behaving now that it is there. Declare it when there is something running you could observe — and ' +
-        'for a defect it is knowable now, because the bug report is the signal: "job X keeps timing out" is ' +
-        'its own post-deploy check. Declaring nothing is a legitimate answer for a refactor, a docs change or a ' +
-        'build fix, and is not the same as declaring everything is fine. Each query is run once against the ' +
-        'environment the moment you submit, and you get told what it answered.',
+      'Executable post-deploy checks. Not asked for any more: say what "worked" would look like in ' +
+        '"watchHint" instead, and the checks are written after delivery, against the code that shipped. Still ' +
+        'accepted, for a planner or an override written before the hint existed.',
+    )
+    .optional(),
+  watchHint: z
+    .object({
+      intents: z
+        .array(
+          z.object({
+            kind: z
+              .enum(['signal', 'measure'])
+              .describe(
+                '"signal": something that should stop happening, or never start — an exception, a failure, a ' +
+                  'retry. "measure": one number that should get better, or no worse — a duration, a rate.',
+              ),
+            source: z
+              .string()
+              .describe(
+                "Where you would expect to read it — your best guess at a name for the environment's " +
+                  'telemetry ("logs", "traces", "metrics"). It binds nothing.',
+              ),
+            says: z.string().describe('The outcome, in one plain sentence: "The statement job stops timing out".'),
+            why: z.string().describe('Optional: why this is the thing worth watching.').optional(),
+          }),
+        )
+        .describe('One intent per thing worth watching once this is running. Words, never a query.')
+        .optional(),
+      none: z
+        .string()
+        .describe(
+          'Instead of "intents": why nothing running behaves differently, so there is nothing to watch. The ' +
+            'reason is required — a refactor, a docs change or a build fix is a fine "none".',
+        )
+        .optional(),
+    })
+    .describe(
+      'How anyone will know, once this is deployed, that it worked — "intents" or "none" with a reason, never ' +
+        'both. Required wherever this deployment watches an environment (the prompt says so when it does), and ' +
+        'ticked by the operator before they may approve the plan.',
     )
     .optional(),
   state: z

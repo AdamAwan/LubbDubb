@@ -15,15 +15,16 @@ The one-line version, because it is the thing most easily got wrong: **the harne
 what to watch for, and never judges a reading.** Both are declared, up front, by parties who already
 know — and everything from the declaration onwards is a scripted pass with no model in it.
 
-> **Partly built.** The windows, the readings, the verdict, the bench row and the Signals card are
-> built. **Not yet built**, and each section that describes them says so:
-> [the watch hint and its tick at approval](#the-planner-at-plan-time-writes-a-hint);
+> **Partly built.** The windows, the readings, the verdict, the bench row, the Signals card,
+> [the watch hint and its tick at approval](#the-planner-at-plan-time-writes-a-hint), and
+> [`{until}` and the baseline that ends at the merge](#until-and-the-baseline-that-ends-at-the-merge) are built.
+> **Not yet built**, and each section that describes them says so:
 > [authoring the watch on `delivered`](#the-assessor-on-delivered-writes-the-checks) and
-> [the accept that releases it](#the-operator-accepts-the-set); [a stated `none`](#declaring-nothing-is-a-legitimate-answer);
+> [the accept that releases it](#the-operator-accepts-the-set); [the assessor's stated `none`](#declaring-nothing-is-a-legitimate-answer);
 > [sources](#sources) and [the source only the operator can run](#a-source-only-the-operator-can-run);
 > [the outcome](#the-outcome) and [discussing it in Claude](#discussing-an-outcome).
-> **What runs today instead:** the planner writes executable checks into the plan document and they are
-> dry-run at submission; the working agent amends them with `watch_declare` at conclude time; each
+> **What runs today instead:** the planner is asked for the hint and not for checks, but a plan document's
+> executable `watch` block still parses and is dry-run at submission; the working agent amends them with `watch_declare` at conclude time; each
 > environment has one `observe` command; and the goal page draws every check's verdict with no
 > headline. Remove each item from this list in the change that builds it.
 
@@ -260,11 +261,11 @@ declared no validation checks is not a goal whose checks all passed
 ([20](20-validation.md#the-flag)). Nothing counts watches, nothing rewards a longer list, and a
 surface that folded null into clean would report the whole fleet as verified.
 
-**Not yet built: declaring nothing is said, never left unsaid.** Where some environment declares a
-`watch`, null is no longer what an author gets by writing nothing. The plan's hint is either intents
-or `none` with a reason, and the authoring agent's `watch_plan` call either declares checks or carries
-an `emptyReason` — each refused without one. The reason is drawn on the plan sheet, ticked at approval
-and shown as the goal's [outcome](#the-outcome).
+**Declaring nothing is said, never left unsaid.** Where some environment declares a `watch`, null is
+not what a planner gets by writing nothing: the plan's hint is either intents or `none` with a reason,
+and a plan document with neither is refused. The reason is drawn on the plan sheet and ticked at
+approval. **Not yet built:** the authoring agent's `watch_plan` call either declares checks or carries
+an `emptyReason`, refused without one, and the reason is shown as the goal's [outcome](#the-outcome).
 
 This is what the feature was missing, and the reason it rarely fired. Both prompts said that declaring
 nothing was a legitimate answer, and nothing asked why, so the cheapest reply to a prompt with a
@@ -276,8 +277,9 @@ that never happened.
 
 ## Who writes it, and when
 
-> **Not yet built**, apart from [the operator's own edits](#the-operator-at-any-point), which run
-> today. What runs instead of the rest is in the marker at the top of this document.
+> **Not yet built**, apart from [the hint](#the-planner-at-plan-time-writes-a-hint),
+> [its tick](#the-operator-ticks-the-hint) and [the operator's own edits](#the-operator-at-any-point),
+> which run today. What runs instead of the rest is in the marker at the top of this document.
 
 Three moments, and the shape is validation's check set exactly
 ([20](20-validation.md#when-the-check-set-is-written)), for its reason. **A watch written at plan
@@ -301,10 +303,10 @@ exists: what _worked_ would look like, in words.
 
 ### The planner, at plan time, writes a hint
 
-**Not yet built.** The plan document's `watch` block is replaced by **`watchHint`**
-([08](08-planning.md#the-plan-document), `src/plans/planDocument.ts`), and it is **required** wherever
+The plan document carries **`watchHint`** ([08](08-planning.md#the-plan-document),
+`src/plans/planDocument.ts`, its schema in `src/plans/watchHint.ts`), and it is **required** wherever
 `watchNote` is appended — that is, wherever some environment declares a `watch`. It is one of two
-shapes, and a document carrying both or neither is refused:
+shapes, and a hint carrying both or neither is refused:
 
 ```jsonc
 "watchHint": {
@@ -321,10 +323,25 @@ shapes, and a document carrying both or neither is refused:
 "watchHint": { "none": "Docs-only change: nothing running behaves differently" }
 ```
 
-It carries no query, no `tolerate`, no threshold and no `presence`. Those are facts about code, and the
-planner is writing before the code exists. `kind` and `source` are there so the operator can see what
-_sort_ of evidence is coming, and so the planner has to think about where it would be read. The assessor
-is free to change both.
+It carries no query, no `tolerate`, no threshold and no `presence` — an intent naming any other key is
+refused. Those are facts about code, and the planner is writing before the code exists. `kind` and
+`source` are there so the operator can see what _sort_ of evidence is coming, and so the planner has to
+think about where it would be read. The assessor is free to change both.
+
+**One test decides whether a hint is required, and both halves read it.** `watchHintRequired`
+(`src/plans/planning.ts`) is true when some environment declares a `watch`; `watchNote` is empty
+exactly when it is false, and the planner's two submission paths — `plan_submit` and the plan file —
+pass it to `validatePlanDocument` as `{ watchHintRequired }`, which refuses a document with no hint.
+A hint that is present is held to its shape everywhere, required or not; what is _not_ required
+anywhere else is its presence. An amendment, a regroup or a rewrite at the operator's own keyboard
+is never asked for one, and a document without one **leaves the standing hint alone**, as an absent
+`validation` or `watch` block leaves its rows alone. A replan that carries one replaces it.
+
+**The `watch` block still parses, and is no longer asked for.** `watchNote` asks for the hint and
+tells the planner not to write executable checks; the tool schema says the same of `watch`. A plan
+that carries one anyway — a planner or a template override written before the hint — is ingested and
+dry-run exactly as before, until [the assessor writes the checks](#the-assessor-on-delivered-writes-the-checks)
+and the block goes.
 
 **For a defect this is still the strong case: the bug report _is_ the signal.** A ticket reading _"job
 X keeps timing out in proc Y"_ contains its own intent — job X stops timing out — and the planner can
@@ -335,19 +352,22 @@ still running. The proof comes later than it did, but it is the same proof.
 
 ### The operator ticks the hint
 
-**Not yet built.** The hint is a caveat on the approval card ([08](08-planning.md#what-the-plan-raises-is-acknowledged-not-merely-rendered)),
-`kind: 'watch'`, labelled **How we'll know it worked**, with the intents, or the `none` and its
-reason, as its detail. Approve is held until it is ticked, exactly as it is held for the planner's
-risks.
+The hint is a caveat on the approval card ([08](08-planning.md#what-the-plan-raises-is-acknowledged-not-merely-rendered)),
+id `watch`, labelled **How we'll know it worked**, with the intents — one line each, `**signal** · logs —
+The statement job stops timing out`, its `why` in brackets — or `Nothing to watch:` and the `none`
+reason, as its detail (`watchHintDetail`, `src/plans/watchHint.ts`). `planCaveats` raises it from the
+stored `plan.watchHint`, so a plan with no hint raises none. Approve is held until it is ticked,
+exactly as it is held for the planner's risks.
 
 It is the one caveat raised on **every** plan where a hint is required, and that departs on purpose
 from the rule that a gate firing on every plan gets ticked blind. A tick there is not a warning being
 acknowledged. It is the operator agreeing, before anything is built, what _worked_ is going to mean,
 and that is the agreement the whole outcome is measured against. The detail is different on every
-plan, which is what stops it becoming a reflex. A tick can carry words like any caveat's, and they
-reach the assessor with the hint.
+plan, which is what stops it becoming a reflex. A tick can carry words like any caveat's, kept on the
+plan as any caveat's are. **Not yet built:** those words reach the assessor with the hint.
 
-On a deployment where no environment declares a `watch`, no hint is asked for and no box is drawn.
+On a deployment where no environment declares a `watch`, no hint is asked for, so no box is drawn
+unless a planner volunteers one — and one volunteered is held to the same shape.
 
 ### While the work happens, nothing is asked
 
@@ -1267,23 +1287,27 @@ A staged environment adds one block to its `watch`:
 }
 ```
 
-**Planners are told.** Where any watched environment declares an `exposure`, the watch notes a planner
-and a working agent read (`watchNote`, `watchDeclareNote`, `src/plans/planning.ts`) append a paragraph
-naming it: every query — signal, measure and presence alike — is scoped to traffic on a build carrying
+**Query authors are told.** Where any watched environment declares an `exposure`, the watch note a
+working agent reads (`watchDeclareNote`, `src/plans/planning.ts`) appends a paragraph naming it: every query — signal, measure and presence alike — is scoped to traffic on a build carrying
 the change, as that environment's `schema` says to. Appended after the schema prose, never
 interpolated ([05](05-dispatcher.md#prompt-templates)). Unscoped, "zero failures" may only mean nobody
-has upgraded yet. → [Exposure](#exposure)
+has upgraded yet. The planner's `watchNote` carries the environments' schema prose and not this
+paragraph: a hint has no query to scope. → [Exposure](#exposure)
 
 ## In the cockpit
 
 → [17](17-cockpit.md). Four surfaces and one changed reading.
 
-**Not yet built**, in this section: the plan sheet's _How we'll know it worked_ section and its
-tick; the Signals card's proposed set with **Accept**, **Edit** and **Send back**; source chips on
+**Not yet built**, in this section: the Signals card's proposed set with **Accept**, **Edit** and **Send back**; source chips on
 every check; the operator-reading asks; and the outcome card at the top of the goal page, with
 **Discuss in Claude**. Each is described where it belongs above
 ([the hint](#the-planner-at-plan-time-writes-a-hint), [the accept](#the-operator-accepts-the-set),
 [sources](#sources), [the outcome](#the-outcome)). What follows is what runs today.
+
+**The plan sheet draws the hint** as a _How we'll know it worked_ section above the checks
+(`web/src/components/WatchHintDigest.tsx`): each intent with its kind and source as chips, what it
+`says`, and its `why` muted under it — or _Nothing to watch_ and the `none` reason. A plan from before
+hints draws nothing there. The tick itself is the approval card's, beside the risks.
 
 **The plan sheet** draws the watch beside the validation checks, each check with its query, its
 expectation, and the dry-run readings under it (`web/src/components/WatchDigest.tsx`). Read-only but
@@ -1468,12 +1492,14 @@ adds one to an environment with open windows has those windows probed on their n
 the correct reading of _not yet known to be exposed_; the first that clears the floor restarts its
 clock at `forMs`. Declared in `WATCH_COLUMNS`.
 
+**`plans.watch_hint`** is the hint as JSON, a column on an existing table and so declared in
+`PLAN_COLUMNS`. Null means _a plan from before hints existed_ — or one written where no hint was asked
+for: no hint is drawn and no box is ticked (and, once it is built, the assessor is asked to author the
+watch from the goal alone). That is the honest reading, so no backfill is needed. It is written only
+by `setPlanWatchHint` from `ingestPlanDocument`, and only when the document carries a hint.
+
 **Not yet built**, and each with its migration stated now so it cannot be forgotten later:
 
-- **`plans.watch_hint`**, the hint as JSON. It is a column on an existing table, so it needs a
-  `ColumnMigrations` entry. Null means _a plan from before hints existed_: no hint is drawn, no box is
-  ticked, and the assessor is asked to author the watch from the goal alone. That is the honest
-  reading, so no backfill is needed.
 - **`watch_plans`**, one row per goal: `authored_at`, `note`, `empty_reason`, `accepted_at`,
   `sent_back` and its words. It is a new table, and `validation_plans`' shape is the model. Null
   `authored_at` means _owed_, which is what holds an arrival back. On the boot that takes this build,
@@ -1535,13 +1561,13 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   before it they fall back to the window ending now; a measure from before the token reads `unknown`
   on that dry run with no baseline; the observe command is handed `LUBBDUBB_WATCH_UNTIL`; and the merge
   is the provider's instant with `recorded_at` standing in (`test/watchUntil.test.ts`).
+- a plan document with neither `watchHint.intents` nor `watchHint.none`, or both, is refused wherever
+  `watchNote` is appended, and accepted with neither where it is not; the approval is held until the
+  `watch` caveat is ticked, and a plan with no hint raises none; `plans.watch_hint` reaches a database
+  from before it (`test/watchHint.test.ts`).
 
 **Not yet built**, and owed by the changes that build each piece:
 
-- a plan document with neither `watchHint.intents` nor `watchHint.none`, or both, is refused wherever
-  `watchNote` is appended, and accepted with neither where it is not;
-- the approval is held until the `watch` caveat is ticked, and no `watch` caveat is raised on a
-  deployment with no environment declaring a `watch`;
 - `watch_plan` with no checks and no `emptyReason` is refused, and authors nothing;
 - `watch_plan` refuses a goal with no standing delivery;
 - an assessor whose turn ends after the check set leaves the watch owed, and rule `watch-plan`

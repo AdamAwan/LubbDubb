@@ -278,6 +278,7 @@ test('the status comment carries the planner narrative, folded, once there is on
     evidence: [{ path: 'src/cache.ts', line: 88, note: 'the stale write' }],
     document: '# Why\n\nBecause.',
     discussing: false,
+    watchHint: null,
     statusCommentRef: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',

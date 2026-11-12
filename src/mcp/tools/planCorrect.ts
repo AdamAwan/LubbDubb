@@ -67,6 +67,7 @@ export const planCorrect: ToolFactory = ({ deps, task, ok }) => ({
         parts: args.parts ?? [],
         validation: args.validation,
         watch: args.watch,
+        watchHint: args.watchHint,
       },
       note: typeof args.note === 'string' ? args.note : '',
       author: 'agent',

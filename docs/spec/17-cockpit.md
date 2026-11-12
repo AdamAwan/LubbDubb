@@ -7812,11 +7812,16 @@ surfaces.
 
 ### The watch digest
 
-> **Not yet built:** the plan sheet stops drawing executable checks. It draws the plan's **watch
-> hint** as a _How we'll know it worked_ section, with a caveat box ticked like the risks, and the
-> pending-change control below moves to the Signals card, where the assessor's set is accepted after
-> `delivered`. The goal page gains an outcome card above the Watch pane, with **Discuss in Claude**.
+> **Not yet built:** the plan sheet stops drawing executable checks, and the pending-change control
+> below moves to the Signals card, where the assessor's set is accepted after `delivered`. The goal
+> page gains an outcome card above the Watch pane, with **Discuss in Claude**.
 > → [29](29-post-deploy-watch.md#who-writes-it-and-when), [29](29-post-deploy-watch.md#the-outcome)
+
+`WatchHintDigest` (`web/src/components/WatchHintDigest.tsx`) draws the plan's **watch hint** first, as
+a _How we'll know it worked_ section: each intent's kind and source as chips, then what it `says`, its
+`why` muted beneath — or _Nothing to watch_ and the `none` reason. It is the agreement the approval's
+`watch` caveat box asks the operator to tick, which the card draws beside the risks; a plan from
+before hints draws nothing. → [29](29-post-deploy-watch.md#the-operator-ticks-the-hint)
 
 `WatchDigest` (`web/src/components/WatchDigest.tsx`) — what a running system would have to show for
 this work to have done what it claimed, drawn under the validation digest because it is the later

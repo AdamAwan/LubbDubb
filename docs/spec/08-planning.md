@@ -435,13 +435,14 @@ a document that gives one is refused; and a check is only ever something running
 can answer ([the bar](20-validation.md#the-bar)) — what the diff, the suite or a green build settles
 is `acceptance`'s business, not validation's.
 
-**Not yet built: `watchHint`.** The `watch` block, executable post-deploy checks written at plan
-time, is replaced by a **hint**: what _worked_ would look like once the change is running, as
-`intents` (each a `kind`, a `source`, a sentence it `says` and a `why`) or as `none` with a reason.
-It is required wherever `watchNote` is appended, meaning wherever some environment declares a `watch`,
-and a document with both shapes or neither is refused. It carries no query. The queries are written
-by the assessor on `delivered`, against merged code, because a design that changes in review makes a
-plan-time query wrong.
+**`watchHint`** is what _worked_ would look like once the change is running, as `intents` (each a
+`kind`, a `source`, a sentence it `says` and an optional `why`) or as `none` with a reason. It is
+required wherever `watchNote` is appended, meaning wherever some environment declares a `watch` —
+`watchHintRequired`, handed to `validatePlanDocument` by the planner's two submission paths — and a
+hint with both shapes or neither is refused wherever one appears. It carries no query. The `watch`
+block, executable post-deploy checks written at plan time, still parses but is no longer asked for;
+**not yet built:** it goes, and the queries are written by the assessor on `delivered`, against merged
+code, because a design that changes in review makes a plan-time query wrong.
 → [29](29-post-deploy-watch.md#the-planner-at-plan-time-writes-a-hint)
 
 `parsePlanDocument(raw)` parses JSON then validates; `validatePlanDocument(value)` validates an
@@ -949,12 +950,13 @@ that fires on every plan is one operators learn to tick blind. The field guide a
 to omit either when there is nothing genuine to raise; `planCaveats` already draws no box for an empty
 field.
 
-**Not yet built: the watch hint is a caveat on every plan that carries one**, labelled _How we'll
-know it worked_, with the intents or the `none` and its reason as its detail. That departs on purpose
-from the paragraph above. This box is not a warning being acknowledged. It is the operator agreeing,
-before anything is built, what the goal's [outcome](29-post-deploy-watch.md#the-outcome) will be
-measured against, and its detail is different on every plan. `planCaveats` raises it from
-`plan.watchHint`, and raises nothing on a deployment where no environment declares a `watch`.
+**The watch hint is a caveat on every plan that carries one**, id `watch`, labelled _How we'll know it
+worked_, with the intents or the `none` and its reason as its detail. That departs on purpose from the
+paragraph above. This box is not a warning being acknowledged. It is the operator agreeing, before
+anything is built, what the goal's [outcome](29-post-deploy-watch.md#the-outcome) will be measured
+against, and its detail is different on every plan. `planCaveats` raises it from the stored
+`plan.watchHint`, so it raises nothing for a plan from before hints, nor — since no hint is asked for
+there — on a deployment where no environment declares a `watch`.
 → [29](29-post-deploy-watch.md#the-operator-ticks-the-hint)
 
 `outOfScope` and `alternatives` are deliberately **not** caveats. Both are the planner being explicit

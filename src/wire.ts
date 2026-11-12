@@ -1118,6 +1118,7 @@ export type {
   GoalWatchDeclaration,
   GoalWatchInput,
   GoalWatchKind,
+  WatchHint,
   StackLanding,
   StateQuery,
   TaskSummary,

@@ -61,6 +61,7 @@ export interface AgentManagerOptions {
   docsFolderPrefix?: string | string[];
   mcp?: McpChannel;
   watch?: WatchDryRunner;
+  watchHintRequired?: boolean;
   errors?: ErrorRecorder;
 }
 
