@@ -112,6 +112,7 @@ const TASK_KIND: Record<HumanTask['kind'], AskKind> = {
   outcome: 'close_out',
   validate: 'validate',
   watch: 'watch',
+  watch_reading: 'watch_reading',
   unwatched: 'unwatched',
   burn: 'burn',
   supply: 'supply',

@@ -72,7 +72,24 @@ CREATE TABLE IF NOT EXISTS watch_readings (
   rows_read   INTEGER,              -- NULL when the observation did not answer
   value       REAL,                 -- a measure's *now*; NULL for a signal and for anything that did not answer
   detail      TEXT,                 -- why, in words, for anything but a clean one
+  read_by     TEXT,                 -- 'harness' | 'operator'; NULL reads 'harness', which every earlier reading was
   PRIMARY KEY (goal_ref, environment, check_id, read_at)
+);
+
+-- What each watch_reading bench row asks (see WatchStore): one check on a source only a
+-- person can run, on one environment, over one period -- the baseline before the merge or
+-- the window's closing reading. The human_tasks row is the ask; this is what it is about,
+-- with the period it was filed with, so the answer is judged against the query the person
+-- was shown. One per check per environment per ask, by the unique key.
+CREATE TABLE IF NOT EXISTS watch_asks (
+  task_id     TEXT PRIMARY KEY,     -- the human_tasks row, kind 'watch_reading'
+  goal_ref    TEXT NOT NULL,        -- issue:<n>
+  check_id    TEXT NOT NULL,
+  environment TEXT NOT NULL,
+  ask         TEXT NOT NULL,        -- 'baseline' | 'closing'
+  since       TEXT NOT NULL,        -- what {since} was filled in with
+  until       TEXT NOT NULL,        -- what {until} was filled in with
+  UNIQUE (goal_ref, check_id, environment, ask)
 );
 
 -- A goal's post-deploy watch as the assessor wrote it with watch_plan, and what the

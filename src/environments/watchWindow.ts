@@ -2,6 +2,7 @@ import type { GoalArrival, WatchWindow } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
 import { exposureWaitMs } from './exposure.js';
+import type { WatchPeriod } from './watchResult.js';
 
 // → docs/spec/24-environments.md
 
@@ -20,6 +21,25 @@ const DEFAULT_WINDOW_MS = 48 * 60 * 60 * 1000;
  */
 export function watchWindowMs(environment: EnvironmentConfig): number {
   return environment.watch?.forMs ?? DEFAULT_WINDOW_MS;
+}
+
+/**
+ * The period a dry run and a baseline read: one window's length ending at the merge, or ending now
+ * where nothing has merged yet. → docs/spec/29-post-deploy-watch.md#until-and-the-baseline-that-ends-at-the-merge
+ */
+export function beforeMergePeriod(environment: EnvironmentConfig, merged: number | null, now: number): WatchPeriod {
+  const until = merged ?? now;
+  return { since: new Date(until - watchWindowMs(environment)).toISOString(), until: new Date(until).toISOString() };
+}
+
+const DEFAULT_OPERATOR_GRACE_MS = 72 * 60 * 60 * 1000;
+
+/**
+ * How long a reading only a person can take stays asked for after the window it belongs to closed.
+ * → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
+ */
+export function operatorGraceMs(environment: EnvironmentConfig | undefined): number {
+  return environment?.watch?.operatorGraceMs ?? DEFAULT_OPERATOR_GRACE_MS;
 }
 
 /**

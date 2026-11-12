@@ -134,6 +134,7 @@ function watchActions(then: Then, refresh: Refresh) {
     },
     deleteWatchCheck: (issueNumber, checkId) => then(api.deleteWatchCheck(issueNumber, checkId)),
     extendWatch: (issueNumber, environment) => then(api.extendWatch(issueNumber, environment)),
+    answerWatchAsk: (id, answer, presence) => then(api.answerWatchAsk(id, answer, presence)),
     discussWatchOutcome: (issueNumber) => then(api.discussWatchOutcome(issueNumber)),
     setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
   } satisfies Partial<CockpitActions>;

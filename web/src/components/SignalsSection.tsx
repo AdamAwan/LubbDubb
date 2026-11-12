@@ -37,6 +37,7 @@ import { isProposed } from '../view/watchChecks.js';
 export function SignalsSection({
   signals,
   watchPlan,
+  waitingOnYou,
   sources,
   refUrls,
   onSave,
@@ -47,6 +48,8 @@ export function SignalsSection({
   signals: GoalWatch[];
   /** The assessor's record for this goal's watch, or null where nothing was ever asked of it. */
   watchPlan: WatchPlanRecord | null;
+  /** The checks whose baseline is asked of a person and not yet answered. */
+  waitingOnYou: ReadonlySet<string>;
   /** Every source a watched environment declares; the form offers a choice only where there is one to make. */
   sources: WatchSourceDeclaration[];
   refUrls: Record<string, string>;
@@ -82,6 +85,7 @@ export function SignalsSection({
           <SignalRow
             key={check.id}
             check={check}
+            waitingOnYou={waitingOnYou.has(check.id)}
             sources={sources}
             refUrls={refUrls}
             onEdit={() => setOpen(check.id)}

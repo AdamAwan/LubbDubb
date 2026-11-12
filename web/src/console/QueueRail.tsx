@@ -53,6 +53,7 @@ export const KIND_VERB: Record<NeedKind, string> = {
   validate: 'Run the checks',
   validation_plan: 'Decide',
   watch: 'Look',
+  watch_reading: 'Run it',
   unwatched: 'Look',
   burn: 'Look',
   limit: 'Look',

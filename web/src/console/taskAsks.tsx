@@ -43,6 +43,8 @@ export function taskBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   switch (row.kind) {
     case 'watch':
       return <WatchFinding task={task} view={view} actions={actions} />;
+    case 'watch_reading':
+      return <WatchReadingAsk task={task} view={view} actions={actions} />;
     case 'close_out':
       return <CloseOutAsk task={task} view={view} actions={actions} inPane={checksBelow} />;
     case 'validate':
@@ -317,6 +319,73 @@ function WatchFinding({
           onClose={() => setRaising(false)}
         />
       )}
+    </>
+  );
+}
+
+/**
+ * A reading only a person can take: the query, period filled in, is the row's own detail; under it a box
+ * to paste what it returned — rows as JSON, or a measure's one number — and a second for a signal's
+ * presence rows. The answer goes through the same contract a harness reading does.
+ * → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
+ */
+function WatchReadingAsk({
+  task,
+  view,
+  actions,
+}: {
+  task: HumanTask;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const ask = (view.state.watchAsks ?? []).find((a) => a.taskId === task.id);
+  const [answer, setAnswer] = useState('');
+  const [presence, setPresence] = useState('');
+  const signal = ask?.presence != null;
+  const ready = answer.trim() !== '' && (!signal || presence.trim() !== '');
+  return (
+    <>
+      <TaskLede task={task} view={view} />
+      {ask !== undefined && (
+        <div className="cn-ask-paste">
+          <label>
+            {ask.kind === 'measure'
+              ? 'What it returned — the one row as JSON, or just its number'
+              : 'The rows it returned, as JSON'}
+            <textarea
+              className="cn-ask-paste-box"
+              rows={ask.kind === 'measure' ? 2 : 5}
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder={ask.kind === 'measure' ? '1190' : '[{ "timestamp": "…", "message": "…" }]'}
+            />
+          </label>
+          {signal && (
+            <label>
+              The presence query&rsquo;s rows, as JSON
+              <textarea
+                className="cn-ask-paste-box"
+                rows={3}
+                value={presence}
+                onChange={(e) => setPresence(e.target.value)}
+                placeholder='[{ "timestamp": "…" }]'
+              />
+            </label>
+          )}
+          <ButtonRow>
+            <AsyncButton
+              usage="watch.edit"
+              tone="primary"
+              disabled={!ready}
+              onClick={() => actions.answerWatchAsk(task.id, answer, signal ? presence : null)}
+              title="Record this as the reading, taken by you — judged against what the check declared, exactly as a reading the harness took"
+            >
+              Record the reading
+            </AsyncButton>
+          </ButtonRow>
+        </div>
+      )}
+      <TaskAnswers task={task} view={view} actions={actions} />
     </>
   );
 }

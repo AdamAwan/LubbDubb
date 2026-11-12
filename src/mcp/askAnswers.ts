@@ -215,6 +215,25 @@ const validate = humanTask((row) => {
   };
 });
 
+/* A reading only a person can take: run on the operator's own machine, under their credential, and answered
+   through the tool the cockpit's paste box answers through. */
+const watchReading: Answerer = (row, ctx) => {
+  const subject = subjectOf(row, 'human_task');
+  if (subject === null) return unanswerable(ctx);
+  return {
+    in: 'claude-code',
+    tool: 'watch_reading',
+    args: { ask: subject.taskId },
+    choose: {
+      answer:
+        'What the query returned when you ran it here, with the operator’s own client and credential: the rows as ' +
+        'JSON, or a measure’s one number. Never a number you did not read.',
+      presence: 'A signal’s presence query’s rows, as JSON. Left out for a measure.',
+    },
+    readFirst: [{ tool: 'watch_reading', args: {} }],
+  };
+};
+
 const supply = humanTask((row) => ({
   ...watchInstead(row),
   note: 'If it asks for a secret or a credential, the operator supplies it themselves — never through this chat.',
@@ -329,6 +348,7 @@ const ANSWER_WITH: Record<AskKind, Answerer> = {
   })),
   validate,
   watch: humanTask(),
+  watch_reading: watchReading,
   unwatched: humanTask(watchInstead),
   supply,
   burn,

@@ -19,12 +19,15 @@ import { isProposed } from '../view/watchChecks.js';
  */
 export function SignalRow({
   check,
+  waitingOnYou,
   sources,
   refUrls,
   onEdit,
   onDelete,
 }: {
   check: GoalWatch;
+  /** Its baseline is asked of a person, who has not answered yet. */
+  waitingOnYou: boolean;
   sources: WatchSourceDeclaration[];
   refUrls: Record<string, string>;
   onEdit: () => void;
@@ -43,6 +46,15 @@ export function SignalRow({
             {check.id}
           </Tag>
           <AuthorChips check={check} />
+          {waitingOnYou && (
+            <Tag
+              tone="amber"
+              fill
+              title="Only a person can run this source: its baseline is asked of you under Needs you"
+            >
+              waiting on you
+            </Tag>
+          )}
         </HeadRow>
         <p className="cn-sig-expect">{expectation(check)}</p>
         <pre className="cn-sig-query">{check.query}</pre>

@@ -313,6 +313,7 @@ export function Signals({
   const { issue, signals, plan, watchPlan } = page;
   if (signals.length === 0 && plan === null) return null;
   const pending = awaitingAccept(signals, watchPlan);
+  const asked = new Set(page.watchAsks.filter((a) => a.ask === 'baseline').map((a) => a.checkId));
   return (
     <section className="cn-card" id="cn-signals">
       <h3>
@@ -320,6 +321,7 @@ export function Signals({
         <i className="cn-n">
           {signals.length === 1 ? '1 reading' : `${signals.length} readings`}
           {pending > 0 && ` · ${pending} awaiting you`}
+          {asked.size > 0 && ` · ${asked.size} waiting on you to run`}
         </i>
         <span className="cn-more">
           asked of a live environment after this ships
@@ -338,6 +340,7 @@ export function Signals({
         <SignalsSection
           signals={signals}
           watchPlan={watchPlan}
+          waitingOnYou={asked}
           sources={sources}
           refUrls={refUrls}
           onSave={(check) => actions.saveWatchCheck(issue.number, check)}

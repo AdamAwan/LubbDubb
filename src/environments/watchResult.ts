@@ -56,21 +56,61 @@ export function preparedQuery(
 }
 
 export function parseWatchResult(stdout: string, checkId: string, kind: WatchQueryKind): WatchResult {
+  return parseRows(stdout, kind, checkId, OBSERVATION_SAID);
+}
+
+/**
+ * A person's answer to a `watch_reading` ask, through the same output contract as a harness reading —
+ * apart from the id echo, which a person who copied the query and pasted its answer stands in for. A
+ * measure may be answered with its one number alone.
+ * → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
+ */
+export function parseOperatorAnswer(answer: string, kind: WatchQueryKind): WatchResult {
+  const text = answer.trim();
+  if (kind === 'measure' && /^-?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(text)) {
+    const value = Number(text);
+    return { rows: [{ value }], value, verdict: 'answered', detail: null };
+  }
+  return parseRows(text, kind, null, ANSWER_SAID);
+}
+
+interface ContractWords {
+  empty: string;
+  notJson: string;
+  notList: string;
+  notRows: string;
+}
+
+const OBSERVATION_SAID: ContractWords = {
+  empty: 'the observation exited 0 and printed nothing',
+  notJson: 'the observation did not answer with JSON',
+  notList: 'the observation answered with something other than a list of rows',
+  notRows: 'the observation answered with a list of something other than rows',
+};
+
+const ANSWER_SAID: ContractWords = {
+  empty: 'the answer was empty',
+  notJson: 'the answer was not JSON rows, or one number for a measure',
+  notList: 'the answer was something other than a list of rows',
+  notRows: 'the answer was a list of something other than rows',
+};
+
+function parseRows(stdout: string, kind: WatchQueryKind, echo: string | null, said: ContractWords): WatchResult {
   const text = stdout.trim();
-  if (text === '') return unanswered('the observation exited 0 and printed nothing');
+  if (text === '') return unanswered(said.empty);
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch (err) {
-    return unanswered(`the observation did not answer with JSON: ${(err as Error).message}`);
+    return unanswered(`${said.notJson}: ${(err as Error).message}`);
   }
-  if (!Array.isArray(json)) return unanswered('the observation answered with something other than a list of rows');
+  if (!Array.isArray(json)) return unanswered(said.notList);
   const rows: WatchRow[] = [];
   for (const entry of json) {
-    if (typeof entry !== 'object' || entry === null || Array.isArray(entry))
-      return unanswered('the observation answered with a list of something other than rows');
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return unanswered(said.notRows);
     const row = entry as WatchRow;
-    if (row[WATCH_ID_COLUMN] !== checkId) return unanswered('the command answered without the query it was given');
+    if (echo !== null && row[WATCH_ID_COLUMN] !== echo)
+      return unanswered('the command answered without the query it was given');
     rows.push(row);
   }
   if (kind !== 'measure') return { rows, value: null, verdict: 'answered', detail: null };

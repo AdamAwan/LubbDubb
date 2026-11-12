@@ -51,6 +51,7 @@ interface EnvironmentWatch {
   schema?: string;
   describe?: string;
   forMs?: number;
+  operatorGraceMs?: number;
   holds?: EnvironmentGate[];
   queryUrl?: string;
   exposure?: EnvironmentWatchExposure;
@@ -246,6 +247,11 @@ function validateWatch(env: EnvironmentConfig, where: string): void {
   if (watch.forMs !== undefined && !isPositiveMs(watch.forMs))
     throw new Error(
       `${where}: "watch.forMs" must be a positive number of milliseconds — how long a window stays open.`,
+    );
+  if (watch.operatorGraceMs !== undefined && !isPositiveMs(watch.operatorGraceMs))
+    throw new Error(
+      `${where}: "watch.operatorGraceMs" must be a positive number of milliseconds — how long a reading only a ` +
+        'person can take stays asked for after its window closes.',
     );
   validateWatchQueryUrl(watch.queryUrl, where);
   if (watch.holds !== undefined) validateWatchHolds(watch.holds, where);
