@@ -1,9 +1,9 @@
-import { DESK_SETTLED } from '../benchSettlement.js';
+import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { GoalWatch, HumanTask, WatchAsk, WatchAskKind, WatchWindow } from '../types.js';
 import type { WatchAskView } from '../wire.js';
-import { withPeriod } from '../validation/watchQueryShape.js';
+import { groupBy } from '../primitives.js';
 import { settledWatchPeriod } from './exposure.js';
 import { goalMergedAt } from './landings.js';
 import type { EnvironmentConfig } from './policy.js';
@@ -11,7 +11,7 @@ import { dryRunOf } from './watchDryRun.js';
 import { watchCheckBlock, watchCheckQuery } from './watchFinding.js';
 import { watchExpectation } from './watchOutcome.js';
 import { parseOperatorAnswer, type WatchPeriod, type WatchResult } from './watchResult.js';
-import { resolveWatchSource, type WatchSource } from './watchSource.js';
+import { resolveWatchSource, watchSources, type WatchSource } from './watchSource.js';
 import { watchCheckVerdict } from './watchVerdict.js';
 import { beforeMergePeriod, operatorGraceMs } from './watchWindow.js';
 
@@ -42,6 +42,23 @@ interface WatchAskRefused {
 
 type WatchAskAnswered = { ok: true; ask: WatchAsk; recorded: string } | WatchAskRefused;
 
+/** An ask still worth answering: its check is live and still reads a source only a person can run there. */
+interface ResolvedAsk {
+  check: GoalWatch;
+  environment: EnvironmentConfig;
+  source: WatchSource;
+}
+
+interface AskFiling extends ResolvedAsk {
+  ask: WatchAskKind;
+  period: WatchPeriod;
+}
+
+type WatchAskStep =
+  | { kind: 'file'; taskId: string | null; filing: AskFiling }
+  | { kind: 'reopen'; taskId: string; filing: AskFiling }
+  | { kind: 'settle'; taskId: string; why: string; nobodyRan: { ask: WatchAsk; detail: string } | null };
+
 /**
  * The readings only a person can take: the asks for them, and what an answer records. The one object the
  * cockpit's paste box, the desktop `watch_reading` tool and the window pass all go through, so an answer
@@ -49,9 +66,12 @@ type WatchAskAnswered = { ok: true; ask: WatchAsk; recorded: string } | WatchAsk
  */
 export class WatchAsks {
   private readonly now: () => number;
+  /** The environments with a source only a person can run; with none, every method here is a no-op. */
+  private readonly operated: readonly EnvironmentConfig[];
 
   constructor(private readonly deps: WatchAsksDeps) {
     this.now = deps.now ?? (() => Date.now());
+    this.operated = deps.environments.filter((e) => watchSources(e.watch).some((s) => s.runBy === 'operator'));
   }
 
   /**
@@ -60,31 +80,41 @@ export class WatchAsks {
    * before the merge, or the window ending now where nothing has merged yet.
    */
   askBaselines(goalRef: string): void {
+    if (this.operated.length === 0) return;
     const { store } = this.deps;
-    if (!this.watching()) return;
+    const mine = store.watches.listWatchAsks(goalRef);
+    const asked = new Set(mine.filter((a) => a.ask === 'baseline').map((a) => `${a.checkId} ${a.environment}`));
+    const standing = new Set(mine.map((a) => a.taskId));
+    const existing = tasksByTitle(store.humanTasks.listHumanTasksOfKind(KIND));
     const merged = goalMergedAt(store.environments.listGoalLandings(), goalRef);
+    const steps: WatchAskStep[] = [];
     for (const check of store.watches.listLiveGoalWatches(goalRef))
-      for (const { environment, source } of this.operatorEnvironments(check)) {
-        if (store.watches.findWatchAsk({ goalRef, checkId: check.id, environment: environment.name, ask: 'baseline' }))
-          continue;
+      for (const environment of this.operated) {
+        const source = operatorSource(environment, check);
+        if (source === null || asked.has(`${check.id} ${environment.name}`)) continue;
         const period = beforeMergePeriod(environment, merged, this.now());
-        this.file(check, environment, source, 'baseline', period);
+        const step = fileStep({ check, environment, source, ask: 'baseline', period }, existing, standing);
+        if (step !== null) steps.push(step);
       }
+    this.apply(steps);
   }
 
   /**
    * The window pass's part, run below settling: the closing ask for each window that has closed within
    * grace, a baseline its window outran retracted, a closing ask past grace settled `unknown`, and any ask
-   * whose check was changed or dropped retracted.
+   * whose check was changed or dropped retracted. Takes the windows and checks the desk already read.
    */
-  pass(): void {
+  pass(read?: { windows: readonly WatchWindow[]; checks: readonly GoalWatch[] }): void {
+    if (this.operated.length === 0) return;
     const { store, errors } = this.deps;
-    if (!this.watching()) return;
     try {
-      const windows = store.watches.listWatchWindows();
-      const checks = store.watches.listGoalWatches();
-      this.askClosings(windows, checks);
-      this.settleAsks(windows, checks);
+      const windows = read?.windows ?? store.watches.listWatchWindows();
+      const checks = read?.checks ?? store.watches.listGoalWatches();
+      const tasks = store.humanTasks.listHumanTasksOfKind(KIND);
+      const asks = store.watches.listWatchAsks();
+      const closings = this.askClosings(windows, checks, tasks, asks);
+      const planned = new Set(closings.flatMap((s) => (s.taskId === null ? [] : [s.taskId])));
+      this.apply([...closings, ...this.settleAsks(windows, checks, tasks, asks, planned)]);
     } catch (err) {
       errors?.record({ source: 'cycle', message: `asking for operator readings failed: ${(err as Error).message}` });
     }
@@ -92,17 +122,14 @@ export class WatchAsks {
 
   /** Every ask still open, with its query ready to run. */
   open(read?: { asks: readonly WatchAsk[]; checks: readonly GoalWatch[] }): WatchAskView[] {
+    if (this.operated.length === 0) return [];
     const { store } = this.deps;
-    if (!this.watching()) return [];
     const open = read?.asks ?? openWatchAsks(store);
     if (open.length === 0) return [];
-    const checks = new Map((read?.checks ?? store.watches.listGoalWatches()).map((c) => [`${c.originRef} ${c.id}`, c]));
+    const checks = checksByKey(read?.checks ?? store.watches.listGoalWatches());
     return open.flatMap((ask) => {
-      const check = checks.get(`${ask.goalRef} ${ask.checkId}`);
-      const environment = this.deps.environments.find((e) => e.name === ask.environment);
-      const source = environment === undefined || check === undefined ? null : operatorSource(environment, check);
-      if (check === undefined || environment === undefined || source === null) return [];
-      return [askView(ask, check, environment, source)];
+      const resolved = this.resolve(ask, checks);
+      return resolved === null ? [] : [askView(ask, resolved)];
     });
   }
 
@@ -126,25 +153,34 @@ export class WatchAsks {
     return { ok: true, ask, recorded };
   }
 
-  private answerable(
-    taskId: string,
-  ): { ok: true; ask: WatchAsk; check: GoalWatch; environment: EnvironmentConfig } | WatchAskRefused {
+  /**
+   * The one rule for whether an ask is still worth answering: its check is still live, its environment
+   * still declared, and the check still reads a source only a person can run there.
+   */
+  private resolve(ask: WatchAsk, checks: ReadonlyMap<string, GoalWatch>): ResolvedAsk | null {
+    const check = checks.get(`${ask.goalRef} ${ask.checkId}`);
+    const environment = this.operated.find((e) => e.name === ask.environment);
+    if (check === undefined || environment === undefined) return null;
+    const source = operatorSource(environment, check);
+    return source === null ? null : { check, environment, source };
+  }
+
+  private answerable(taskId: string): ({ ok: true; ask: WatchAsk } & ResolvedAsk) | WatchAskRefused {
     const { store } = this.deps;
     const task = store.humanTasks.getHumanTask(taskId);
     if (task?.kind !== KIND) return { ok: false, status: 404, error: 'no reading is asked for under that id' };
     if (task.status !== 'open')
       return { ok: false, status: 409, error: 'that ask has already been answered or settled' };
     const ask = store.watches.getWatchAsk(taskId);
-    const check =
-      ask === null ? undefined : store.watches.listLiveGoalWatches(ask.goalRef).find((c) => c.id === ask.checkId);
-    const environment = ask === null ? undefined : this.deps.environments.find((e) => e.name === ask.environment);
-    if (ask === null || check === undefined || environment === undefined || operatorSource(environment, check) === null)
+    const resolved =
+      ask === null ? null : this.resolve(ask, checksByKey(store.watches.listLiveGoalWatches(ask.goalRef)));
+    if (ask === null || resolved === null)
       return {
         ok: false,
         status: 409,
         error: 'the check this asked about has changed or gone, so nothing is recorded',
       };
-    return { ok: true, ask, check, environment };
+    return { ok: true, ask, ...resolved };
   }
 
   private recordClosing(ask: WatchAsk, check: GoalWatch, presence: WatchResult | null, reading: WatchResult): string {
@@ -175,110 +211,155 @@ export class WatchAsks {
       : `the baseline read ${String(dryRun.rows)} rows`;
   }
 
-  private askClosings(windows: readonly WatchWindow[], checks: readonly GoalWatch[]): void {
-    const { store } = this.deps;
+  private askClosings(
+    windows: readonly WatchWindow[],
+    checks: readonly GoalWatch[],
+    tasks: readonly HumanTask[],
+    asks: readonly WatchAsk[],
+  ): WatchAskStep[] {
     const now = this.now();
+    const byGoal = groupBy(checks, (c) => c.originRef);
+    const asked = new Map(asks.map((a) => [askKey(a), a]));
+    const status = new Map(tasks.map((t) => [t.id, t.status]));
+    const standing = new Set(asks.map((a) => a.taskId));
+    const existing = tasksByTitle(tasks);
+    const steps: WatchAskStep[] = [];
     for (const window of windows) {
       if (window.settledAt === null) continue;
-      const environment = this.deps.environments.find((e) => e.name === window.environment);
-      if (environment?.watch === undefined) continue;
+      const environment = this.operated.find((e) => e.name === window.environment);
+      if (environment === undefined) continue;
       const period = settledWatchPeriod(window);
       if (Date.parse(period.until) + operatorGraceMs(environment) <= now) continue;
-      for (const check of checks) {
-        if (check.originRef !== window.goalRef) continue;
+      for (const check of byGoal.get(window.goalRef) ?? []) {
         const source = operatorSource(environment, check);
         if (source === null) continue;
         const key = { goalRef: window.goalRef, checkId: check.id, environment: environment.name };
-        const baseline = store.watches.findWatchAsk({ ...key, ask: 'baseline' });
-        if (baseline !== null)
-          this.retract(baseline.taskId, `${environment.name}'s window closed before the baseline was taken`);
-        const closing = store.watches.findWatchAsk({ ...key, ask: 'closing' });
-        if (closing !== null && closing.until === period.until) continue;
-        this.file(check, environment, source, 'closing', period);
+        const baseline = asked.get(askKey({ ...key, ask: 'baseline' }));
+        if (baseline !== undefined && status.get(baseline.taskId) === 'open')
+          steps.push(retraction(baseline.taskId, `${environment.name}'s window closed before the baseline was taken`));
+        const closing = asked.get(askKey({ ...key, ask: 'closing' }));
+        if (closing?.until === period.until) continue;
+        const step = fileStep({ check, environment, source, ask: 'closing', period }, existing, standing);
+        if (step !== null) steps.push(step);
       }
     }
+    return steps;
   }
 
-  private settleAsks(windows: readonly WatchWindow[], checks: readonly GoalWatch[]): void {
-    const { store } = this.deps;
+  private settleAsks(
+    windows: readonly WatchWindow[],
+    checks: readonly GoalWatch[],
+    tasks: readonly HumanTask[],
+    asks: readonly WatchAsk[],
+    planned: ReadonlySet<string>,
+  ): WatchAskStep[] {
+    const open = tasks.filter((t) => t.status === 'open' && !planned.has(t.id));
+    if (open.length === 0) return [];
     const now = this.now();
-    for (const task of store.humanTasks.listHumanTasksOfKind(KIND)) {
-      if (task.status !== 'open') continue;
-      const ask = store.watches.getWatchAsk(task.id);
-      const check = ask === null ? undefined : checks.find((c) => c.originRef === ask.goalRef && c.id === ask.checkId);
-      const environment = ask === null ? undefined : this.deps.environments.find((e) => e.name === ask.environment);
-      if (
-        ask === null ||
-        check === undefined ||
-        environment === undefined ||
-        operatorSource(environment, check) === null
-      ) {
-        this.retract(task.id, 'the check it asked about was changed or dropped');
+    const byTask = new Map(asks.map((a) => [a.taskId, a]));
+    const byCheck = checksByKey(checks);
+    const byWindow = new Map(windows.map((w) => [`${w.goalRef} ${w.environment}`, w]));
+    const steps: WatchAskStep[] = [];
+    for (const task of open) {
+      const ask = byTask.get(task.id);
+      const resolved = ask === undefined ? null : this.resolve(ask, byCheck);
+      if (ask === undefined || resolved === null) {
+        steps.push(retraction(task.id, 'the check it asked about was changed or dropped'));
         continue;
       }
       if (ask.ask !== 'closing') continue;
-      const window = windows.find((w) => w.goalRef === ask.goalRef && w.environment === ask.environment);
+      const window = byWindow.get(`${ask.goalRef} ${ask.environment}`);
       if (window?.settledAt === null) {
-        this.retract(task.id, `${ask.environment}'s window was extended, and asks again when it closes`);
+        steps.push(retraction(task.id, `${ask.environment}'s window was extended, and asks again when it closes`));
         continue;
       }
+      const { environment } = resolved;
       if (Date.parse(ask.until) + operatorGraceMs(environment) > now) continue;
-      store.watches.recordWatchReading({
-        goalRef: ask.goalRef,
-        environment: ask.environment,
-        checkId: ask.checkId,
-        verdict: 'unknown',
-        rows: null,
-        value: null,
-        detail: `nobody ran it — ${ask.environment} reads this check only through a person, and the ask went unanswered for ${graceWords(environment)} after its window closed`,
+      steps.push({
+        kind: 'settle',
+        taskId: task.id,
+        why: `nobody ran it within ${graceWords(environment)}, so it reads unknown`,
+        nobodyRan: {
+          ask,
+          detail: `nobody ran it — ${ask.environment} reads this check only through a person, and the ask went unanswered for ${graceWords(environment)} after its window closed`,
+        },
       });
-      this.retract(task.id, `nobody ran it within ${graceWords(environment)}, so it reads unknown`);
+    }
+    return steps;
+  }
+
+  private apply(steps: readonly WatchAskStep[]): void {
+    const { store } = this.deps;
+    for (const step of steps) {
+      if (step.kind === 'settle') {
+        if (step.nobodyRan !== null)
+          store.watches.recordWatchReading({
+            goalRef: step.nobodyRan.ask.goalRef,
+            environment: step.nobodyRan.ask.environment,
+            checkId: step.nobodyRan.ask.checkId,
+            verdict: 'unknown',
+            rows: null,
+            value: null,
+            detail: step.nobodyRan.detail,
+          });
+        store.humanTasks.settleHumanTask(step.taskId, 'declined', DESK_SETTLED + step.why);
+        continue;
+      }
+      const { check, environment, ask, period } = step.filing;
+      const detail = askDetail(step.filing);
+      const taskId =
+        step.kind === 'reopen'
+          ? (store.humanTasks.reopenHumanTask(step.taskId, detail), step.taskId)
+          : store.humanTasks.recordHumanTask({
+              title: askTitle(check, environment.name, ask),
+              detail,
+              originRef: check.originRef,
+              kind: KIND,
+              agentId: null,
+              taskId: null,
+            }).task.id;
+      store.watches.recordWatchAsk({
+        taskId,
+        goalRef: check.originRef,
+        checkId: check.id,
+        environment: environment.name,
+        ask,
+        ...period,
+      });
     }
   }
+}
 
-  private file(
-    check: GoalWatch,
-    environment: EnvironmentConfig,
-    source: WatchSource,
-    ask: WatchAskKind,
-    period: WatchPeriod,
-  ): void {
-    const { store } = this.deps;
-    const title = askTitle(check, environment.name, ask);
-    const detail = askDetail(check, environment, source, ask, period);
-    const filed = store.humanTasks.recordHumanTask({
-      title,
-      detail,
-      originRef: check.originRef,
-      kind: KIND,
-      agentId: null,
-      taskId: null,
-    });
-    if (filed.task.status !== 'open') store.humanTasks.reopenHumanTask(filed.task.id, detail);
-    store.watches.recordWatchAsk({
-      taskId: filed.task.id,
-      goalRef: check.originRef,
-      checkId: check.id,
-      environment: environment.name,
-      ask,
-      ...period,
-    });
-  }
+/**
+ * Filing an ask: a new row, the open row refreshed, or a settled row re-opened — where the harness settled
+ * it, or where an edit to the check cleared the ask it answered (`asked` no longer holds its task), so the
+ * question it answered no longer exists. A row a person answered or declined, on a question that still
+ * stands, is theirs and is never re-opened: the step is null.
+ */
+function fileStep(
+  filing: AskFiling,
+  existing: ReadonlyMap<string, HumanTask>,
+  asked: ReadonlySet<string>,
+): WatchAskStep | null {
+  const task = existing.get(`${filing.check.originRef} ${askTitle(filing.check, filing.environment.name, filing.ask)}`);
+  if (task === undefined || task.status === 'open') return { kind: 'file', taskId: task?.id ?? null, filing };
+  return deskSettled(task) || !asked.has(task.id) ? { kind: 'reopen', taskId: task.id, filing } : null;
+}
 
-  private retract(taskId: string, why: string): void {
-    this.deps.store.humanTasks.settleHumanTask(taskId, 'declined', DESK_SETTLED + why);
-  }
+function retraction(taskId: string, why: string): WatchAskStep {
+  return { kind: 'settle', taskId, why, nobodyRan: null };
+}
 
-  private watching(): boolean {
-    return this.deps.environments.some((e) => e.watch !== undefined);
-  }
+function tasksByTitle(tasks: readonly HumanTask[]): Map<string, HumanTask> {
+  return new Map(tasks.map((t) => [`${t.originRef ?? ''} ${t.title}`, t]));
+}
 
-  private operatorEnvironments(check: GoalWatch): { environment: EnvironmentConfig; source: WatchSource }[] {
-    return this.deps.environments.flatMap((environment) => {
-      const source = operatorSource(environment, check);
-      return source === null ? [] : [{ environment, source }];
-    });
-  }
+function checksByKey(checks: readonly GoalWatch[]): Map<string, GoalWatch> {
+  return new Map(checks.map((c) => [`${c.originRef} ${c.id}`, c]));
+}
+
+function askKey(ask: Pick<WatchAsk, 'goalRef' | 'checkId' | 'environment' | 'ask'>): string {
+  return `${ask.goalRef} ${ask.checkId} ${ask.environment} ${ask.ask}`;
 }
 
 /**
@@ -308,14 +389,18 @@ function parseAnswer(
 
 /**
  * The `watch_reading` asks still open, each with what it asks — off the bench rows the caller already holds
- * where it has them, and without reading `watch_asks` at all while nothing is open.
+ * where it has them, one goal's where it names one, and without reading `watch_asks` at all while nothing is
+ * open.
  */
-export function openWatchAsks(store: Store, tasks?: readonly HumanTask[]): WatchAsk[] {
-  const open = (tasks ?? store.humanTasks.listHumanTasksOfKind(KIND)).filter(
-    (t) => t.kind === KIND && t.status === 'open',
+export function openWatchAsks(
+  store: Store,
+  scope: { tasks?: readonly HumanTask[]; goalRef?: string } = {},
+): WatchAsk[] {
+  const open = (scope.tasks ?? store.humanTasks.listHumanTasksOfKind(KIND)).filter(
+    (t) => t.kind === KIND && t.status === 'open' && (scope.goalRef === undefined || t.originRef === scope.goalRef),
   );
   if (open.length === 0) return [];
-  const asks = new Map(store.watches.listWatchAsks().map((a) => [a.taskId, a]));
+  const asks = new Map(store.watches.listWatchAsks(scope.goalRef).map((a) => [a.taskId, a]));
   return open.flatMap((t) => {
     const ask = asks.get(t.id);
     return ask === undefined ? [] : [ask];
@@ -333,7 +418,7 @@ function askTitle(check: GoalWatch, environment: string, ask: WatchAskKind): str
     : `Run “${check.title}” on ${environment} now its window has closed — only a person can`;
 }
 
-function askView(ask: WatchAsk, check: GoalWatch, environment: EnvironmentConfig, source: WatchSource): WatchAskView {
+function askView(ask: WatchAsk, { check, environment, source }: ResolvedAsk): WatchAskView {
   const query = watchCheckQuery(check, environment, ask);
   return {
     ...ask,
@@ -342,20 +427,14 @@ function askView(ask: WatchAsk, check: GoalWatch, environment: EnvironmentConfig
     source: source.name,
     language: query.language,
     query: query.query,
-    presence: check.presence === null ? null : withPeriod(check.presence, ask.since, ask.until),
+    presence: query.presence,
     queryUrl: query.queryUrl,
     closesAt:
       ask.ask === 'closing' ? new Date(Date.parse(ask.until) + operatorGraceMs(environment)).toISOString() : null,
   };
 }
 
-function askDetail(
-  check: GoalWatch,
-  environment: EnvironmentConfig,
-  source: WatchSource,
-  ask: WatchAskKind,
-  period: WatchPeriod,
-): string {
+function askDetail({ check, environment, source, ask, period }: AskFiling): string {
   const env = environment.name;
   const what =
     ask === 'baseline'
@@ -376,19 +455,11 @@ function askDetail(
       body: [`**Expected:** ${watchExpectation(check)}`],
       why: check.why,
       lead: `**Run this as it stands** — the period from ${period.since} to ${period.until} is filled in:`,
+      presenceLead:
+        '**And its presence query**, which proves the code path ran at all — a signal cannot read clean while it is silent:',
       environment: env,
       query: watchCheckQuery(check, environment, period),
     }),
-    ...(check.presence === null
-      ? []
-      : [
-          '**And its presence query**, which proves the code path ran at all — a signal cannot read clean while it is silent:',
-          '',
-          '```' + source.language,
-          withPeriod(check.presence, period.since, period.until),
-          '```',
-          '',
-        ]),
     `${answer} Or have your own Claude Code run it: the \`watch_reading\` tool lists this ask and records the answer.`,
   ].join('\n');
 }

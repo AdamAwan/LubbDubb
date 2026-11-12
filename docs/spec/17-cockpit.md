@@ -1301,7 +1301,8 @@ list built the same way names exactly what the count counted. Built from `config
 person can run is asked on the rail: the desk's detail is the query itself, period filled in and fenced
 in its language with the link to run it, and under it `WatchReadingAsk` (`web/src/console/taskAsks.tsx`)
 draws a box for the rows — or a measure's one number — a second for a signal's presence rows, and
-**Record the reading**. It reads which box to draw off `CockpitState.watchAsks`, the server's own list,
+**Record the reading**. The boxes are the Signals card's own field grammar (`cn-sig-form`, `cn-sig-field`,
+`cn-in cn-sig-area`), not a stylesheet of their own. It reads which box to draw off `CockpitState.watchAsks`, the server's own list,
 and posts to the route the desktop `watch_reading` tool's object shares, so a paste and an answer from
 Claude are one write. Done and Decline stay, for somebody who will not run it.
 → [29](29-post-deploy-watch.md#a-source-only-the-operator-can-run)

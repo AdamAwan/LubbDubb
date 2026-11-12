@@ -38,7 +38,7 @@ export function watchOutcome(input: {
   standing: WatchStanding;
 }): WatchOutcome | null {
   const { goalRef, checks, windows } = input;
-  const watching = windows.filter((w) => w.window.settledAt === null || w.awaiting).map((w) => w.window.environment);
+  const watching = windows.filter((w) => !w.settled).map((w) => w.window.environment);
   if (checks.length === 0) {
     const { standing } = input;
     if (standing === null) return null;
@@ -47,7 +47,7 @@ export function watchOutcome(input: {
       : answer(goalRef, 'unwritten', {});
   }
   const settled = windows
-    .filter((w) => w.window.settledAt !== null && !w.awaiting)
+    .filter((w) => w.settled)
     .sort((a, b) => (b.window.settledAt ?? '').localeCompare(a.window.settledAt ?? ''));
   if (settled.length === 0) {
     if (windows.length === 0) return null;
@@ -157,7 +157,7 @@ function beforeElsewhere(check: WatchOutcomeCheck): string | null {
  */
 export function watchOutcomeKey(outcome: WatchOutcome, windows: readonly WatchWindowReading[]): string {
   const settled = windows
-    .flatMap(({ window }) => (window.settledAt === null ? [] : [`${window.environment} ${window.settledAt}`]))
+    .flatMap(({ window, settled }) => (settled ? [`${window.environment} ${window.settledAt ?? ''}`] : []))
     .sort();
   return `_Watch outcome ${outcome.outcome}, read off the windows settled ${settled.join(', ')}._`;
 }
@@ -205,7 +205,7 @@ function checkNote(
   const elsewhere = beforeElsewhere(folded);
   const before =
     elsewhere === null ? number(folded.before) : `${number(folded.before)} on ${elsewhere} before the merge`;
-  const window = windows.find((w) => w.window.settledAt !== null && w.window.environment === folded.environment);
+  const window = windows.find((w) => w.settled && w.window.environment === folded.environment);
   return watchCheckBlock({
     heading: `${check.title} — ${folded.verdict}${on}`,
     body: [

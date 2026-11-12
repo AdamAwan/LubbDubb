@@ -1,6 +1,7 @@
 import { openedGoals } from '../environments/arrival.js';
 import { watchClearedGoals, watchCloseOutLine, watchWindowReadings } from '../environments/watchFinding.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
+import { openWatchAsks } from '../environments/watchAsks.js';
 import type { Store } from '../store/store.js';
 import type { Issue } from '../types.js';
 import { goalValidation, type GoalValidation } from '../validation/goal.js';
@@ -25,10 +26,13 @@ export class DeliveryCloseOutDesk {
     const deliveries = this.store.verdicts.listDeliveries();
     const existing = this.store.humanTasks.listHumanTasksOfKind('close_out');
     if (deliveries.length === 0 && existing.length === 0) return;
+    const windows = this.store.watches.listWatchWindows();
+    const waiting = openWatchAsks(this.store);
     const readings = watchWindowReadings({
-      windows: this.store.watches.listWatchWindows(),
+      windows,
       checks: this.store.watches.listGoalWatches(),
       readings: this.store.watches.listWatchReadings(),
+      waiting,
     });
     const steps = closeOutPass({
       issues: world.issues,
@@ -55,8 +59,9 @@ export class DeliveryCloseOutDesk {
       watchCleared: watchClearedGoals(
         'close_out',
         this.environments,
-        this.store.watches.listWatchWindows(),
+        windows,
         this.store.environments.listEnvironmentGateReleases(),
+        () => waiting,
       ),
       canClose: this.canClose(),
       opened: openedGoals(

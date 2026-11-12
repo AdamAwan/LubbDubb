@@ -37,6 +37,8 @@ function watchWindowVerdict(readings: readonly (WatchCheckVerdict | null)[]): Wa
 /** A check's query as the operator would run it: the period filled in, its source's language, and where to run it. */
 export interface WatchCheckQuery {
   query: string;
+  /** A signal's presence query, filled in the same way; null for a check that carries none. */
+  presence: string | null;
   /** The fence's info string: the language of the source the check read. */
   language: WatchSourceLanguage;
   queryUrl: string | null;
@@ -51,9 +53,15 @@ export function watchCheckQuery(
   environment: EnvironmentConfig | undefined,
   period: WatchPeriod | null,
 ): WatchCheckQuery {
-  const query = period === null ? check.query : withPeriod(check.query, period.since, period.until);
+  const fill = (text: string): string => (period === null ? text : withPeriod(text, period.since, period.until));
+  const query = fill(check.query);
   const source = declaredSource(environment?.watch, check.source);
-  return { query, language: source?.language ?? 'kql', queryUrl: watchQueryUrl(source?.queryUrl, query) };
+  return {
+    query,
+    presence: check.presence === null ? null : fill(check.presence),
+    language: source?.language ?? 'kql',
+    queryUrl: watchQueryUrl(source?.queryUrl, query),
+  };
 }
 
 interface RegressedCheck {
@@ -78,6 +86,11 @@ export interface WatchWindowReading {
    * for the outcome. → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
    */
   awaiting: boolean;
+  /**
+   * The window has settled **and** awaits no person's reading — the settledness every reader of the
+   * outcome, the close-out's sentence and the bench row goes by, never `window.settledAt` alone.
+   */
+  settled: boolean;
   /** Every one of the goal's checks, in declared order, with its standing reading here. */
   checks: WatchCheckReading[];
   regressed: RegressedCheck[];
@@ -96,13 +109,13 @@ export function watchWindowReadings(input: {
   checks: readonly GoalWatch[];
   readings: readonly WatchReading[];
   environments?: readonly EnvironmentConfig[];
-  /** The `watch_reading` asks still open; only a closing one holds a window. */
-  waiting?: readonly WatchAsk[];
+  /** The `watch_reading` asks still open (`openWatchAsks`); only a closing one holds a window. */
+  waiting: readonly WatchAsk[];
 }): WatchWindowReading[] {
   const newest = new Map<string, WatchReading>();
   for (const r of input.readings) newest.set(`${r.goalRef} ${r.environment} ${r.checkId}`, r);
   const waiting = new Set(
-    (input.waiting ?? []).filter((a) => a.ask === 'closing').map((a) => `${a.goalRef} ${a.environment} ${a.checkId}`),
+    input.waiting.filter((a) => a.ask === 'closing').map((a) => `${a.goalRef} ${a.environment} ${a.checkId}`),
   );
   const checksByGoal = groupBy(input.checks, (c) => c.originRef);
   return input.windows.map((window) => {
@@ -111,10 +124,12 @@ export function watchWindowReadings(input: {
       reading: newest.get(`${window.goalRef} ${window.environment} ${check.id}`) ?? null,
       waitingOnYou: waiting.has(`${window.goalRef} ${window.environment} ${check.id}`),
     }));
+    const awaiting = checks.some((c) => c.waitingOnYou);
     return {
       window,
       verdict: watchWindowVerdict(checks.map((c) => c.reading?.verdict ?? null)),
-      awaiting: checks.some((c) => c.waitingOnYou),
+      awaiting,
+      settled: window.settledAt !== null && !awaiting,
       checks,
       regressed: checks.flatMap(({ check, reading }) => {
         if (reading?.verdict !== 'regressed') return [];
@@ -141,6 +156,8 @@ export function watchCheckBlock(block: {
   body: readonly string[];
   why: string | null;
   lead: string | null;
+  /** Where given, the presence query is written under the check's own, led by this. */
+  presenceLead?: string;
   environment: string | null;
   query: WatchCheckQuery;
 }): string[] {
@@ -157,6 +174,9 @@ export function watchCheckBlock(block: {
     '```',
     '',
     ...(query.queryUrl === null || environment === null ? [] : [`[Run it on ${environment} ↗](${query.queryUrl})`, '']),
+    ...(block.presenceLead === undefined || query.presence === null
+      ? []
+      : [block.presenceLead, '', '```' + query.language, query.presence, '```', '']),
   ];
 }
 
@@ -166,7 +186,7 @@ export function watchFindings(input: {
 }): WatchFindingStep[] {
   const byKey = new Map(input.existing.map((t) => [`${t.originRef ?? ''} ${t.title}`, t]));
   const steps: WatchFindingStep[] = [];
-  for (const { window, verdict, regressed } of input.readings) {
+  for (const { window, verdict, regressed, settled } of input.readings) {
     const title = findingTitle(window.environment);
     const existing = byKey.get(`${window.goalRef} ${title}`);
     if (verdict !== 'regressed') {
@@ -179,7 +199,7 @@ export function watchFindings(input: {
         });
       continue;
     }
-    const detail = findingDetail(window, regressed);
+    const detail = findingDetail(window, settled, regressed);
     if (existing && existing.status !== 'open') {
       if (deskSettled(existing)) steps.push({ kind: 'reopen', taskId: existing.id, detail });
       continue;
@@ -193,12 +213,11 @@ function findingTitle(environment: string): string {
   return `The post-deploy watch on ${environment} is reporting a regression`;
 }
 
-function findingDetail(window: WatchWindow, regressed: RegressedCheck[]): string {
+function findingDetail(window: WatchWindow, settled: boolean, regressed: RegressedCheck[]): string {
   const env = window.environment;
-  const still =
-    window.settledAt === null
-      ? 'The window is still open, so these numbers are the newest reading and are rewritten on every pass.'
-      : `The window has settled, so these are the last numbers ${env} gave.`;
+  const still = !settled
+    ? 'The window is still open, so these numbers are the newest reading and are rewritten on every pass.'
+    : `The window has settled, so these are the last numbers ${env} gave.`;
   return [
     `This goal's work is live on **${env}**, and a check declared to watch it afterwards is reading outside what it ` +
       `declared. Nothing has interpreted this: the numbers below are ${env}'s own answers, which is why the row is ` +
@@ -237,7 +256,7 @@ export function watchCloseOutLine(goalRef: string, readings: readonly WatchWindo
   const mine = readings.filter((r) => r.window.goalRef === goalRef);
   if (mine.length === 0) return null;
   const said = mine.map((r) => `${r.window.environment} ${WATCH_SAID[r.verdict]}`);
-  const open = mine.some((r) => r.window.settledAt === null);
+  const open = mine.some((r) => !r.settled);
   return (
     `**The post-deploy watch says:** ${said.join(', ')}.` +
     (open ? ' It is still open, and holds nothing — this row is yours to close whenever you are ready.' : '')
@@ -258,7 +277,8 @@ const WATCH_SAID: Record<WatchWindowVerdict, string> = {
  *
  * Only a *settled* window clears a goal (a hold scoped to open windows would
  * withhold nothing), satisfied by whichever declaring environment settles first,
- * and an operator's *not waiting on an environment* clears it too.
+ * and an operator's *not waiting on an environment* clears it too. A window whose
+ * closing reading is still asked of a person has not answered, so it clears nothing.
  *
  * @public read by the two desks that file the obligations `holds` can name
  */
@@ -267,10 +287,18 @@ export function watchClearedGoals(
   environments: readonly EnvironmentConfig[],
   windows: readonly WatchWindow[],
   releases: readonly { goalRef: string }[],
+  waiting: () => readonly WatchAsk[],
 ): ReadonlySet<string> | null {
   const holding = new Set(environments.filter((e) => e.watch?.holds?.includes(gate)).map((e) => e.name));
   if (holding.size === 0) return null;
+  const awaited = new Set(
+    waiting()
+      .filter((a) => a.ask === 'closing')
+      .map((a) => `${a.goalRef} ${a.environment}`),
+  );
   const cleared = new Set(releases.map((r) => r.goalRef));
-  for (const w of windows) if (w.settledAt !== null && holding.has(w.environment)) cleared.add(w.goalRef);
+  for (const w of windows)
+    if (w.settledAt !== null && holding.has(w.environment) && !awaited.has(`${w.goalRef} ${w.environment}`))
+      cleared.add(w.goalRef);
   return cleared;
 }

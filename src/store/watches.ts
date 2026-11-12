@@ -2,7 +2,6 @@ import type {
   GoalWatch,
   GoalWatchInput,
   WatchAsk,
-  WatchAskKind,
   WatchCheckVerdict,
   WatchReading,
   WatchReadingVerdict,
@@ -79,8 +78,7 @@ export class WatchStore {
         }
         if (keep.has(row.check_id)) continue;
         this.ctx.prep(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
-        this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
-        this.ctx.prep(`DELETE FROM watch_asks WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
+        this.dropCheckState(originRef, row.check_id);
       }
       for (const check of checks) {
         if (mine.has(check.id)) continue;
@@ -201,10 +199,7 @@ export class WatchStore {
           goalRef: originRef,
           now,
         });
-      if (!asked) {
-        this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, check.id);
-        this.ctx.prep(`DELETE FROM watch_asks WHERE goal_ref=? AND check_id=?`).run(originRef, check.id);
-      }
+      if (!asked) this.dropCheckState(originRef, check.id);
     })();
     const saved = this.ctx
       .prep(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
@@ -218,8 +213,7 @@ export class WatchStore {
         .prep(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`)
         .run(originRef, checkId).changes;
       if (gone === 0) return false;
-      this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
-      this.ctx.prep(`DELETE FROM watch_asks WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
+      this.dropCheckState(originRef, checkId);
       return true;
     })();
   }
@@ -423,17 +417,14 @@ export class WatchStore {
     return row === undefined ? null : hydrateAsk(row);
   }
 
-  findWatchAsk(key: { goalRef: string; checkId: string; environment: string; ask: WatchAskKind }): WatchAsk | null {
-    const row = this.ctx
-      .prep(`SELECT * FROM watch_asks WHERE goal_ref=? AND check_id=? AND environment=? AND ask=?`)
-      .get(key.goalRef, key.checkId, key.environment, key.ask) as WatchAskRow | undefined;
-    return row === undefined ? null : hydrateAsk(row);
-  }
-
-  listWatchAsks(): WatchAsk[] {
-    return (this.ctx.prep(`SELECT * FROM watch_asks ORDER BY goal_ref, check_id`).all() as WatchAskRow[]).map(
-      hydrateAsk,
-    );
+  /** Every ask, or one goal's. */
+  listWatchAsks(goalRef?: string): WatchAsk[] {
+    const rows = (
+      goalRef === undefined
+        ? this.ctx.prep(`SELECT * FROM watch_asks ORDER BY goal_ref, check_id`).all()
+        : this.ctx.prep(`SELECT * FROM watch_asks WHERE goal_ref=? ORDER BY check_id`).all(goalRef)
+    ) as WatchAskRow[];
+    return rows.map(hydrateAsk);
   }
 
   /** One per check per environment per ask: a second write for the same key moves its period, never adds a row. */
@@ -446,6 +437,12 @@ export class WatchStore {
            task_id=excluded.task_id, since=excluded.since, until=excluded.until`,
       )
       .run(ask);
+  }
+
+  /** A check's readings and asks, which describe the query it no longer carries. */
+  private dropCheckState(originRef: string, checkId: string): void {
+    this.ctx.prep(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
+    this.ctx.prep(`DELETE FROM watch_asks WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
   }
 
   listWatchReadings(): WatchReading[] {

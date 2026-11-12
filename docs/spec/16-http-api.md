@@ -830,7 +830,8 @@ one write: a closing answer is the window's reading of the check, `read_by: 'ope
 answer is the check's dry run and a measure's baseline; and the row settles `done`. **400** on an answer
 off the output contract, or a signal without its presence rows — nothing is recorded, and the person can
 paste it again. **404** where the id is no `watch_reading` row, **409** where it is already settled or
-its check has changed or gone. → [29](29-post-deploy-watch.md#a-source-only-the-operator-can-run)
+its check has changed or gone — the same test the pass retracts an ask on and the listing leaves one out
+by. → [29](29-post-deploy-watch.md#a-source-only-the-operator-can-run)
 
 ### `POST /api/issues/:number/shortfall`
 

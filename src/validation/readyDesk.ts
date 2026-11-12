@@ -1,6 +1,7 @@
 import { openedGoals } from '../environments/arrival.js';
 import { watchClearedGoals } from '../environments/watchFinding.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
+import { openWatchAsks } from '../environments/watchAsks.js';
 import type { Store } from '../store/store.js';
 import type { Issue, RemoteSheetRow, ValidationCheck } from '../types.js';
 import { checkSetReleased } from './planApproval.js';
@@ -39,6 +40,7 @@ export class ValidationReadyDesk {
         this.environments,
         this.store.watches.listWatchWindows(),
         this.store.environments.listEnvironmentGateReleases(),
+        () => openWatchAsks(this.store),
       ),
       opened: openedGoals(
         'validate',

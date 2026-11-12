@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { toolSchema } from './schema.js';
 import { toolError, toolJson } from './protocol.js';
 import type { DesktopToolFactory } from './desktopContext.js';
-import type { WatchAskView } from '../wire.js';
 
 // → docs/spec/29-post-deploy-watch.md#a-source-only-the-operator-can-run
 
@@ -18,7 +17,7 @@ const watchReading: DesktopToolFactory = (deps) => ({
     z.object({
       ask: z
         .string()
-        .describe('The ask id from the list, to record its answer. Left out, the open asks are listed.')
+        .describe("An ask's `taskId` from the list, to record its answer. Left out, the open asks are listed.")
         .optional(),
       answer: z
         .string()
@@ -37,7 +36,7 @@ const watchReading: DesktopToolFactory = (deps) => ({
     const asks = deps.watchAsks();
     if (typeof args.ask !== 'string') {
       const open = asks.open();
-      return toolJson({ asks: open.map(describeAsk), next: open.length === 0 ? NOTHING_OPEN : LIST_NEXT });
+      return toolJson({ asks: open, next: open.length === 0 ? NOTHING_OPEN : LIST_NEXT });
     }
     if (typeof args.answer !== 'string')
       return toolError('Give "answer" with "ask": what the query returned, as rows of JSON or one number.');
@@ -47,39 +46,14 @@ const watchReading: DesktopToolFactory = (deps) => ({
     });
     if (!answered.ok) return toolError(answered.error);
     deps.changed({ type: 'world:changed' });
-    return toolJson({
-      recorded: answered.recorded,
-      ask: answered.ask.ask,
-      check: answered.ask.checkId,
-      environment: answered.ask.environment,
-      readBy: 'operator',
-    });
+    return toolJson({ recorded: answered.recorded, ...answered.ask, readBy: 'operator' });
   },
 });
 
-function describeAsk(ask: WatchAskView): Record<string, unknown> {
-  return {
-    id: ask.taskId,
-    goal: ask.goalRef,
-    check: ask.checkId,
-    title: ask.checkTitle,
-    kind: ask.kind,
-    environment: ask.environment,
-    ask: ask.ask,
-    source: ask.source,
-    language: ask.language,
-    period: { since: ask.since, until: ask.until },
-    query: ask.query,
-    presence: ask.presence,
-    runAt: ask.queryUrl,
-    unansweredReadsUnknownAt: ask.closesAt,
-  };
-}
-
 const LIST_NEXT =
   'Run each query as it stands — the period is already in it — against the source it names, with whatever ' +
-  'client and login the operator uses for it. Then call watch_reading with the ask id and what came back. If ' +
-  'you cannot run it, say so and leave it: an unanswered closing ask reads unknown when its grace runs out, ' +
+  "client and login the operator uses for it. Then call watch_reading with the ask's taskId and what came back. " +
+  'If you cannot run it, say so and leave it: an unanswered closing ask reads unknown at its closesAt, ' +
   'which is the honest answer, and a number you did not read is not.';
 
 const NOTHING_OPEN =

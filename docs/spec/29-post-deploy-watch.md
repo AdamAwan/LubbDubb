@@ -791,7 +791,8 @@ a check naming none, the first that watches at all — so a `sql` check on a dep
 answers such a source as `operator` rather than with an `observe` command, and every reader takes that
 as _ask a person_: the window's reading pass records nothing for the check, and the dry run records
 `unknown` saying the source is read only through a person and is **not** a refusal handed back to the
-author. What is asked instead, and when, is [the operator's source](#a-source-only-the-operator-can-run).
+author. The dry run resolves the source once, in `WatchDryRun.read`, which answers both the reading and
+whether it is a refusal: the person-run branch is that method's first arm, not a guard beside it. What is asked instead, and when, is [the operator's source](#a-source-only-the-operator-can-run).
 A measures-only language is refused first, whoever runs the source.
 
 ### What a language changes
@@ -866,7 +867,23 @@ the `since` and `until` it was filed with — so an answer is judged against the
 shown, never one recomputed after a merge moved. The table's unique key on `(goal, check, environment,
 ask)` is what makes it one per check per environment per ask, and filing again for the same key
 updates that row rather than adding one. All of it is `WatchAsks` (`src/environments/watchAsks.ts`),
-the one object the window pass, the paste box and the desktop tool go through:
+the one object the window pass, the paste box and the desktop tool go through. It works out once, at
+construction, which environments declare a source only a person can run, and on a deployment where none
+does every method returns before reading anything; otherwise it walks only those environments.
+
+**One rule says whether an ask still stands**, and the listing, an answer and the pass all go through
+it (`resolve`): its check is still live, its environment is still declared, and the check still reads a
+source only a person can run there. An ask that fails it is not listed, refuses an answer (409) and is
+retracted by the pass.
+
+**Filing is a plan, then its application**, the desks' pure-step arrangement (`watchFindings` and the
+watch desk's apply loop): the pass and `askBaselines` decide `file`, `reopen` or `settle` steps off the
+rows they read once, and `apply` writes them. **The harness re-opens only a row it settled itself**
+(`deskSettled`) — a retraction for an extended window, a baseline its window outran. A row a person
+answered (`done`) or declined is theirs and is never re-opened while the question it answered still
+stands, so a window extended and settled again after its closing ask was answered keeps that answer
+rather than asking again. The one way a person's row comes back is that the question itself is gone: an
+edit that changed the check's query cleared the ask row it answered, so the same title asks afresh.
 
 - **The baseline** is asked by `askBaselines`, which the accept route calls once the set is live, and
   which the dry run calls for a goal with live checks — so an operator's own edit and a plan document's
@@ -878,7 +895,8 @@ the one object the window pass, the paste box and the desktop tool go through:
   nothing, so turning the feature on does not ask a person about March. Its period is the window's own,
   arrival (or exposure) to the end (`settledWatchPeriod`). Asking it retracts any baseline ask still
   open for that check there. A window extended while its closing ask is open retracts the ask, and asks
-  again — the same row, re-opened with the new period — when it settles again.
+  again — the same row, re-opened with the new period, because the harness was the one that settled
+  it — when it settles again.
 - **An ask whose check was edited, dropped or moved off an operator source retracts itself**, with the
   harness's settlement prefix, and an edit that changes a check's query clears its asks with its
   readings so the dry run asks afresh.
@@ -916,9 +934,13 @@ checks in the same window are read on the schedule and settle at `forMs` as they
 window's [outcome](#the-outcome) is drawn when its operator readings are in or out of grace, so a goal
 does not read _worked_ on its harness checks while the SQL question it was really about has not been
 asked. `watchWindowReadings` marks a window `awaiting` while any closing ask on it is open — the open
-ask is the whole test, because the pass retracts it the moment grace runs out — and `watchOutcome` counts
-an awaiting window among the environments still watching rather than the settled ones. Only a closing
-ask holds a window; a baseline never does.
+ask is the whole test, because the pass retracts it the moment grace runs out — and its result carries
+**`settled`**: settled _and_ not awaiting. The open asks are a required input (`openWatchAsks`), so no
+reader can forget them. `settled` is the one settledness every reader of a window's answer goes by,
+never `window.settledAt` alone: `watchOutcome` counts an unsettled window among the environments still
+watching, the close-out's sentence says the watch is still open, and the bench row's detail says the
+window is still open. A [`holds`](#it-holds-nothing-unless-asked) opt-in is not cleared by an awaiting
+window either. Only a closing ask holds a window; a baseline never does.
 
 ## The window
 
@@ -1346,7 +1368,10 @@ so a hold scoped to open windows would read as configured and withhold nothing e
 `watchClearedGoals` therefore has `openedGoals`' exact shape, null and all — an empty set would
 withhold the obligation on every deployment on earth and would look identical to the feature working
 — and an operator's _not waiting on an environment_ clears a hold as it clears a gate, so a goal whose
-work will never reach an environment does not sit delivered with an empty bench for good.
+work will never reach an environment does not sit delivered with an empty bench for good. A window still
+waiting on a person's closing reading ([below](#a-source-only-the-operator-can-run)) has not answered,
+so it clears nothing until the reading is in or its grace has run out; `watchClearedGoals` takes the open
+asks as a thunk, read only where some environment declares a `holds`.
 
 ### A reading is never a `WorldEvent`
 
@@ -1799,5 +1824,8 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   answered; a pasted answer is recorded `read_by: 'operator'`, a pasted baseline sets the measure's
   baseline, and a paste off the contract is refused recording nothing; an unanswered closing ask settles
   `unknown` after `operatorGraceMs` and retracts itself; an ask whose check is dropped retracts itself;
+  an answered closing ask is not re-opened on the next pass nor when its window settles again, while an
+  unanswered one its window outran is re-opened with the new period; an answered baseline is asked afresh
+  once an edit changes its query; a `holds` opt-in is not cleared by a window awaiting a closing reading;
   the desktop `watch_reading` tool lists the asks and records through the same object; and
   `watch_readings.read_by` reaches a database from before it (`test/watchOperator.test.ts`).

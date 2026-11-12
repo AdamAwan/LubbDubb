@@ -16,8 +16,8 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
-import { WatchAsks } from '../src/environments/watchAsks.js';
-import { watchWindowReadings } from '../src/environments/watchFinding.js';
+import { openWatchAsks, WatchAsks } from '../src/environments/watchAsks.js';
+import { watchClearedGoals, watchWindowReadings } from '../src/environments/watchFinding.js';
 import { watchOutcome } from '../src/environments/watchOutcome.js';
 import { parseOperatorAnswer } from '../src/environments/watchResult.js';
 import { validateEnvironments, type EnvironmentConfig } from '../src/environments/policy.js';
@@ -252,6 +252,85 @@ test('an unanswered closing ask settles the check unknown after operatorGraceMs,
   system.store.close();
 });
 
+test('an answered closing ask is never re-opened — not on the next pass, and not when its window settles again', async () => {
+  const environments = [sqlEnvironment('liveUk')];
+  const system = build(environments);
+  arrived(system, 'liveUk', [MEASURE]);
+  await system.harness.runCycle();
+  const [{ task }] = asks(system) as [ReturnType<typeof asks>[number]];
+  const answered = system.watchAsks.answer(task.id, { answer: '40', presence: null });
+  assert.equal(answered.ok, true);
+
+  await system.harness.runCycle();
+  assert.equal(system.store.humanTasks.getHumanTask(task.id)?.status, 'done', 'the next pass leaves it answered');
+
+  system.store.watches.extendWatchWindow(GOAL, 'liveUk', new Date(Date.now() + HOUR_MS).toISOString());
+  new WatchAsks({ store: system.store, environments }).pass();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  system.store.watches.settleWatchWindow(GOAL, 'liveUk');
+  new WatchAsks({ store: system.store, environments }).pass();
+  const after = system.store.humanTasks.getHumanTask(task.id)!;
+  assert.equal(after.status, 'done', "the operator's answer is theirs: the harness re-opens only what it settled");
+  assert.match(after.resolution ?? '', /Answered by the operator/);
+  system.store.close();
+});
+
+test('an answered baseline is asked afresh once an edit changes the query it answered', async () => {
+  const system = build([sqlEnvironment('liveUk')]);
+  system.store.watches.ingestGoalWatch(GOAL, [MEASURE]);
+  await system.watch.run(GOAL);
+  const [{ task }] = asks(system) as [ReturnType<typeof asks>[number]];
+  system.watchAsks.answer(task.id, { answer: '1190', presence: null });
+  await system.watch.run(GOAL);
+  assert.equal(system.store.humanTasks.getHumanTask(task.id)?.status, 'done', 'the same question is not asked twice');
+
+  const { seq: _seq, ...edited } = { ...MEASURE, query: `${MEASURE.query} and region = 'uk'` };
+  system.store.watches.saveOperatorWatch(GOAL, edited);
+  await system.watch.run(GOAL);
+  assert.equal(system.store.humanTasks.getHumanTask(task.id)?.status, 'open', 'the answer was to a query that is gone');
+  system.store.close();
+});
+
+test('an unanswered closing ask its window outran retracts, and re-opens with the new period when it settles again', async () => {
+  const environments = [sqlEnvironment('liveUk')];
+  const system = build(environments);
+  arrived(system, 'liveUk', [MEASURE]);
+  await system.harness.runCycle();
+  const [{ task }] = asks(system) as [ReturnType<typeof asks>[number]];
+
+  system.store.watches.extendWatchWindow(GOAL, 'liveUk', new Date(Date.now() + HOUR_MS).toISOString());
+  new WatchAsks({ store: system.store, environments }).pass();
+  const retracted = system.store.humanTasks.getHumanTask(task.id)!;
+  assert.equal(retracted.status, 'declined');
+  assert.ok(retracted.resolution?.startsWith(DESK_SETTLED));
+
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  system.store.watches.settleWatchWindow(GOAL, 'liveUk');
+  new WatchAsks({ store: system.store, environments }).pass();
+  assert.equal(system.store.humanTasks.getHumanTask(task.id)?.status, 'open', 'the same row, re-opened');
+  const window = system.store.watches.listWatchWindows()[0]!;
+  assert.equal(system.store.watches.getWatchAsk(task.id)?.until, window.settledAt, 'asking over the new period');
+  system.store.close();
+});
+
+test('a holds opt-in is not cleared by a window still waiting on a person’s closing reading', async () => {
+  const environment = sqlEnvironment('liveUk', { holds: ['close_out'] });
+  const system = build([environment]);
+  arrived(system, 'liveUk', [MEASURE]);
+  await system.harness.runCycle();
+  const cleared = () =>
+    watchClearedGoals('close_out', [environment], system.store.watches.listWatchWindows(), [], () =>
+      openWatchAsks(system.store),
+    );
+  assert.notEqual(system.store.watches.listWatchWindows()[0]?.settledAt, null);
+  assert.equal(cleared()?.has(GOAL), false, 'settled, but the window has not answered');
+
+  const [{ task }] = asks(system) as [ReturnType<typeof asks>[number]];
+  system.watchAsks.answer(task.id, { answer: '40', presence: null });
+  assert.equal(cleared()?.has(GOAL), true);
+  system.store.close();
+});
+
 test('an ask whose check is dropped retracts itself', async () => {
   const system = build([sqlEnvironment('liveUk')]);
   system.store.watches.ingestGoalWatch(GOAL, [MEASURE]);
@@ -281,20 +360,20 @@ test('the desktop watch_reading tool lists the open asks and records through the
 
   const listed = await tool.handler({});
   const { asks: open } = JSON.parse(listed.content[0]!.text) as {
-    asks: { id: string; query: string; presence: string }[];
+    asks: { taskId: string; query: string; presence: string }[];
   };
   assert.equal(open.length, 1);
   assert.ok(!open[0]!.query.includes('{since}') && !open[0]!.presence.includes('{until}'));
 
-  const missing = await tool.handler({ ask: open[0]!.id, answer: '[]' });
+  const missing = await tool.handler({ ask: open[0]!.taskId, answer: '[]' });
   assert.equal(missing.isError, true, 'a signal is asked both questions');
 
-  const recorded = await tool.handler({ ask: open[0]!.id, answer: '[]', presence: '[{"run": 1}]' });
+  const recorded = await tool.handler({ ask: open[0]!.taskId, answer: '[]', presence: '[{"run": 1}]' });
   assert.notEqual(recorded.isError, true, recorded.content[0]?.text);
   const [reading] = system.store.watches.listWatchReadings();
   assert.equal(reading?.readBy, 'operator');
   assert.equal(reading?.verdict, 'clean');
-  assert.equal(system.store.humanTasks.getHumanTask(open[0]!.id)?.status, 'done');
+  assert.equal(system.store.humanTasks.getHumanTask(open[0]!.taskId)?.status, 'done');
   system.store.close();
 });
 

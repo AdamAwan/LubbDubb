@@ -186,7 +186,7 @@ export function readGoalWatchRecords(store: System['store'], goalRef: string): G
     windows: store.watches.listWatchWindows().filter((w) => w.goalRef === goalRef),
     checks,
     readings: store.watches.listWatchReadings().filter((r) => r.goalRef === goalRef),
-    waiting: openWatchAsks(store).filter((a) => a.goalRef === goalRef),
+    waiting: openWatchAsks(store, { goalRef }),
   });
   const standing = watchOutcomeStanding({
     plan: store.plans.getPlanByOrigin(goalRef) ?? null,

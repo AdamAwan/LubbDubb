@@ -347,13 +347,15 @@ function WatchReadingAsk({
     <>
       <TaskLede task={task} view={view} />
       {ask !== undefined && (
-        <div className="cn-ask-paste">
-          <label>
-            {ask.kind === 'measure'
-              ? 'What it returned — the one row as JSON, or just its number'
-              : 'The rows it returned, as JSON'}
+        <div className="cn-sig-form">
+          <label className="cn-sig-field">
+            <span>
+              {ask.kind === 'measure'
+                ? 'What it returned — the one row as JSON, or just its number'
+                : 'The rows it returned, as JSON'}
+            </span>
             <textarea
-              className="cn-ask-paste-box"
+              className="cn-in cn-sig-area"
               rows={ask.kind === 'measure' ? 2 : 5}
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
@@ -361,10 +363,10 @@ function WatchReadingAsk({
             />
           </label>
           {signal && (
-            <label>
-              The presence query&rsquo;s rows, as JSON
+            <label className="cn-sig-field">
+              <span>The presence query&rsquo;s rows, as JSON</span>
               <textarea
-                className="cn-ask-paste-box"
+                className="cn-in cn-sig-area"
                 rows={3}
                 value={presence}
                 onChange={(e) => setPresence(e.target.value)}

@@ -429,6 +429,7 @@ test("the bench row fences each query in its source's language, and links throug
       checks: [check({ ...SIGNAL, source: 'logs' }), check(MEASURE)],
       readings: [regressed('no-timeouts'), regressed('orders-landed')],
       environments: [TWO_SOURCES],
+      waiting: [],
     }),
     existing: [],
   });

@@ -11,7 +11,7 @@ import { exposureFloor, exposureShortfall, watchPeriod } from './exposure.js';
 import { landedCommits } from './landings.js';
 import { resolveWatchSource } from './watchSource.js';
 import { watchHold } from '../validation/watchAuthoring.js';
-import type { WatchAsks } from './watchAsks.js';
+import { openWatchAsks, type WatchAsks } from './watchAsks.js';
 
 // → docs/spec/24-environments.md
 
@@ -39,20 +39,31 @@ export class WatchDesk {
     if (!this.deps.environments.some((e) => e.watch !== undefined)) return;
     this.open();
     this.settle();
-    this.deps.asks.pass();
-    await this.read();
-    this.file();
+    const { store, errors } = this.deps;
+    let windows: WatchWindow[];
+    let checks: GoalWatch[];
+    try {
+      windows = store.watches.listWatchWindows();
+      checks = store.watches.listGoalWatches();
+    } catch (err) {
+      errors?.record({ source: 'cycle', message: `reading watch windows failed: ${(err as Error).message}` });
+      return;
+    }
+    this.deps.asks.pass({ windows, checks });
+    await this.read(windows, checks);
+    this.file(checks);
   }
 
-  private file(): void {
+  private file(checks: readonly GoalWatch[]): void {
     const { store, errors } = this.deps;
     try {
       const steps = watchFindings({
         readings: watchWindowReadings({
           windows: store.watches.listWatchWindows(),
-          checks: store.watches.listGoalWatches(),
+          checks,
           readings: store.watches.listWatchReadings(),
           environments: this.deps.environments,
+          waiting: openWatchAsks(store),
         }),
         existing: store.humanTasks.listHumanTasksOfKind('watch'),
       });
@@ -124,12 +135,12 @@ export class WatchDesk {
     }
   }
 
-  private async read(): Promise<void> {
+  private async read(windows: readonly WatchWindow[], checks: readonly GoalWatch[]): Promise<void> {
     const { store, errors } = this.deps;
     let due: WatchWindow[];
     try {
       due = dueWindows({
-        windows: store.watches.listWatchWindows(),
+        windows,
         readings: store.watches.listWatchReadings(),
         watchIntervalMs: this.deps.watchIntervalMs,
         now: this.now(),
@@ -139,7 +150,6 @@ export class WatchDesk {
       return;
     }
     const byName = new Map(this.deps.environments.map((e) => [e.name, e]));
-    const checks = store.watches.listGoalWatches();
     const landings = store.environments.listGoalLandings();
     for (const opened of due) {
       const environment = byName.get(opened.environment);

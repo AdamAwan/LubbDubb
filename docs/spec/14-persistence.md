@@ -287,7 +287,9 @@ both unnecessary. → [29](29-post-deploy-watch.md#persistence)
 describes, at the moment a reading only a person can take is asked for, so a missing row means _never
 asked_ and the table needs no boot pass. The closing ask's own guard — filed only for a window that
 settled within `operatorGraceMs` — is what keeps a deployment that already declared an `operator` source
-from being asked about every window that ever closed. → [29](29-post-deploy-watch.md#a-source-only-the-operator-can-run)
+from being asked about every window that ever closed. A check whose query changes or which is dropped
+loses its `watch_readings` and `watch_asks` rows together, through the one `dropCheckState` in
+`watches.ts`, since both describe a query it no longer carries. → [29](29-post-deploy-watch.md#a-source-only-the-operator-can-run)
 
 #### Retired watch proposals
 

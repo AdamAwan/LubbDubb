@@ -78,7 +78,7 @@ export function baseReads(system: System, opts: SnapshotOpts | undefined) {
         Date.now() - Date.parse(row.ejectedAt) >= config.ejection.contactGraceMinutes * 60_000,
     }));
   const allHumanTasks = once(() => store.humanTasks.listAllHumanTasks());
-  const watchAsks = once(() => openWatchAsks(store, allHumanTasks()));
+  const watchAsks = once(() => openWatchAsks(store, { tasks: allHumanTasks() }));
   const proposals = store.escalations.listProposals();
   const openEscalations = once(() => store.escalations.listOpenEscalations());
   const bugFilings = store.bugFilings.listBugFilings();

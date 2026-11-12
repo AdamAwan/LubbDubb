@@ -2,7 +2,7 @@ import type { Store } from '../store/store.js';
 import type { GoalWatch, WatchReadingVerdict } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
 import { observationAsk, type EnvironmentObserver } from './observer.js';
-import { scalarShaped, unanswered, type WatchPeriod, type WatchResult } from './watchResult.js';
+import { scalarShaped, unanswered, type WatchResult } from './watchResult.js';
 import { carriesUntil, missingUntilRefusal } from '../validation/watchQueryShape.js';
 import { beforeMergePeriod } from './watchWindow.js';
 import { goalMergedAt } from './landings.js';
@@ -39,35 +39,53 @@ export class WatchDryRun implements WatchDryRunner {
     const refusals: string[] = [];
     for (const check of checks) {
       const environment = dryRunEnvironment(this.deps.environments, check.source);
-      const operator = resolveWatchSource(environment, check).operator !== null;
-      const reading = operator
-        ? operatorDryRun(environment, check)
-        : merged !== null && check.kind === 'measure' && !carriesUntil(check.query)
-          ? readingOf(environment, check, unanswered(missingUntilRefusal()))
-          : await this.read(environment, check, beforeMergePeriod(environment, merged, this.now()));
+      const { reading, refusal } = await this.read(environment, check, merged);
       this.deps.store.watches.recordWatchDryRun(originRef, check.id, { environment: environment.name, ...reading });
-      if (reading.detail !== null && !operator) refusals.push(`${check.id}: ${reading.detail}`);
+      if (refusal !== null) refusals.push(`${check.id}: ${refusal}`);
     }
     if (checks.some((c) => c.live)) this.deps.asks.askBaselines(originRef);
     return refusals;
   }
 
-  private async read(environment: EnvironmentConfig, check: GoalWatch, period: WatchPeriod): Promise<DryRunReading> {
+  /**
+   * The check's dry run on one environment, and what it says to the author — nothing, for a source only a
+   * person can run, whose baseline ask stands in for the reading.
+   */
+  private async read(
+    environment: EnvironmentConfig,
+    check: GoalWatch,
+    merged: number | null,
+  ): Promise<{ reading: DryRunReading; refusal: string | null }> {
     const resolved = resolveWatchSource(environment, check);
+    if (resolved.operator !== null) return { reading: operatorDryRun(environment, check), refusal: null };
+    const reading = await this.observe(environment, check, resolved, merged);
+    return { reading, refusal: reading.detail };
+  }
+
+  private async observe(
+    environment: EnvironmentConfig,
+    check: GoalWatch,
+    resolved: ReturnType<typeof resolveWatchSource>,
+    merged: number | null,
+  ): Promise<DryRunReading> {
     if (resolved.source === null)
       return { verdict: 'unknown', presence: null, rows: null, value: null, detail: resolved.refusal };
+    if (merged !== null && check.kind === 'measure' && !carriesUntil(check.query))
+      return readingOf(environment, check, unanswered(missingUntilRefusal()));
+    const period = beforeMergePeriod(environment, merged, this.now());
     const ask = observationAsk(environment.name, resolved.source, check.id, period);
     const presence =
       check.presence === null
         ? null
         : await this.deps.observer.observe({ ...ask, query: check.presence, kind: 'presence' });
-    if (presence !== null && verdictOf(presence) !== 'fires') return dryRunOf(environment, check, presence, presence);
+    const silent = presence === null ? null : presenceRefusal(environment, presence);
+    if (silent !== null) return silent;
     const result = await this.deps.observer.observe({
       ...ask,
       query: check.query,
       kind: check.kind === 'measure' ? 'measure' : 'signal',
     });
-    return dryRunOf(environment, check, presence, result);
+    return readingOf(environment, check, result);
   }
 }
 
@@ -96,29 +114,32 @@ export function dryRunOf(
   presence: WatchResult | null,
   result: WatchResult,
 ): DryRunReading {
-  if (presence !== null) {
-    const probed = verdictOf(presence);
-    if (probed === 'unknown')
-      return {
-        verdict: 'unknown',
-        presence: probed,
-        rows: null,
-        value: null,
-        detail: `the watch could not read ${environment.name} — ${presence.detail ?? 'the observation did not answer'}`,
-      };
-    if (probed === 'zero')
-      return {
-        verdict: 'unknown',
-        presence: probed,
-        rows: null,
-        value: null,
-        detail:
-          `the presence query matched nothing on ${environment.name}, so the telemetry has never heard of this ` +
-          'code path — wrong name, wrong application, or nothing instrumented. A signal cannot report clean ' +
-          'while its presence query is silent.',
-      };
-  }
-  return readingOf(environment, check, result);
+  return (presence === null ? null : presenceRefusal(environment, presence)) ?? readingOf(environment, check, result);
+}
+
+/** A presence answer that did not fire: the dry run stops there, and says why. Null where it fired. */
+function presenceRefusal(environment: EnvironmentConfig, presence: WatchResult): DryRunReading | null {
+  const probed = verdictOf(presence);
+  if (probed === 'unknown')
+    return {
+      verdict: 'unknown',
+      presence: probed,
+      rows: null,
+      value: null,
+      detail: `the watch could not read ${environment.name} — ${presence.detail ?? 'the observation did not answer'}`,
+    };
+  if (probed === 'zero')
+    return {
+      verdict: 'unknown',
+      presence: probed,
+      rows: null,
+      value: null,
+      detail:
+        `the presence query matched nothing on ${environment.name}, so the telemetry has never heard of this ` +
+        'code path — wrong name, wrong application, or nothing instrumented. A signal cannot report clean ' +
+        'while its presence query is silent.',
+    };
+  return null;
 }
 
 interface DryRunReading {
