@@ -1,7 +1,7 @@
 import type { Store } from '../store/store.js';
 import type { GoalWatch, WatchReadingVerdict } from '../types.js';
 import type { EnvironmentConfig } from './policy.js';
-import type { EnvironmentObserver } from './observer.js';
+import { observationAsk, type EnvironmentObserver } from './observer.js';
 import { scalarShaped, unanswered, type WatchPeriod, type WatchResult } from './watchResult.js';
 import { carriesUntil, missingUntilRefusal } from '../validation/watchQueryShape.js';
 import { watchWindowMs } from './watchWindow.js';
@@ -55,14 +55,7 @@ export class WatchDryRun implements WatchDryRunner {
     const resolved = resolveWatchSource(environment, check);
     if (resolved.source === null)
       return { verdict: 'unknown', presence: null, rows: null, value: null, detail: resolved.refusal };
-    const ask = {
-      environment: environment.name,
-      command: resolved.source.observe,
-      source: resolved.source.name,
-      language: resolved.source.language,
-      checkId: check.id,
-      ...period,
-    };
+    const ask = observationAsk(environment.name, resolved.source, check.id, period);
     if (check.presence !== null) {
       const probe = await this.deps.observer.observe({ ...ask, query: check.presence, kind: 'presence' });
       const presence = verdictOf(probe);

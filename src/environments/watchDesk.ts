@@ -1,7 +1,7 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { GoalWatch, WatchWindow } from '../types.js';
-import type { EnvironmentObserver } from './observer.js';
+import { observationAsk, type EnvironmentObserver } from './observer.js';
 import type { WatchPeriod } from './watchResult.js';
 import type { EnvironmentConfig } from './policy.js';
 import { watchFindings, watchWindowReadings } from './watchFinding.js';
@@ -211,15 +211,7 @@ export class WatchDesk {
       });
       return;
     }
-    const ask = {
-      environment: environment.name,
-      command: resolved.source.observe,
-      source: resolved.source.name,
-      language: resolved.source.language,
-      checkId: check.id,
-      ...period,
-      commits,
-    };
+    const ask = { ...observationAsk(environment.name, resolved.source, check.id, period), commits };
     const presence =
       check.presence === null
         ? null

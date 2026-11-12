@@ -26,6 +26,24 @@ export interface EnvironmentObservationRequest extends WatchPeriod {
   commits?: readonly string[];
 }
 
+/** Everything one check's observations on one source share; each read adds its `query` and `kind`. */
+export function observationAsk(
+  environment: string,
+  source: { name: string; language: WatchSourceLanguage; observe: string },
+  checkId: string,
+  period: WatchPeriod,
+): Omit<EnvironmentObservationRequest, 'query' | 'kind'> {
+  return {
+    environment,
+    command: source.observe,
+    source: source.name,
+    language: source.language,
+    checkId,
+    since: period.since,
+    until: period.until,
+  };
+}
+
 export interface EnvironmentObserver {
   observe(request: EnvironmentObservationRequest): Promise<WatchResult>;
   exposure(request: ExposureRequest): Promise<ExposureReading>;

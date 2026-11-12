@@ -9,6 +9,14 @@ import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
 
+const SourceField = z
+  .string()
+  .describe(
+    'The environment source this check reads, by name — the list under the watch notes in your prompt. ' +
+      'Leave it out where every environment has only one source.',
+  )
+  .optional();
+
 const WatchDeclareInput = z.object({
   note: z
     .string()
@@ -53,13 +61,7 @@ const WatchDeclareInput = z.object({
           )
           .optional(),
         why: z.string().describe('Why this is the signal that matters.').optional(),
-        source: z
-          .string()
-          .describe(
-            'The environment source this check reads, by name — the list under the watch notes in your prompt. ' +
-              'Leave it out where every environment has only one source.',
-          )
-          .optional(),
+        source: SourceField,
       }),
     )
     .describe(
@@ -100,13 +102,7 @@ const WatchDeclareInput = z.object({
           ),
         unit: z.string().describe('ms, %, per minute — drawn beside the number, never parsed.').optional(),
         why: z.string().optional(),
-        source: z
-          .string()
-          .describe(
-            'The environment source this check reads, by name — the list under the watch notes in your prompt. ' +
-              'Leave it out where every environment has only one source.',
-          )
-          .optional(),
+        source: SourceField,
       }),
     )
     .describe(

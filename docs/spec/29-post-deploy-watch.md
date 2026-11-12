@@ -158,7 +158,8 @@ branch, since that is not when the work reached anything. `merged_at` is the pro
 time for the merged pull request — GitHub's `closed_at`, Azure's `closedDate` — stored when the sweep
 records the landing, and a [carried](24-environments.md#a-stacked-pull-request-rides-its-carrier)
 landing takes its carrier's, because that merge is when the stacked work reached the integration
-branch. It is the provider's instant rather than the landing's own `recorded_at`, because `recorded_at`
+branch — and keeps its own where the carrier's row has none, since its own merge onto the topic branch
+is earlier, which is the safe side for a baseline to end on. It is the provider's instant rather than the landing's own `recorded_at`, because `recorded_at`
 is when the harness _noticed_: a pulse later at best, and as late as `closedPrWindowMs` after a
 restart that straddled the merge — late enough for a fast deployment to be inside the baseline. A row
 from before the column, or one the provider gave no time for, has `recorded_at` stand in; that is the

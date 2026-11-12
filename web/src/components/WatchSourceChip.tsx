@@ -84,7 +84,8 @@ export function measuresOnlyRefusal(
   sources: readonly WatchSourceDeclaration[],
 ): string | null {
   if (kind !== 'signal') return null;
-  const declared = sources.find((s) => s.name === source);
+  const declared =
+    source === '' ? (sources.length === 1 ? sources[0] : undefined) : sources.find((s) => s.name === source);
   if (declared === undefined || (declared.language !== 'promql' && declared.language !== 'other')) return null;
   return (
     `A ${declared.language} source takes measures only: the harness cannot read whether such a query aggregates. ` +

@@ -153,8 +153,8 @@ function checkBlock(check: RegressedCheck, environment: string): string[] {
     check.said,
     '',
     ...(check.why === null ? [] : [`**Why it was declared:** ${check.why}`, '']),
-    `**To see the rows yourself**, this is the query the watch put to ${environment}, with the instant the ` +
-      'work arrived filled in where the declaration carried its time bound:',
+    `**To see the rows yourself**, this is the query the watch put to ${environment}, with the period it read ` +
+      'over — from the moment the work arrived — filled in where the declaration carried its time bounds:',
     '',
     '```' + check.language,
     check.query,

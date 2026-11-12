@@ -72,7 +72,7 @@ export class EnvironmentStore {
         `INSERT INTO goal_landings (pr_number, goal_ref, sha, recorded_at, on_integration, merged_at)
          VALUES (@prNumber, @goalRef, @sha, @recordedAt, @onIntegration, @mergedAt)
          ON CONFLICT(pr_number) DO UPDATE SET sha = excluded.sha, on_integration = excluded.on_integration,
-           merged_at = excluded.merged_at`,
+           merged_at = COALESCE(excluded.merged_at, merged_at)`,
       )
       .run({
         prNumber: input.prNumber,
