@@ -60,7 +60,7 @@ function capture(): ErrorRecorder & { entries: ErrorLogInput[] } {
 function watch(clock: { at: number }) {
   const sampler = new FakeSampler();
   const errors = capture();
-  const reads = new SlowReadTally(RUNTIME_THRESHOLDS.slowReadMs, () => 0);
+  const reads = new SlowReadTally(() => 0);
   const health = new RuntimeHealthWatch({ errors, reads, sampler, clock: () => clock.at });
   return { sampler, errors, reads, health };
 }
@@ -111,11 +111,11 @@ test('a lag that persists is one entry per quiet period, carrying what it held b
   assert.match(errors.entries[1]?.detail ?? '', /3 more blocked windows since the last entry/);
 });
 
-test('a slow store read is named by its first line, grouped per statement', () => {
+test('a slow store read is named by its whole statement, grouped per statement', () => {
   const db = new Database(':memory:');
   try {
     let t = 0;
-    const reads = new SlowReadTally(RUNTIME_THRESHOLDS.slowReadMs, () => (t += 300));
+    const reads = new SlowReadTally(() => (t += 300));
     const prep = createPrepare(db, reads);
     const errors = capture();
     const clock = { at: Date.parse('2026-11-12T10:00:00Z') };
@@ -127,11 +127,11 @@ test('a slow store read is named by its first line, grouped per statement', () =
     health.tick();
 
     assert.equal(errors.entries.length, 1, 'two slow reads of one statement are one entry');
-    assert.match(errors.entries[0]?.message ?? '', /a store read took 300 ms: SELECT 1 AS one$/);
+    assert.match(errors.entries[0]?.message ?? '', /a store read took 300 ms: SELECT 1 AS one WHERE 1 = 1$/);
     assert.match(errors.entries[0]?.detail ?? '', /^2 reads of this statement/);
     assert.deepEqual(
       health.reading().slowReads.map((r) => [r.sql, r.count]),
-      [['SELECT 1 AS one', 2]],
+      [['SELECT 1 AS one WHERE 1 = 1', 2]],
     );
   } finally {
     db.close();
@@ -139,7 +139,7 @@ test('a slow store read is named by its first line, grouped per statement', () =
 });
 
 test('a read under the threshold is tallied nowhere', () => {
-  const reads = new SlowReadTally(250, () => 0);
+  const reads = new SlowReadTally(() => 0);
   reads.read('SELECT 1', 249);
   assert.equal(reads.drain().size, 0);
 });

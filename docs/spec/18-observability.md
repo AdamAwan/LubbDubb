@@ -1254,7 +1254,9 @@ running timer.
   the late timer records it when the loop comes back.
 - **Slow store reads** — the `SlowReadTally` every memoised `get`/`all` reports to
   ([14](14-persistence.md#reads-are-timed)), drained per window: count and longest time per statement,
-  keyed on the SQL's first line, which is enough to find the query and nothing a person cannot read.
+  keyed on the whole statement with its whitespace collapsed, cut at 200 characters. Not the first line: a store
+  statement's first line is often a column list or a `WITH` clause, which names no table and folds two
+  different queries into one count.
 
 **When it turns red.** A window is a fault when its **p99 ≥ 1 s or its max ≥ 5 s** — the max because a
 single 22 s stall is one sample among ~1,500 and moves no percentile; the p99 because a loop that is
@@ -1264,7 +1266,7 @@ on the WebSocket like any other failure. The thresholds are `RUNTIME_THRESHOLDS`
 describe when a Node server is unwell, not a deployment's policy.
 
 **Grouped, so a stuck loop is one entry rather than one a window.** Each key — `event-loop`, or the
-statement's first line — records at most once per **15 minutes**; occurrences inside that quiet
+statement's key — records at most once per **15 minutes**; occurrences inside that quiet
 period are counted, and the next entry says how many it held back. The grouping is in memory, so a
 restart may record one more; the error log is the record an operator clears
 ([above](#the-error-log)), and a fault worth the list is one that comes back after a clear.

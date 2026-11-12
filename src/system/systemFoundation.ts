@@ -7,7 +7,7 @@ import { DiscussionPullDesk } from '../discussions/pullDesk.js';
 import { recordIssueComments } from '../sink/issueCommentsSent.js';
 import { Store } from '../store/store.js';
 import { systemClock } from '../store/context.js';
-import { RUNTIME_THRESHOLDS, RuntimeHealthWatch, SlowReadTally, type LoopDelaySampler } from '../runtimeHealth.js';
+import { RuntimeHealthWatch, SlowReadTally, type LoopDelaySampler } from '../runtimeHealth.js';
 import { CompositeConnector } from '../integrations/compositeConnector.js';
 import { buildIntegrations } from '../integrations/registry.js';
 import type { PoolTransport } from '../pool/transport.js';
@@ -197,7 +197,7 @@ function realClone(opts: BuildOptions): boolean {
 }
 
 export function buildFoundation(config: Config, opts: BuildOptions) {
-  const reads = new SlowReadTally(RUNTIME_THRESHOLDS.slowReadMs, opts.readClock);
+  const reads = new SlowReadTally(opts.readClock);
   const store = new Store(config.dbPath, systemClock, reads);
   store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
   store.surfaceReach.pruneSurfaceReach(true);

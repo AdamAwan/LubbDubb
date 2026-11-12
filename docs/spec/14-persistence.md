@@ -149,9 +149,9 @@ apply the modifier once, under a cache key of its own.
 
 The `Store` constructor takes an optional `ReadObserver` (`{now, read}`), and `createPrepare` given
 one shadows each memoised statement's `get` and `all` with a timed copy **once, when it is compiled**:
-two clock reads and a call per read, no allocation, and nothing at all when no observer is passed —
+two clock reads and a call per read, and nothing at all when no observer is passed —
 which is every `new Store(...)` a test builds directly. `buildFoundation` passes the runtime watch's
-`SlowReadTally`, which keeps only reads at or over 250 ms, keyed on the SQL's first non-empty line, for
+`SlowReadTally`, which keeps only reads at or over 250 ms, keyed on the whole statement with its whitespace collapsed (cut at 200 characters), for
 the watch to drain into the error log ([18](18-observability.md#the-runtime-watch)).
 
 Timing lives at `prep` rather than at call sites because `prep` is the one door almost every read

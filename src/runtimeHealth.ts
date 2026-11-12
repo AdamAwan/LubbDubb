@@ -1,6 +1,5 @@
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import type { ErrorRecorder } from './errorLog.js';
-import { firstLine } from './primitives.js';
 import type { ReadObserver } from './store/context.js';
 import type { EventLoopWindow, RuntimeHealthReading, SlowRead } from './types.js';
 
@@ -25,22 +24,17 @@ export const RUNTIME_THRESHOLDS = {
   keptSlowReads: 20,
 } as const;
 
-type Thresholds = typeof RUNTIME_THRESHOLDS;
-
 const NS_PER_MS = 1e6;
 
 /** Tallies store reads over the threshold; built before the store, drained by the watch. */
 export class SlowReadTally implements ReadObserver {
   private pending = new Map<string, { count: number; maxMs: number }>();
 
-  constructor(
-    private readonly thresholdMs: number = RUNTIME_THRESHOLDS.slowReadMs,
-    readonly now: () => number = () => performance.now(),
-  ) {}
+  constructor(readonly now: () => number = performance.now.bind(performance)) {}
 
   read(sql: string, ms: number): void {
-    if (ms < this.thresholdMs) return;
-    const key = firstLine(sql) ?? sql;
+    if (ms < RUNTIME_THRESHOLDS.slowReadMs) return;
+    const key = statementKey(sql);
     const held = this.pending.get(key);
     if (held === undefined) this.pending.set(key, { count: 1, maxMs: ms });
     else {
@@ -62,7 +56,7 @@ interface Group {
 }
 
 export class RuntimeHealthWatch {
-  private readonly thresholds: Thresholds;
+  private readonly thresholds = RUNTIME_THRESHOLDS;
   private readonly sampler: LoopDelaySampler;
   private readonly clock: () => number;
   private readonly groups = new Map<string, Group>();
@@ -76,10 +70,8 @@ export class RuntimeHealthWatch {
       reads: SlowReadTally;
       sampler?: LoopDelaySampler;
       clock?: () => number;
-      thresholds?: Partial<Thresholds>;
     },
   ) {
-    this.thresholds = { ...RUNTIME_THRESHOLDS, ...deps.thresholds };
     this.sampler = deps.sampler ?? monitorEventLoopDelay({ resolution: 20 });
     this.clock = deps.clock ?? Date.now;
   }
@@ -100,20 +92,22 @@ export class RuntimeHealthWatch {
 
   tick(): void {
     const now = this.clock();
-    const at = new Date(now).toISOString();
-    const window = this.closeWindow(at);
-    if (window !== null) this.judgeLag(window, now);
-    for (const [sql, { count, maxMs }] of this.deps.reads.drain()) this.judgeRead(sql, count, maxMs, at, now);
+    const window = this.closeWindow(now);
+    if (window !== null) {
+      this.latest = window;
+      this.judgeLag(window, now);
+    }
+    for (const [sql, { count, maxMs }] of this.deps.reads.drain()) this.judgeRead(sql, count, maxMs, now);
   }
 
   reading(): RuntimeHealthReading {
     return {
       eventLoop: this.latest,
-      slowReads: [...this.slowReads.values()].sort((a, b) => b.lastAt.localeCompare(a.lastAt)),
+      slowReads: [...this.slowReads.values()].reverse(),
     };
   }
 
-  private closeWindow(at: string): EventLoopWindow | null {
+  private closeWindow(now: number): EventLoopWindow | null {
     const s = this.sampler;
     const max = s.max;
     if (!Number.isFinite(max) || max <= 0) {
@@ -121,7 +115,7 @@ export class RuntimeHealthWatch {
       return null;
     }
     const window: EventLoopWindow = {
-      at,
+      at: new Date(now).toISOString(),
       windowMs: this.thresholds.windowMs,
       meanMs: ms(s.mean),
       p50Ms: ms(s.percentile(50)),
@@ -129,7 +123,6 @@ export class RuntimeHealthWatch {
       maxMs: ms(max),
     };
     s.reset();
-    this.latest = window;
     return window;
   }
 
@@ -146,15 +139,19 @@ export class RuntimeHealthWatch {
     }));
   }
 
-  private judgeRead(sql: string, count: number, maxMs: number, at: string, now: number): void {
+  private judgeRead(sql: string, count: number, maxMs: number, now: number): void {
     const held = this.slowReads.get(sql);
+    this.slowReads.delete(sql);
     this.slowReads.set(sql, {
       sql,
       count: (held?.count ?? 0) + count,
       maxMs: Math.max(held?.maxMs ?? 0, round(maxMs)),
-      lastAt: at,
+      lastAt: new Date(now).toISOString(),
     });
-    this.trimSlowReads();
+    if (this.slowReads.size > this.thresholds.keptSlowReads) {
+      const oldest = this.slowReads.keys().next().value;
+      if (oldest !== undefined) this.slowReads.delete(oldest);
+    }
     this.recordGrouped(`read:${sql}`, now, (suppressed) => ({
       message: `a store read took ${fmt(maxMs)} ms: ${sql}`,
       detail: [
@@ -162,12 +159,6 @@ export class RuntimeHealthWatch {
         ...suppressedLine(suppressed, 'slow read'),
       ].join('\n'),
     }));
-  }
-
-  private trimSlowReads(): void {
-    if (this.slowReads.size <= this.thresholds.keptSlowReads) return;
-    const oldest = [...this.slowReads.values()].sort((a, b) => a.lastAt.localeCompare(b.lastAt))[0];
-    if (oldest !== undefined) this.slowReads.delete(oldest.sql);
   }
 
   private recordGrouped(
@@ -187,6 +178,13 @@ export class RuntimeHealthWatch {
 
 function suppressedLine(suppressed: number, what: string): string[] {
   return suppressed === 0 ? [] : [`${suppressed} more ${what}${suppressed === 1 ? '' : 's'} since the last entry`];
+}
+
+const KEY_LENGTH = 200;
+
+function statementKey(sql: string): string {
+  const flat = sql.replace(/\s+/g, ' ').trim();
+  return flat.length > KEY_LENGTH ? `${flat.slice(0, KEY_LENGTH)}…` : flat;
 }
 
 function ms(ns: number): number {
