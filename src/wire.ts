@@ -509,7 +509,7 @@ export interface CockpitState {
   environmentArrivals: GoalArrival[];
   remoteSheets: RemoteSheetView[];
   stackLandings: StackLandingView[];
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   jobs: Job[];
   schedules: JobSchedule[];
   agents: Agent[];
@@ -721,7 +721,7 @@ export interface AgentFilesPayload {
 export interface GoalAgentsPayload {
   ref: string;
   agents: Agent[];
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
 }
 
 export interface WorkRootsPayload {

@@ -96,6 +96,10 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   callers folded rows into the claim store and went with it, so the mechanism comes back with the next migration that
   needs it. → [22](docs/spec/22-pets.md#clearing-the-vivarium),
   [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
+- **Every write to `tasks` is a `TaskStore` method that sets `this.summaries = null`.** `listTasks` is memoised there
+  and cleared only by those writes, so a `DELETE` or `UPDATE` on `tasks` from anywhere else — a retention sweep, a
+  repair pass — leaves every reader on the table as it was, with nothing red. →
+  [14](docs/spec/14-persistence.md#tasks)
 - **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the aggregate as
   another fleet's, and looks exactly like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
 - **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.** Which

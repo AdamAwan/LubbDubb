@@ -15,7 +15,7 @@ export function assessBranch(issueNumber: number): string {
   return `assess/issue/${issueNumber}`;
 }
 
-export function hasPriorWork(issueNumber: number, tasks: TaskSummary[]): boolean {
+export function hasPriorWork(issueNumber: number, tasks: readonly TaskSummary[]): boolean {
   return tasks.some((t) => {
     const role = issueOriginRole(issueNumber, t.originRef);
     return role === 'work' || role === 'evidence';

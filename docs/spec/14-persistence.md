@@ -64,7 +64,8 @@ Four properties, all asserted structurally in `test/storeModules.test.ts` rather
 - **Each table is named by exactly one module.** Two writers to one table is how the invariants
   between them come to disagree — which is why the four issue-verdict tables are deliberately one
   module and not four (see below).
-- **The transcript buffer survives `close()`.** `TranscriptStore` is the one stateful module — it
+- **The transcript buffer survives `close()`.** `TranscriptStore` is the one module that holds
+  _unwritten_ state (`TaskStore`'s memo of [`listTasks`](#tasks) holds only a copy of what is on disk) — it
   accumulates output in memory and writes on a ~16KB threshold — so `Store.close()` has to ask it
   to flush before the handle goes, and a test with a real file on disk is what notices if it stops.
 
@@ -648,7 +649,8 @@ lacked the index.
 ### Tasks
 
 `createTask`, `updateTask` (status / agentId / branch only), `getTask`, `listTasks`,
-`listOutstandingTasks`, `findActiveTaskByOrigin(originRef)`, `findActiveTaskByBranch(branch)`,
+`listTasksTouchedSince(since)`, `listGoalTasks(goalRef, prRefs)`, `listOutstandingTasks`,
+`findActiveTaskByOrigin(originRef)`, `findActiveTaskByBranch(branch)`,
 `hasActiveTaskOnBranch(branch, exceptTaskId)`. "Active" is `queued`, `running` or `waiting`, spelled
 once as `ACTIVE_TASK_STATUS_SQL` in `src/tasks.ts` and shared with `isActiveTask`.
 
@@ -656,15 +658,49 @@ once as `ACTIVE_TASK_STATUS_SQL` in `src/tasks.ts` and shared with `isActiveTask
 task **other than** the one being asked about still holds the branch. The reaped-agent handler in
 `src/system/system.ts` asks it before releasing a worktree slot, and asked it by hydrating the whole table
 and filtering in JS until it was an index-shaped `SELECT 1 … LIMIT 1`. There is no index on
-`tasks(branch)` — `idx_tasks_status` and `idx_tasks_origin` are the only two — so the query is a scan
-of `tasks` with an early exit, still strictly cheaper than hydrating every row.
+`tasks(branch)` — the indexes are `idx_tasks_status`, `idx_tasks_origin` and `idx_tasks_updated` — so
+the query is a scan of `tasks` with an early exit, still strictly cheaper than hydrating every row.
 
 **`listTasks` returns `TaskSummary`, not `Task`: every column except `prompt`.** It is the only
 all-time reading of the table, and it names its columns rather than starring. A rendered agent prompt
 is kilobytes; on a deployment with 1,248 tasks the prompts were 17.4 MB of the 20.2 MB `SELECT *`
 returned, and better-sqlite3 is synchronous, so that read blocked the server — 322 ms against 33 ms
-for the named columns — every time any of its thirteen callers ran, several times a pulse per open
+for the named columns — every time any of its callers ran, several times a pulse per open
 cockpit. None of them reads a prompt: they read origins, branches, statuses and rules.
+
+**Naming the columns does not make the read cheap.** `prompt` sits fourth in the row, so on a table
+whose prompts run to kilobytes every column after it lives on overflow pages, and reading a summary
+still walks every row's chain. On a deployment with 5,487 tasks and a 424 MB database the summary
+read, issued by the cycle's observe step, its reconcile desks (the work graph, branch reaping), the
+pulse read, the pool digest, and by `/api/state`, allowance, reliability, both spend routes, tickets,
+features and MCP usage per open cockpit, froze the event loop (#1159). Two things answer it:
+
+- **`listTasks` is memoised in `TaskStore`, and every task write clears the memo.** `createTask` and
+  `updateTask` set it to null after their statement runs; the next `listTasks` reads the table once and
+  every later caller is handed the same list until the next write. So a cycle that writes no task
+  reads the table once, however many desks ask, and repeated cockpit requests between task writes read
+  it not at all. The list is returned **frozen**, items and all, and typed `readonly TaskSummary[]`:
+  it is shared, so a caller that sorted it in place would reorder every other caller's. An earlier
+  holder keeps the list it was handed; a write replaces the memo rather than editing it.
+  A memo rather than a hand-me-down through the cycle, because the cycle's own passes write tasks
+  between its readers — a park resumed, a stall completed, a dispatch — and a list handed down from
+  the top of the cycle would be stale exactly there.
+- **A caller that needs a slice reads the slice.** `listTasksTouchedSince(since)` is the read plan's
+  ([04](04-harness-cycle.md#the-fresh-set)): the active set, unioned with every row whose `updated_at`
+  is past the instant, each half on its own index (`idx_tasks_status`, `idx_tasks_updated`).
+  `listGoalTasks` serves the goal retrospective's dossier (`src/retro/record.ts`), which wants one
+  goal's origins. A part restart's refusal (`partRestartRefusal`) asks only whether a _live_ task holds
+  the part, so it is handed `listOutstandingTasks`. None of these goes through the memo; each is
+  bounded by what it asks for rather than by the table.
+
+**Every write to `tasks` is a `TaskStore` method that clears the memo.** A statement that writes the
+table from anywhere else — a retention `DELETE` in another module, a repair pass on `Store` — leaves
+`listTasks` serving the table as it was, with nothing red: the cockpit draws tasks that are gone, and
+the dispatcher reads an origin as covered by a task that has ended. `test/taskListReads.test.ts`
+asserts both halves structurally. A transaction that writes `tasks` and then rolls back would leave
+a memo read inside it describing rows that never landed; none exists, and one that is added clears
+the memo on rollback too. The boot backfill (`backfillTaskDispatchKind`) is the one writer outside the
+class, and it runs before `TaskStore` is constructed.
 
 The prompt is a **single-row** read. `getTask`, `listOutstandingTasks` (bounded to the active set) and
 `createTask`'s own return value are `Task`, and they are what the three readers of a prompt use — the

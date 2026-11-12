@@ -48,7 +48,11 @@ interface RunRecord {
   complete: boolean;
 }
 
-export function runsToRecord(issues: readonly Issue[], tasks: TaskSummary[], signals: CompletionSignals): RunRecord[] {
+export function runsToRecord(
+  issues: readonly Issue[],
+  tasks: readonly TaskSummary[],
+  signals: CompletionSignals,
+): RunRecord[] {
   const records: RunRecord[] = [];
   for (const issue of issues) {
     const complete = isGoalComplete(issue.number, signals);

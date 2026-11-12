@@ -253,6 +253,12 @@ reuses the hydration that describes that agent's work as still to do.
 It beats the lane rather than widening it, for the same reason: an entity it names is usually one whose
 token has not moved, so anything short of overriding the reuse entirely would change nothing at all.
 
+**The plan reads only the tasks it can use.** Both questions it asks of `tasks` — which are active, and
+which changed since the last reading — are answered by `listTasksTouchedSince(previous.takenAt)`, an
+indexed read of the active set plus every row whose `updated_at` is past that instant, rather than by
+the all-time `listTasks` filtered in JS ([14](14-persistence.md#tasks)). The instant is normalised to
+the store's own ISO form first, because the comparison is a string one.
+
 ### Who owns the cold-lane interval
 
 **The lane does, and the cache now owns nothing.** `HydrationCache` used to expire every entry after
@@ -482,7 +488,12 @@ flowchart TD
    recorded above are the cycle's only write to a table it goes on to read, and that write is above
    the read — so a second read of `listAllPlanParts`, `listIssueRuns`, `listPrReviews` or
    `listPrReviewRoutes` could only ever return the same rows, at the cost of another query and of a
-   reader having to wonder which of the two the decision was made against. Immediately **above** the whole read,
+   reader having to wonder which of the two the decision was made against. `tasks` is the exception
+   that proves it: the cycle's own passes _do_ write it (a park resumed, a stall completed, a dispatch),
+   so its readers are not handed one early copy. They each ask `listTasks`, which is memoised in the
+   store and cleared by every task write ([14](14-persistence.md#tasks)) — a cycle that writes no task
+   reads the table once however many desks ask, and one that does reads it again only after the
+   write, which is the read a stale hand-me-down would have got wrong. Immediately **above** the whole read,
    `fleet.resumeExpiredParks()` ends every usage-limit park whose reset time has passed, so an agent
    the account stopped mid-turn comes back on its own rather than waiting for someone to notice a
    clock ([10](10-agent-runtimes.md#ending-it-on-the-clock)). Its position is the point: an agent it
