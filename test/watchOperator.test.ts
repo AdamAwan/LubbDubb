@@ -252,7 +252,7 @@ test('an unanswered closing ask settles the check unknown after operatorGraceMs,
   system.store.close();
 });
 
-test('an answered closing ask is never re-opened — not on the next pass, and not when its window settles again', async () => {
+test('an answered closing ask is never re-opened by the harness — only the operator extending its window asks again', async () => {
   const environments = [sqlEnvironment('liveUk')];
   const system = build(environments);
   arrived(system, 'liveUk', [MEASURE]);
@@ -264,14 +264,74 @@ test('an answered closing ask is never re-opened — not on the next pass, and n
   await system.harness.runCycle();
   assert.equal(system.store.humanTasks.getHumanTask(task.id)?.status, 'done', 'the next pass leaves it answered');
 
-  system.store.watches.extendWatchWindow(GOAL, 'liveUk', new Date(Date.now() + HOUR_MS).toISOString());
+  const { app } = await buildApp(system);
+  const extended = await app.inject({ method: 'POST', url: `/api/issues/12/watch/liveUk/extend` });
+  assert.equal(extended.statusCode, 200);
   new WatchAsks({ store: system.store, environments }).pass();
+  assert.equal(system.store.humanTasks.getHumanTask(task.id)?.status, 'done', 'nothing is asked while it watches');
+
   await new Promise((resolve) => setTimeout(resolve, 5));
   system.store.watches.settleWatchWindow(GOAL, 'liveUk');
   new WatchAsks({ store: system.store, environments }).pass();
-  const after = system.store.humanTasks.getHumanTask(task.id)!;
-  assert.equal(after.status, 'done', "the operator's answer is theirs: the harness re-opens only what it settled");
-  assert.match(after.resolution ?? '', /Answered by the operator/);
+  const reasked = system.store.humanTasks.getHumanTask(task.id)!;
+  assert.equal(reasked.status, 'open', 'the extend asked to watch longer, so the closing reading is asked again');
+  const window = system.store.watches.listWatchWindows()[0]!;
+  assert.equal(system.store.watches.getWatchAsk(task.id)?.until, window.settledAt, 'over the new period');
+  const waiting = () =>
+    watchWindowReadings({
+      windows: system.store.watches.listWatchWindows(),
+      checks: system.store.watches.listGoalWatches(),
+      readings: system.store.watches.listWatchReadings(),
+      waiting: openWatchAsks(system.store),
+    })[0]!;
+  assert.equal(waiting().settled, false, 'the old period’s answer does not settle the longer window');
+
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(system.watchAsks.answer(task.id, { answer: '3', presence: null }).ok, true);
+  const readings = system.store.watches.listWatchReadings();
+  assert.deepEqual(
+    readings.map((r) => r.value),
+    [40, 3],
+    'the old answer stays in the history',
+  );
+  const standing = waiting();
+  assert.equal(standing.settled, true);
+  assert.equal(standing.checks[0]?.reading?.value, 3, 'and the new period’s answer is the one that stands');
+  assert.equal(standing.verdict, 'regressed');
+
+  new WatchAsks({ store: system.store, environments }).pass();
+  assert.equal(system.store.humanTasks.getHumanTask(task.id)?.status, 'done', 'and is not re-opened after it');
+  await app.close();
+  system.store.close();
+});
+
+test('a dry run leaves an answered baseline alone: editing one check keeps the other’s answer', async () => {
+  const system = build([sqlEnvironment('liveUk')]);
+  system.store.watches.ingestGoalWatch(GOAL, [MEASURE, SIGNAL]);
+  await system.watch.run(GOAL);
+  const signalAsk = asks(system).find(({ ask }) => ask.checkId === SIGNAL.id)!;
+  const answered = system.watchAsks.answer(signalAsk.task.id, {
+    answer: '[{"at": 1}, {"at": 2}]',
+    presence: '[{"at": 1}]',
+  });
+  assert.equal(answered.ok, true);
+  const before = system.store.watches.listGoalWatches().find((c) => c.id === SIGNAL.id)!;
+  assert.equal(before.dryRunRows, 2);
+
+  const { seq: _seq, ...edited } = { ...MEASURE, query: `${MEASURE.query} and region = 'uk'` };
+  system.store.watches.saveOperatorWatch(GOAL, edited);
+  await system.watch.run(GOAL);
+
+  const after = system.store.watches.listGoalWatches().find((c) => c.id === SIGNAL.id)!;
+  assert.equal(after.dryRunVerdict, 'fires', 'the answer the person gave still stands');
+  assert.equal(after.dryRunPresence, 'fires');
+  assert.equal(after.dryRunRows, 2);
+  assert.equal(after.dryRunAt, before.dryRunAt);
+  assert.equal(system.store.humanTasks.getHumanTask(signalAsk.task.id)?.status, 'done', 'and is not asked again');
+  const measure = system.store.watches.listGoalWatches().find((c) => c.id === MEASURE.id)!;
+  assert.equal(measure.dryRunVerdict, 'unknown', 'the edited check is the one put back to the placeholder');
+  const measureAsk = asks(system).find(({ ask }) => ask.checkId === MEASURE.id)!;
+  assert.equal(measureAsk.task.status, 'open', 'and asked afresh');
   system.store.close();
 });
 

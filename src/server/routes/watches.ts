@@ -55,7 +55,7 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
         return reply
           .code(409)
           .send({ error: 'that environment declares no watch, so a window there could ask nothing' });
-      const window = store.watches.extendWatchWindow(
+      const window = system.watchAsks.extend(
         issueOrigin(params.number),
         params.environment,
         new Date(Date.now() + watchWindowMs(environment)).toISOString(),

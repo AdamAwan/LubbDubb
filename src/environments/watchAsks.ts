@@ -122,6 +122,28 @@ export class WatchAsks {
     }
   }
 
+  /**
+   * The operator's extend: the window watches again, and its closing asks — open or answered — are cleared,
+   * because the reading they asked for covered a period the operator has just said is too short. The pass
+   * asks again, over the new period, when the window settles; an answer from the old period stays in the
+   * readings' history and stops standing once the new one is in, or once grace runs out on it.
+   */
+  extend(goalRef: string, environment: string, settlesAt: string): WatchWindow | null {
+    const { store } = this.deps;
+    const window = store.watches.extendWatchWindow(goalRef, environment, settlesAt);
+    if (window === null || !this.operated.some((e) => e.name === environment)) return window;
+    for (const ask of store.watches.listWatchAsks(goalRef))
+      if (ask.ask === 'closing' && ask.environment === environment)
+        if (store.humanTasks.getHumanTask(ask.taskId)?.status === 'open')
+          store.humanTasks.settleHumanTask(
+            ask.taskId,
+            'declined',
+            DESK_SETTLED + `${environment}'s window was extended, and asks again when it closes`,
+          );
+    store.watches.dropWindowAsks(goalRef, environment, 'closing');
+    return window;
+  }
+
   /** Every ask still open, with its query ready to run. */
   open(read?: { asks: readonly WatchAsk[]; checks: readonly GoalWatch[] }): WatchAskView[] {
     if (this.operated.length === 0) return [];
@@ -334,8 +356,8 @@ export class WatchAsks {
 
 /**
  * Filing an ask: a new row, the open row refreshed, or a settled row re-opened — where the harness settled
- * it, or where an edit to the check cleared the ask it answered (`asked` no longer holds its task), so the
- * question it answered no longer exists. A row a person answered or declined, on a question that still
+ * it, or where an edit to the check or an extend of its window cleared the ask it answered (`asked` no longer
+ * holds its task), so the question it answered no longer exists. A row a person answered or declined, on a question that still
  * stands, is theirs and is never re-opened: the step is null.
  */
 function fileStep(

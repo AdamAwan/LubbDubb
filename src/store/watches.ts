@@ -2,6 +2,7 @@ import type {
   GoalWatch,
   GoalWatchInput,
   WatchAsk,
+  WatchAskKind,
   WatchCheckVerdict,
   WatchReading,
   WatchReadingVerdict,
@@ -437,6 +438,11 @@ export class WatchStore {
            task_id=excluded.task_id, since=excluded.since, until=excluded.until`,
       )
       .run(ask);
+  }
+
+  /** One window's asks of one kind, whatever became of their rows: the question they asked is gone. */
+  dropWindowAsks(goalRef: string, environment: string, ask: WatchAskKind): void {
+    this.ctx.prep(`DELETE FROM watch_asks WHERE goal_ref=? AND environment=? AND ask=?`).run(goalRef, environment, ask);
   }
 
   /** A check's readings and asks, which describe the query it no longer carries. */

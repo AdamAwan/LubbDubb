@@ -883,10 +883,10 @@ retracted by the pass.
 watch desk's apply loop): the pass and `askBaselines` decide `file`, `reopen` or `settle` steps off the
 rows they read once, and `apply` writes them. **The harness re-opens only a row it settled itself**
 (`deskSettled`) — a retraction for an extended window, a baseline its window outran. A row a person
-answered (`done`) or declined is theirs and is never re-opened while the question it answered still
-stands, so a window extended and settled again after its closing ask was answered keeps that answer
-rather than asking again. The one way a person's row comes back is that the question itself is gone: an
-edit that changed the check's query cleared the ask row it answered, so the same title asks afresh.
+answered (`done`) or declined is theirs and is never re-opened by the harness on its own — not on the
+next pass, and not on any later one. A person's row comes back only when the question itself is gone,
+and two things end a question, each cleared ask row letting the same title ask afresh: an edit that
+changed the check's query, and the operator **extending** that window.
 
 - **The baseline** is asked by `askBaselines`, which the accept route calls once the set is live, and
   which the dry run calls for a goal with live checks — so an operator's own edit and a plan document's
@@ -899,12 +899,24 @@ edit that changed the check's query cleared the ask row it answered, so the same
   **within grace** — a window that settled longer ago than `operatorGraceMs` before this build files
   nothing, so turning the feature on does not ask a person about March. Its period is the window's own,
   arrival (or exposure) to the end (`settledWatchPeriod`). Asking it retracts any baseline ask still
-  open for that check there. A window extended while its closing ask is open retracts the ask, and asks
-  again — the same row, re-opened with the new period, because the harness was the one that settled
-  it — when it settles again.
+  open for that check there. **An extend asks the closing reading again.** It is the operator's own
+  click asking to watch longer, so a reading over the shorter period no longer answers it:
+  `WatchAsks.extend`, which the extend route goes through, retracts the window's closing asks still open
+  and clears every closing ask row on that window, answered or not. When the window settles again the
+  pass files them over the new period — the same rows, re-opened — and the window is `awaiting` until
+  they are answered or grace runs out. An answer from the old period stays in `watch_readings` as
+  history, but the reading that stands for the window's outcome is the new answer, or `unknown` once
+  nobody ran it.
 - **An ask whose check was edited, dropped or moved off an operator source retracts itself**, with the
   harness's settlement prefix, and an edit that changes a check's query clears its asks with its
   readings so the dry run asks afresh.
+- **A dry run never overwrites an answered baseline.** `WatchDryRun.run` puts every check on the goal
+  through again — an edit to one check dry-runs its siblings — and a check on an operator source gets the
+  placeholder dry run (_nothing was put to it_). That placeholder is written only for a check with no
+  answered baseline: where its baseline ask settled `done` and the check still holds the dry run the
+  answer wrote, the dry run leaves it alone. The ask row itself is the test that the query is unchanged,
+  because an edit to the query, presence or source clears it; a check whose dry run was wiped by a plan
+  document's re-ingest gets the placeholder back.
 
 Two ways to answer it, and both land in the same place:
 
@@ -1083,7 +1095,9 @@ harness already wrote, and an operator's decision is not a reading. The new end 
 window with (`watchWindowMs`, `src/environments/watchWindow.ts`) — a second reading of that field is
 one edit from a window extending by a different length from the one it opened with, with nothing
 red. `watch_windows.extended_at` records that it happened, so the card can say why a window's end is
-not the one its arrival would have given it.
+not the one its arrival would have given it. On a source only a person can run, the extend also
+clears the window's closing asks, so the closing reading is asked again over the longer period when it
+settles ([below](#a-source-only-the-operator-can-run)).
 → `POST /api/issues/:number/watch/:environment/extend` (`src/server/routes/watches.ts`)
 
 A settled window is never pruned either, which is the other half of the same rule: its readings are

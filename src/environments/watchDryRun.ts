@@ -36,15 +36,32 @@ export class WatchDryRun implements WatchDryRunner {
     if (!this.deps.environments.some((env) => watchSources(env.watch).length > 0)) return [];
     const checks = this.deps.store.watches.listDryRunWatches(originRef);
     const merged = goalMergedAt(this.deps.store.environments.listGoalLandings(), originRef);
+    const answered = this.answeredBaselines(originRef);
     const refusals: string[] = [];
     for (const check of checks) {
       const environment = dryRunEnvironment(this.deps.environments, check.source);
+      if (answered.has(check.id) && check.dryRunAt !== null && resolveWatchSource(environment, check).operator !== null)
+        continue;
       const { reading, refusal } = await this.read(environment, check, merged);
       this.deps.store.watches.recordWatchDryRun(originRef, check.id, { environment: environment.name, ...reading });
       if (refusal !== null) refusals.push(`${check.id}: ${refusal}`);
     }
     if (checks.some((c) => c.live)) this.deps.asks.askBaselines(originRef);
     return refusals;
+  }
+
+  /**
+   * The checks whose baseline a person answered, on a query an edit has not changed since — an edit clears
+   * the ask with it. Their stored dry run is that answer, which no placeholder may overwrite.
+   */
+  private answeredBaselines(originRef: string): Set<string> {
+    const { store } = this.deps;
+    return new Set(
+      store.watches
+        .listWatchAsks(originRef)
+        .filter((a) => a.ask === 'baseline' && store.humanTasks.getHumanTask(a.taskId)?.status === 'done')
+        .map((a) => a.checkId),
+    );
   }
 
   /**

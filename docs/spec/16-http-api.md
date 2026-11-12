@@ -813,7 +813,9 @@ No body. Gives a post-deploy watch window more time — the honest answer for on
 weekly job it was about ever ran. It **re-opens the window it names** rather than opening a second
 one, and the readings it already took are untouched, so the verdict that was fixed stays readable
 under the ones it is about to take. The new end is measured from **now** by the environment's own
-`forMs`, through the one function the arrival pass sizes a window with.
+`forMs`, through the one function the arrival pass sizes a window with. It goes through
+`WatchAsks.extend`, which also clears the window's closing asks for a reading only a person can take —
+answered or not — so they are asked again over the new period when the window settles.
 
 Two refusals, each a different kind of no. **404** where there is no window on that goal and
 environment — a stale page and a wrong name look identical from here, and reporting either as done
