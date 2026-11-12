@@ -6,7 +6,7 @@ export const ENDED_AGENT_TAIL = 200;
 
 interface FleetHistory {
   agents: Agent[];
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   ended: number;
 }
 

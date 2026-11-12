@@ -18,4 +18,6 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 
 CREATE INDEX IF NOT EXISTS idx_tasks_origin ON tasks(origin_ref);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at);
 `;

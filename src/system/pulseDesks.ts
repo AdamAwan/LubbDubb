@@ -95,10 +95,10 @@ export type PulsePhase =
 interface PulseReadings {
   reconcile: { world: WorldSnapshot; previousWorld: WorldSnapshot | null; readWorld: boolean };
   open: Record<string, never>;
-  afterTasks: { world: WorldSnapshot; tasks: TaskSummary[] };
-  afterAgents: { tasks: TaskSummary[]; agents: Agent[] };
+  afterTasks: { world: WorldSnapshot; tasks: readonly TaskSummary[] };
+  afterAgents: { tasks: readonly TaskSummary[]; agents: Agent[] };
   afterVerdicts: { world: WorldSnapshot };
-  afterOrigins: { world: WorldSnapshot; tasks: TaskSummary[]; signals: CompletionSignals };
+  afterOrigins: { world: WorldSnapshot; tasks: readonly TaskSummary[]; signals: CompletionSignals };
   afterReviews: { dispatchWorld: WorldSnapshot; prReviews: PrReview[]; prReviewRoutes: PrReviewRoute[] };
   afterExecute: Record<string, never>;
 }

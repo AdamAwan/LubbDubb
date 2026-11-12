@@ -25,6 +25,8 @@ export const TASK_COLUMNS: ColumnMigrations = {
 };
 
 export class TaskStore {
+  private summaries: readonly TaskSummary[] | null = null;
+
   constructor(private readonly ctx: StoreContext) {}
 
   createTask(
@@ -94,6 +96,7 @@ export class TaskStore {
          VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @mcpServers, @model, @effort, @permissionMode, @permissionAutoApprove, @profile, @profileSource, @status, @agentId, @createdAt, @updatedAt)`,
       )
       .run(taskToRow(task));
+    this.summaries = null;
     return task;
   }
 
@@ -104,6 +107,7 @@ export class TaskStore {
     this.ctx
       .prep(`UPDATE tasks SET status=@status, agent_id=@agentId, branch=@branch, updated_at=@updatedAt WHERE id=@id`)
       .run({ id, status: next.status, agentId: next.agentId, branch: next.branch, updatedAt: next.updatedAt });
+    this.summaries = null;
   }
 
   getTask(id: string): Task | null {
@@ -111,10 +115,24 @@ export class TaskStore {
     return row ? rowToTask(row) : null;
   }
 
-  listTasks(): TaskSummary[] {
+  listTasks(): readonly TaskSummary[] {
+    if (this.summaries === null) {
+      const rows = this.ctx
+        .prep(`SELECT ${SUMMARY_COLUMNS} FROM tasks ORDER BY created_at DESC`)
+        .all() as TaskSummaryRow[];
+      this.summaries = Object.freeze(rows.map((r) => Object.freeze(rowToSummary(r))));
+    }
+    return this.summaries;
+  }
+
+  listTasksTouchedSince(since: string): TaskSummary[] {
     const rows = this.ctx
-      .prep(`SELECT ${SUMMARY_COLUMNS} FROM tasks ORDER BY created_at DESC`)
-      .all() as TaskSummaryRow[];
+      .prep(
+        `SELECT ${SUMMARY_COLUMNS} FROM tasks WHERE status IN ${ACTIVE_TASK_STATUS_SQL}
+         UNION SELECT ${SUMMARY_COLUMNS} FROM tasks WHERE updated_at > ?
+         ORDER BY created_at DESC`,
+      )
+      .all(since) as TaskSummaryRow[];
     return rows.map(rowToSummary);
   }
 

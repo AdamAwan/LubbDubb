@@ -11,7 +11,7 @@ interface ScopeDrift {
 export function planScopeDrift(
   issueNumber: number,
   parts: PlanPart[],
-  tasks: TaskSummary[],
+  tasks: readonly TaskSummary[],
   files: AgentFile[],
 ): ScopeDrift[] {
   const filesByAgent = new Map<string, AgentFile[]>();

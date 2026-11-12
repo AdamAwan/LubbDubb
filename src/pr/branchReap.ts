@@ -12,7 +12,7 @@ interface BranchReapInput {
 export interface BranchReapContext {
   defaultBranch: string;
   prAuthorConfigured: boolean;
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   reaped: ReadonlySet<number>;
 }
 

@@ -199,7 +199,7 @@ export interface McpNamingTotal {
 interface McpInsightsInput {
   calls: McpCall[];
   agents: Agent[];
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   namedInPrompts: Map<string, number>;
   lastCallByTool: Map<string, string>;
   callsEverByAgent: Map<string, number>;

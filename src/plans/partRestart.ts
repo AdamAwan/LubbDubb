@@ -14,7 +14,7 @@ interface PartRestartContext {
   errors: ErrorLog;
 }
 
-export function partRestartRefusal(part: PlanPart, tasks: TaskSummary[], canClosePr: boolean): string | null {
+export function partRestartRefusal(part: PlanPart, tasks: readonly TaskSummary[], canClosePr: boolean): string | null {
   if (partSettled(part))
     return `"${part.slug}" has already finished as ${part.status} — restarting it would ask the fleet to redo delivered work. Amend the plan and let it declare a new part instead.`;
   if (part.prNumber === null)
@@ -83,7 +83,7 @@ export async function restartPlanPart(
   return { ok: true, part: updated, detail: done.join('; ') };
 }
 
-function liveAgent(part: PlanPart, tasks: TaskSummary[]): TaskSummary | undefined {
+function liveAgent(part: PlanPart, tasks: readonly TaskSummary[]): TaskSummary | undefined {
   const active = (t: TaskSummary): boolean => t.status === 'queued' || t.status === 'running' || t.status === 'waiting';
   return tasks.find((t) => active(t) && (t.id === part.taskId || (part.branch !== null && t.branch === part.branch)));
 }

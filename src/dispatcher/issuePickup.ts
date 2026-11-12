@@ -141,7 +141,7 @@ export interface IssuePickupContext {
   policy: IssuePickupPolicy;
   cooldown: CooldownPolicy;
   now: string;
-  tasks: TaskSummary[];
+  tasks: readonly TaskSummary[];
   recentDecisions: Decision[];
   openPrs: PullRequest[];
   plans?: Plan[];
