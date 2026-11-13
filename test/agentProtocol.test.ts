@@ -160,3 +160,7 @@ test('the terminal runtime still detects the protocol sentinels from real output
   assert.equal(system.store.escalations.listOpenEscalations().length, 1);
   system.store.close();
 });
+
+test('every agent is told to run /simplify before it pushes a pull request', () => {
+  assert.match(PROTOCOL_SYSTEM_PROMPT.replace(/\s+/g, ' '), /run the \/simplify skill over your changes/);
+});

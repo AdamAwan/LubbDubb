@@ -24,6 +24,9 @@ export const PROTOCOL_SYSTEM_PROMPT = [
   '   finished: print the DONE sentinel. The harness watches pull requests and dispatches an agent',
   '   again when CI turns red or a comment lands, so waiting only holds a worktree open for nothing.',
   '',
+  '4. Before you push work that opens a pull request, run the /simplify skill over your changes and',
+  '   commit what it fixes.',
+  '',
   'Do not print either sentinel for any other reason. Keep working autonomously between them.',
 ].join('\n');
 

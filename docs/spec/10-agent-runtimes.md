@@ -96,6 +96,12 @@ build, a test run, a CI check, a long command. Nothing wakes an agent when one f
 WAITING sentinel is for a _person_. A turn ending with neither sentinel is an
 [unannounced stop](#the-unannounced-stop).
 
+It also asks every agent to **run the `/simplify` skill before pushing work that opens a pull
+request**, and commit what it fixes. It sits here rather than with `open_pr` because an agent
+without the MCP channel, or whose `open_pr` is unavailable, opens its pull request by hand and never
+reads that tool. It is an instruction, not a gate: nothing checks it ran. `Skill` is in the default
+`agentAllowedTools`; a list without it makes the step a no-op.
+
 ### The flag payload
 
 A bare ref (a worktree-relative path or an `http(s)` URL) or a JSON object
