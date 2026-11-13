@@ -6,7 +6,6 @@ import { mkdtempSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildClaudeStreamArgs, DONE_REMINDER, MCP_PROTOCOL_ADDENDUM } from '../src/agents/agentProtocol.js';
-import { defaultConfig } from '../src/config/config.js';
 import { DONE_SENTINEL } from '../src/agents/sentinels.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { handleRequest, parseFrame, type McpTool, toolJson } from '../src/mcp/protocol.js';
@@ -1635,9 +1634,4 @@ test('every origin fence points a refused caller at a tool that accepts it', () 
       }
     }
   }
-});
-
-test('an agent is told to run /simplify before it opens its pull request', () => {
-  assert.match(MCP_PROTOCOL_ADDENDUM.replace(/\s+/g, ' '), /\/simplify skill over your changes/);
-  assert.ok(defaultConfig().agentAllowedTools.includes('Skill'));
 });

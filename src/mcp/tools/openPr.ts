@@ -61,8 +61,8 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Open the pull request for the work you were dispatched to do. The harness supplies the branch, ' +
     'the base — which is the rung beneath you when your work is stacked on another part — and the ' +
-    'title convention; you supply what the change does. Run the /simplify skill over your changes and ' +
-    'commit what it fixes, then commit and push your branch before you call ' +
+    'title convention; you supply what the change does. Run the /simplify skill over your changes, ' +
+    'then commit and push your branch before you call ' +
     'this — the harness never pushes, and the provider refuses a pull request whose head it cannot ' +
     'see. You cannot open a pull request for another ' +
     "agent's work: the branch and base come from your own origin, never from an argument. If this " +

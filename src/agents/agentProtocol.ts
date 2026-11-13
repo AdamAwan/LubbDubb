@@ -24,6 +24,9 @@ export const PROTOCOL_SYSTEM_PROMPT = [
   '   finished: print the DONE sentinel. The harness watches pull requests and dispatches an agent',
   '   again when CI turns red or a comment lands, so waiting only holds a worktree open for nothing.',
   '',
+  '4. Before you push work that opens a pull request, run the /simplify skill over your changes and',
+  '   commit what it fixes.',
+  '',
   'Do not print either sentinel for any other reason. Keep working autonomously between them.',
 ].join('\n');
 
@@ -51,9 +54,9 @@ export const MCP_PROTOCOL_ADDENDUM = [
   '  for you. Whether the pull request *closes* its issue is still yours to say, in the body. The last five',
   '  arguments are what a reviewer needs to answer for themselves whether this is what was asked for, what',
   '  cannot be undone, what is missing, and how far it reaches: give them coordinates in the code, never a',
-  '  verdict on your own change. Before you open it, run the /simplify skill over your changes and commit what',
-  '  it fixes. Then commit and `git push -u origin <your branch>`: nothing in the harness pushes for you, and a',
-  '  pull request cannot be opened on commits the provider has never seen — by this tool or by hand.',
+  '  verdict on your own change. Commit and `git push -u origin <your branch>` first: nothing in the harness',
+  '  pushes for you, and a pull request cannot be opened on commits the provider has never seen — by this tool',
+  '  or by hand.',
   '- When something that is not your goal stops you from finishing at all — a base branch somebody else',
   '  broke, a service that is down, a defect in code nobody is touching — do not go fixing it. If your task',
   '  is concluded with a status, conclude it "blocked" and say what stopped you: the goal parks and the',

@@ -665,11 +665,9 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   provider, not by the harness. The precondition is now in the tool's own description, in
   `MCP_PROTOCOL_ADDENDUM` (appended, so an operator's prompt override cannot drop it), and in the
   failure the tool returns.
-- **The change is simplified before it is opened.** The tool's description and
-  `MCP_PROTOCOL_ADDENDUM` both tell the agent to run the `/simplify` skill over its diff and commit
-  what it fixes before pushing — a cleanup pass a reviewer would otherwise ask for. It is an
-  instruction, not a gate: the harness does not check it ran. `Skill` is in the default
-  `agentAllowedTools`, so an operator who replaces that list without it turns the step into a no-op.
+- **The change is simplified before it is opened.** The description says to run `/simplify` first;
+  the rule itself lives in the base protocol, so a by-hand pull request is covered too. →
+  [10](10-agent-runtimes.md#the-sentinel-protocol)
 - **An unpushed head is diagnosed rather than quoted.** GitHub answers
   `{"resource":"PullRequest","field":"head","code":"invalid"}`, which says nothing an agent can act
   on — and the generic failure then advises opening the pull request _by hand_, which fails
