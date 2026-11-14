@@ -56,6 +56,7 @@ function build(over: { gitObserver?: FakeGitObserver; errors?: string } = {}): {
     pool: { project: 'shop' },
     appErrorIntervalMs: 0,
     labelPrefix: 'lubbdubb',
+    appErrorTriagePerDay: 0,
   });
   let failure: string | null = null;
   let target: System['connector'] | null = null;
@@ -72,7 +73,7 @@ function build(over: { gitObserver?: FakeGitObserver; errors?: string } = {}): {
     environmentProber: new FakeEnvironmentProber({ test: ['aaa'] }),
     appErrorReader: new FakeAppErrorReader({ test: over.errors ?? errorsOn('Orders.Submit') }),
     upstream: new FakeUpstreamIssues(),
-    ...(over.gitObserver === undefined ? {} : { gitObserver: over.gitObserver }),
+    gitObserver: over.gitObserver ?? new FakeGitObserver(),
     sink,
     errorMirror: () => {},
   });

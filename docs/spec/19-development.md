@@ -429,7 +429,7 @@ Tests build a full `System` with fakes injected via `buildSystem(config, opts)`:
 | Option          | Replaces                                                                                                                                                                                                                   |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `backend`       | `NodePtyBackend` → `FakePtyBackend` (`src/pty/fakeBackend.ts`). Drive it with `.last().emit(...)` / `.emitExit(...)`; inspect `.writes`.                                                                                   |
-| `streamSpawner` | The real child process for the stream-JSON runtime.                                                                                                                                                                        |
+| `streamSpawner` | The real child process for the stream-JSON runtime. With `backend` injected and no `streamSpawner`, a stream launch is **refused** — the spawn throws and the agent fails to start — rather than running a real `claude`.  |
 | `sink`          | The outbound seam (defaults to the composite connector).                                                                                                                                                                   |
 | `gitObserver`   | `GitCliObserver` → `FakeGitObserver`. Injecting one also turns the reconciler's `git fetch` off.                                                                                                                           |
 | `worktrees`     | `WorktreeManager` → `FakeWorktreeManager` (`src/worktree/fakeWorktreeManager.ts`). Records `ensure`/`remove`, leases slots from a pool as the real one does, and hands back a real empty directory; touches no repository. |
@@ -437,6 +437,21 @@ Tests build a full `System` with fakes injected via `buildSystem(config, opts)`:
 | `pluginCli`     | `ClaudePluginCli` → `FakePluginCli` (`src/plugin/fakePluginCli.ts`). A test reaching `/api/plugin` without it runs the real `claude plugin` against the developer's own plugin store.                                      |
 
 Plus `dbPath: ':memory:'` for an in-memory database.
+
+### Why a faked backend refuses a stream launch
+
+`agentMode` defaults to `stream`, and the stream runtime spawns through `streamSpawner`, not through
+`backend`. So a test that fakes `backend` — and believes its agents are fakes — but leaves
+`streamSpawner` out once launched a **real `claude`** for every code agent a pulse dispatched, on the
+developer's own login, with nothing red: the agent ran, burned quota and wrote into a fake worktree.
+`buildAgentRuntime` extends the `realTransport` rule to close it: with `backend` injected and no
+`streamSpawner`, the stream factory is handed a spawner that throws, naming the missing seam, and the
+dispatch fails to spawn. A test that wants a stream session injects a `streamSpawner`; one that wants
+a fake agent runs `agentMode: 'raw'`, which drives `backend`.
+
+A pulsing test that declares an `errors` block injects `FakeGitObserver` as well: [agent
+triage](39-app-errors.md#agent-triage)'s assembly reads the linked payload, and linking asks the clone
+— the real one, in whatever checkout the suite runs in, without the fake.
 
 ### Why a test must not dispatch through the real worktree manager
 

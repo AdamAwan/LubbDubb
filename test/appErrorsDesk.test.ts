@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system/system.js';
+import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -34,12 +35,14 @@ function build(
     pool: { project: 'acme-api' },
     appErrorIntervalMs: over.appErrorIntervalMs ?? 0,
     appErrorIgnore: over.appErrorIgnore ?? [],
+    appErrorTriagePerDay: 0,
   });
   return buildSystem(config, {
     backend: new FakePtyBackend(),
     worktrees: new FakeWorktreeManager(),
     environmentProber: prober,
     appErrorReader: reader,
+    gitObserver: new FakeGitObserver(),
   });
 }
 

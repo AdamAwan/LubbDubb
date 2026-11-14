@@ -32,6 +32,7 @@ import type {
   AppErrorDetail,
   AppErrorPressPayload,
   AppErrorSearchPayload,
+  AppErrorTriagePressPayload,
   FilingTargetProbe,
   IssueFiled,
   PetCatalogue,
@@ -194,6 +195,8 @@ const realApi = {
     post<AppErrorPressPayload>('/api/app-errors/file-bug', { environment, fingerprint, ...opts }),
   reopenAppErrorTicket: (key: string) => post<AppErrorPressPayload>('/api/app-errors/reopen', { key }),
   searchAppErrorKey: (key: string) => post<AppErrorSearchPayload>('/api/app-errors/search', { key }),
+  triageAppError: (environment: string, fingerprint: string) =>
+    post<AppErrorTriagePressPayload>('/api/app-errors/triage', { environment, fingerprint }),
   claimBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/claim`, {}),
   unclaimBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/unclaim`, {}),
   closeBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/close`, {}),

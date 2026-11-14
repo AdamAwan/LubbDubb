@@ -65,6 +65,7 @@ import { watchPlan } from './rules/watchPlan.js';
 import { validationPlanApproval } from './rules/validationPlanApproval.js';
 import { remoteValidation } from './rules/remoteValidation.js';
 import { botPrRisk } from './rules/botPrRisk.js';
+import { appErrorTriage } from './rules/appErrorTriage.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -97,6 +98,7 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'remote-validation': remoteValidation,
   'validation-failed': validationFailed,
   'bot-pr-risk': botPrRisk,
+  'app-error-triage': appErrorTriage,
   'feature-summary': featureSummary,
   'feature-sequence': featureSequence,
 };

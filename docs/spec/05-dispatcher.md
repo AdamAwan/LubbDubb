@@ -217,6 +217,7 @@ unconditional.
 | `remote-validation`        | Validation sheet pressed                 | `remoteValidation`   | An operator pressed go on a goal's validation sheet against a deployed environment, which opened a run row. One code agent, read-only and pinned to the **deployed commit**, invokes the project's own runner command and says where the report landed — it states no outcome. Below `validate-check`, above `validation-failed`, whose input it produces. → [36](36-remote-validation.md#the-dispatch--rule-remote-validation) |
 | `validation-failed`        | A validation check came back failed      | —                    | A check somebody ran against the delivered goal was recorded **failed**. One code agent, read-only on the default branch, reproduces it and says what is behind it. Never wired through a shortfall. → [20](20-validation.md#when-a-check-fails)                                                                                                                                                                                |
 | `bot-pr-risk`              | Bot pull requests unread for risk        | —                    | A risk run over up to twenty dependency-bot pull requests is open and waiting ([37](37-bot-prs.md#the-risk-summary)). One desk agent for the whole batch; advice only.                                                                                                                                                                                                                                                          |
+| `app-error-triage`         | App errors nothing linked                | —                    | A triage run over up to ten moved app error groups the deterministic link named no goal for is open and waiting ([39](39-app-errors.md#agent-triage)). One read-only code agent for the whole batch; advice drawn beside the link.                                                                                                                                                                                              |
 | `feature-summary`          | Feature has moved                        | —                    | A Feature's children stand somewhere other than where its summary was written, or it has none. One desk agent says where the Feature is. Produces no work at all, so nothing may wait behind it.                                                                                                                                                                                                                                |
 | `feature-sequence`         | Feature has unsequenced stories          | `sequencer`          | A Feature has gained or lost stories since anybody wrote an order for them, or has never had one. One desk agent proposes which go first; holds nothing until an operator accepts. Beside `feature-summary` at the bottom, for its reason. → [33](33-story-sequencing.md)                                                                                                                                                       |
 
@@ -620,11 +621,17 @@ is no second list to keep in step with it. What each stage contributes:
     below every rule that produces work, because what it writes is advice beside a pull request
     nobody is obliged to act on, and above the Feature desks only because somebody may have pressed
     for it and be watching the tab. → [37](37-bot-prs.md#the-risk-summary)
-12. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
+12. **App error triage** (`app-error-triage`), one read-only code agent over a batch of moved app
+    errors the deterministic link named no goal for — directly below the bot PR risk run and for its
+    reason: what it writes is advice beside an error row, it produces no work, and somebody may have
+    pressed Triage and be watching. It is a code agent, unlike its neighbour, because the agent follows
+    method-name frames into the code; that costs a slot's checkout, which is one more reason it ranks
+    where nothing that produces work waits behind it. → [39](39-app-errors.md#agent-triage)
+13. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
     below even a handed-over validation check, because it is the only kind of rule in the book that
     produces no work at all: a check is a reading somebody asked for, and this is a paragraph about
     readings already taken. Nothing may wait behind it.
-13. **Feature sequences** (`feature-sequence`), a desk agent per Feature whose stories nobody has put
+14. **Feature sequences** (`feature-sequence`), a desk agent per Feature whose stories nobody has put
     in an order — **last**, beside `feature-summary` and for its reason: it proposes an ordering and
     holds nothing, so it produces no work either. → [33](33-story-sequencing.md)
 

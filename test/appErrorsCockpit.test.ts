@@ -51,6 +51,7 @@ function group(environment: string, over: Partial<AppErrorGroupView> = {}): AppE
     spike: null,
     link: null,
     tracker: null,
+    triage: null,
     ...over,
   };
 }
@@ -65,6 +66,8 @@ function env(environment: string, band: string, groups: AppErrorGroupView[]): Ap
       detail: null,
       readAt: '2026-10-20T11:50:00.000Z',
       okAt: '2026-10-20T11:50:00.000Z',
+      query: null,
+      queryLink: null,
     },
     head: {
       environment,
@@ -364,7 +367,7 @@ test('with nothing declared the page says how to declare it', () => {
 test('the goal card counts the moved groups linked to it, and not a hint', () => {
   const data = payload();
   assert.deepEqual(goalErrorLines(data, 'issue:42'), [
-    { environment: 'liveEu', band: 'prod', count: 1, how: ['frame-match'] },
+    { environment: 'liveEu', band: 'prod', count: 1, how: ['frame-match'], guessed: 0 },
   ]);
   assert.deepEqual(goalErrorLines(data, 'issue:7'), []);
   const link = (over: Partial<AppErrorLink>): AppErrorLink => ({

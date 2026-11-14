@@ -4,14 +4,18 @@ import type { AppErrorDetail, AppErrorEnvironmentView, AppErrorGroupView, AppErr
 
 const DAY_MS = 86_400_000;
 
-type Group = Omit<AppErrorGroupView, 'environment' | 'daily' | 'returnedAt' | 'spike' | 'link' | 'tracker'> & {
+type Group = Omit<
+  AppErrorGroupView,
+  'environment' | 'daily' | 'returnedAt' | 'spike' | 'link' | 'tracker' | 'triage'
+> & {
   series: number[];
   spike?: AppErrorGroupView['spike'];
   link?: AppErrorGroupView['link'];
+  triage?: AppErrorGroupView['triage'];
 };
 
 function group(environment: string, now: number, g: Group): AppErrorGroupView {
-  const { series, spike, link, ...rest } = g;
+  const { series, spike, link, triage, ...rest } = g;
   const daily = series.map((count, i) => ({
     day: new Date(now - (series.length - 1 - i) * DAY_MS).toISOString().slice(0, 10),
     count,
@@ -24,6 +28,7 @@ function group(environment: string, now: number, g: Group): AppErrorGroupView {
     spike: spike ?? null,
     link: link ?? null,
     tracker: null,
+    triage: triage ?? null,
   };
 }
 
@@ -38,6 +43,10 @@ export function demoAppErrors(now: number): AppErrorsPayload {
       detail: null,
       readAt: ago(0.2),
       okAt: ago(0.2),
+      query:
+        'exceptions\n| where timestamp > datetime(2026-11-13T09:00:00Z)\n| summarize count = count(), ' +
+        'firstSeen = min(timestamp), lastSeen = max(timestamp) by problemId, type, outerMessage\n| order by count desc',
+      queryLink: 'https://portal.azure.com/#blade/AppInsightsExtension/LogsBlade',
     },
     head: { environment: 'staging', sha: '9f3c2a1', previousSha: '41be07d', observedAt: ago(0.2), changedAt: ago(20) },
     groups: stagingGroups(now, ago),
@@ -51,6 +60,8 @@ export function demoAppErrors(now: number): AppErrorsPayload {
       detail: 'the errors command exited 1: az: the access token has expired',
       readAt: ago(0.3),
       okAt: ago(30),
+      query: null,
+      queryLink: null,
     },
     head: { environment: 'prod', sha: '41be07d', previousSha: null, observedAt: ago(0.3), changedAt: null },
     groups: [],
@@ -124,6 +135,17 @@ function stagingGroups(now: number, ago: (hours: number) => string): AppErrorGro
         why: 'No link: pay.ts changed as much by #398 as by #364, of 3 goals in the deploy window 41be07d..9f3c2a1, and nothing else separates them.',
         candidates: 3,
         tied: ['issue:398', 'issue:364'],
+      },
+      triage: {
+        verdict: 'caused-by',
+        goalRef: 'issue:398',
+        confidence: 'medium',
+        reason:
+          'pay.ts:142 is the retry loop #398 rewrote; it now waits the full 10s on every attempt where #364 only renamed a variable beside it.',
+        at: ago(1.5),
+        queued: false,
+        detailReadAt: ago(1.6),
+        detailQuery: { at: ago(1.6), ok: true },
       },
     }),
     group('staging', now, {

@@ -27,6 +27,7 @@ import { CommandAppErrorReader } from '../appErrors/reader.js';
 import { AppErrorLinker } from '../appErrors/linker.js';
 import { AppErrorTrackerDesk } from '../appErrors/tracker.js';
 import { appErrorView, CurrentAppErrors } from '../appErrors/current.js';
+import { AppErrorTriageDesk } from '../appErrors/triageDesk.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber } from '../environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from '../environments/observer.js';
@@ -162,6 +163,18 @@ export function buildEnvironmentDesks(
     errors,
   });
 
+  const linker = new AppErrorLinker({ git: gitObserver, errors });
+  const appErrorPayloads = new CurrentAppErrors({ store, config, linker });
+  const appErrorTriage = new AppErrorTriageDesk({
+    store,
+    environments: config.environments,
+    perDay: () => config.appErrorTriagePerDay,
+    current: appErrorPayloads,
+    view: () => appErrorView(store, config, Date.now()),
+    knownChangedFiles: linker.knownChangedFiles,
+    errors,
+  });
+
   const watchDryRun = new WatchDryRun({
     store,
     environments: config.environments,
@@ -174,7 +187,8 @@ export function buildEnvironmentDesks(
     appErrorTracker,
     watchDryRun,
     watchAsks,
-    appErrorPayloads: new CurrentAppErrors({ store, config, linker: new AppErrorLinker({ git: gitObserver, errors }) }),
+    appErrorPayloads,
+    appErrorTriage,
     ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
   };
 }
