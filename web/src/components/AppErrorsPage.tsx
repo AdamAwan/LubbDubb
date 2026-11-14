@@ -26,6 +26,7 @@ import { AppErrorFilters, SortHead } from './AppErrorsFilters.js';
 import { TrackerCell } from './AppErrorsTracker.js';
 import { TriageNote } from './AppErrorsTriage.js';
 import { BareButton, Button } from './button.js';
+import { Collapsible } from './collapsible.js';
 import { Ref } from './refs.js';
 import { Tag, type TagTone } from './tag.js';
 import { ExtLink, relTime } from './util.js';
@@ -272,6 +273,22 @@ function ReadLine({
         </p>
       )}
       {reading.detail !== null && <p className="ae-note">{reading.detail}</p>}
+      <ReadQuery reading={reading} />
+    </div>
+  );
+}
+
+/** The query the last answered read ran, as its script printed it, and a link that opens it there. */
+function ReadQuery({ reading }: { reading: ErrorReading }): JSX.Element | null {
+  if (reading.query === null && reading.queryLink === null) return null;
+  return (
+    <div className="ae-query">
+      {reading.queryLink !== null && <ExtLink href={reading.queryLink}>Open query</ExtLink>}
+      {reading.query !== null && (
+        <Collapsible subject="app-error" className="ae-detail" title="Found by this query">
+          <pre className="ae-stack ae-query-text">{reading.query}</pre>
+        </Collapsible>
+      )}
     </div>
   );
 }

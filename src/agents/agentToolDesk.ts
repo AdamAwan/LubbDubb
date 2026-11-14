@@ -269,8 +269,14 @@ export class AgentToolDesk implements AgentToolTarget {
     return this.withCaller(agentId, ({ task }) => recordAppErrorTriage(this.store, task.originRef, input));
   }
 
-  readAppErrorDetail(agentId: string, key: string): AppErrorDetailRead {
-    return this.withCaller(agentId, ({ task }) => readAppErrorDetail(this.store, task, key));
+  async readAppErrorDetail(agentId: string, key: string): Promise<AppErrorDetailRead> {
+    const caller = this.withCaller(agentId, ({ task }) => ({ ok: true as const, task }));
+    if (!caller.ok) return caller;
+    return readAppErrorDetail(
+      { store: this.store, query: this.opts.appErrorDetail, errors: this.opts.errors },
+      caller.task,
+      key,
+    );
   }
 
   recordBotPrOutcome(agentId: string, input: BotPrOutcomeInput): BotPrOutcomeRecorded {

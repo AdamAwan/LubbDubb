@@ -7,6 +7,8 @@ import type {
   AppErrorTriageVerdict,
   Task,
 } from '../types.js';
+import type { ErrorRecorder } from '../errorLog.js';
+import { detailRequest, type AppErrorDetailOutput, type AppErrorDetailRunner } from './detailCommand.js';
 import { appErrorTriageRunId } from './triageOrigin.js';
 
 // → docs/spec/39-app-errors.md#agent-triage
@@ -24,7 +26,28 @@ export interface AppErrorTriageInput {
 export type AppErrorTriageRecorded = { ok: true; remaining: string[] } | { ok: false; error: string };
 
 export type AppErrorDetailRead =
-  { ok: true; key: string; message: string | null; stack: string | null } | { ok: false; error: string };
+  | {
+      ok: true;
+      key: string;
+      message: string | null;
+      stack: string | null;
+      /** What the environment's `errors.detail` printed, or why it did not; null where none is declared. */
+      query: AppErrorDetailOutput | null;
+    }
+  | { ok: false; error: string };
+
+/** The environment's declared `errors.detail`, and what runs it. */
+export interface AppErrorDetailQuery {
+  command: (environment: string) => string | null;
+  runner: AppErrorDetailRunner;
+}
+
+interface DetailReadDeps {
+  store: Store;
+  query?: AppErrorDetailQuery;
+  errors?: ErrorRecorder;
+  now?: () => number;
+}
 
 type Fenced = { ok: true; run: AppErrorTriageRun; subject: AppErrorTriageSubject } | { ok: false; error: string };
 
@@ -106,12 +129,52 @@ export function recordAppErrorTriage(
   return { ok: true, remaining: run.subjects.map((s) => s.key).filter((k) => !done.has(k)) };
 }
 
-/** The stored sample message and stack, and nothing else: every read is recorded and drawn on the Errors tab. */
-export function readAppErrorDetail(store: Store, task: Task, key: string): AppErrorDetailRead {
+/**
+ * The stored sample message and stack and, where the environment declares `errors.detail`, what that
+ * query prints for the group — the fingerprint passed in the env, never in the command's text. Every
+ * read is recorded, with whether the query ran and answered, and drawn on the Errors tab.
+ */
+export async function readAppErrorDetail(deps: DetailReadDeps, task: Task, key: string): Promise<AppErrorDetailRead> {
+  const { store } = deps;
   const fenced = fence(store, 'app_error_detail', task.originRef, key);
   if (!fenced.ok) return fenced;
   const { run, subject } = fenced;
   const detail = store.appErrors.getDetail(subject.environment, subject.fingerprint);
-  store.appErrorTriage.recordDetailRead({ ...subject, runId: run.id, taskId: task.id });
-  return { ok: true, key: subject.key, message: detail?.message ?? null, stack: detail?.stack ?? null };
+  const query = await runDetailQuery(deps, subject);
+  store.appErrorTriage.recordDetailRead({
+    ...subject,
+    runId: run.id,
+    taskId: task.id,
+    queryStatus: query === null ? null : query.ok ? 'ok' : 'failed',
+  });
+  return { ok: true, key: subject.key, message: detail?.message ?? null, stack: detail?.stack ?? null, query };
+}
+
+async function runDetailQuery(
+  deps: DetailReadDeps,
+  subject: AppErrorTriageSubject,
+): Promise<AppErrorDetailOutput | null> {
+  const command = deps.query?.command(subject.environment) ?? null;
+  if (deps.query === undefined || command === null) return null;
+  const firstSeen = deps.store.appErrors.groupMarks(subject.environment).get(subject.fingerprint)?.firstSeen ?? null;
+  const request = detailRequest({
+    environment: subject.environment,
+    detail: command,
+    fingerprint: subject.fingerprint,
+    firstSeen,
+    now: (deps.now ?? Date.now)(),
+  });
+  let output: AppErrorDetailOutput;
+  try {
+    output = await deps.query.runner.detail(request);
+  } catch (err) {
+    output = { ok: false, failure: `the detail query could not be run: ${(err as Error).message}` };
+  }
+  if (!output.ok)
+    deps.errors?.record({
+      source: 'agent',
+      message: `the errors.detail query for ${subject.environment} failed for ${subject.key}`,
+      detail: output.failure,
+    });
+  return output;
 }

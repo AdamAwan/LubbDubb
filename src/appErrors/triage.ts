@@ -1,7 +1,8 @@
 import { issueOriginNumber } from '../issueOrigins.js';
 import { utcDay } from '../primitives.js';
-import type { StoredTriage, TriageEpisode } from '../store/appErrorTriage.js';
+import type { StoredDetailRead, StoredTriage, TriageEpisode } from '../store/appErrorTriage.js';
 import type {
+  AppErrorRead,
   AppErrorState,
   AppErrorTriage,
   AppErrorTriageRun,
@@ -184,25 +185,40 @@ const ANCHOR_SAID: Record<string, string> = {
   spiking: 'the deploy it spiked after',
 };
 
-/** The groups, appended to the rendered prompt. Never a message or a stack: the agent asks for those. */
-export function triageBriefing(entries: readonly TriageBriefEntry[]): string {
-  return `\n\n## The error groups (${String(entries.length)})\n\n${entries.map(entrySection).join('\n\n')}`;
+/**
+ * The groups, appended to the rendered prompt, then the query each of their environments was read with.
+ * Never a message or a stack: the agent asks for those.
+ */
+export function triageBriefing(
+  entries: readonly TriageBriefEntry[],
+  context: { readings?: readonly AppErrorRead[]; detailQueries?: ReadonlySet<string> } = {},
+): string {
+  const readings = context.readings ?? [];
+  const detail = context.detailQueries ?? new Set<string>();
+  const sections = entries.map((e) => entrySection(e, detail.has(e.group.environment)));
+  const groups = `\n\n## The error groups (${String(entries.length)})\n\n${sections.join('\n\n')}`;
+  const named = new Set(entries.map((e) => e.group.environment));
+  const queries = readings.filter((r) => named.has(r.environment) && (r.query !== null || r.queryLink !== null));
+  if (queries.length === 0) return groups;
+  return `${groups}\n\n## How these errors were found\n\n${queries.map(querySection).join('\n\n')}`;
 }
 
-function entrySection({ group, anchor, candidates }: TriageBriefEntry): string {
+function querySection(reading: AppErrorRead): string {
+  const lines = [`### ${reading.environment}`];
+  if (reading.queryLink !== null) lines.push('', `Open it in the telemetry: ${reading.queryLink}`);
+  if (reading.query !== null) {
+    const fence = '`'.repeat(Math.max(3, ...[...reading.query.matchAll(/`+/g)].map((m) => m[0].length + 1)));
+    lines.push('', 'The query the errors command ran:', '', fence, reading.query, fence);
+  }
+  return lines.join('\n');
+}
+
+function entrySection({ group, anchor, candidates }: TriageBriefEntry, detailQuery: boolean): string {
   const link = group.link;
   const lines = [
     `### ${group.key} — ${group.title}`,
     '',
-    `- Environment: ${group.environment}`,
-    `- State: ${group.state}, anchored at ${anchor === '' ? 'no deploy on record (the last day)' : anchor} (${ANCHOR_SAID[group.state] ?? group.state})`,
-    `- Occurrences over the retained fortnight: ${String(group.count)}; first seen ${group.firstSeen}, last seen ${group.lastSeen}`,
-    ...(group.spike === null
-      ? []
-      : [`- Rate: ${String(group.spike.perDay)} a day against ${String(group.spike.baselinePerDay)} usual`]),
-    `- Operation: ${group.operation ?? '(none reported)'}`,
-    `- Version: ${group.version ?? '(none reported)'}`,
-    `- Stored sample message and stack: ${group.hasDetail ? 'yes — app_error_detail returns them' : 'none'}`,
+    ...groupFacts(group, anchor, detailQuery),
     '',
     '#### Frames',
     '',
@@ -226,6 +242,24 @@ function entrySection({ group, anchor, candidates }: TriageBriefEntry): string {
       : candidates.map(candidateLine).join('\n'),
   ];
   return lines.join('\n');
+}
+
+function groupFacts(group: AppErrorGroupView, anchor: string, detailQuery: boolean): string[] {
+  return [
+    `- Environment: ${group.environment}`,
+    `- State: ${group.state}, anchored at ${anchor === '' ? 'no deploy on record (the last day)' : anchor} (${ANCHOR_SAID[group.state] ?? group.state})`,
+    `- Occurrences over the retained fortnight: ${String(group.count)}; first seen ${group.firstSeen}, last seen ${group.lastSeen}`,
+    ...(group.spike === null
+      ? []
+      : [`- Rate: ${String(group.spike.perDay)} a day against ${String(group.spike.baselinePerDay)} usual`]),
+    `- Operation: ${group.operation ?? '(none reported)'}`,
+    `- Version: ${group.version ?? '(none reported)'}`,
+    `- Stored sample message and stack: ${group.hasDetail ? 'yes — app_error_detail returns them' : 'none'}`,
+    ...(detailQuery
+      ? [`- Detail query: declared on ${group.environment} — app_error_detail runs it for this group`]
+      : []),
+    ...(group.url === null ? [] : [`- In the telemetry: ${group.url}`]),
+  ];
 }
 
 function candidateLine(c: TriageCandidate): string {
@@ -252,12 +286,12 @@ export function withTriage(
   payload: AppErrorsPayload,
   input: {
     triages: readonly StoredTriage[];
-    reads: readonly (TriageEpisode & { at: string })[];
+    reads: readonly StoredDetailRead[];
     open: AppErrorTriageRun | null;
   },
 ): AppErrorsPayload {
   const verdicts = new Map(input.triages.map((t) => [episodeId(t), t]));
-  const reads = new Map(input.reads.map((r) => [episodeId(r), r.at]));
+  const reads = new Map(input.reads.map((r) => [episodeId(r), r]));
   const queued = new Set((input.open?.subjects ?? []).map(episodeId));
   return {
     ...payload,
@@ -278,16 +312,16 @@ export function withTriage(
 function triageOf(
   stored: StoredTriage | undefined,
   queued: boolean,
-  detailReadAt: string | null,
+  read: StoredDetailRead | null,
 ): AppErrorTriage | null {
-  if (stored === undefined && !queued && detailReadAt === null) return null;
-  return {
-    verdict: stored?.verdict ?? null,
-    goalRef: stored?.goalRef ?? null,
-    confidence: stored?.confidence ?? null,
-    reason: stored?.reason ?? null,
-    at: stored?.at ?? null,
-    queued,
-    detailReadAt,
-  };
+  if (stored === undefined && !queued && read === null) return null;
+  return { ...verdictOf(stored), queued, detailReadAt: read?.at ?? null, detailQuery: read?.query ?? null };
+}
+
+function verdictOf(
+  stored: StoredTriage | undefined,
+): Pick<AppErrorTriage, 'verdict' | 'goalRef' | 'confidence' | 'reason' | 'at'> {
+  if (stored === undefined) return { verdict: null, goalRef: null, confidence: null, reason: null, at: null };
+  const { verdict, goalRef, confidence, reason, at } = stored;
+  return { verdict, goalRef, confidence, reason, at };
 }

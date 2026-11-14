@@ -1707,6 +1707,10 @@ export interface AppErrorRead {
   detail: string | null;
   readAt: string;
   okAt: string | null;
+  /** The query the last answered read ran, as the command printed it; null when it printed none. */
+  query: string | null;
+  /** A link that opens that query in the telemetry's own portal, absolute http(s); null when none was printed. */
+  queryLink: string | null;
 }
 
 export interface AppErrorDay {
@@ -1817,6 +1821,14 @@ export interface AppErrorTriage {
   queued: boolean;
   /** When the triage agent last asked for this episode's stored message and stack; null when it never did. */
   detailReadAt: string | null;
+  /** When that ask last ran the environment's `errors.detail` query, and whether it answered; null when none did. */
+  detailQuery: AppErrorDetailQueryRun | null;
+}
+
+/** One run of an environment's detail query by the triage agent: when, and whether it printed an answer. */
+export interface AppErrorDetailQueryRun {
+  at: string;
+  ok: boolean;
 }
 
 /** What the last search for one key found: the ticket that answers for it, and how many carried it. */

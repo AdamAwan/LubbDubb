@@ -5243,6 +5243,14 @@ button.cn-grow {
   border: 1px solid var(--cn-line);
   border-radius: var(--cn-r-sm);
 }
+.ae-query {
+  margin-top: 4px;
+}
+.ae-query-text {
+  font-family: var(--cn-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .ae-when,
 .ae-n {
   white-space: nowrap;

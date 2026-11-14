@@ -115,7 +115,7 @@ export interface AgentToolTarget {
   ): { ok: true; featureOrigin: string } | { ok: false; error: string };
   recordBotPrRisk(agentId: string, input: BotPrRiskInput): BotPrRiskRecorded;
   recordAppErrorTriage(agentId: string, input: AppErrorTriageInput): AppErrorTriageRecorded;
-  readAppErrorDetail(agentId: string, key: string): AppErrorDetailRead;
+  readAppErrorDetail(agentId: string, key: string): Promise<AppErrorDetailRead>;
   recordBotPrOutcome(agentId: string, input: BotPrOutcomeInput): BotPrOutcomeRecorded;
   recordFeatureSequence(
     agentId: string,

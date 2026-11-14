@@ -38,7 +38,9 @@ CREATE TABLE IF NOT EXISTS app_error_triages (
 );
 
 -- Every time a triage agent asked for a group's stored message and stack: the
--- only way either reaches a model, so every one is recorded and drawn.
+-- only way either reaches a model, so every one is recorded and drawn. When the
+-- environment declares errors.detail, the same read ran that command: its outcome
+-- is query_status, and what it printed is never stored.
 CREATE TABLE IF NOT EXISTS app_error_detail_reads (
   error_key   TEXT NOT NULL,
   environment TEXT NOT NULL,
@@ -47,7 +49,8 @@ CREATE TABLE IF NOT EXISTS app_error_detail_reads (
   anchor      TEXT NOT NULL,
   run_id      TEXT NOT NULL,
   task_id     TEXT NOT NULL,
-  at          TEXT NOT NULL
+  at          TEXT NOT NULL,
+  query_status TEXT                 -- null: no detail query declared | 'ok' | 'failed'
 );
 CREATE INDEX IF NOT EXISTS app_error_detail_reads_episode
   ON app_error_detail_reads (environment, fingerprint, state, anchor);

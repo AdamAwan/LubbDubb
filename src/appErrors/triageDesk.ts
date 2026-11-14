@@ -171,7 +171,10 @@ export class AppErrorTriageDesk {
     return store.appErrorTriage.openRun({
       trigger,
       subjects: entries.map(triageSubject),
-      briefing: triageBriefing(entries),
+      briefing: triageBriefing(entries, {
+        readings: store.appErrors.listReads(),
+        detailQueries: new Set(this.deps.environments.filter((e) => e.errors?.detail !== undefined).map((e) => e.name)),
+      }),
     });
   }
 }

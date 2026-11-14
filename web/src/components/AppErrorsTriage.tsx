@@ -32,6 +32,13 @@ export function TriageNote({
       {triage !== null && triage.detailReadAt !== null && (
         <span className="ae-note">The triage agent read the stack.</span>
       )}
+      {triage?.detailQuery != null && (
+        <span className="ae-note" title={`ran ${relTime(triage.detailQuery.at, now)}`}>
+          {triage.detailQuery.ok
+            ? 'The triage agent ran the detail query.'
+            : 'The triage agent ran the detail query, and it failed.'}
+        </span>
+      )}
       {press && (
         <span className="ae-acts">
           <AsyncButton

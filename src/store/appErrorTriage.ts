@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import type {
+  AppErrorDetailQueryRun,
   AppErrorState,
   AppErrorTriageConfidence,
   AppErrorTriageRun,
@@ -27,6 +28,15 @@ export interface StoredTriage extends TriageEpisode {
   reason: string;
   runId: string;
   at: string;
+}
+
+/** How the environment's detail query went, on the read that ran it. */
+export type DetailQueryStatus = 'ok' | 'failed';
+
+/** An episode's latest detail read, and the latest one that ran the detail query. */
+export interface StoredDetailRead extends TriageEpisode {
+  at: string;
+  query: AppErrorDetailQueryRun | null;
 }
 
 export class AppErrorTriageStore {
@@ -135,11 +145,14 @@ export class AppErrorTriageStore {
     return new Set(rows.map((r) => r.error_key));
   }
 
-  recordDetailRead(input: TriageEpisode & { key: string; runId: string; taskId: string }): void {
+  recordDetailRead(
+    input: TriageEpisode & { key: string; runId: string; taskId: string; queryStatus: DetailQueryStatus | null },
+  ): void {
     this.ctx
       .prep(
-        `INSERT INTO app_error_detail_reads (error_key, environment, fingerprint, state, anchor, run_id, task_id, at)
-         VALUES (@key, @environment, @fingerprint, @state, @anchor, @runId, @taskId, @at)`,
+        `INSERT INTO app_error_detail_reads
+           (error_key, environment, fingerprint, state, anchor, run_id, task_id, at, query_status)
+         VALUES (@key, @environment, @fingerprint, @state, @anchor, @runId, @taskId, @at, @queryStatus)`,
       )
       .run({
         key: input.key,
@@ -150,19 +163,36 @@ export class AppErrorTriageStore {
         runId: input.runId,
         taskId: input.taskId,
         at: this.ctx.now(),
+        queryStatus: input.queryStatus,
       });
   }
 
-  /** The latest detail read per episode. */
-  listDetailReads(): (TriageEpisode & { at: string })[] {
-    return (
-      this.ctx
-        .prep(
-          `SELECT environment, fingerprint, state, anchor, MAX(at) AS at FROM app_error_detail_reads
-           GROUP BY environment, fingerprint, state, anchor`,
-        )
-        .all() as { environment: string; fingerprint: string; state: string; anchor: string; at: string }[]
-    ).map((r) => ({ ...r, state: r.state as AppErrorState }));
+  /** The latest detail read per episode, and the latest of them that ran the environment's detail query. */
+  listDetailReads(): StoredDetailRead[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT environment, fingerprint, state, anchor, MAX(at) AS at FROM app_error_detail_reads
+         GROUP BY environment, fingerprint, state, anchor`,
+      )
+      .all() as EpisodeAtRow[];
+    const queried = this.ctx
+      .prep(
+        `SELECT environment, fingerprint, state, anchor, MAX(at) AS at, query_status FROM app_error_detail_reads
+         WHERE query_status IS NOT NULL GROUP BY environment, fingerprint, state, anchor`,
+      )
+      .all() as (EpisodeAtRow & { query_status: string })[];
+    const ran = new Map(queried.map((q) => [episodeKey(q), q]));
+    return rows.map((r) => {
+      const q = ran.get(episodeKey(r));
+      return {
+        environment: r.environment,
+        fingerprint: r.fingerprint,
+        state: r.state as AppErrorState,
+        anchor: r.anchor,
+        at: r.at,
+        query: q === undefined ? null : { at: q.at, ok: q.query_status === 'ok' },
+      };
+    });
   }
 
   /** Verdicts and reads whose group is no longer held, and runs settled before `settledBefore`. */
@@ -182,6 +212,18 @@ export class AppErrorTriageStore {
       this.ctx.prep(`DELETE FROM app_error_triage_runs WHERE status = 'done' AND settled_at < ?`).run(settledBefore);
     })();
   }
+}
+
+function episodeKey(r: EpisodeAtRow): string {
+  return [r.environment, r.fingerprint, r.state, r.anchor].join('\u0000');
+}
+
+interface EpisodeAtRow {
+  environment: string;
+  fingerprint: string;
+  state: string;
+  anchor: string;
+  at: string;
 }
 
 function toRun(r: RunRow): AppErrorTriageRun {

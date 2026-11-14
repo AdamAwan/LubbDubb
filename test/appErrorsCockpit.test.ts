@@ -66,6 +66,8 @@ function env(environment: string, band: string, groups: AppErrorGroupView[]): Ap
       detail: null,
       readAt: '2026-10-20T11:50:00.000Z',
       okAt: '2026-10-20T11:50:00.000Z',
+      query: null,
+      queryLink: null,
     },
     head: {
       environment,

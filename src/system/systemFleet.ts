@@ -114,6 +114,11 @@ export function buildAgentManager(
     watch: { run: (originRef: string): Promise<string[]> => late.get().watchDryRun.run(originRef) },
     watchHintRequired: watchHintRequired(config.environments),
     errors,
+    appErrorDetail: {
+      command: (environment: string): string | null =>
+        config.environments.find((e) => e.name === environment)?.errors?.detail ?? null,
+      runner: base.appErrorDetails,
+    },
   });
   return { sequenceWatchPolicy, featureBoard, agents };
 }

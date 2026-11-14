@@ -70,8 +70,8 @@ export class AppErrorDesk {
       errors?.record({
         source: 'cycle',
         message:
-          `the errors command for ${environment.name} printed ${String(report.refused.length)} row(s) the ` +
-          'contract refuses; they were left out of the reading',
+          `the errors command for ${environment.name} printed ${String(report.refused.length)} row(s) or field(s) ` +
+          'the contract refuses; they were left out of the reading',
         detail: report.refused.slice(0, 10).join('\n'),
       });
     const held = store.appErrors.groupMarks(environment.name);
@@ -83,7 +83,17 @@ export class AppErrorDesk {
       report.dropped > 0
         ? `kept the ${String(report.rows.length)} most frequent groups; ${String(report.dropped)} more were left out`
         : null;
-    store.appErrors.recordRead({ environment: environment.name, readAt, status: 'ok', detail }, groups);
+    store.appErrors.recordRead(
+      {
+        environment: environment.name,
+        readAt,
+        status: 'ok',
+        detail,
+        query: report.query,
+        queryLink: report.queryLink,
+      },
+      groups,
+    );
     return true;
   }
 }

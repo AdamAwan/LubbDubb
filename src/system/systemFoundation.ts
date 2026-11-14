@@ -33,6 +33,7 @@ import { EscalationInbox } from '../escalation/escalationInbox.js';
 import { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { EnvironmentHealthProber } from '../environments/healthProber.js';
 import type { AppErrorReader } from '../appErrors/reader.js';
+import { CommandAppErrorDetailRunner, type AppErrorDetailRunner } from '../appErrors/detailCommand.js';
 import type { ReviewProber } from '../review/reviewedElsewhere.js';
 import type { EnvironmentProber } from '../environments/prober.js';
 import type { EnvironmentObserver } from '../environments/observer.js';
@@ -81,6 +82,8 @@ export interface BuildOptions {
   environmentProber?: EnvironmentProber;
   environmentHealthProber?: EnvironmentHealthProber;
   appErrorReader?: AppErrorReader;
+  /** Runs an environment's `errors.detail` for the triage agent; a test injects `FakeAppErrorDetailRunner`. */
+  appErrorDetailRunner?: AppErrorDetailRunner;
   reviewProber?: ReviewProber;
   environmentObserver?: EnvironmentObserver;
   stateReader?: StateReader;
@@ -253,6 +256,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     gitObserver,
     cloneUpkeep,
     retention,
+    appErrorDetails: opts.appErrorDetailRunner ?? new CommandAppErrorDetailRunner(config.repoRoot),
     watchLabel: watchLabelFor(config.labelPrefix),
     discussions,
     discussionPulls: new DiscussionPullDesk({

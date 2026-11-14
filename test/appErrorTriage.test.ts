@@ -338,9 +338,10 @@ test('one read-only agent triages the run: fenced verdicts, recorded detail read
     assert.equal(say({ goalRef: null }).ok, false, 'caused-by needs a goal');
     assert.deepEqual(say({ goalRef: '#412' }), { ok: true, remaining: [cart.key] });
 
-    const detail = system.agents.readAppErrorDetail(agentId, orders.key);
+    const detail = await system.agents.readAppErrorDetail(agentId, orders.key);
     assert.ok(detail.ok && detail.message?.startsWith('SECRET-MESSAGE') && detail.stack?.startsWith('SECRET-STACK'));
-    assert.equal(system.agents.readAppErrorDetail(agentId, 'err:shop:00000000').ok, false);
+    assert.equal(detail.query, null, 'no detail query is declared, so none ran');
+    assert.equal((await system.agents.readAppErrorDetail(agentId, 'err:shop:00000000')).ok, false);
 
     const data = await payload(system);
     const triage = groupOf(data, 'Orders.Submit').triage;

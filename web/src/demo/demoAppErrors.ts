@@ -43,6 +43,10 @@ export function demoAppErrors(now: number): AppErrorsPayload {
       detail: null,
       readAt: ago(0.2),
       okAt: ago(0.2),
+      query:
+        'exceptions\n| where timestamp > datetime(2026-11-13T09:00:00Z)\n| summarize count = count(), ' +
+        'firstSeen = min(timestamp), lastSeen = max(timestamp) by problemId, type, outerMessage\n| order by count desc',
+      queryLink: 'https://portal.azure.com/#blade/AppInsightsExtension/LogsBlade',
     },
     head: { environment: 'staging', sha: '9f3c2a1', previousSha: '41be07d', observedAt: ago(0.2), changedAt: ago(20) },
     groups: stagingGroups(now, ago),
@@ -56,6 +60,8 @@ export function demoAppErrors(now: number): AppErrorsPayload {
       detail: 'the errors command exited 1: az: the access token has expired',
       readAt: ago(0.3),
       okAt: ago(30),
+      query: null,
+      queryLink: null,
     },
     head: { environment: 'prod', sha: '41be07d', previousSha: null, observedAt: ago(0.3), changedAt: null },
     groups: [],
@@ -138,7 +144,8 @@ function stagingGroups(now: number, ago: (hours: number) => string): AppErrorGro
           'pay.ts:142 is the retry loop #398 rewrote; it now waits the full 10s on every attempt where #364 only renamed a variable beside it.',
         at: ago(1.5),
         queued: false,
-        detailReadAt: null,
+        detailReadAt: ago(1.6),
+        detailQuery: { at: ago(1.6), ok: true },
       },
     }),
     group('staging', now, {

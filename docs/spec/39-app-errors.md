@@ -36,7 +36,10 @@ them. Two things are **not yet built**, and each section that names them says so
   "name": "live",
   "at": "./scripts/deployed-sha.sh live",
   "group": "prod",
-  "errors": { "list": "./scripts/ai-errors.sh live {since}" },
+  "errors": {
+    "list": "./scripts/ai-errors.sh live {since}",
+    "detail": "./scripts/ai-error-detail.sh live", // optional: see below
+  },
 }
 ```
 
@@ -53,13 +56,31 @@ them. Two things are **not yet built**, and each section that names them says so
 `{since}` is substituted into the command text (every occurrence) and passed beside it in
 `LUBBDUBB_ERRORS_SINCE`. It is an ISO-8601 instant, which carries nothing a shell would read.
 
+`errors.detail` is optional: a second command, run for **one** group when the
+[triage agent](#agent-triage) asks for more than the stored sample — [the detail query](#the-detail-query).
+`validateEnvironments` refuses an empty or non-string `detail`, and a `detail` carrying
+**`{fingerprint}`**, with a refusal that says to read `LUBBDUBB_ERROR_FINGERPRINT` instead: a fingerprint
+comes from the telemetry, so substituted into a command's text it is whatever a shell makes of it. The
+fingerprint reaches the command **only through the environment**, never through its text.
+
 Four top-level keys tune it ([02](02-configuration.md)): `appErrorIntervalMs` (default 15 minutes),
 `appErrorMinCount` (default 2), `appErrorIgnore` (default empty) and `appErrorTriagePerDay` (default
 20; [agent triage](#agent-triage)).
 
 ## The output contract
 
-The command prints one JSON **list**, one object per error group:
+The command prints one JSON **list**, one object per error group — or an **object** carrying that list
+beside the query that produced it:
+
+```jsonc
+{
+  "query": "exceptions | where timestamp > datetime(…) | summarize …", // optional: the query, as run
+  "queryLink": "https://portal.azure.com/#…", // optional: absolute http(s), opens the query
+  "groups": [ /* the list below */ ],
+}
+```
+
+Each group is:
 
 ```jsonc
 [
@@ -81,6 +102,17 @@ The command prints one JSON **list**, one object per error group:
 
 `parseAppErrorReport` (`src/appErrors/report.ts`) is pure and is the whole of the schema.
 
+- **The list form is the object form with no query.** Both are always valid; a script moves from one
+  to the other without anything else changing. An object whose `groups` is not a list is `unknown`,
+  like any other shape that is not a list.
+- **`query` and `queryLink` are context, never part of the reading's answer.** `query` is trimmed and
+  capped at 8,000 characters; `queryLink` must be an absolute http(s) URL of at most 2,000. Either one
+  breaking the contract — a `query` that is not a string, a relative or `javascript:` link — is **refused
+  by name** (`"queryLink" must be an absolute http(s) URL`) and left out, exactly as a bad row is: the
+  refusal joins the read's refusals, after the rows', and the groups still read. A broken link is a
+  broken link, not a broken reading, and failing the read over it would turn a cosmetic mistake into
+  `unknown`.
+
 - **The fingerprint is the script's job**, and the contract says what it must be: stable across
   deploys, versions and environments, free of line numbers, ids and user data. For App Insights that is
   `problemId`. It is capped at 200 characters — it is an identity, not a message.
@@ -98,7 +130,8 @@ The command prints one JSON **list**, one object per error group:
   and they go into no filed bug, no pool document and no prompt or briefing the harness renders. A
   message carries user data, and a stack can; the harness never matches or links on either — the
   frames do that. They reach a model **only on that model's explicit request**: the
-  [triage agent](#agent-triage) may ask for one group of its own run with `app_error_detail`, and
+  [triage agent](#agent-triage) may ask for one group of its own run with `app_error_detail` — which
+  is also the only thing that runs an environment's [detail query](#the-detail-query) — and
   every such read is recorded (`app_error_detail_reads`) and drawn on the row — _the triage agent read
   the stack_ — so the operator sees every time either left the store. **Nor do they ride the minute poll**: a group carries only `hasDetail`, and the
   text is fetched per group when its row is opened (`GET /api/app-errors/detail`) — 500 groups of
@@ -123,7 +156,7 @@ and day counts are written in one transaction; the prune is a second, once per d
 
 | Table              | One row per                       | Holds                                                                                                     |
 | ------------------ | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `app_error_reads`  | environment                       | The last read: status, detail, `read_at` and `ok_at` (last _answered_ read)                               |
+| `app_error_reads`  | environment                       | The last read: status, detail, `read_at`, `ok_at` (last _answered_ read), `query` and `query_link`        |
 | `app_error_groups` | `(environment, fingerprint)`      | Title, operation, version, frames, message, stack, url; first and last seen as accumulated; `returned_at` |
 | `app_error_days`   | `(environment, fingerprint, day)` | Occurrences on one UTC day                                                                                |
 
@@ -133,6 +166,11 @@ on the key rather than on an environment and nothing about a read writes it. Thr
 `app_error_triage_runs`, `app_error_triages` and `app_error_detail_reads` — are
 [agent triage](#agent-triage)'s, owned by `AppErrorTriageStore` (`src/store/appErrorTriage.ts`).
 
+- **`query` and `query_link` are the last answered read's.** An `ok` read writes what it printed, null
+  included, so a script that stops printing a query stops showing one; an `unknown` read leaves both as
+  they were, so a failing query is still on the card beside the warning it caused. Both columns were
+  added to an existing table, so they are declared in `APP_ERROR_COLUMNS`
+  ([14](14-persistence.md#migrations)).
 - **`ok_at` moves only on an `ok` read**, and it is what the next read's `{since}` is: a read that
   failed for a day leaves the next one reaching back over that day rather than skipping it. `{since}`
   is never further back than **fourteen days** (`MAX_LOOKBACK_MS`), which is also a first read's reach.
@@ -153,9 +191,10 @@ on the key rather than on an environment and nothing about a read writes it. Thr
   environment's groups age out the same way. Seen again after that, a group is a stranger, and reads
   `new`.
 
-The triage tables were introduced new and so need no `ColumnMigrations` entry **today** — the rule in
+The triage tables were introduced new and so need no `ColumnMigrations` entry **today** —
+`app_error_detail_reads.query_status` was part of the table before it shipped — and the rule in
 [14](14-persistence.md#migrations) applies to the first column anyone adds, as it already did to
-`app_error_groups`' `message` and `stack`.
+`app_error_groups`' `message` and `stack` and to `app_error_reads`' `query` and `query_link`.
 
 ## The deploy window
 
@@ -628,8 +667,14 @@ The run's **briefing** is assembled once, when the run opens (`triageBriefing`),
 **appended** to the rendered `app-error-triage` prompt — never interpolated, for the reason every
 appended briefing is ([05](05-dispatcher.md#prompt-templates)). Per group: the key, title, environment,
 state and anchor, the fortnight's count and first and last seen, the spike's two rates, the operation,
-the version, whether a sample message and stack are stored, the **frames**, the deterministic link's
-`why` and `tied`, the tracker ticket and its status, and the **candidates**:
+the version, whether a sample message and stack are stored, whether its environment declares a
+[detail query](#the-detail-query), the group's own telemetry link (`url`, the row's _Open in telemetry_)
+where the script printed one, the **frames**, the deterministic link's `why` and `tied`, the tracker
+ticket and its status, and the **candidates** (below). After the groups, **How these errors were found**:
+for each environment the run's groups are on, the [query](#the-output-contract) its last answered read
+ran, in a code fence longer than any run of backticks inside it, and the link that opens it — so the
+agent, like the operator, sees what question the telemetry was asked. Both are the script's own text and
+are read as data, as the titles and frames are. The candidates:
 
 - every goal with a landing on the integration branch (`onIntegration` not `no`) in the thirty days
   (`LANDING_HORIZON_MS`) before the anchor — wider than any linking window, because the window is what
@@ -648,9 +693,38 @@ subject, because they are what `app_error_triage` accepts.
 **Never the message or the stack.** The agent starts from the frames. It runs in a **read-only
 checkout of the default branch** (`readOnlyDispatch`), so it can follow a method-name frame to its file
 with a search and read `git log` on it. Where the frames and the code do not settle it,
-`app_error_detail({key})` returns the stored sample message and stack for a group **of its own run**,
-and records the read — key, episode, run id, task id, when — in `app_error_detail_reads`. The row says
-_the triage agent read the stack_. That is the only way either reaches a model.
+`app_error_detail({key})` returns the stored sample message and stack for a group **of its own run** —
+and, where the group's environment declares one, what [the detail query](#the-detail-query) prints for
+it — and records the read — key, episode, run id, task id, when, and whether the query ran and answered
+(`query_status`: null where none is declared, `ok`, `failed`) — in `app_error_detail_reads`. The row says
+_the triage agent read the stack_, and _the triage agent ran the detail query_ (_…, and it failed_). That
+is the only way any of it reaches a model.
+
+### The detail query
+
+The agent cannot log in to a portal, and the stored sample is one occurrence. An environment's optional
+`errors.detail` is the operator's answer: a command that, given one group, prints whatever more the
+telemetry holds — more occurrences, their messages, operations, custom dimensions — in **any format**.
+The harness never parses it; it is text for a model.
+
+- **Run in `repoRoot`**, like `list`, with `LUBBDUBB_ENVIRONMENT`, `LUBBDUBB_ERROR_FINGERPRINT` and
+  `LUBBDUBB_ERRORS_SINCE` set. **The fingerprint is never in the command's text** (a `{fingerprint}` is
+  refused at boot, [above](#configuring-an-environment)): it comes from the telemetry, and a shell reads
+  what is substituted. `{since}` is substituted as in `list`, since an ISO instant is the harness's own
+  text.
+- **`since` is the group's first sighting** — the harness's accumulated `firstSeen` — **floored at
+  fourteen days back** (`detailSince`, the same `MAX_LOOKBACK_MS` a list read reaches). The first
+  sighting is where the group's story starts; the floor keeps a group first seen a month ago from asking
+  the telemetry for a month.
+- **What it prints is trimmed and capped at 32,000 characters** (`MAX_DETAIL_OUTPUT_CHARS`), and the
+  agent is told when it was cut. It is killed after 60 seconds. A non-zero exit, a signal, a timeout or
+  empty output is returned to the agent as a **failure in words** — _the detail query exited 1: az login
+  required_ — never as an answer, and recorded through `errors.record`. The tool still answers with the
+  stored message and stack: a broken query costs the extra, not the read.
+- **It is run on the agent's request only**, once per `app_error_detail` call, and only for a group of
+  the agent's own run — the same fence as the stored detail. **Its output is stored nowhere**: the read
+  record says only that it ran and how it went.
+
 
 ### What it answers
 
@@ -690,6 +764,16 @@ has deleted are deleted with it, and runs settled more than thirty days ago go t
 answers from scripted stdout per environment, records every request, and answers `unknown` for an
 environment nobody scripted. Injected as `appErrorReader` on `buildSystem`.
 
+`AppErrorDetailRunner` (`src/appErrors/detailCommand.ts`) — one method,
+`detail({environment, command, fingerprint, since})`, answering `{ok, text, truncated}` or
+`{ok: false, failure}`. `CommandAppErrorDetailRunner` spawns the [detail query](#the-detail-query);
+`FakeAppErrorDetailRunner` (`src/appErrors/fakeReader.ts`) answers from scripted output per environment —
+stdout, capped as the real one caps it, or an outcome — records every request on `asked`, and answers a
+failure for an environment nobody scripted. Injected as `appErrorDetailRunner` on `buildSystem`, and
+handed to the agent manager with each environment's declared `detail`. **A test that declares
+`errors.detail` and calls `app_error_detail` injects it**, or it spawns the declared command
+(`test/appErrorQuery.test.ts`).
+
 The tracker lock searches through `IssueKeySink` beside `ActionSink` — `canSearchIssueKeys`,
 `findIssuesByKeys` — and reopens through `ActionSink.canReopenIssue` / `reopenIssue`, a general tracker
 operation beside `closeIssue`. `CompositeConnector` routes them to the issues provider's
@@ -720,7 +804,8 @@ counts per group is too much to send every couple of seconds to every open cockp
 - `project` — the key's project segment;
 - `environments` — one `AppErrorEnvironmentView` per environment that declares `errors`, in config
   order: its `band`, its `reading` (an `AppErrorRead`, or null before the first read — status, detail,
-  `readAt`, `okAt`), its `head` (a `DeployedHead`, or null before the probe first answered — the
+  `readAt`, `okAt`, and the last answered read's `query` and `queryLink`, each null when none was
+  printed), its `head` (a `DeployedHead`, or null before the probe first answered — the
   [deploy window](#the-deploy-window)), and its `groups`;
 - each group an `AppErrorGroupView`: the stored `AppErrorGroup` (title, operation, version, frames,
   `hasDetail`, `url`, first and last seen, `returnedAt`) with `daily` made dense over the last fourteen UTC days,
@@ -734,8 +819,10 @@ counts per group is too much to send every couple of seconds to every open cockp
 `triage: AppErrorTriage | null` — [agent triage](#agent-triage), kept apart from the link: for the
 group's **current episode**, the `verdict`, `goalRef`, `confidence`, `reason` and `at` of a stored
 verdict (all null when there is none), `queued` (a run still out holds the episode and has not
-answered it) and `detailReadAt` (when a triage agent last read its message and stack). Null where none
-of the three applies, and for a group with no episode.
+answered it), `detailReadAt` (when a triage agent last read its message and stack) and `detailQuery`
+(`AppErrorDetailQueryRun`: when the latest read that ran the [detail query](#the-detail-query) did, and
+whether it answered; null when none did). Null where none of these applies, and for a group with no
+episode.
 
 `link: AppErrorLink | null` — [the link](#linking-a-group-to-work). Null for a group nothing is
 linked for (`steady`, `gone`, ignored); otherwise always an object, even when no goal was found:
@@ -777,7 +864,10 @@ liveUs`), and an environment in no group is a band of one under its own name. Ea
   does not hold reads as the first.
 - **Three cards over the table**: the deploy window per member (the head's `previousSha → sha` and when
   the harness noticed it; the first build read says it has no deploy time, which is why `new` means
-  the last day there), the last read per member, and the project — the key's middle segment.
+  the last day there), the last read per member, and the project — the key's middle segment. Under each
+  member's last read, **Open query** off `reading.queryLink` and a **Found by this query** fold
+  (`Collapsible`, closed by default) holding `reading.query` in a wrapping mono block — each only where
+  the script printed it. They are the last _answered_ read's, so they stay beside an `unknown` warning.
 - **`unknown` is a warning, never an empty table.** A member whose last read is `unknown` draws an amber
   chip, the sentence _this is not "no errors"_, when it last answered, and the reading's `detail`. A
   table of no rows under an unanswered read would be exactly the confident wrong answer the
@@ -820,7 +910,8 @@ liveUs`), and an environment in no group is a band of one under its own name. Ea
 - **Under the link, the triage agent's word** (`TriageNote`, `web/src/components/AppErrorsTriage.tsx`),
   never merged into it: _Agent: probably_ and the goal through `<Ref>`, or _Agent: pre-existing_ /
   _unclear_, a confidence pill and the reason; _The triage agent has this group_ while a run holds it;
-  _The triage agent read the stack_ when `detailReadAt` is set. A **Triage** press (**Triage again**
+  _The triage agent read the stack_ when `detailReadAt` is set; _The triage agent ran the detail query_
+  (_…, and it failed_) when `detailQuery` is. A **Triage** press (**Triage again**
   once answered) sits there on every moved row no open run already holds (`canTriage`). Colours are the
   existing tokens; nothing here is a literal.
 - **The tracker column carries the presses**, by what the search found (`trackerPresses`,
