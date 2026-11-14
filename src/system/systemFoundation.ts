@@ -280,7 +280,6 @@ type ArgsBuilder = (opts: {
 
 export type AgentRuntime = ReturnType<typeof buildAgentRuntime>;
 
-// A test that fakes the PTY backend and injects no stream spawner must never launch a real `claude`.
 const refuseSpawn: Spawner = (command) => {
   throw new Error(`refused to launch ${command}: the PTY backend is faked and no streamSpawner was injected`);
 };

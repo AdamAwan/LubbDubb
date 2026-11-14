@@ -659,7 +659,8 @@ inside the pulse is the five seconds the tracker desk exists to avoid.
 
 - **A link pass the deadline cut short opens nothing.** `readLinked` says whether the pass was whole;
   a window undecided only because the clone did not answer in time would put an agent on a group the
-  next request links. The assembly returns, and a later pass asks again.
+  next request links. The assembly returns without marking itself quiet, so the next pass asks again
+  rather than waiting for a read to move.
 - **An assembly that found nothing is not repeated** until something it was built from moves — an
   environment's read, the last run's id or status, the UTC day or the cap — so an idle deployment does
   not rebuild the payload on every pulse.
@@ -947,7 +948,8 @@ liveUs`), and an environment in no group is a band of one under its own name. Ea
 
 **On the goal**, the header's identity row carries _N new errors on test since this arrived_
 (`web/src/console/goalErrors.tsx`) when any environment's group in `new`, `returned` or `spiking` links
-to that goal — **or the triage agent said it was `caused-by` that goal** (`triagedTo`), counted once
+to that goal — **or the triage agent said it was `caused-by` that goal** (`triagedTo`) and the
+deterministic link does not already count the group on a different goal (`countsElsewhere`), counted once
 and marked: _(2 the triage agent's guess)_, and on hover _N linked by frame match and M by the triage
 agent's guess_ — with how each link was made on hover; pressing it opens the Errors tab on that
 environment's band, with the show filter and search cleared so a filter left from an earlier visit

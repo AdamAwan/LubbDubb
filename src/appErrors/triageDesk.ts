@@ -48,13 +48,16 @@ interface AppErrorTriageDeskDeps {
   now?: () => number;
 }
 
+/** `cut-short`: the link pass was not whole, so nothing was decided and a later pass asks again. */
+type Assembled = TriageRequestOutcome | 'nothing' | 'cut-short';
+
 export type TriageRequestOutcome =
   { ok: true; run: AppErrorTriageRun } | { ok: false; status: 404 | 409 | 422; refusal: string };
 
 /** Opens triage runs over the moved groups the deterministic linker left without a goal; the pulse never waits on one. */
 export class AppErrorTriageDesk {
   private readonly now: () => number;
-  private assembling: Promise<TriageRequestOutcome | null> | null = null;
+  private assembling: Promise<Assembled> | null = null;
   private quiet: string | null = null;
   /** The episodes the last whole linked pass found linked, and the basis it was linked on. */
   private linked: { basis: string; episodes: Set<string> } | null = null;
@@ -72,7 +75,7 @@ export class AppErrorTriageDesk {
     if (mark === this.quiet) return;
     this.assembling = this.assemble()
       .then((outcome) => {
-        if (outcome === null) this.quiet = mark;
+        if (outcome === 'nothing') this.quiet = mark;
         return outcome;
       })
       .catch((err: unknown) => {
@@ -80,7 +83,7 @@ export class AppErrorTriageDesk {
           source: 'cycle',
           message: `assembling an app error triage run failed: ${(err as Error).message}`,
         });
-        return null;
+        return 'nothing' as const;
       })
       .finally(() => (this.assembling = null));
   }
@@ -130,24 +133,24 @@ export class AppErrorTriageDesk {
     ].join('\n');
   }
 
-  private async assemble(): Promise<TriageRequestOutcome | null> {
+  private async assemble(): Promise<Assembled> {
     const { store } = this.deps;
     const now = this.now();
     const used = store.appErrorTriage.autoSubjectsSince(new Date(dayStart(utcDay(now))).toISOString());
     const room = Math.min(TRIAGE_BATCH_LIMIT, this.deps.perDay() - used);
-    if (room <= 0) return null;
+    if (room <= 0) return 'nothing';
     store.appErrorTriage.prune(new Date(now - RUN_RETENTION_MS).toISOString(), store.appErrors.listGroupIds());
     const done = new Set(store.appErrorTriage.listTriages().map(episodeId));
     const basis = this.deps.current.linkBasis();
     const skip = this.linked?.basis === basis ? new Set([...done, ...this.linked.episodes]) : done;
-    if (pickForTriage(unlinkedGroups(this.deps.view()), skip, 1).length === 0) return null;
+    if (pickForTriage(unlinkedGroups(this.deps.view()), skip, 1).length === 0) return 'nothing';
     const { payload, answered } = await this.deps.current.readLinked(now);
-    if (!answered) return null;
+    if (!answered) return 'cut-short';
     this.linked = { basis, episodes: linkedEpisodes(payload) };
     const chosen = pickForTriage(unlinkedGroups(payload), done, room);
-    if (chosen.length === 0) return null;
+    if (chosen.length === 0) return 'nothing';
     const run = this.open('auto', chosen);
-    return run === null ? null : { ok: true, run };
+    return run === null ? 'nothing' : { ok: true, run };
   }
 
   private open(trigger: AppErrorTriageTrigger, groups: readonly UnlinkedGroup[]): AppErrorTriageRun | null {

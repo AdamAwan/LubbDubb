@@ -196,6 +196,11 @@ export interface GoalErrorLine {
   guessed: number;
 }
 
+/** Whether the deterministic link already counts this group on a different goal. */
+function countsElsewhere(link: ErrorLink | null, goalRef: string): boolean {
+  return link !== null && link.goalRef !== null && link.goalRef !== goalRef && countsOnGoal(link);
+}
+
 /** Whether the triage agent named this goal as the group's cause. */
 function triagedTo(triage: ErrorTriage | null, goalRef: string): boolean {
   return triage?.verdict === 'caused-by' && triage.goalRef === goalRef;
@@ -205,7 +210,9 @@ export function goalErrorLines(payload: AppErrorsPayload, goalRef: string): Goal
   return payload.environments.flatMap((env) => {
     const moved = env.groups.filter((g) => isMoved(g.state));
     const linked = new Set(moved.filter((g) => g.link?.goalRef === goalRef && countsOnGoal(g.link)));
-    const guessed = moved.filter((g) => !linked.has(g) && triagedTo(g.triage, goalRef));
+    const guessed = moved.filter(
+      (g) => !linked.has(g) && !countsElsewhere(g.link, goalRef) && triagedTo(g.triage, goalRef),
+    );
     if (linked.size + guessed.length === 0) return [];
     const how = [...new Set([...linked].flatMap((g) => g.link?.how ?? []))];
     return [
