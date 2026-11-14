@@ -7065,3 +7065,21 @@ button.cn-grow {
   padding: 0;
   margin: 0;
 }
+.ae-triage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  margin-top: 4px;
+}
+.ae-agent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+}
+.ae-agent-said {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--cn-fg-dim);
+}

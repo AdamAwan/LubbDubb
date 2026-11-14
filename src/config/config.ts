@@ -93,6 +93,8 @@ export interface Config {
   appErrorIntervalMs: number;
   appErrorMinCount: number;
   appErrorIgnore: string[];
+  /** Moved, unlinked error groups automatic triage may hand an agent each UTC day; 0 turns it off. */
+  appErrorTriagePerDay: number;
   remoteValidation: RemoteValidationPolicy;
   ci: CiPolicy;
   upNextOverrideTtlMs: number;
@@ -263,6 +265,7 @@ const DEFAULTS: Config = {
   appErrorIntervalMs: 15 * 60 * 1000,
   appErrorMinCount: 2,
   appErrorIgnore: [],
+  appErrorTriagePerDay: 20,
   remoteValidation: DEFAULT_REMOTE_VALIDATION,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,

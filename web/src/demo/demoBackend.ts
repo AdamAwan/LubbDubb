@@ -1,6 +1,7 @@
 import type {
   AppErrorPressPayload,
   AppErrorSearchPayload,
+  AppErrorTriagePressPayload,
   PrDescriptionDraft,
   PrDescriptionVersion,
   RemoteSheetView,
@@ -4921,6 +4922,8 @@ export const demoApi = {
     Promise.reject(new Error('the demo has no tracker to reopen in')),
   searchAppErrorKey: (_key: string): Promise<AppErrorSearchPayload> =>
     Promise.reject(new Error('the demo has no tracker to search')),
+  triageAppError: (_environment: string, _fingerprint: string): Promise<AppErrorTriagePressPayload> =>
+    Promise.reject(new Error('the demo has no agent to triage with')),
   summariseBotPrs: () => Promise.resolve({ ok: true as const, prs: 2 }),
   claimBotPr: (number: number) => {
     demoClaimed.add(number);

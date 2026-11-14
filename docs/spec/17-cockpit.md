@@ -5652,9 +5652,11 @@ Tab `errors`, `web/src/components/AppErrorsPage.tsx`, in the nav beside Insights
 `CockpitConfig.appErrors` is true. One tab per environment band, the deploy window and last read over
 a table of the error groups that moved, with `steady` and `gone` folded away behind a toggle that is a
 `Place` field. Each row draws the goal it is probably the work of and what the tracker holds for its
-key, with the tracker presses (File bug, Investigate, Reopen, Retry search) beside the ticket. Its goal
+key, with the tracker presses (File bug, Investigate, Reopen, Retry search) beside the ticket. Under the
+link, kept apart from it, is what the triage agent said — _Agent: probably_ a goal, pre-existing or
+unclear, with its confidence and reason, whether it read the stack — and the **Triage** press. Its goal
 and ticket references go through `<Ref>`, never inside a button, and the goal header carries the line
-that sends an operator here. The tab and every goal header's line read one shared poll (`usePolled`,
+that sends an operator here, counting the errors the triage agent named the goal for as its guess. The tab and every goal header's line read one shared poll (`usePolled`,
 `web/src/hooks.ts`), so a goal page does not add a request per mount. Owned by
 [39](39-app-errors.md#in-the-cockpit).
 

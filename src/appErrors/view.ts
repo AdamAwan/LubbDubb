@@ -68,6 +68,7 @@ export function appErrorsView(input: AppErrorsViewInput): AppErrorsPayload {
           spike,
           link: null,
           tracker: null,
+          triage: null,
         };
       })
       .sort(byState);

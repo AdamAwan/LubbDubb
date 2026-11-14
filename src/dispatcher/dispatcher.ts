@@ -32,6 +32,7 @@ import type {
   LocalRun,
   LocalValidation,
   RemoteRunBrief,
+  PendingAppErrorTriageRun,
   PendingBotPrRiskRun,
   ValidationCheck,
   ValidationPlanRecord,
@@ -86,6 +87,8 @@ export interface DispatchContext {
   remoteRuns?: RemoteRunBrief[];
   /** The one risk run waiting for its agent, if there is one. → 37-bot-prs.md#the-risk-summary */
   botPrRiskRun?: PendingBotPrRiskRun | null;
+  /** The one app error triage run waiting for its agent. → 39-app-errors.md#agent-triage */
+  appErrorTriageRun?: PendingAppErrorTriageRun | null;
   priorityOverrides?: PriorityOverride[];
   goalPriorities?: GoalPriority[];
   goalPauses?: GoalPause[];

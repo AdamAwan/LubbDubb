@@ -1766,6 +1766,59 @@ export interface AppErrorTracker {
   note: string | null;
 }
 
+/** → docs/spec/39-app-errors.md#agent-triage */
+export type AppErrorTriageVerdict = 'caused-by' | 'pre-existing' | 'unclear';
+
+export type AppErrorTriageConfidence = 'low' | 'medium' | 'high';
+
+export type AppErrorTriageTrigger = 'auto' | 'operator';
+
+export type AppErrorTriageRunStatus = 'pending' | 'dispatched' | 'done';
+
+/**
+ * One moved group's episode put in front of the triage agent: the group, the state it moved into, the
+ * instant that episode is anchored at (empty for a spike with no deploy on record), and the goals it may
+ * name as the cause.
+ */
+export interface AppErrorTriageSubject {
+  key: string;
+  environment: string;
+  fingerprint: string;
+  state: AppErrorState;
+  anchor: string;
+  candidates: string[];
+}
+
+export interface AppErrorTriageRun {
+  id: string;
+  status: AppErrorTriageRunStatus;
+  trigger: AppErrorTriageTrigger;
+  subjects: AppErrorTriageSubject[];
+  taskId: string | null;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+/** A run waiting for its agent carries the briefing it is dispatched with, assembled when it opened. */
+export interface PendingAppErrorTriageRun extends AppErrorTriageRun {
+  briefing: string;
+}
+
+/**
+ * What the triage agent said about a group's current episode, as the Errors tab draws it. Every verdict
+ * field is null while the episode sits in a run nobody has answered for yet (`queued`).
+ */
+export interface AppErrorTriage {
+  verdict: AppErrorTriageVerdict | null;
+  goalRef: string | null;
+  confidence: AppErrorTriageConfidence | null;
+  reason: string | null;
+  at: string | null;
+  queued: boolean;
+  /** When the triage agent last asked for this episode's stored message and stack; null when it never did. */
+  detailReadAt: string | null;
+}
+
 /** What the last search for one key found: the ticket that answers for it, and how many carried it. */
 export interface AppErrorTicketSearch {
   key: string;

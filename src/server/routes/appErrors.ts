@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import type { AppErrorDetail, AppErrorSearchPayload, AppErrorsPayload } from '../../wire.js';
+import type {
+  AppErrorDetail,
+  AppErrorSearchPayload,
+  AppErrorsPayload,
+  AppErrorTriagePressPayload,
+} from '../../wire.js';
 import {
   fileAppErrorBug,
   reopenAppErrorTicket,
@@ -11,7 +16,8 @@ import { issueWatchContext } from '../../issueWatch.js';
 import { checked, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
-// → docs/spec/16-http-api.md, docs/spec/39-app-errors.md#on-the-wire, docs/spec/39-app-errors.md#the-presses
+// → docs/spec/16-http-api.md, docs/spec/39-app-errors.md#on-the-wire, docs/spec/39-app-errors.md#the-presses,
+//   docs/spec/39-app-errors.md#agent-triage
 
 const GroupBody = z.object({
   environment: requiredText('environment is required'),
@@ -29,7 +35,8 @@ const KeyBody = z.object({
   key: requiredText('key is required').refine((key) => key.startsWith('err:'), 'key must be an app error key (err:…)'),
 });
 
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
+export function register(app: FastifyInstance, ctx: RouteContext): void {
+  const { system, hub } = ctx;
   const { store, config, errors, sink } = system;
   const current = (): Promise<AppErrorsPayload> => system.appErrorPayloads.read(Date.now());
   const deps = (): AppErrorFilingDeps => ({
@@ -99,6 +106,28 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         return reply.code(409).send({ error: 'no tracker this deployment files into can be searched by key' });
       const search = (await system.appErrorTracker.search([body.key])).get(body.key)!;
       return { ok: true, search } satisfies AppErrorSearchPayload;
+    }),
+  );
+
+  registerTriage(app, ctx);
+}
+
+/** The Triage press: one group into a run of its own, whatever its link or the day's cap. */
+function registerTriage(app: FastifyInstance, { system, hub }: RouteContext): void {
+  app.post(
+    '/api/app-errors/triage',
+    checked({ body: GroupQuery }, async ({ body, reply }) => {
+      let outcome;
+      try {
+        outcome = await system.appErrorTriage.request(body.environment, body.fingerprint);
+      } catch (err) {
+        const message = `the triage run could not be assembled: ${(err as Error).message}`;
+        system.errors.record({ source: 'server', message });
+        return reply.code(502).send({ error: message });
+      }
+      if (!outcome.ok) return reply.code(outcome.status).send({ error: outcome.refusal });
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true, runId: outcome.run.id } satisfies AppErrorTriagePressPayload;
     }),
   );
 }

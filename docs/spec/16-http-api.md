@@ -1437,7 +1437,8 @@ error groups with their state, key, dense fourteen-day series and, for a moved g
 probably the work of; per band the roll-up. Not on `/api/state`, for `/api/mcp/usage`'s reason. The
 link asks the clone, and the route waits on it for at most five seconds; a linked payload is reused for
 thirty seconds while nothing it was built from has moved ([39](39-app-errors.md#where-it-is-computed)). Each group's `tracker` is what the last search for its
-key found. See [39](39-app-errors.md#on-the-wire).
+key found, and its `triage` what the triage agent said about its current episode, kept apart from the
+`link` ([39](39-app-errors.md#agent-triage)). See [39](39-app-errors.md#on-the-wire).
 
 ### `GET /api/app-errors/detail`
 
@@ -1460,6 +1461,16 @@ Refusals: **409** with no tracker configured, a tracker that cannot search or re
 reopen, or a press already running for the key; **404** for a group the store does not hold; **502**
 for a search that failed (unless `unsearched: true`) or a tracker that refused the write. Never a
 `WorldEvent`.
+
+### `POST /api/app-errors/triage`
+
+The row's **Triage** press ([39](39-app-errors.md#agent-triage)). Takes `{environment, fingerprint}`
+and opens a triage run over that one group — whatever its link, the day's `appErrorTriagePerDay` cap or
+an earlier verdict on its episode — from the same linked payload the tab drew. Answers
+`AppErrorTriagePressPayload` (`{ok, runId}`) and broadcasts `world:changed`; the run is dispatched by
+rule `app-error-triage` on a later pulse. Refusals: **404** for a group the payload does not hold,
+**422** for one with no episode (steady, gone or muted), **409** while a triage run is already out,
+**502** (recorded through `errors.record`) when the linked read throws.
 
 ### `GET /api/mcp/usage`
 

@@ -12,11 +12,10 @@ baseline — rather than drawn as an error list an operator has to read in full.
 **Partly built.** What is described here as running is the command, its contract, grouping, states,
 the key, [linking a moved group to the goal that probably caused it](#linking-a-group-to-work) —
 deterministically, from the deploy window, frames against landed diffs, test-before-live and operation
-hints — the [tracker lock](#the-tracker-lock) and its presses, the route and the cockpit that draws
-them. Three things are **not yet built**, and each section that names them says so:
+hints — [agent triage](#agent-triage) of what that link leaves without a goal, automatically and on a
+press, the [tracker lock](#the-tracker-lock) and its presses, the route and the cockpit that draws
+them. Two things are **not yet built**, and each section that names them says so:
 
-- **Model triage on a press** — the bug-investigation flow with the trace attached, for what the
-  deterministic link leaves open. → [Not yet built](#not-yet-built)
 - **Promote to watch** — turning a group into a declared `signal` check on the fixing goal.
   → [Why there is no Watch press](#why-there-is-no-watch-press)
 - **Cross-fleet links through the pool.** → [Not yet built](#not-yet-built)
@@ -27,7 +26,7 @@ them. Three things are **not yet built**, and each section that names them says 
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A telemetry client    | The harness knows a command and an output contract, never Kusto, App Insights or Sentry. The same shape as `health` and `observe`.                                                                                                                                  |
 | A `WorldEvent` source | `deliveryHold` expires a delivery verdict on **any** world event matching a goal's issue ref, so an error reading filed as one would un-park delivered goals. Own tables, own route — the arrivals rule again.                                                      |
-| A dispatch input      | Nothing under `src/dispatcher/` reads what this writes. It files only on an operator's press, opens no gate and reaches no prompt; Investigate starts the existing investigation by its label, and nothing else. A link is computed per request and stored nowhere. |
+| A dispatch input      | One rule reads one thing this writes: `app-error-triage` dispatches a [triage run](#agent-triage) the triage desk opened, from the run row alone. No rule reads a reading, a group, a link, the tracker cache or a triage verdict; this files only on an operator's press and opens no gate; Investigate starts the existing investigation by its label. A link is computed per request and stored nowhere. |
 | An error log          | The harness's own faults are `error_events` (`src/store/errors.ts`, [18](18-observability.md)). These are the **application's** errors, which is why the feature is called app errors.                                                                              |
 
 ## Configuring an environment
@@ -54,8 +53,9 @@ them. Three things are **not yet built**, and each section that names them says 
 `{since}` is substituted into the command text (every occurrence) and passed beside it in
 `LUBBDUBB_ERRORS_SINCE`. It is an ISO-8601 instant, which carries nothing a shell would read.
 
-Three top-level keys tune it ([02](02-configuration.md)): `appErrorIntervalMs` (default 15 minutes),
-`appErrorMinCount` (default 2) and `appErrorIgnore` (default empty).
+Four top-level keys tune it ([02](02-configuration.md)): `appErrorIntervalMs` (default 15 minutes),
+`appErrorMinCount` (default 2), `appErrorIgnore` (default empty) and `appErrorTriagePerDay` (default
+20; [agent triage](#agent-triage)).
 
 ## The output contract
 
@@ -94,10 +94,13 @@ The command prints one JSON **list**, one object per error group:
   `detail`; the reading is still `ok`.
 - Titles are capped at 300 characters, `version` and `operation` at 200, `frames` at twenty of 300,
   `message` at 2,000 and `stack` at 16,000.
-- **`message` and `stack` are for the operator's eyes only.** They are what the Errors tab opens a
-  row onto, and they go nowhere else: not into a filed bug, not into the pool, not into a prompt.
-  A message carries user data, and a stack can; the harness never matches or links on either — the
-  frames do that. **Nor do they ride the minute poll**: a group carries only `hasDetail`, and the
+- **`message` and `stack` are never in a briefing.** They are what the Errors tab opens a row onto,
+  and they go into no filed bug, no pool document and no prompt or briefing the harness renders. A
+  message carries user data, and a stack can; the harness never matches or links on either — the
+  frames do that. They reach a model **only on that model's explicit request**: the
+  [triage agent](#agent-triage) may ask for one group of its own run with `app_error_detail`, and
+  every such read is recorded (`app_error_detail_reads`) and drawn on the row — _the triage agent read
+  the stack_ — so the operator sees every time either left the store. **Nor do they ride the minute poll**: a group carries only `hasDetail`, and the
   text is fetched per group when its row is opened (`GET /api/app-errors/detail`) — 500 groups of
   16,000-character stacks would otherwise be shipped every minute to every open tab, and read out of
   SQLite on every tracker pass, to be shown for one row. The two columns are declared **last** in
@@ -126,7 +129,9 @@ and day counts are written in one transaction; the prune is a second, once per d
 
 A fourth, `app_error_tickets`, is the [tracker lock](#the-tracker-lock)'s cache, one row per key and
 owned by `AppErrorTicketStore` (`src/store/appErrorTickets.ts`) — its own module, because it is keyed
-on the key rather than on an environment and nothing about a read writes it.
+on the key rather than on an environment and nothing about a read writes it. Three more —
+`app_error_triage_runs`, `app_error_triages` and `app_error_detail_reads` — are
+[agent triage](#agent-triage)'s, owned by `AppErrorTriageStore` (`src/store/appErrorTriage.ts`).
 
 - **`ok_at` moves only on an `ok` read**, and it is what the next read's `{since}` is: a read that
   failed for a day leaves the next one reaching back over that day rather than skipping it. `{since}`
@@ -148,8 +153,9 @@ on the key rather than on an environment and nothing about a read writes it.
   environment's groups age out the same way. Seen again after that, a group is a stranger, and reads
   `new`.
 
-All four tables were introduced new and so need no `ColumnMigrations` entry **today** — the rule in
-[14](14-persistence.md#migrations) still applies to the first column anyone adds.
+The triage tables were introduced new and so need no `ColumnMigrations` entry **today** — the rule in
+[14](14-persistence.md#migrations) applies to the first column anyone adds, as it already did to
+`app_error_groups`' `message` and `stack`.
 
 ## The deploy window
 
@@ -236,9 +242,10 @@ An environment that declares no `group` is a band of one named for itself, exact
 `AppErrorDesk` (`src/appErrors/desk.ts`) is its own pulse entry, `appErrors`
 ([04](04-harness-cycle.md#the-pulse-registry)), **directly below `environments`**: that desk's probe
 records the head a reading is held against, so above it a deploy would be noticed a pulse late.
-**One pass reads what it writes** inside the pulse — the [tracker desk](#the-search), directly below
-it, which starts a search for the groups the read just moved. Nothing else does: no gate, no bench row, no
-prompt.
+**Two passes read what it writes** inside the pulse — the [tracker desk](#the-search), directly below
+it, which starts a search for the groups the read just moved, and the [triage desk](#agent-triage)
+below that, which starts assembling a triage run over the ones nothing linked. Neither waits on what it
+starts. Nothing else does: no gate, no bench row.
 
 Every environment that declares `errors` is read **concurrently**, each unless its last read is
 younger than `appErrorIntervalMs` — an `unknown` read counts, so a broken query is retried on the
@@ -377,7 +384,9 @@ is safe because it [searches the tracker again](#the-presses) regardless.
 The [tracker desk](#the-search) is the one reader that does not link: it reads `appErrorView`, the
 view alone, with neither links nor trackers. It needs only each group's key and state, which linking
 never changes, and linking there would put the clone's questions — up to five seconds of them — inside
-the pulse for an answer nothing on the pulse reads.
+the pulse for an answer nothing on the pulse reads. The [triage desk](#agent-triage) does need the
+link — which groups it left without a goal is its whole question — so it reads this same builder, but
+from a promise the pulse never awaits ([below](#the-pulse-never-waits-on-the-clone)).
 
 What makes that affordable is that everything the clone says here is **about a fixed commit**, and so
 never changes. `AppErrorLinker` keeps every `contains` answer whose heads are commit ids, and every
@@ -548,6 +557,132 @@ card — the group's operation and fingerprint are on the row.
   window can file a duplicate. It is the one gap the search at the press does not close, and the next
   search shows both.
 
+## Agent triage
+
+The deterministic link is honest, and so it is often empty: a week-long deploy window holds a dozen
+goals, most faults carry no frame a diff names, and an undecided window or a tie is _no link_ by rule.
+What the operator saw was errors that spiked and returned with blame landing on nothing. **Agent
+triage** puts a model on exactly that remainder — one read-only agent over a batch of moved groups the
+link left without a goal — and draws what it says **beside** the link, never in place of it.
+
+`src/appErrors/triage.ts` (pure), `src/appErrors/triageDesk.ts` (the desk), `src/appErrors/triageRecord.ts`
+(the tools' half), rule `app-error-triage` (`src/dispatcher/rules/appErrorTriage.ts`), the tools
+`app_error_triage` and `app_error_detail` ([11](11-mcp-tools.md)), and the store `AppErrorTriageStore`.
+
+### Which groups, and how often
+
+A group is triaged when it is **moved** (`new`, `returned`, `spiking`), **not muted**, and its link's
+`goalRef` is null — no evidence, an undecided window and a tie alike (`unlinkedGroups`).
+
+- **Once per episode.** An episode is the group (environment and fingerprint), the state it moved into
+  and its **anchor** — the [linking anchor](#linking-a-group-to-work), as text (`episodeAnchor`): the
+  first sighting for `new`, `returnedAt` for `returned`, the head's `changedAt` for `spiking`. A spike
+  with **no deploy on record** is anchored at the empty string rather than at the link's _a day before
+  now_, which moves with the clock and would make every pass a new episode. An episode with a verdict
+  in `app_error_triages` is never put in an automatic run again; a group that returns again later is a
+  new episode and is triaged again. An episode the agent never answered is not answered, and goes in a
+  later run.
+- **One group per key per run**, the most moved first and then the most frequent (`pickForTriage`). A
+  fault on two environments is two episodes, because each environment's candidates differ; the second
+  goes in the next run.
+- **At most ten a run** (`TRIAGE_BATCH_LIMIT`), and **one run open at a time** — the partial unique
+  index on `app_error_triage_runs`, as for the bot PR risk run ([37](37-bot-prs.md#the-risk-summary)).
+- **A daily cap**: automatic runs put at most `appErrorTriagePerDay` groups (default 20) in front of an
+  agent per UTC day, counted from the runs' own subject lists (`autoSubjectsSince`). `0` turns automatic
+  triage off and leaves the press. An episode an agent keeps failing to answer is re-offered, and the
+  cap is what bounds that.
+- **The Triage press** (`POST /api/app-errors/triage`, `{environment, fingerprint}`, trigger
+  `operator`) opens a run over that one group **regardless of its link, the cap or an earlier verdict**
+  — a second verdict on an episode replaces the first. It answers 404 for a group the payload does not
+  hold, 422 for one with no episode (steady, gone, muted), and 409 while any run is out, as Summarise
+  does. It reads the same [linked payload](#where-it-is-computed) the tab drew, so the run carries the
+  link the operator saw.
+
+### The pulse never waits on the clone
+
+The desk is its own pulse entry, `appErrorTriage`, **directly below `appErrorTracker`**
+([04](04-harness-cycle.md#the-pulse-registry)), `readWorld: false` — its subject is the store. It needs
+the **link**, and the link is the clone's: up to five seconds the [tracker desk](#where-it-is-computed)
+refuses to spend in the pulse. The triage desk resolves it the way the bot PR risk desk and the
+tracker's own search do: **the pass starts the work and returns.** `run()` settles a run whose agent
+has ended, and — when automatic triage is on, some environment declares `errors`, no run is open and no
+assembly is in flight — starts one assembly and does not await it. The assembly awaits
+`CurrentAppErrors.readLinked`, the one builder of the linked payload, so it **shares** the pass the tab
+and the goal headers already pay for (and the thirty-second reuse), and opens the run row when the read
+lands; the run is dispatched on a later pulse.
+
+Two alternatives were refused. Opening runs from whatever linked payload the route last built ties
+triage to somebody having the Errors tab open, and a fleet nobody is watching never triages. Linking
+inside the pulse is the five seconds the tracker desk exists to avoid.
+
+- **A link pass the deadline cut short opens nothing.** `readLinked` says whether the pass was whole;
+  a window undecided only because the clone did not answer in time would put an agent on a group the
+  next request links. The assembly returns, and a later pass asks again.
+- **An assembly that found nothing is not repeated** until something it was built from moves — an
+  environment's read, the last run's id or status, the UTC day or the cap — so an idle deployment does
+  not rebuild the payload on every pulse.
+
+### What the agent is given
+
+The run's **briefing** is assembled once, when the run opens (`triageBriefing`), stored on the row and
+**appended** to the rendered `app-error-triage` prompt — never interpolated, for the reason every
+appended briefing is ([05](05-dispatcher.md#prompt-templates)). Per group: the key, title, environment,
+state and anchor, the fortnight's count and first and last seen, the spike's two rates, the operation,
+the version, whether a sample message and stack are stored, the **frames**, the deterministic link's
+`why` and `tied`, the tracker ticket and its status, and the **candidates**:
+
+- every goal with a landing on the integration branch (`onIntegration` not `no`) in the thirty days
+  (`LANDING_HORIZON_MS`) before the anchor — wider than any linking window, because the window is what
+  already failed — each with its ref, its work-graph title, when it last landed, and the paths its
+  landings changed **where the linker's diff cache already holds every one of them**
+  (`AppErrorLinker.knownChangedFiles`). The clone is never asked here; a goal whose diffs it has not
+  answered is listed without paths, saying so. A candidate whose changes touch one of the group's frame
+  files says which;
+- for a **returned** group, the goal of its tracker ticket — the bug the [tracker lock](#the-tracker-lock)
+  found under the key, which the fleet works as its own goal (`goalOfTicket`) — listed **first** and
+  marked as the prime suspect wherever it landed: the fix that did not hold.
+
+At most forty candidates are listed, and thirty paths each. The candidate refs are stored on the run's
+subject, because they are what `app_error_triage` accepts.
+
+**Never the message or the stack.** The agent starts from the frames. It runs in a **read-only
+checkout of the default branch** (`readOnlyDispatch`), so it can follow a method-name frame to its file
+with a search and read `git log` on it. Where the frames and the code do not settle it,
+`app_error_detail({key})` returns the stored sample message and stack for a group **of its own run**,
+and records the read — key, episode, run id, task id, when — in `app_error_detail_reads`. The row says
+_the triage agent read the stack_. That is the only way either reaches a model.
+
+### What it answers
+
+`app_error_triage({key, verdict, goalRef?, confidence, reason})`, resolved from the dispatch origin
+(`app-errors:triage:<run id>`), so an agent speaks only to the groups it was handed:
+
+| Field        | Is                                                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `verdict`    | `caused-by` one of the group's candidates, `pre-existing` (the fault was there before any landed), or `unclear`       |
+| `goalRef`    | required with `caused-by` and refused with anything else; `issue:412`, `#412` or `412`, but only one of **that group's** candidates — a refusal names them |
+| `confidence` | `low`, `medium` or `high`                                                                                               |
+| `reason`     | two or three sentences, at most 600 characters (`MAX_TRIAGE_REASON`)                                                   |
+
+A key outside the run is refused, naming the run's keys. A verdict is stored **per episode** in
+`app_error_triages`, replacing one already there; the answer says which keys of the run are still owed.
+
+### What it is, and is not
+
+**Advice beside the link.** The deterministic `link` is still computed per request and never touched
+by a verdict; the triage is a separate `triage` field on the row, folded on afresh on every read
+(`withTriage`) like the tracker cache. No rule reads a verdict, no bug is filed or related from one, and
+Investigate's offer still reads the link alone. It **counts on the goal header**, marked as the agent's
+guess ([in the cockpit](#in-the-cockpit)), because a goal header that never mentions what the only
+reader of the code concluded is the silence the operator complained of.
+
+**The run settles when its agent's task ends, however it ends** — the desk sees the claimed task no
+longer active and marks the run `done`; groups left unanswered go in a later run. A run row is one
+assembly rather than a standing signal: no cooldown budget and no escalation.
+
+Retention: on each assembly, verdicts and detail reads whose group the [prune](#what-is-stored-and-for-how-long)
+has deleted are deleted with it, and runs settled more than thirty days ago go too.
+
 ## Seams
 
 `AppErrorReader` (`src/appErrors/reader.ts`) — one method, `list({environment, command, since})`.
@@ -566,6 +701,11 @@ scripted fake; `FakeIssuesIntegration` searches the bodies it filed. A test of t
 keeps the fake connector underneath (`test/appErrorTracker.test.ts`). **A test that declares an
 `errors` block injects it and `environmentProber`**, or it spawns the declared command — and, because
 such an environment is probed for its head, the `at` probe — on the machine running the tests.
+
+**A test that runs a pulse over a moved group sets `appErrorTriagePerDay: 0`** unless triage is its
+subject, and then runs `agentMode: 'raw'` with `FakeWorktreeManager` (`test/appErrorTriage.test.ts`):
+automatic [triage](#agent-triage) dispatches a code agent, which on the default agent mode is a real
+`claude`. It injects `gitObserver` too, since the triage assembly links, and linking asks the clone.
 
 Linking asks the clone through `GitObserver` — `contains` and `changedFiles` — injected as
 `gitObserver`. `FakeGitObserver` answers `changedFiles` from `setChangedFiles` and `null` for a commit
@@ -591,6 +731,12 @@ counts per group is too much to send every couple of seconds to every open cockp
   Sorted moved-first — `new`, `returned`, `spiking`, `steady`, `gone` — then most recently seen;
 - `bands` — the [roll-up](#groups).
 
+`triage: AppErrorTriage | null` — [agent triage](#agent-triage), kept apart from the link: for the
+group's **current episode**, the `verdict`, `goalRef`, `confidence`, `reason` and `at` of a stored
+verdict (all null when there is none), `queued` (a run still out holds the episode and has not
+answered it) and `detailReadAt` (when a triage agent last read its message and stack). Null where none
+of the three applies, and for a group with no episode.
+
 `link: AppErrorLink | null` — [the link](#linking-a-group-to-work). Null for a group nothing is
 linked for (`steady`, `gone`, ignored); otherwise always an object, even when no goal was found:
 
@@ -611,7 +757,8 @@ The route's payload is built by `CurrentAppErrors` (`src/appErrors/current.ts`, 
 the one builder of the linked payload, which the presses read too, so a press files from exactly the row the tab drew
 ([where it is computed](#where-it-is-computed)). The
 presses are [above](#the-presses); each answers an `AppErrorPressPayload` — the ticket ref, whether it
-was `reused`, and for Investigate the label writes that failed.
+was `reused`, and for Investigate the label writes that failed. The Triage press answers an
+`AppErrorTriagePressPayload` — the run it opened.
 
 ## In the cockpit
 
@@ -670,6 +817,12 @@ liveUs`), and an environment in no group is a band of one under its own name. Ea
   not be decided, never `0`, which would say the deploy shipped nothing. **The tracker column** draws the status, the ticket through `<Ref>` and the note.
   Each is a dash while its field is null — a blank there would read as a stage that ran and found
   nothing.
+- **Under the link, the triage agent's word** (`TriageNote`, `web/src/components/AppErrorsTriage.tsx`),
+  never merged into it: _Agent: probably_ and the goal through `<Ref>`, or _Agent: pre-existing_ /
+  _unclear_, a confidence pill and the reason; _The triage agent has this group_ while a run holds it;
+  _The triage agent read the stack_ when `detailReadAt` is set. A **Triage** press (**Triage again**
+  once answered) sits there on every moved row no open run already holds (`canTriage`). Colours are the
+  existing tokens; nothing here is a literal.
 - **The tracker column carries the presses**, by what the search found (`trackerPresses`,
   `web/src/view/appErrors.ts`), each pressing for the member whose state the band reports:
 
@@ -687,7 +840,9 @@ liveUs`), and an environment in no group is a band of one under its own name. Ea
 
 **On the goal**, the header's identity row carries _N new errors on test since this arrived_
 (`web/src/console/goalErrors.tsx`) when any environment's group in `new`, `returned` or `spiking` links
-to that goal, with how each link was made on hover; pressing it opens the Errors tab on that
+to that goal — **or the triage agent said it was `caused-by` that goal** (`triagedTo`), counted once
+and marked: _(2 the triage agent's guess)_, and on hover _N linked by frame match and M by the triage
+agent's guess_ — with how each link was made on hover; pressing it opens the Errors tab on that
 environment's band, with the show filter and search cleared so a filter left from an earlier visit
 cannot hide the errors it counted. It counts per environment rather than per band, so a fault seen in two regions is
 two there and one row on the tab. **A link made only by hint is not counted** (`countsOnGoal`): an
@@ -700,10 +855,6 @@ true, so a deployment that reads no errors pays nothing on every goal page.
 
 Each removes its line here when it lands:
 
-- **Model triage on a press** — the bug-investigation flow ([38](38-bug-investigation.md)) with the
-  trace attached, for a group the [deterministic link](#linking-a-group-to-work) leaves without a goal.
-  Today Investigate files the bug and sets the investigate label, and the investigator starts from
-  the ticket alone.
 - **Promote to watch.** → [Why there is no Watch press](#why-there-is-no-watch-press)
 - **Cross-fleet links through the pool** ([28](28-cross-fleet-pool.md)). The pool is the wrong lock,
   but it can later show which fleet **linked** a group to which of its goals, which narrows the

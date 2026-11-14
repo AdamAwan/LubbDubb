@@ -24,6 +24,7 @@ import {
 import { AppErrorDetailFold } from './AppErrorDetail.js';
 import { AppErrorFilters, SortHead } from './AppErrorsFilters.js';
 import { TrackerCell } from './AppErrorsTracker.js';
+import { TriageNote } from './AppErrorsTriage.js';
 import { BareButton, Button } from './button.js';
 import { Ref } from './refs.js';
 import { Tag, type TagTone } from './tag.js';
@@ -408,6 +409,7 @@ function ErrorTableRow({
       <td className="ae-n">{row.count}</td>
       <td>
         <LinkCell link={row.link} />
+        <TriageNote row={row} now={now} onPressed={onPressed} />
       </td>
       <td>
         <TrackerCell row={row} onPressed={onPressed} />

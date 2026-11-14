@@ -258,6 +258,7 @@ export type {
   AppErrorDetail,
   AppErrorPressPayload,
   AppErrorSearchPayload,
+  AppErrorTriagePressPayload,
   UpdateKind,
   CockpitState as AppState,
   CockpitWorld as WorldSnapshot,

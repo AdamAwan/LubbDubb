@@ -23,6 +23,13 @@ import {
 } from '../featureSummaries/featureSummary.js';
 import { featureSequenceSubmitOrigin, resequenceVerdict } from '../sequence/sequence.js';
 import { recordBotPrRisk, type BotPrRiskInput, type BotPrRiskRecorded } from '../botPrs/riskRecord.js';
+import {
+  readAppErrorDetail,
+  recordAppErrorTriage,
+  type AppErrorDetailRead,
+  type AppErrorTriageInput,
+  type AppErrorTriageRecorded,
+} from '../appErrors/triageRecord.js';
 import { recordBotPrOutcome, type BotPrOutcomeInput, type BotPrOutcomeRecorded } from '../botPrs/outcome.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
 import type { ReviewThreadLabelSubmission } from '../review/threadLabels.js';
@@ -256,6 +263,14 @@ export class AgentToolDesk implements AgentToolTarget {
 
   recordBotPrRisk(agentId: string, input: BotPrRiskInput): BotPrRiskRecorded {
     return this.withCaller(agentId, ({ task }) => recordBotPrRisk(this.store, task.originRef, input));
+  }
+
+  recordAppErrorTriage(agentId: string, input: AppErrorTriageInput): AppErrorTriageRecorded {
+    return this.withCaller(agentId, ({ task }) => recordAppErrorTriage(this.store, task.originRef, input));
+  }
+
+  readAppErrorDetail(agentId: string, key: string): AppErrorDetailRead {
+    return this.withCaller(agentId, ({ task }) => readAppErrorDetail(this.store, task, key));
   }
 
   recordBotPrOutcome(agentId: string, input: BotPrOutcomeInput): BotPrOutcomeRecorded {

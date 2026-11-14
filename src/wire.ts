@@ -51,6 +51,7 @@ import type {
   AppErrorState,
   AppErrorTicketSearch,
   AppErrorTracker,
+  AppErrorTriage,
   DeployedHead,
   AgentFile,
   AgentFlag,
@@ -980,6 +981,8 @@ export interface AppErrorGroupView extends AppErrorGroup {
   spike: AppErrorSpike | null;
   link: AppErrorLink | null;
   tracker: AppErrorTracker | null;
+  /** The triage agent's word on this episode, kept apart from the deterministic `link`. */
+  triage: AppErrorTriage | null;
 }
 
 export interface AppErrorEnvironmentView {
@@ -1021,6 +1024,12 @@ export interface AppErrorPressPayload {
   reused: boolean;
   /** For Investigate: the label writes that failed, each a sentence. Null for any other press. */
   investigation: { failed: string[] } | null;
+}
+
+/** What a Triage press opened: the run that holds the group. */
+export interface AppErrorTriagePressPayload {
+  ok: true;
+  runId: string;
 }
 
 export interface AppErrorSearchPayload {

@@ -7,6 +7,7 @@ export type ErrorState = AppErrorGroupView['state'];
 export type ErrorLink = NonNullable<AppErrorGroupView['link']>;
 type ErrorLinkHow = ErrorLink['how'][number];
 export type ErrorTracker = NonNullable<AppErrorGroupView['tracker']>;
+export type ErrorTriage = NonNullable<AppErrorGroupView['triage']>;
 export type ErrorReading = NonNullable<AppErrorEnvironmentView['reading']>;
 
 /** The three states that say something moved. The other two are folded away by default. */
@@ -36,6 +37,7 @@ export interface ErrorRow {
   spike: AppErrorGroupView['spike'];
   link: ErrorLink | null;
   tracker: ErrorTracker | null;
+  triage: ErrorTriage | null;
 }
 
 /** The band a place names, or the first one when it names none the payload holds. */
@@ -82,6 +84,7 @@ function bandRow(bandGroup: AppErrorBandView['groups'][number], held: readonly A
     daily: sumDaily(held),
     link: firstOf(lead, held, (g) => g.link),
     tracker: firstOf(lead, held, (g) => g.tracker),
+    triage: lead?.triage ?? null,
   };
 }
 
@@ -181,19 +184,50 @@ export function countsOnGoal(link: ErrorLink): boolean {
   return link.how.some((how) => how !== 'route-hint');
 }
 
-/** What the goal card says about one environment: the moved groups linked to this goal there. */
+/**
+ * What the goal card says about one environment: the moved groups linked to this goal there, and among
+ * them the ones only the triage agent named it for — counted, but said as its guess.
+ */
 export interface GoalErrorLine {
   environment: string;
   band: string;
   count: number;
   how: ErrorLinkHow[];
+  guessed: number;
+}
+
+/** Whether the triage agent named this goal as the group's cause. */
+function triagedTo(triage: ErrorTriage | null, goalRef: string): boolean {
+  return triage?.verdict === 'caused-by' && triage.goalRef === goalRef;
 }
 
 export function goalErrorLines(payload: AppErrorsPayload, goalRef: string): GoalErrorLine[] {
   return payload.environments.flatMap((env) => {
-    const linked = env.groups.filter((g) => isMoved(g.state) && g.link?.goalRef === goalRef && countsOnGoal(g.link));
-    if (linked.length === 0) return [];
+    const moved = env.groups.filter((g) => isMoved(g.state));
+    const linked = moved.filter((g) => g.link?.goalRef === goalRef && countsOnGoal(g.link));
+    const guessed = moved.filter((g) => !linked.includes(g) && triagedTo(g.triage, goalRef));
+    if (linked.length + guessed.length === 0) return [];
     const how = [...new Set(linked.flatMap((g) => g.link?.how ?? []))];
-    return [{ environment: env.environment, band: env.band, count: linked.length, how }];
+    return [
+      {
+        environment: env.environment,
+        band: env.band,
+        count: linked.length + guessed.length,
+        how,
+        guessed: guessed.length,
+      },
+    ];
   });
+}
+
+/** How the triage agent's verdict is said on a row. */
+export const VERDICT_SAID: Record<NonNullable<ErrorTriage['verdict']>, string> = {
+  'caused-by': 'probably',
+  'pre-existing': 'pre-existing',
+  unclear: 'unclear',
+};
+
+/** A row a Triage press can queue: one that moved, and that no open run already holds. */
+export function canTriage(row: ErrorRow): boolean {
+  return isMoved(row.state) && row.triage?.queued !== true;
 }

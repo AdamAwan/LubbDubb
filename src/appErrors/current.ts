@@ -4,6 +4,7 @@ import type { AppErrorsPayload } from '../wire.js';
 import { appErrorProject } from './key.js';
 import type { AppErrorLinker } from './linker.js';
 import { withTrackers } from './tracker.js';
+import { withTriage } from './triage.js';
 import { appErrorsView } from './view.js';
 
 // → docs/spec/39-app-errors.md#where-it-is-computed
@@ -16,7 +17,7 @@ type CurrentConfig = Pick<
 /** A linked payload is reused this long while nothing it was built from has moved. */
 const REUSE_MS = 30_000;
 
-/** The payload with every `link` and `tracker` still null: the tracker desk's reading, which needs only keys and states. */
+/** The payload with every `link`, `tracker` and `triage` still null: the tracker desk's reading, which needs only keys and states. */
 export function appErrorView(store: Store, config: CurrentConfig, now: number): AppErrorsPayload {
   return appErrorsView({
     environments: config.environments,
@@ -37,8 +38,9 @@ interface CurrentAppErrorsDeps {
 }
 
 /**
- * The one builder of the linked payload — the Errors tab's, every goal badge's and every press's. A
- * linked pass is shared for a short while, and only while no read, head or landing has moved since.
+ * The one builder of the linked payload — the Errors tab's, every goal badge's, every press's and the
+ * triage desk's. A linked pass is shared for a short while, and only while no read, head or landing has
+ * moved since. The tracker cache and the triage verdicts are folded on afresh on every read.
  */
 export class CurrentAppErrors {
   private held: { key: string; builtAt: number; payload: AppErrorsPayload } | null = null;
@@ -46,6 +48,14 @@ export class CurrentAppErrors {
   constructor(private readonly deps: CurrentAppErrorsDeps) {}
 
   async read(now: number): Promise<AppErrorsPayload> {
+    return (await this.readLinked(now)).payload;
+  }
+
+  /**
+   * The linked payload and whether its link pass was whole: `answered` is false when the deadline cut
+   * some question to the clone off, so a window reads undecided only for want of time.
+   */
+  async readLinked(now: number): Promise<{ payload: AppErrorsPayload; answered: boolean }> {
     const { store, config, linker } = this.deps;
     const landings = store.environments.listGoalLandings();
     const readings = store.environments.listEnvironmentReach();
@@ -59,11 +69,18 @@ export class CurrentAppErrors {
       `min ${String(config.appErrorMinCount)} ignore ${config.appErrorIgnore.join(',')}`,
     ].join('\n');
     let linked = this.held?.key === key && now - this.held.builtAt < REUSE_MS ? this.held.payload : null;
+    let answered = true;
     if (linked === null) {
       linked = appErrorView(store, config, now);
-      const answered = await linker.link(linked, { landings, readings, nodes, now });
+      answered = await linker.link(linked, { landings, readings, nodes, now });
       this.held = answered ? { key, builtAt: now, payload: linked } : null;
     }
-    return withTrackers(linked, store.appErrorTickets.listSearches());
+    const tracked = withTrackers(linked, store.appErrorTickets.listSearches());
+    const payload = withTriage(tracked, {
+      triages: store.appErrorTriage.listTriages(),
+      reads: store.appErrorTriage.listDetailReads(),
+      open: store.appErrorTriage.openRunNow(),
+    });
+    return { payload, answered };
   }
 }

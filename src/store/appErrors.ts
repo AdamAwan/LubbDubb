@@ -92,6 +92,14 @@ export class AppErrorStore {
     );
   }
 
+  /** Every group held, by name alone. */
+  listGroupIds(): { environment: string; fingerprint: string }[] {
+    return this.ctx.prep(`SELECT environment, fingerprint FROM app_error_groups`).all() as {
+      environment: string;
+      fingerprint: string;
+    }[];
+  }
+
   getDetail(environment: string, fingerprint: string): AppErrorDetail | null {
     const row = this.ctx
       .prep(`SELECT message, stack FROM app_error_groups WHERE environment = ? AND fingerprint = ?`)

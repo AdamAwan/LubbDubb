@@ -228,6 +228,7 @@ export function cycleLookups(
   | 'liveLocalRun'
   | 'remoteRuns'
   | 'botPrRiskRun'
+  | 'appErrorTriageRun'
   | 'localValidations'
 > {
   return {
@@ -245,6 +246,7 @@ export function cycleLookups(
     liveLocalRun: ctx.localRun ?? null,
     remoteRuns: ctx.remoteRuns ?? [],
     botPrRiskRun: ctx.botPrRiskRun ?? null,
+    appErrorTriageRun: ctx.appErrorTriageRun ?? null,
     localValidations: ctx.localValidations ?? [],
   };
 }
