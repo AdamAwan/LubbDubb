@@ -55,7 +55,7 @@ test('a well-formed report is read row by row, with the link carried as the url'
 
 test('an empty list is no errors; silence, prose and the wrong shape are unknown', () => {
   const none = parseAppErrorReport('[]');
-  assert.deepEqual(none, { status: 'ok', rows: [], refused: [], dropped: 0 });
+  assert.deepEqual(none, { status: 'ok', rows: [], refused: [], dropped: 0, query: null, queryLink: null });
   for (const [stdout, why] of [
     ['', /printed nothing/],
     ['not json', /did not answer with JSON/],

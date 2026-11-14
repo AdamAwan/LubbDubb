@@ -30,6 +30,7 @@ import type {
   PrSplitVerdict,
   PullRequest,
   RemoteRunBrief,
+  PendingAppErrorTriageRun,
   PendingBotPrRiskRun,
   TaskSummary,
   ValidationCheck,
@@ -137,6 +138,7 @@ export interface StageContext {
   /** Every live run row, with what the agent must read already rendered. → 36-remote-validation.md */
   remoteRuns: readonly RemoteRunBrief[];
   botPrRiskRun: PendingBotPrRiskRun | null;
+  appErrorTriageRun: PendingAppErrorTriageRun | null;
   localValidations: LocalValidation[];
   localValidation: LocalValidationPolicy;
   validationClaimMinutes: number;

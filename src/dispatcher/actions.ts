@@ -49,6 +49,11 @@ const extraTools = {
     .object({ id: z.string().min(1) })
     .nullable()
     .default(null),
+  /** The app error triage run this dispatch claims, `remoteRun`'s shape. → docs/spec/39-app-errors.md#agent-triage */
+  appErrorTriageRun: z
+    .object({ id: z.string().min(1) })
+    .nullable()
+    .default(null),
 };
 
 const ActionSchema = z.discriminatedUnion('type', [

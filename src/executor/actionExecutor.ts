@@ -259,14 +259,13 @@ export class ActionExecutor {
       store.botPrRisks.claimRun(action.botPrRiskRun.id, taskId);
     if (action.type !== 'dispatch_code_agent') return;
     if (action.partId) store.plans.markPartDispatched(action.partId, taskId, action.branch);
-    if (action.localValidation) {
-      if (action.localValidation.as === 'fix')
-        store.localValidations.markLocalValidationFix(action.localValidation.id, taskId);
-      else store.localValidations.markLocalValidationDispatched(action.localValidation.id, taskId);
-    }
+    const local = action.localValidation;
+    if (local?.as === 'fix') store.localValidations.markLocalValidationFix(local.id, taskId);
+    else if (local) store.localValidations.markLocalValidationDispatched(local.id, taskId);
     // One agent per run, across a restart: the conditional `WHERE status = 'pending'` is
     // the store's own and never a check made here first.
     if (action.remoteRun) store.remoteValidation.claimRemoteRun(action.remoteRun.id, taskId);
+    if (action.appErrorTriageRun) store.appErrorTriage.claimRun(action.appErrorTriageRun.id, taskId);
   }
 
   private escalate(action: ValidatedAction & { type: 'escalate_to_human' }, run: ActionRun): void {

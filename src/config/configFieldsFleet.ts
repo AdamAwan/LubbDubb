@@ -108,6 +108,12 @@ export const FLEET_FIELDS: readonly ConfigField[] = [
     why: 'Error fingerprints (or their err:… keys) held at steady — known noise that should never read as moved.',
   },
   {
+    path: 'appErrorTriagePerDay',
+    type: 'number',
+    access: 'plain',
+    why: 'How many moved error groups nothing linked to a goal an agent may triage automatically each day. 0 leaves triage to the Triage press.',
+  },
+  {
     path: 'remoteValidation.tenantTimeoutMs',
     type: 'number',
     ms: true,

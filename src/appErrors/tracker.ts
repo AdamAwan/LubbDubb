@@ -6,10 +6,9 @@ import type { AppErrorTicketStore } from '../store/appErrorTickets.js';
 import type { AppErrorRead, AppErrorState, AppErrorTicketSearch, AppErrorTracker } from '../types.js';
 import type { AppErrorGroupView, AppErrorsPayload } from '../wire.js';
 import { groupId } from './link.js';
+import { MOVED } from './states.js';
 
 // → docs/spec/39-app-errors.md#the-tracker-lock
-
-const MOVED: ReadonlySet<AppErrorState> = new Set<AppErrorState>(['new', 'returned', 'spiking']);
 
 /** Neither tracker client sets a request timeout, and a search still running holds every later pass. */
 const SEARCH_DEADLINE_MS = 30_000;

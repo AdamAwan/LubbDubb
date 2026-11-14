@@ -117,6 +117,7 @@ export interface System {
   stateQueries: StateQueryDesk;
   remoteValidation: RemoteValidationDesk;
   appErrorTracker: AppErrorTrackerDesk;
+  appErrorTriage: EnvironmentDesks['appErrorTriage'];
   validationReady: ValidationReadyDesk;
   remoteRuns: RemoteRunDesk;
   remoteIntents: EnvironmentDesks['remoteIntents'];
@@ -203,6 +204,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     stateQueries: envs.stateQueries,
     remoteValidation: envs.remoteValidation,
     appErrorTracker: envs.appErrorTracker,
+    appErrorTriage: envs.appErrorTriage,
     validationReady: bench.validationReady,
     remoteRuns: envs.remoteRuns,
     remoteIntents: envs.remoteIntents,
@@ -361,6 +363,7 @@ function buildHarness(
     watched: watchHintRequired(config.environments),
     appErrors: envs.appErrors,
     appErrorTracker: envs.appErrorTracker,
+    appErrorTriage: envs.appErrorTriage,
     remoteValidation: envs.remoteValidation,
     remoteIntents: envs.remoteIntents,
     prWatch: intake.prWatch,

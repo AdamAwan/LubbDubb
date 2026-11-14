@@ -29,11 +29,11 @@ export function dayStart(day: string): number {
   return Date.parse(`${day}T00:00:00.000Z`);
 }
 
-/** `{since}` for the next read: the last successful one, never further back than the lookback. */
-export function readSince(okAt: string | null, now: number): string {
+/** `{since}` from an instant — the last successful read, a group's first sighting — never further back than the lookback. */
+export function readSince(from: string | null, now: number): string {
   const floor = now - MAX_LOOKBACK_MS;
-  const from = okAt === null ? floor : Math.max(Date.parse(okAt), floor);
-  return new Date(from).toISOString();
+  const at = from === null ? NaN : Date.parse(from);
+  return new Date(Number.isNaN(at) ? floor : Math.max(at, floor)).toISOString();
 }
 
 export function mergeGroup(

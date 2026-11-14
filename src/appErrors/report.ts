@@ -8,9 +8,12 @@ const MAX_FRAME_CHARS = 300;
 const MAX_URL_CHARS = 2000;
 const MAX_MESSAGE_CHARS = 2000;
 const MAX_STACK_CHARS = 16_000;
+const MAX_QUERY_CHARS = 8_000;
 export const MAX_ROWS_PER_READ = 500;
 
 export const SINCE_TOKEN = '{since}';
+
+class Refused extends Error {}
 
 /** One row of the `errors` command's output, after the contract has been checked. */
 export interface AppErrorRow {
@@ -27,8 +30,15 @@ export interface AppErrorRow {
   url: string | null;
 }
 
+/** The query the command ran and a link that opens it, when the command printed the object form. */
+interface AppErrorQuery {
+  query: string | null;
+  queryLink: string | null;
+}
+
 export type AppErrorReport =
-  { status: 'ok'; rows: AppErrorRow[]; refused: string[]; dropped: number } | { status: 'unknown'; detail: string };
+  | ({ status: 'ok'; rows: AppErrorRow[]; refused: string[]; dropped: number } & AppErrorQuery)
+  | { status: 'unknown'; detail: string };
 
 export function unreadableErrors(detail: string): AppErrorReport {
   return { status: 'unknown', detail };
@@ -47,11 +57,12 @@ export function parseAppErrorReport(stdout: string): AppErrorReport {
   } catch (err) {
     return unreadableErrors(`the errors command did not answer with JSON: ${(err as Error).message}`);
   }
-  if (!Array.isArray(json))
-    return unreadableErrors('the errors command answered with something other than a list of error groups');
+  const listed = readEnvelope(json);
+  if (typeof listed === 'string') return unreadableErrors(listed);
+  const { groups, query, queryLink, refused: envelopeRefused } = listed;
   const refused: string[] = [];
   const byFingerprint = new Map<string, AppErrorRow>();
-  json.forEach((value, i) => {
+  groups.forEach((value, i) => {
     const row = readRow(value);
     if (typeof row === 'string') {
       refused.push(`row ${String(i)}: ${row}`);
@@ -60,23 +71,55 @@ export function parseAppErrorReport(stdout: string): AppErrorReport {
     const seen = byFingerprint.get(row.fingerprint);
     byFingerprint.set(row.fingerprint, seen === undefined ? row : fold(seen, row));
   });
-  if (json.length > 0 && byFingerprint.size === 0)
+  if (groups.length > 0 && byFingerprint.size === 0)
     return unreadableErrors(`every row the errors command printed was refused — ${refused[0] ?? ''}`);
   const rows = [...byFingerprint.values()].sort((a, b) => b.count - a.count);
   return {
     status: 'ok',
     rows: rows.slice(0, MAX_ROWS_PER_READ),
-    refused,
+    refused: [...refused, ...envelopeRefused],
     dropped: Math.max(0, rows.length - MAX_ROWS_PER_READ),
+    query,
+    queryLink,
   };
+}
+
+interface Envelope extends AppErrorQuery {
+  groups: unknown[];
+  refused: string[];
+}
+
+/**
+ * The list form, or `{query?, queryLink?, groups}`. A `query` or `queryLink` that breaks the contract is
+ * refused by name and left out, and the reading still stands.
+ */
+function readEnvelope(json: unknown): Envelope | string {
+  if (Array.isArray(json)) return { groups: json, query: null, queryLink: null, refused: [] };
+  if (typeof json !== 'object' || json === null)
+    return 'the errors command answered with something other than a list of error groups, or an object carrying one';
+  const envelope = json as Record<string, unknown>;
+  const groups = envelope['groups'];
+  if (!Array.isArray(groups))
+    return 'the errors command answered with something other than a list of error groups: an object carries them as a "groups" list';
+  const refused: string[] = [];
+  const field = <T>(read: () => T): T | null => {
+    try {
+      return read();
+    } catch (err) {
+      if (!(err instanceof Refused)) throw err;
+      refused.push(err.message);
+      return null;
+    }
+  };
+  const query = field(() => optionalText(envelope['query'], 'query', MAX_QUERY_CHARS));
+  const queryLink = field(() => readUrl(envelope['queryLink'], 'queryLink'));
+  return { groups, query, queryLink, refused };
 }
 
 function fold(a: AppErrorRow, b: AppErrorRow): AppErrorRow {
   const later = b.lastSeen > a.lastSeen ? b : a;
   return { ...later, count: a.count + b.count, firstSeen: a.firstSeen < b.firstSeen ? a.firstSeen : b.firstSeen };
 }
-
-class Refused extends Error {}
 
 function readRow(value: unknown): AppErrorRow | string {
   try {
@@ -117,7 +160,7 @@ function readDetail(row: Record<string, unknown>): Omit<AppErrorRow, keyof Ident
     frames: readFrames(row['frames']),
     message: optionalText(row['message'], 'message', MAX_MESSAGE_CHARS),
     stack: optionalText(row['stack'], 'stack', MAX_STACK_CHARS),
-    url: readUrl(row['link']),
+    url: readUrl(row['link'], 'link'),
   };
 }
 
@@ -144,10 +187,10 @@ function readFrames(value: unknown): string[] {
     .slice(0, MAX_FRAMES);
 }
 
-function readUrl(value: unknown): string | null {
+function readUrl(value: unknown, name: string): string | null {
   if (value === undefined || value === null || value === '') return null;
   const parsed = typeof value === 'string' && value.length <= MAX_URL_CHARS ? URL.parse(value) : null;
   if (parsed === null || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:'))
-    throw new Refused('"link" must be an absolute http(s) URL');
+    throw new Refused(`"${name}" must be an absolute http(s) URL`);
   return value as string;
 }

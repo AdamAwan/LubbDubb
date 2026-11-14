@@ -4,6 +4,14 @@ import { QUIET_MS, dayStart } from './groups.js';
 
 // → docs/spec/39-app-errors.md#states
 
+export type MovedState = Extract<AppErrorState, 'new' | 'returned' | 'spiking'>;
+
+/** The states a group has moved into: what the tracker lock and agent triage act on. */
+export const MOVED: ReadonlySet<AppErrorState> = new Set<MovedState>(['new', 'returned', 'spiking']);
+
+/** Moved first, then steady, then gone. */
+export const STATE_RANK: Record<AppErrorState, number> = { new: 0, returned: 1, spiking: 2, steady: 3, gone: 4 };
+
 /** With no deploy on record, a group first seen this recently reads `new`. */
 const NEW_FALLBACK_MS = DAY_MS;
 

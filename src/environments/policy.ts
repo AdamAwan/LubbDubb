@@ -1,6 +1,7 @@
 import type { EnvironmentGate, RemoteRowKind } from '../types.js';
 import { QUERY_URL_TOKENS } from './watchQueryUrl.js';
 import { SINCE_TOKEN } from '../appErrors/report.js';
+import { FINGERPRINT_TOKEN } from '../appErrors/detailCommand.js';
 import { WATCH_SOURCE_LANGUAGES, WATCH_SOURCE_RUNNERS, type WatchSourceConfig } from './watchSource.js';
 
 // → docs/spec/24-environments.md
@@ -13,7 +14,7 @@ export interface EnvironmentConfig {
   arrival?: EnvironmentArrival;
   watch?: EnvironmentWatch;
   validate?: EnvironmentValidate;
-  errors?: { list: string };
+  errors?: { list: string; detail?: string };
 }
 
 const REMOTE_ROW_KINDS: readonly RemoteRowKind[] = ['check', 'state'];
@@ -189,6 +190,22 @@ function validateErrors(errors: EnvironmentConfig['errors'], where: string): voi
     throw new Error(
       `${where}: "errors.list" carries no ${SINCE_TOKEN}. Every read is bounded by the instant the last one ` +
         'reached, and a command that ignores it counts old errors as new on every read.',
+    );
+  validateErrorDetail(errors.detail, where);
+}
+
+function validateErrorDetail(detail: unknown, where: string): void {
+  if (detail === undefined) return;
+  if (typeof detail !== 'string' || detail.trim() === '')
+    throw new Error(
+      `${where}: "errors.detail" must be a non-empty command printing what more the telemetry holds on one error ` +
+        'group, or be left out — with none, the triage agent reads only the stored sample.',
+    );
+  if (detail.includes(FINGERPRINT_TOKEN))
+    throw new Error(
+      `${where}: "errors.detail" carries ${FINGERPRINT_TOKEN}, and the fingerprint is never put into a command's ` +
+        'text — it comes from telemetry, and a shell would read it. Read it from the LUBBDUBB_ERROR_FINGERPRINT ' +
+        'environment variable instead.',
     );
 }
 

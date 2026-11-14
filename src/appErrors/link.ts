@@ -9,7 +9,7 @@ import { GROUP_RETENTION_DAYS } from './groups.js';
 // → docs/spec/39-app-errors.md#linking-a-group-to-work
 
 /** A landing recorded longer than this before a window's start is in no window. */
-const LANDING_HORIZON_MS = 30 * DAY_MS;
+export const LANDING_HORIZON_MS = 30 * DAY_MS;
 
 /** With no deploy window, the period before a group's sighting whose arrivals are its candidates. */
 const ARRIVAL_LOOKBACK_MS = 7 * DAY_MS;

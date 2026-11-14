@@ -10,6 +10,8 @@ import { concludeWork } from './tools/concludeWork.js';
 import { escalate } from './tools/escalate.js';
 import { featureSummary } from './tools/featureSummary.js';
 import { botPrRisk } from './tools/botPrRisk.js';
+import { appErrorTriage } from './tools/appErrorTriage.js';
+import { appErrorDetail } from './tools/appErrorDetail.js';
 import { dependencyOutcome } from './tools/dependencyOutcome.js';
 import { sequenceSubmit } from './tools/sequenceSubmit.js';
 import { linkTicket } from './tools/linkTicket.js';
@@ -66,6 +68,8 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   retro_submit: retroSubmit,
   feature_summary: featureSummary,
   bot_pr_risk: botPrRisk,
+  app_error_triage: appErrorTriage,
+  app_error_detail: appErrorDetail,
   dependency_outcome: dependencyOutcome,
   sequence_submit: sequenceSubmit,
   open_pr: openPr,

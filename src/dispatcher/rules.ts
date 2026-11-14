@@ -326,6 +326,14 @@ const RULES = [
   },
 
   {
+    id: 'app-error-triage',
+    kind: 'rule',
+    name: 'App errors nothing linked to a goal',
+    description:
+      "AppErrorTriageDesk opened a triage run — automatically, within `appErrorTriagePerDay`, or because somebody pressed Triage on an Errors row — over up to ten app error groups that moved (new, returned or spiking) and whose deterministic link named no goal: an undecided window, a tie, or no evidence at all. This puts **one** read-only code agent on the whole batch, in a detached checkout of the default branch so it can follow a method-name frame to its file. Each group's frames, state, counts and the deterministic link's account are appended to its prompt with a wider list of candidate goals than the linker uses — every goal landed on the integration branch in the thirty days before the group's anchor, with what it changed where the linker already knows, and for a returned group the goal of its tracker ticket, the fix that did not hold. The query each environment was read with, and each group's telemetry link, are in the brief; the message and stack are **not** — the agent asks for them with `app_error_detail`, which also runs the environment's `errors.detail` query for that group where one is declared, and every such read is recorded and drawn on the row. It answers `app_error_triage` once per group — caused-by one of that group's candidates, pre-existing, or unclear — and that is advice drawn beside the link and nothing else: no rule reads a verdict, nothing is filed and no gate moves. Each episode — a group, its state and its anchor — is answered at most once, so a group that returns again is triaged again; one the agent never answers goes in a later run. It sits beside `bot-pr-risk` at the bottom because it produces no work. A run row is one assembly rather than a standing signal, so there is no cooldown budget and no escalation: it is re-proposed each pulse until it dispatches, and it settles when its agent's task ends, however that happens.",
+  },
+
+  {
     id: 'feature-summary',
     kind: 'rule',
     name: 'Feature has moved since anybody said where it was',

@@ -8,6 +8,7 @@ import type { ColumnMigrations } from './migrate.js';
 
 export const APP_ERROR_COLUMNS: ColumnMigrations = {
   app_error_groups: { message: 'TEXT', stack: 'TEXT' },
+  app_error_reads: { query: 'TEXT', query_link: 'TEXT' },
 };
 
 interface GroupInput {
@@ -15,26 +16,31 @@ interface GroupInput {
   days: AppErrorDay[];
 }
 
-type ReadInput = Omit<AppErrorRead, 'okAt'>;
+/** A read with no query to report — an `unknown` one, or a list that printed none — leaves them out. */
+type ReadInput = Omit<AppErrorRead, 'okAt' | 'query' | 'queryLink'> &
+  Partial<Pick<AppErrorRead, 'query' | 'queryLink'>>;
 
 export class AppErrorStore {
   constructor(private readonly ctx: StoreContext) {}
 
   /**
    * One read, written whole: the reading row, every group it named and their day counts. `okAt` moves
-   * only on an `ok` read, because it is what the next read's `{since}` is bounded by.
+   * only on an `ok` read, because it is what the next read's `{since}` is bounded by; the query and its
+   * link are the last answered read's, so an `unknown` read leaves them as they were.
    */
   recordRead(read: ReadInput, groups: GroupInput[]): void {
     this.ctx.db.transaction(() => {
       this.ctx
         .prep(
-          `INSERT INTO app_error_reads (environment, status, detail, read_at, ok_at)
-           VALUES (@environment, @status, @detail, @readAt, @okAt)
+          `INSERT INTO app_error_reads (environment, status, detail, read_at, ok_at, query, query_link)
+           VALUES (@environment, @status, @detail, @readAt, @okAt, @query, @queryLink)
            ON CONFLICT(environment) DO UPDATE SET
              status=excluded.status, detail=excluded.detail, read_at=excluded.read_at,
-             ok_at=ifnull(excluded.ok_at, app_error_reads.ok_at)`,
+             ok_at=ifnull(excluded.ok_at, app_error_reads.ok_at),
+             query=CASE WHEN excluded.status = 'ok' THEN excluded.query ELSE app_error_reads.query END,
+             query_link=CASE WHEN excluded.status = 'ok' THEN excluded.query_link ELSE app_error_reads.query_link END`,
         )
-        .run({ ...read, okAt: read.status === 'ok' ? read.readAt : null });
+        .run({ query: null, queryLink: null, ...read, okAt: read.status === 'ok' ? read.readAt : null });
       for (const { group, days } of groups) {
         this.ctx
           .prep(
@@ -92,6 +98,22 @@ export class AppErrorStore {
     );
   }
 
+  /** Every group held, by name alone. */
+  listGroupIds(): { environment: string; fingerprint: string }[] {
+    return this.ctx.prep(`SELECT environment, fingerprint FROM app_error_groups`).all() as {
+      environment: string;
+      fingerprint: string;
+    }[];
+  }
+
+  /** A held group's first sighting; null for a group not held. */
+  firstSeen(environment: string, fingerprint: string): string | null {
+    const row = this.ctx
+      .prep(`SELECT first_seen FROM app_error_groups WHERE environment = ? AND fingerprint = ?`)
+      .get(environment, fingerprint) as { first_seen: string } | undefined;
+    return row?.first_seen ?? null;
+  }
+
   getDetail(environment: string, fingerprint: string): AppErrorDetail | null {
     const row = this.ctx
       .prep(`SELECT message, stack FROM app_error_groups WHERE environment = ? AND fingerprint = ?`)
@@ -134,6 +156,8 @@ interface ReadRow {
   detail: string | null;
   read_at: string;
   ok_at: string | null;
+  query: string | null;
+  query_link: string | null;
 }
 
 function readOf(r: ReadRow): AppErrorRead {
@@ -143,6 +167,8 @@ function readOf(r: ReadRow): AppErrorRead {
     detail: r.detail,
     readAt: r.read_at,
     okAt: r.ok_at,
+    query: r.query,
+    queryLink: r.query_link,
   };
 }
 

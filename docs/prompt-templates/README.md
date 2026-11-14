@@ -57,3 +57,5 @@ placeholder is fine.
 | `pr-concern-escalation`   | a PR concern keeps failing to clear (→ human)                            |
 | `review-pack-author`      | retired — review packs were removed; never rendered                      |
 | `review-pack-check`       | retired — review packs were removed; never rendered                      |
+| `bot-pr-risk`             | dependency-bot pull requests nobody has read for risk                    |
+| `app-error-triage`        | moved app errors the deterministic link named no goal for                |

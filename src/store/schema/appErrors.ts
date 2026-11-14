@@ -8,7 +8,9 @@ CREATE TABLE IF NOT EXISTS app_error_reads (
   status       TEXT NOT NULL,      -- ok | unknown
   detail       TEXT,
   read_at      TEXT NOT NULL,
-  ok_at        TEXT
+  ok_at        TEXT,
+  query        TEXT,               -- the query the last answered read ran, as it printed it
+  query_link   TEXT                -- a link that opens it, absolute http(s)
 );
 
 -- One error fingerprint on one environment, accumulated across reads. Never a

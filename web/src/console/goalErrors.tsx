@@ -24,10 +24,9 @@ export function GoalErrorBadge({
   const first = lines[0];
   if (first === undefined) return null;
   const total = lines.reduce((n, l) => n + l.count, 0);
+  const guessed = lines.reduce((n, l) => n + l.guessed, 0);
   const where = lines.map((l) => l.environment).join(', ');
-  const title = lines
-    .map((l) => `${l.count} on ${l.environment}, linked by ${l.how.map((h) => HOW_SAID[h]).join(' and ')}`)
-    .join('; ');
+  const title = lines.map(lineSaid).join('; ');
   return (
     <Button
       ghost
@@ -39,6 +38,16 @@ export function GoalErrorBadge({
       onClick={() => actions.openErrors({ errorsBand: first.band, errorsShow: 'all', errorsText: null })}
     >
       {total} new error{total === 1 ? '' : 's'} on {where} since this arrived
+      {guessed > 0 && ` (${guessed === total ? 'all' : String(guessed)} the triage agent's guess)`}
     </Button>
   );
+}
+
+function lineSaid(l: GoalErrorLine): string {
+  const linked = l.count - l.guessed;
+  const parts = [
+    ...(linked > 0 ? [`${linked} linked by ${l.how.map((h) => HOW_SAID[h]).join(' and ')}`] : []),
+    ...(l.guessed > 0 ? [`${l.guessed} by the triage agent's guess`] : []),
+  ];
+  return `${parts.join(' and ')} on ${l.environment}`;
 }

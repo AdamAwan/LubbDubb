@@ -13,6 +13,7 @@ import type {
   Task,
 } from '../types.js';
 import type { ErrorRecorder } from '../errorLog.js';
+import type { AppErrorDetailQuery } from '../appErrors/triageRecord.js';
 import type { AssessmentVerdict } from '../mcp/assessment.js';
 import type { GoalAppraisalVerdictName } from '../mcp/goalAppraisal.js';
 import type { PrReviewPolicy } from '../review/policy.js';
@@ -64,6 +65,8 @@ export interface AgentManagerOptions {
   /** Some environment declares a `watch`: a plan's hint is required, and the assessor's `delivered` asks for the watch. */
   watchHintRequired?: boolean;
   errors?: ErrorRecorder;
+  /** Each environment's `errors.detail` and what runs it, for `app_error_detail`. */
+  appErrorDetail?: AppErrorDetailQuery;
 }
 
 export type TerminalBy = 'agent' | 'operator' | 'expiry';

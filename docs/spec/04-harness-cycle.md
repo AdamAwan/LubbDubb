@@ -590,7 +590,8 @@ There is one entry type, because a desk is a sweep that runs at its own phase. A
   repeated at every call site.
   The walk **awaits every pass**, sync or async alike, and there is no flag to opt out of that. A pass
   with work the pulse must not block on starts that work itself and returns — `cloneUpkeep` does, for a
-  repack ([09](09-execution.md#the-clones-object-store)), `botPrRisks` for its provider sweep, and `retention` for the
+  repack ([09](09-execution.md#the-clones-object-store)), `botPrRisks` for its provider sweep, `appErrorTriage` for the
+  linked read its triage run is assembled from ([39](39-app-errors.md#the-pulse-never-waits-on-the-clone)), and `retention` for the
   batched history sweep ([14](14-persistence.md#history-retention)) — which keeps the
   decision beside the call it is about rather than in a registry flag every other pass has to be read
   against.
@@ -610,6 +611,7 @@ breaking silently:
 | `environments` → `remoteValidation`                | a sheet is assembled off the arrivals the environment desk records ([36](36-remote-validation.md))                                             |
 | `environments` → `appErrors`                       | an error read is held against the head the environment desk's probe just recorded ([39](39-app-errors.md#the-deploy-window))                   |
 | `appErrors` → `appErrorTracker`                    | the tracker is searched for the groups the read just moved ([39](39-app-errors.md#the-tracker-lock))                                           |
+| `appErrorTracker` → `appErrorTriage`               | a triage run's briefing names a returned group's tracker ticket, so it is assembled after the search for it starts ([39](39-app-errors.md#agent-triage)) |
 | `remoteValidation` → `validationReady`             | the validate row's detail carries **this** pulse's sheet                                                                                       |
 | `validationAsks` → `validationReady` → `closeOuts` | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                       |
 | `plans` → `graph`                                  | the part→PR observations the reconciler just made are the ones recorded                                                                        |

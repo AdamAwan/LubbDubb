@@ -58,6 +58,7 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings, watched 
       : {}),
     localRun: store.localRuns.liveLocalRun(),
     botPrRiskRun: store.botPrRisks.pendingRun(),
+    appErrorTriageRun: store.appErrorTriage.pendingRun(),
     localValidations: [
       ...store.localValidations.listOpenLocalValidations(),
       ...store.localValidations.listLocalValidationsAwaitingFix(),

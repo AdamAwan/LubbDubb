@@ -98,4 +98,9 @@ export function validateAppErrors(merged: Config): void {
     );
   if (typeof merged.appErrorIntervalMs !== 'number' || !(merged.appErrorIntervalMs >= 0))
     throw new Error('appErrorIntervalMs: must be a number of milliseconds.');
+  if (!Number.isInteger(merged.appErrorTriagePerDay) || merged.appErrorTriagePerDay < 0)
+    throw new Error(
+      `appErrorTriagePerDay: must be a whole number of at least 0 — how many moved, unlinked error groups ` +
+        `automatic triage may hand an agent each day, 0 for none. Got ${JSON.stringify(merged.appErrorTriagePerDay)}.`,
+    );
 }

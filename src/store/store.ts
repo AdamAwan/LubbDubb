@@ -17,6 +17,7 @@ import { McpCallStore } from './mcpCalls.js';
 import { ApiErrorStore } from './apiErrors.js';
 import { APP_ERROR_COLUMNS, AppErrorStore } from './appErrors.js';
 import { AppErrorTicketStore } from './appErrorTickets.js';
+import { AppErrorTriageStore } from './appErrorTriage.js';
 import { SurfaceReachStore } from './surfaceReach.js';
 import { declineRetiredOutcomeRows, HumanTaskStore, HUMAN_TASK_COLUMNS, indexHumanTasksByKind } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
@@ -181,6 +182,7 @@ export class Store {
   readonly apiErrors: ApiErrorStore;
   readonly appErrors: AppErrorStore;
   readonly appErrorTickets: AppErrorTicketStore;
+  readonly appErrorTriage: AppErrorTriageStore;
   readonly surfaceReach: SurfaceReachStore;
   readonly humanTasks: HumanTaskStore;
   readonly plans: PlanStore;
@@ -250,6 +252,7 @@ export class Store {
     this.apiErrors = new ApiErrorStore(ctx);
     this.appErrors = new AppErrorStore(ctx);
     this.appErrorTickets = new AppErrorTicketStore(ctx);
+    this.appErrorTriage = new AppErrorTriageStore(ctx);
     this.surfaceReach = new SurfaceReachStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
     this.plans = new PlanStore(ctx);

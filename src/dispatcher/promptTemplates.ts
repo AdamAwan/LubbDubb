@@ -62,6 +62,7 @@ type PromptId =
   | 'blueprint-ticket-body'
   | 'brief-ticket-body'
   | 'app-error-ticket-body'
+  | 'app-error-triage'
   | 'bot-pr-risk'
   | 'pr-title';
 
