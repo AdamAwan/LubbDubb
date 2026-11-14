@@ -12,7 +12,12 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeAppErrorDetailRunner, FakeAppErrorReader } from '../src/appErrors/fakeReader.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { parseAppErrorReport } from '../src/appErrors/report.js';
-import { capDetailOutput, detailRequest, MAX_DETAIL_OUTPUT_CHARS } from '../src/appErrors/detailCommand.js';
+import {
+  capDetailOutput,
+  CommandAppErrorDetailRunner,
+  detailRequest,
+  MAX_DETAIL_OUTPUT_CHARS,
+} from '../src/appErrors/detailCommand.js';
 import { MAX_LOOKBACK_MS } from '../src/appErrors/groups.js';
 import { triageBriefing } from '../src/appErrors/triage.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
@@ -107,6 +112,20 @@ test('the detail query reaches back to the group’s first sighting, never past 
   assert.ok(capped.ok && capped.truncated && capped.text.length === MAX_DETAIL_OUTPUT_CHARS);
   assert.deepEqual(capDetailOutput(' fine \n'), { ok: true, text: 'fine', truncated: false });
   assert.equal(capDetailOutput('  ').ok, false, 'silence is not an answer');
+});
+
+test('a detail query that prints past its buffer is stopped there and answers its prefix, truncated', async () => {
+  const runner = new CommandAppErrorDetailRunner(process.cwd(), 10_000);
+  const request = (command: string) => ({
+    environment: 'live',
+    command,
+    fingerprint: 'f',
+    since: '2026-11-01T00:00:00.000Z',
+  });
+  const flood = await runner.detail(request(`node -e "process.stdout.write('z'.repeat(1_000_000))"`));
+  assert.ok(flood.ok && flood.truncated && flood.text === 'z'.repeat(MAX_DETAIL_OUTPUT_CHARS));
+  const failed = await runner.detail(request(`node -e "console.error('az login required'); process.exit(1)"`));
+  assert.deepEqual(failed, { ok: false, failure: 'the detail query exited 1: az login required' });
 });
 
 test('the briefing carries each environment’s query and link, and each group’s telemetry link', () => {

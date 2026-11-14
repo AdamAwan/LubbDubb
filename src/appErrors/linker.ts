@@ -88,9 +88,7 @@ export class AppErrorLinker {
   }
 
   /** What the clone already said a commit changed, without asking it: null where it has not answered. */
-  knownChangedFiles(sha: string): string[] | null {
-    return this.diffs.get(sha) ?? null;
-  }
+  readonly knownChangedFiles = (sha: string): string[] | null => this.diffs.get(sha) ?? null;
 
   private async deployVerdicts(
     payload: AppErrorsPayload,

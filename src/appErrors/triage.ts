@@ -3,7 +3,6 @@ import { utcDay } from '../primitives.js';
 import type { StoredDetailRead, StoredTriage, TriageEpisode } from '../store/appErrorTriage.js';
 import type {
   AppErrorRead,
-  AppErrorState,
   AppErrorTriage,
   AppErrorTriageRun,
   AppErrorTriageSubject,
@@ -56,6 +55,20 @@ export function unlinkedGroups(payload: AppErrorsPayload): UnlinkedGroup[] {
       const anchor = episodeAnchor(group, view.head);
       if (anchor === null || (group.link?.goalRef ?? null) !== null) continue;
       out.push({ group, head: view.head, anchor });
+    }
+  return out;
+}
+
+/** The episodes of a linked payload whose link names a goal. */
+export function linkedEpisodes(payload: AppErrorsPayload): Set<string> {
+  const out = new Set<string>();
+  for (const view of payload.environments)
+    for (const group of view.groups) {
+      const anchor = episodeAnchor(group, view.head);
+      if (anchor === null || (group.link?.goalRef ?? null) === null) continue;
+      out.add(
+        episodeId({ environment: group.environment, fingerprint: group.fingerprint, state: group.state, anchor }),
+      );
     }
   return out;
 }

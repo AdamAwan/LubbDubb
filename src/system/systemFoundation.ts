@@ -280,6 +280,11 @@ type ArgsBuilder = (opts: {
 
 export type AgentRuntime = ReturnType<typeof buildAgentRuntime>;
 
+// A test that fakes the PTY backend and injects no stream spawner must never launch a real `claude`.
+const refuseSpawn: Spawner = (command) => {
+  throw new Error(`refused to launch ${command}: the PTY backend is faked and no streamSpawner was injected`);
+};
+
 export function buildAgentRuntime(config: Config, opts: BuildOptions, { backend, errors }: Foundation) {
   const realTransport = opts.backend === undefined && opts.streamSpawner === undefined;
   const reapTree: ProcessReaper =
@@ -300,8 +305,9 @@ export function buildAgentRuntime(config: Config, opts: BuildOptions, { backend,
         reap: reapTree,
       });
   };
+  const spawner = opts.streamSpawner ?? (opts.backend === undefined ? undefined : refuseSpawn);
   const streamFactory: SessionFactory = (spec) =>
-    new StreamJsonSession(spec, opts.streamSpawner, reapTree, config.agentSilenceParkMs);
+    new StreamJsonSession(spec, spawner, reapTree, config.agentSilenceParkMs);
 
   const attachments = new AttachmentFiles(config.attachmentRoot);
   const additionalDirectories = [config.attachmentRoot, config.validationRoot];

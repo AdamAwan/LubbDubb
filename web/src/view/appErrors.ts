@@ -204,15 +204,15 @@ function triagedTo(triage: ErrorTriage | null, goalRef: string): boolean {
 export function goalErrorLines(payload: AppErrorsPayload, goalRef: string): GoalErrorLine[] {
   return payload.environments.flatMap((env) => {
     const moved = env.groups.filter((g) => isMoved(g.state));
-    const linked = moved.filter((g) => g.link?.goalRef === goalRef && countsOnGoal(g.link));
-    const guessed = moved.filter((g) => !linked.includes(g) && triagedTo(g.triage, goalRef));
-    if (linked.length + guessed.length === 0) return [];
-    const how = [...new Set(linked.flatMap((g) => g.link?.how ?? []))];
+    const linked = new Set(moved.filter((g) => g.link?.goalRef === goalRef && countsOnGoal(g.link)));
+    const guessed = moved.filter((g) => !linked.has(g) && triagedTo(g.triage, goalRef));
+    if (linked.size + guessed.length === 0) return [];
+    const how = [...new Set([...linked].flatMap((g) => g.link?.how ?? []))];
     return [
       {
         environment: env.environment,
         band: env.band,
-        count: linked.length + guessed.length,
+        count: linked.size + guessed.length,
         how,
         guessed: guessed.length,
       },

@@ -22,12 +22,12 @@ them. Two things are **not yet built**, and each section that names them says so
 
 ## What it is not
 
-| Not                   | Because                                                                                                                                                                                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A telemetry client    | The harness knows a command and an output contract, never Kusto, App Insights or Sentry. The same shape as `health` and `observe`.                                                                                                                                  |
-| A `WorldEvent` source | `deliveryHold` expires a delivery verdict on **any** world event matching a goal's issue ref, so an error reading filed as one would un-park delivered goals. Own tables, own route — the arrivals rule again.                                                      |
+| Not                   | Because                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A telemetry client    | The harness knows a command and an output contract, never Kusto, App Insights or Sentry. The same shape as `health` and `observe`.                                                                                                                                                                                                                                                                          |
+| A `WorldEvent` source | `deliveryHold` expires a delivery verdict on **any** world event matching a goal's issue ref, so an error reading filed as one would un-park delivered goals. Own tables, own route — the arrivals rule again.                                                                                                                                                                                              |
 | A dispatch input      | One rule reads one thing this writes: `app-error-triage` dispatches a [triage run](#agent-triage) the triage desk opened, from the run row alone. No rule reads a reading, a group, a link, the tracker cache or a triage verdict; this files only on an operator's press and opens no gate; Investigate starts the existing investigation by its label. A link is computed per request and stored nowhere. |
-| An error log          | The harness's own faults are `error_events` (`src/store/errors.ts`, [18](18-observability.md)). These are the **application's** errors, which is why the feature is called app errors.                                                                              |
+| An error log          | The harness's own faults are `error_events` (`src/store/errors.ts`, [18](18-observability.md)). These are the **application's** errors, which is why the feature is called app errors.                                                                                                                                                                                                                      |
 
 ## Configuring an environment
 
@@ -76,7 +76,7 @@ beside the query that produced it:
 {
   "query": "exceptions | where timestamp > datetime(…) | summarize …", // optional: the query, as run
   "queryLink": "https://portal.azure.com/#…", // optional: absolute http(s), opens the query
-  "groups": [ /* the list below */ ],
+  "groups": [/* the list below */],
 }
 ```
 
@@ -147,7 +147,10 @@ not JSON, and JSON that is not a list are all `unknown` with an account of why. 
 exit code is **not** forgiven when stdout parses: a failed `az` call that printed `[]` before dying is
 precisely the confident wrong answer this rule exists to refuse. The command is killed after 60
 seconds — twice the health check's, because a telemetry query over a fortnight is slower than an
-`HTTP 200`.
+`HTTP 200` — and stopped once it has printed 16 MiB, which is `unknown` too: a list cut off part-way is
+not a list. `list` and the [detail query](#the-detail-query) are spawned by the one helper,
+`runErrorsCommand` (`src/appErrors/command.ts`), which reports an exit, a signal or a timeout as a
+failure in words and an overflow as what was captured up to the limit.
 
 ## What is stored, and for how long
 
@@ -660,6 +663,13 @@ inside the pulse is the five seconds the tracker desk exists to avoid.
 - **An assembly that found nothing is not repeated** until something it was built from moves — an
   environment's read, the last run's id or status, the UTC day or the cap — so an idle deployment does
   not rebuild the payload on every pulse.
+- **An episode the link already names a goal for does not ask the clone again.** Before the linked
+  read, the assembly checks the view without links for a moved, unanswered episode; the view has no
+  links, so every linked episode passes that check. The desk therefore remembers the episodes the last
+  whole linked pass found linked, with the **link basis** it was linked on (`CurrentAppErrors.linkBasis`:
+  heads, landings, reach, work nodes and the count and ignore settings — everything the link reads but
+  the reads), and skips the linked read when every unanswered episode is one of them and the basis has
+  not moved. A new read alone does not move it, which is the point: reads arrive every few minutes.
 
 ### What the agent is given
 
@@ -713,11 +723,13 @@ The harness never parses it; it is text for a model.
   what is substituted. `{since}` is substituted as in `list`, since an ISO instant is the harness's own
   text.
 - **`since` is the group's first sighting** — the harness's accumulated `firstSeen` — **floored at
-  fourteen days back** (`detailSince`, the same `MAX_LOOKBACK_MS` a list read reaches). The first
+  fourteen days back** (`readSince`, the same floor at `MAX_LOOKBACK_MS` a list read's `{since}` takes). The first
   sighting is where the group's story starts; the floor keeps a group first seen a month ago from asking
   the telemetry for a month.
 - **What it prints is trimmed and capped at 32,000 characters** (`MAX_DETAIL_OUTPUT_CHARS`), and the
-  agent is told when it was cut. It is killed after 60 seconds. A non-zero exit, a signal, a timeout or
+  agent is told when it was cut. It is killed after 60 seconds, and **stopped once it has printed four
+  times the cap**: a query that would print megabytes is cut there rather than buffered whole, and what
+  it printed up to then is capped as usual and marked truncated — an answer, not a failure. A non-zero exit, a signal, a timeout or
   empty output is returned to the agent as a **failure in words** — _the detail query exited 1: az login
   required_ — never as an answer, and recorded through `errors.record`. The tool still answers with the
   stored message and stack: a broken query costs the extra, not the read.
@@ -725,18 +737,17 @@ The harness never parses it; it is text for a model.
   the agent's own run — the same fence as the stored detail. **Its output is stored nowhere**: the read
   record says only that it ran and how it went.
 
-
 ### What it answers
 
 `app_error_triage({key, verdict, goalRef?, confidence, reason})`, resolved from the dispatch origin
 (`app-errors:triage:<run id>`), so an agent speaks only to the groups it was handed:
 
-| Field        | Is                                                                                                                      |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `verdict`    | `caused-by` one of the group's candidates, `pre-existing` (the fault was there before any landed), or `unclear`       |
+| Field        | Is                                                                                                                                                         |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `verdict`    | `caused-by` one of the group's candidates, `pre-existing` (the fault was there before any landed), or `unclear`                                            |
 | `goalRef`    | required with `caused-by` and refused with anything else; `issue:412`, `#412` or `412`, but only one of **that group's** candidates — a refusal names them |
-| `confidence` | `low`, `medium` or `high`                                                                                               |
-| `reason`     | two or three sentences, at most 600 characters (`MAX_TRIAGE_REASON`)                                                   |
+| `confidence` | `low`, `medium` or `high`                                                                                                                                  |
+| `reason`     | two or three sentences, at most 600 characters (`MAX_TRIAGE_REASON`)                                                                                       |
 
 A key outside the run is refused, naming the run's keys. A verdict is stored **per episode** in
 `app_error_triages`, replacing one already there; the answer says which keys of the run are still owed.
@@ -754,8 +765,11 @@ reader of the code concluded is the silence the operator complained of.
 longer active and marks the run `done`; groups left unanswered go in a later run. A run row is one
 assembly rather than a standing signal: no cooldown budget and no escalation.
 
-Retention: on each assembly, verdicts and detail reads whose group the [prune](#what-is-stored-and-for-how-long)
-has deleted are deleted with it, and runs settled more than thirty days ago go too.
+Retention: on each assembly that has room under the daily cap, verdicts and detail reads whose group
+the [prune](#what-is-stored-and-for-how-long) has deleted are deleted with it — the desk hands the store the groups held, and each table is cleared
+in one `DELETE … WHERE NOT EXISTS` over that list, since the triage store may not name `app_error_groups`
+([14](14-persistence.md#shape)) — and runs settled more than thirty days ago go too. An
+assembly the cap turns away prunes nothing; the next day's first one does.
 
 ## Seams
 
@@ -788,8 +802,10 @@ such an environment is probed for its head, the `at` probe — on the machine ru
 
 **A test that runs a pulse over a moved group sets `appErrorTriagePerDay: 0`** unless triage is its
 subject, and then runs `agentMode: 'raw'` with `FakeWorktreeManager` (`test/appErrorTriage.test.ts`):
-automatic [triage](#agent-triage) dispatches a code agent, which on the default agent mode is a real
-`claude`. It injects `gitObserver` too, since the triage assembly links, and linking asks the clone.
+automatic [triage](#agent-triage) dispatches a code agent, which puts a task, an agent row and — on the
+default agent mode, where a faked `backend` with no `streamSpawner` refuses the launch
+([19](19-development.md#testing-seams)) — a failed spawn into a test whose subject is something else.
+It injects `gitObserver` too, since the triage assembly links, and linking asks the clone.
 
 Linking asks the clone through `GitObserver` — `contains` and `changedFiles` — injected as
 `gitObserver`. `FakeGitObserver` answers `changedFiles` from `setChangedFiles` and `null` for a commit

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
+import { MAX_DETAIL_OUTPUT_CHARS, type AppErrorDetailOutput } from '../../appErrors/detailCommand.js';
 
 // → docs/spec/11-mcp-tools.md, docs/spec/39-app-errors.md#agent-triage
 
@@ -21,28 +22,17 @@ export const appErrorDetail: ToolFactory = ({ deps, agent, ok }) => ({
     if (!parsed.success) return toolError(`Detail refused: ${parsed.error.message}`);
     const result = await deps.agents.readAppErrorDetail(agent.id, parsed.data.key);
     if (!result.ok) return toolError(result.error);
-    const { query } = result;
+    const { detailQuery, note } = queryReport(result.query);
     return ok({
       key: result.key,
       message: result.message,
       stack: result.stack,
-      detailQuery:
-        query === null
-          ? null
-          : query.ok
-            ? { output: query.text, truncated: query.truncated }
-            : { failed: query.failure },
+      detailQuery,
       note: [
         result.message === null && result.stack === null
           ? 'The telemetry reported no sample message or stack for this group.'
           : null,
-        query === null
-          ? 'This environment declares no detail query, so nothing more can be asked of its telemetry.'
-          : query.ok
-            ? query.truncated
-              ? 'The detail query ran; its output was cut to its first 32,000 characters.'
-              : 'The detail query ran.'
-            : 'The detail query failed; the failure is above. Work from what you have.',
+        note,
         'This read has been recorded.',
       ]
         .filter((n) => n !== null)
@@ -50,3 +40,25 @@ export const appErrorDetail: ToolFactory = ({ deps, agent, ok }) => ({
     });
   },
 });
+
+function queryReport(query: AppErrorDetailOutput | null): {
+  detailQuery: { output: string; truncated: boolean } | { failed: string } | null;
+  note: string;
+} {
+  if (query === null)
+    return {
+      detailQuery: null,
+      note: 'This environment declares no detail query, so nothing more can be asked of its telemetry.',
+    };
+  if (!query.ok)
+    return {
+      detailQuery: { failed: query.failure },
+      note: 'The detail query failed; the failure is above. Work from what you have.',
+    };
+  return {
+    detailQuery: { output: query.text, truncated: query.truncated },
+    note: query.truncated
+      ? `The detail query ran; its output was cut to its first ${MAX_DETAIL_OUTPUT_CHARS.toLocaleString('en-US')} characters.`
+      : 'The detail query ran.',
+  };
+}

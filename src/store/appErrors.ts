@@ -106,6 +106,14 @@ export class AppErrorStore {
     }[];
   }
 
+  /** A held group's first sighting; null for a group not held. */
+  firstSeen(environment: string, fingerprint: string): string | null {
+    const row = this.ctx
+      .prep(`SELECT first_seen FROM app_error_groups WHERE environment = ? AND fingerprint = ?`)
+      .get(environment, fingerprint) as { first_seen: string } | undefined;
+    return row?.first_seen ?? null;
+  }
+
   getDetail(environment: string, fingerprint: string): AppErrorDetail | null {
     const row = this.ctx
       .prep(`SELECT message, stack FROM app_error_groups WHERE environment = ? AND fingerprint = ?`)

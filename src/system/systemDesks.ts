@@ -171,7 +171,7 @@ export function buildEnvironmentDesks(
     perDay: () => config.appErrorTriagePerDay,
     current: appErrorPayloads,
     view: () => appErrorView(store, config, Date.now()),
-    knownChangedFiles: (sha) => linker.knownChangedFiles(sha),
+    knownChangedFiles: linker.knownChangedFiles,
     errors,
   });
 

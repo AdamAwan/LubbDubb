@@ -1,15 +1,17 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
-import { DAY_MS } from '../primitives.js';
+import { DAY_MS, utcDay } from '../primitives.js';
 import type { Store } from '../store/store.js';
 import { isActiveTask } from '../tasks.js';
 import type { AppErrorTriageRun, AppErrorTriageTrigger } from '../types.js';
 import type { AppErrorsPayload } from '../wire.js';
-import { groupId, linkAnchor } from './link.js';
+import { dayStart } from './groups.js';
+import { linkAnchor } from './link.js';
 import {
   episodeAnchor,
   episodeId,
   goalOfTicket,
+  linkedEpisodes,
   pickForTriage,
   triageBriefing,
   triageCandidates,
@@ -29,6 +31,7 @@ const RUN_RETENTION_MS = 30 * DAY_MS;
 
 interface LinkedReader {
   readLinked(now: number): Promise<{ payload: AppErrorsPayload; answered: boolean }>;
+  linkBasis(): string;
 }
 
 interface AppErrorTriageDeskDeps {
@@ -37,9 +40,9 @@ interface AppErrorTriageDeskDeps {
   /** `appErrorTriagePerDay`, read live: the groups automatic runs may put in front of an agent each UTC day. */
   perDay: () => number;
   current: LinkedReader;
-  /** The view without links: whether any moved episode is unanswered, asked before the clone is. */
+  /** The view without links, asked before the clone is. */
   view: () => AppErrorsPayload;
-  /** What the linker already holds for a commit; never a question to the clone. */
+  /** What the linker already holds for a commit. */
   knownChangedFiles: (sha: string) => string[] | null;
   errors?: ErrorRecorder;
   now?: () => number;
@@ -48,17 +51,13 @@ interface AppErrorTriageDeskDeps {
 export type TriageRequestOutcome =
   { ok: true; run: AppErrorTriageRun } | { ok: false; status: 404 | 409 | 422; refusal: string };
 
-/**
- * Opens triage runs over the moved groups the deterministic linker left without a goal. The pulse
- * never waits on it: a pass starts an assembly — which awaits the shared linked read, the clone's
- * five seconds included — and returns; the run lands in the store when the read does, and is
- * dispatched on a later pulse.
- */
+/** Opens triage runs over the moved groups the deterministic linker left without a goal; the pulse never waits on one. */
 export class AppErrorTriageDesk {
   private readonly now: () => number;
   private assembling: Promise<TriageRequestOutcome | null> | null = null;
-  /** What the store looked like when an assembly last found nothing to open: unchanged, it is not asked again. */
   private quiet: string | null = null;
+  /** The episodes the last whole linked pass found linked, and the basis it was linked on. */
+  private linked: { basis: string; episodes: Set<string> } | null = null;
 
   constructor(private readonly deps: AppErrorTriageDeskDeps) {
     this.now = deps.now ?? (() => Date.now());
@@ -66,10 +65,9 @@ export class AppErrorTriageDesk {
 
   /** @public called by the pulse, directly below `appErrorTracker`. Starts the assembly it owes and does not wait. */
   run(): void {
-    this.settle();
+    if (this.settle() !== null) return;
     if (this.assembling !== null || this.deps.perDay() <= 0) return;
     if (!this.deps.environments.some((e) => e.errors !== undefined)) return;
-    if (this.deps.store.appErrorTriage.openRunNow() !== null) return;
     const mark = this.mark();
     if (mark === this.quiet) return;
     this.assembling = this.assemble()
@@ -94,9 +92,7 @@ export class AppErrorTriageDesk {
 
   /** The operator's Triage press: one group, whatever its link, the cap or an earlier verdict on it. */
   async request(environment: string, fingerprint: string): Promise<TriageRequestOutcome> {
-    const { store } = this.deps;
-    this.settle();
-    if (store.appErrorTriage.openRunNow() !== null) return { ok: false, status: 409, refusal: ALREADY_OUT };
+    if (this.settle() !== null) return { ok: false, status: 409, refusal: ALREADY_OUT };
     const { payload } = await this.deps.current.readLinked(this.now());
     const view = payload.environments.find((e) => e.environment === environment);
     const group = view?.groups.find((g) => g.fingerprint === fingerprint);
@@ -112,22 +108,24 @@ export class AppErrorTriageDesk {
     return run === null ? { ok: false, status: 409, refusal: ALREADY_OUT } : { ok: true, run };
   }
 
-  private settle(): void {
+  /** Settles the open run once its agent's task has ended; the run still open, or null. */
+  private settle(): AppErrorTriageRun | null {
     const { store } = this.deps;
     const open = store.appErrorTriage.openRunNow();
-    if (open?.status !== 'dispatched' || open.taskId === null) return;
+    if (open?.status !== 'dispatched' || open.taskId === null) return open;
     const task = store.tasks.getTask(open.taskId);
-    if (task === null || !isActiveTask(task)) store.appErrorTriage.settleRun(open.id);
+    if (task !== null && isActiveTask(task)) return open;
+    store.appErrorTriage.settleRun(open.id);
+    return null;
   }
 
-  /** The reads, the last run and the day: an assembly that found nothing is asked again only once one moves. */
   private mark(): string {
     const { store } = this.deps;
     const last = store.appErrorTriage.lastRun();
     return [
       ...store.appErrors.listReads().map((r) => `${r.environment}@${r.readAt}`),
       `run ${last?.id ?? ''}:${last?.status ?? ''}`,
-      `day ${dayStart(this.now())}`,
+      `day ${utcDay(this.now())}`,
       `cap ${String(this.deps.perDay())}`,
     ].join('\n');
   }
@@ -135,15 +133,17 @@ export class AppErrorTriageDesk {
   private async assemble(): Promise<TriageRequestOutcome | null> {
     const { store } = this.deps;
     const now = this.now();
-    const held = new Set(store.appErrors.listGroupIds().map(groupId));
-    store.appErrorTriage.prune(new Date(now - RUN_RETENTION_MS).toISOString(), held);
-    const used = store.appErrorTriage.autoSubjectsSince(dayStart(now));
+    const used = store.appErrorTriage.autoSubjectsSince(new Date(dayStart(utcDay(now))).toISOString());
     const room = Math.min(TRIAGE_BATCH_LIMIT, this.deps.perDay() - used);
     if (room <= 0) return null;
+    store.appErrorTriage.prune(new Date(now - RUN_RETENTION_MS).toISOString(), store.appErrors.listGroupIds());
     const done = new Set(store.appErrorTriage.listTriages().map(episodeId));
-    if (pickForTriage(unlinkedGroups(this.deps.view()), done, 1).length === 0) return null;
+    const basis = this.deps.current.linkBasis();
+    const skip = this.linked?.basis === basis ? new Set([...done, ...this.linked.episodes]) : done;
+    if (pickForTriage(unlinkedGroups(this.deps.view()), skip, 1).length === 0) return null;
     const { payload, answered } = await this.deps.current.readLinked(now);
     if (!answered) return null;
+    this.linked = { basis, episodes: linkedEpisodes(payload) };
     const chosen = pickForTriage(unlinkedGroups(payload), done, room);
     if (chosen.length === 0) return null;
     const run = this.open('auto', chosen);
@@ -163,7 +163,7 @@ export class AppErrorTriageDesk {
         frames: group.frames,
         landings,
         titles,
-        diff: (sha) => this.deps.knownChangedFiles(sha),
+        diff: this.deps.knownChangedFiles,
         prime,
       });
       return { group, anchor, candidates };
@@ -177,8 +177,4 @@ export class AppErrorTriageDesk {
       }),
     });
   }
-}
-
-function dayStart(now: number): string {
-  return new Date(Math.floor(now / DAY_MS) * DAY_MS).toISOString();
 }

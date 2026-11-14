@@ -1,4 +1,4 @@
-import { issueOriginNumber } from '../issueOrigins.js';
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import type { Store } from '../store/store.js';
 import type {
   AppErrorTriageConfidence,
@@ -74,7 +74,7 @@ function candidateNamed(subject: AppErrorTriageSubject, named: string): string |
   const text = named.trim();
   if (subject.candidates.includes(text)) return text;
   const bare = /^#?(\d+)$/.exec(text);
-  const ref = bare === null ? null : `issue:${bare[1]!}`;
+  const ref = bare === null ? null : issueOriginRef('root', Number(bare[1]));
   return ref !== null && subject.candidates.includes(ref) ? ref : null;
 }
 
@@ -86,25 +86,25 @@ export function recordAppErrorTriage(
   const fenced = fence(store, 'app_error_triage', originRef, input.key);
   if (!fenced.ok) return fenced;
   const { run, subject } = fenced;
-  let goalRef: string | null = null;
-  if (input.verdict === 'caused-by') {
-    if (input.goalRef === null || input.goalRef.trim() === '')
-      return { ok: false, error: 'caused-by needs a goalRef: the candidate goal you think caused it.' };
-    goalRef = candidateNamed(subject, input.goalRef);
-    if (goalRef === null)
-      return {
-        ok: false,
-        error:
-          subject.candidates.length === 0
-            ? `${subject.key} has no candidate goals, so it cannot be caused-by one. Say pre-existing or unclear.`
-            : `${input.goalRef} is not one of ${subject.key}'s candidates (${subject.candidates
-                .map((c) => `#${String(issueOriginNumber('root', c) ?? c)}`)
-                .join(', ')}). Name one of them, or say pre-existing or unclear.`,
-      };
-  } else if (input.goalRef !== null && input.goalRef.trim() !== '')
+  const named = input.goalRef?.trim() || null;
+  const causedBy = input.verdict === 'caused-by';
+  if (causedBy && named === null)
+    return { ok: false, error: 'caused-by needs a goalRef: the candidate goal you think caused it.' };
+  if (!causedBy && named !== null)
     return {
       ok: false,
       error: `goalRef goes only with caused-by. For ${input.verdict}, leave it out and say in reason what you found.`,
+    };
+  const goalRef = named === null ? null : candidateNamed(subject, named);
+  if (named !== null && goalRef === null)
+    return {
+      ok: false,
+      error:
+        subject.candidates.length === 0
+          ? `${subject.key} has no candidate goals, so it cannot be caused-by one. Say pre-existing or unclear.`
+          : `${named} is not one of ${subject.key}'s candidates (${subject.candidates
+              .map((c) => `#${String(issueOriginNumber('root', c) ?? c)}`)
+              .join(', ')}). Name one of them, or say pre-existing or unclear.`,
     };
   const reason = input.reason.trim();
   if (reason === '') return { ok: false, error: 'reason is empty: say what you found, in a sentence or two.' };
@@ -156,12 +156,11 @@ async function runDetailQuery(
 ): Promise<AppErrorDetailOutput | null> {
   const command = deps.query?.command(subject.environment) ?? null;
   if (deps.query === undefined || command === null) return null;
-  const firstSeen = deps.store.appErrors.groupMarks(subject.environment).get(subject.fingerprint)?.firstSeen ?? null;
   const request = detailRequest({
     environment: subject.environment,
     detail: command,
     fingerprint: subject.fingerprint,
-    firstSeen,
+    firstSeen: deps.store.appErrors.firstSeen(subject.environment, subject.fingerprint),
     now: (deps.now ?? Date.now)(),
   });
   let output: AppErrorDetailOutput;

@@ -101,10 +101,13 @@ export class AppErrorTriageStore {
 
   /** How many groups automatic runs opened since `since` put in front of an agent: what the daily cap counts. */
   autoSubjectsSince(since: string): number {
-    const rows = this.ctx
-      .prep(`SELECT subjects FROM app_error_triage_runs WHERE trigger = 'auto' AND created_at >= ?`)
-      .all(since) as { subjects: string }[];
-    return rows.reduce((n, r) => n + parseSubjects(r.subjects).length, 0);
+    const row = this.ctx
+      .prep(
+        `SELECT COALESCE(SUM(CASE WHEN json_valid(subjects) THEN json_array_length(subjects) ELSE 0 END), 0) AS n
+           FROM app_error_triage_runs WHERE trigger = 'auto' AND created_at >= ?`,
+      )
+      .get(since) as { n: number };
+    return row.n;
   }
 
   /** One verdict per episode: a second answer on the same episode replaces the first. */
@@ -154,76 +157,57 @@ export class AppErrorTriageStore {
            (error_key, environment, fingerprint, state, anchor, run_id, task_id, at, query_status)
          VALUES (@key, @environment, @fingerprint, @state, @anchor, @runId, @taskId, @at, @queryStatus)`,
       )
-      .run({
-        key: input.key,
-        environment: input.environment,
-        fingerprint: input.fingerprint,
-        state: input.state,
-        anchor: input.anchor,
-        runId: input.runId,
-        taskId: input.taskId,
-        at: this.ctx.now(),
-        queryStatus: input.queryStatus,
-      });
+      .run({ ...input, at: this.ctx.now() });
   }
 
   /** The latest detail read per episode, and the latest of them that ran the environment's detail query. */
   listDetailReads(): StoredDetailRead[] {
     const rows = this.ctx
       .prep(
-        `SELECT environment, fingerprint, state, anchor, MAX(at) AS at FROM app_error_detail_reads
-         GROUP BY environment, fingerprint, state, anchor`,
+        `SELECT e.*, (SELECT q.query_status FROM app_error_detail_reads q
+                       WHERE q.environment = e.environment AND q.fingerprint = e.fingerprint AND q.state = e.state
+                         AND q.anchor = e.anchor AND q.at = e.query_at AND q.query_status IS NOT NULL
+                       ORDER BY q.rowid DESC LIMIT 1) AS query_status
+           FROM (SELECT environment, fingerprint, state, anchor, MAX(at) AS at,
+                        MAX(CASE WHEN query_status IS NOT NULL THEN at END) AS query_at
+                   FROM app_error_detail_reads GROUP BY environment, fingerprint, state, anchor) e`,
       )
-      .all() as EpisodeAtRow[];
-    const queried = this.ctx
-      .prep(
-        `SELECT environment, fingerprint, state, anchor, MAX(at) AS at, query_status FROM app_error_detail_reads
-         WHERE query_status IS NOT NULL GROUP BY environment, fingerprint, state, anchor`,
-      )
-      .all() as (EpisodeAtRow & { query_status: string })[];
-    const ran = new Map(queried.map((q) => [episodeKey(q), q]));
-    return rows.map((r) => {
-      const q = ran.get(episodeKey(r));
-      return {
-        environment: r.environment,
-        fingerprint: r.fingerprint,
-        state: r.state as AppErrorState,
-        anchor: r.anchor,
-        at: r.at,
-        query: q === undefined ? null : { at: q.at, ok: q.query_status === 'ok' },
-      };
-    });
+      .all() as DetailReadRow[];
+    return rows.map((r) => ({
+      environment: r.environment,
+      fingerprint: r.fingerprint,
+      state: r.state as AppErrorState,
+      anchor: r.anchor,
+      at: r.at,
+      query: r.query_at === null ? null : { at: r.query_at, ok: r.query_status === 'ok' },
+    }));
   }
 
-  /** Verdicts and reads whose group is no longer held, and runs settled before `settledBefore`. */
-  prune(settledBefore: string, held: ReadonlySet<string>): void {
+  /** Verdicts and reads whose group is not in `held`, and runs settled before `settledBefore`. */
+  prune(settledBefore: string, held: readonly { environment: string; fingerprint: string }[]): void {
+    const groups = JSON.stringify(held.map((g) => [g.environment, g.fingerprint]));
     this.ctx.db.transaction(() => {
-      for (const table of ['app_error_triages', 'app_error_detail_reads']) {
-        const rows = this.ctx.prep(`SELECT DISTINCT environment, fingerprint FROM ${table}`).all() as {
-          environment: string;
-          fingerprint: string;
-        }[];
-        for (const r of rows)
-          if (!held.has(`${r.environment}\u0000${r.fingerprint}`))
-            this.ctx
-              .prep(`DELETE FROM ${table} WHERE environment = ? AND fingerprint = ?`)
-              .run(r.environment, r.fingerprint);
-      }
+      for (const table of ['app_error_triages', 'app_error_detail_reads'])
+        this.ctx
+          .prep(
+            `DELETE FROM ${table} WHERE NOT EXISTS (SELECT 1 FROM json_each(?) g
+               WHERE json_extract(g.value, '$[0]') = ${table}.environment
+                 AND json_extract(g.value, '$[1]') = ${table}.fingerprint)`,
+          )
+          .run(groups);
       this.ctx.prep(`DELETE FROM app_error_triage_runs WHERE status = 'done' AND settled_at < ?`).run(settledBefore);
     })();
   }
 }
 
-function episodeKey(r: EpisodeAtRow): string {
-  return [r.environment, r.fingerprint, r.state, r.anchor].join('\u0000');
-}
-
-interface EpisodeAtRow {
+interface DetailReadRow {
   environment: string;
   fingerprint: string;
   state: string;
   anchor: string;
   at: string;
+  query_at: string | null;
+  query_status: string | null;
 }
 
 function toRun(r: RunRow): AppErrorTriageRun {
