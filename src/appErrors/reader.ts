@@ -1,5 +1,4 @@
-import { exec } from 'node:child_process';
-import { firstLine } from '../primitives.js';
+import { ERRORS_COMMAND_TIMEOUT_MS, runErrorsCommand } from './command.js';
 import { parseAppErrorReport, unreadableErrors, type AppErrorReport } from './report.js';
 
 // → docs/spec/39-app-errors.md
@@ -15,45 +14,25 @@ export interface AppErrorReader {
   list(request: AppErrorReadRequest): Promise<AppErrorReport>;
 }
 
-const DEFAULT_TIMEOUT_MS = 60_000;
-
 const MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 export class CommandAppErrorReader implements AppErrorReader {
   constructor(
     private readonly repoRoot: string,
-    private readonly timeoutMs: number = DEFAULT_TIMEOUT_MS,
+    private readonly timeoutMs: number = ERRORS_COMMAND_TIMEOUT_MS,
   ) {}
 
-  list(request: AppErrorReadRequest): Promise<AppErrorReport> {
-    return new Promise((resolve) => {
-      exec(
-        request.command,
-        {
-          cwd: this.repoRoot,
-          timeout: this.timeoutMs,
-          maxBuffer: MAX_OUTPUT_BYTES,
-          windowsHide: true,
-          env: { ...process.env, LUBBDUBB_ENVIRONMENT: request.environment, LUBBDUBB_ERRORS_SINCE: request.since },
-        },
-        (err, stdout, stderr) => {
-          if (err !== null) return resolve(unreadableErrors(failure(err as ExecFailure, stderr)));
-          resolve(parseAppErrorReport(stdout));
-        },
-      );
+  async list(request: AppErrorReadRequest): Promise<AppErrorReport> {
+    const out = await runErrorsCommand({
+      label: 'the errors command',
+      command: request.command,
+      env: { LUBBDUBB_ENVIRONMENT: request.environment, LUBBDUBB_ERRORS_SINCE: request.since },
+      repoRoot: this.repoRoot,
+      timeoutMs: this.timeoutMs,
+      maxBuffer: MAX_OUTPUT_BYTES,
     });
+    if (!out.ok) return unreadableErrors(out.failure);
+    if (out.overflowed) return unreadableErrors('the errors command printed more than 16 MiB and was stopped');
+    return parseAppErrorReport(out.stdout);
   }
-}
-
-interface ExecFailure extends Error {
-  code?: number | string;
-  killed?: boolean;
-  signal?: NodeJS.Signals | null;
-}
-
-function failure(err: ExecFailure, stderr: string): string {
-  if (err.killed === true || (err.signal !== null && err.signal !== undefined))
-    return `the errors command was killed after ${err.signal ?? 'timeout'}`;
-  const why = firstLine(stderr);
-  return `the errors command exited ${String(err.code ?? 'unknown')}: ${why ?? err.message}`;
 }

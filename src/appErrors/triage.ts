@@ -1,4 +1,4 @@
-import { issueOriginNumber } from '../issueOrigins.js';
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { utcDay } from '../primitives.js';
 import type { StoredDetailRead, StoredTriage, TriageEpisode } from '../store/appErrorTriage.js';
 import type {
@@ -13,6 +13,7 @@ import type {
 import type { AppErrorGroupView, AppErrorsPayload } from '../wire.js';
 import { filesTouched, frameFiles } from './frames.js';
 import { LANDING_HORIZON_MS } from './link.js';
+import { MOVED, STATE_RANK, type MovedState } from './states.js';
 
 // → docs/spec/39-app-errors.md#agent-triage
 
@@ -22,9 +23,6 @@ export const TRIAGE_BATCH_LIMIT = 10;
 /** The most candidate goals and changed paths a group's briefing lists. */
 const MAX_CANDIDATES = 40;
 const MAX_FILES = 30;
-
-const MOVED: ReadonlySet<AppErrorState> = new Set<AppErrorState>(['new', 'returned', 'spiking']);
-const STATE_RANK: Record<AppErrorState, number> = { new: 0, returned: 1, spiking: 2, steady: 3, gone: 4 };
 
 /**
  * The instant a moved group's episode is anchored at, as text: `new` from its first sighting, `returned`
@@ -106,7 +104,7 @@ export interface TriageCandidate {
 /** The goal a tracker ticket is: the fleet works a bug as its own goal, so it is the ticket's own ref. */
 export function goalOfTicket(ticketRef: string | null): string | null {
   const n = issueOriginNumber('root', ticketRef);
-  return n === null ? null : `issue:${String(n)}`;
+  return n === null ? null : issueOriginRef('root', n);
 }
 
 /**
@@ -179,7 +177,7 @@ export function triageSubject(entry: TriageBriefEntry): AppErrorTriageSubject {
   };
 }
 
-const ANCHOR_SAID: Record<string, string> = {
+const ANCHOR_SAID: Record<MovedState, string> = {
   new: 'first seen',
   returned: 'came back',
   spiking: 'the deploy it spiked after',
@@ -247,7 +245,7 @@ function entrySection({ group, anchor, candidates }: TriageBriefEntry, detailQue
 function groupFacts(group: AppErrorGroupView, anchor: string, detailQuery: boolean): string[] {
   return [
     `- Environment: ${group.environment}`,
-    `- State: ${group.state}, anchored at ${anchor === '' ? 'no deploy on record (the last day)' : anchor} (${ANCHOR_SAID[group.state] ?? group.state})`,
+    `- State: ${group.state}, anchored at ${anchor === '' ? 'no deploy on record (the last day)' : anchor} (${ANCHOR_SAID[group.state as MovedState]})`,
     `- Occurrences over the retained fortnight: ${String(group.count)}; first seen ${group.firstSeen}, last seen ${group.lastSeen}`,
     ...(group.spike === null
       ? []
@@ -267,15 +265,15 @@ function candidateLine(c: TriageCandidate): string {
   const prime = c.prime ? ' — **the goal of its tracker ticket: the fix that did not hold is the prime suspect**' : '';
   const landed = c.landedAt === null ? ' — no landing recorded' : ` — landed ${utcDay(c.landedAt)}`;
   const touched = c.touched.length === 0 ? '' : ` — changed the frame file(s) ${c.touched.join(', ')}`;
-  const files =
-    c.files === null
-      ? c.landedAt === null
-        ? ''
-        : '\n  - changed paths: not listed (the clone has not answered for its commits)'
-      : c.files.length === 0
-        ? '\n  - changed paths: none'
-        : `\n  - changed paths: ${c.files.slice(0, MAX_FILES).join(', ')}${c.files.length > MAX_FILES ? `, and ${String(c.files.length - MAX_FILES)} more` : ''}`;
-  return `${head}${prime}${landed}${touched}${files}`;
+  return `${head}${prime}${landed}${touched}${changedPaths(c)}`;
+}
+
+function changedPaths(c: TriageCandidate): string {
+  if (c.files === null)
+    return c.landedAt === null ? '' : '\n  - changed paths: not listed (the clone has not answered for its commits)';
+  if (c.files.length === 0) return '\n  - changed paths: none';
+  const more = c.files.length > MAX_FILES ? `, and ${String(c.files.length - MAX_FILES)} more` : '';
+  return `\n  - changed paths: ${c.files.slice(0, MAX_FILES).join(', ')}${more}`;
 }
 
 /**

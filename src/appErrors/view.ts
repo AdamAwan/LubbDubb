@@ -18,11 +18,9 @@ import type {
 } from '../wire.js';
 import { retainedDays } from './groups.js';
 import { appErrorKey } from './key.js';
-import { appErrorCount, appErrorReading } from './states.js';
+import { appErrorCount, appErrorReading, STATE_RANK } from './states.js';
 
 // → docs/spec/39-app-errors.md#on-the-wire
-
-const STATE_RANK: Record<AppErrorState, number> = { new: 0, returned: 1, spiking: 2, steady: 3, gone: 4 };
 
 interface AppErrorsViewInput {
   environments: readonly EnvironmentConfig[];
