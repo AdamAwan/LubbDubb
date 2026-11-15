@@ -1,5 +1,18 @@
 # 06 — Issue pickup and labels
 
+## Invariants
+
+- **With `requireOwnLabel` on, the watch gate reads `labelsAddedByViewer` and fails closed when a provider leaves it unset.** A provider that cannot report label authorship therefore picks up nothing, with nothing red. → [§](#intrinsic-eligibility) · `test/issuePickup.test.ts`
+- **The pause set is folded into the pickup policy on every cycle, never snapshotted at boot.** A boot-time copy would keep dispatching under a Feature the operator paused ten minutes ago. → [§](#the-pause-set-is-folded-in-per-cycle) · `test/featurePause.test.ts`
+- **A pause is its own standing, `paused`, never folded into `unwatched`, and writes no tag anywhere.** Un-watching and pausing are the two readings the feature exists to keep apart. → [§](#pausing-a-feature-which-is-not-un-watching-one) · `test/featurePause.test.ts`
+- **Every pickup gate reads `effectivePickupStates`, which folds `inProgressState` into the operator's list; `deliveryHold` alone keeps the configured list.** An item the harness moved out of the list otherwise falls into a hole — never picked up, never advanced, never returned. → [§](#the-effective-pickup-states) · `test/issuePickup.test.ts`
+- **`openPrForIssue` is handed every open pull request, unwatched ones included, and skips merged ones.** Both providers list only open PRs, so a hidden one reads as merged, and the sticky `linkedPrNumber` alone would retire an issue needing a second PR. → [§](#openprforissue) · `test/issuePickup.test.ts`
+- **No rule dispatches an implementation agent at an issue as a whole; every implementing agent is a plan part.** Every gate after the work — assessor, shortfall routing, validation, close-out — reads the plan. → [§](#implementation-always-goes-through-a-plan) · _no test_
+- **A `blocked` conclusion writes no conclusion; its escalation is the block's only record, carries no `agentId`, and answering or dismissing it releases the goal.** A block that cleared a delivery would hand delivered work back to the fleet, and one naming its agent would be swept by the very finish it reported. → [§](#blocked-parks-the-goal-for-you) · `test/blockedGoal.test.ts`
+- **The harness settles a block only when its issue is absent from a fresh world with no stale source.** A partial read that dropped the issue would otherwise release a live block. → [§](#blocked-parks-the-goal-for-you) · `test/blockedGoal.test.ts`
+- **A delivery verdict expires on a world transition after its `updated_at`, not `decided_at`, and has no timer arm.** Measured against the first verdict, every re-cast is born already expired; a clock would re-pick genuinely delivered work. → [§](#what-ends-it) · `test/issueDelivery.test.ts`
+- **A shortfall is never a pickup gate.** An issue carrying one is eligible exactly as if it carried nothing, so its plan goes on scheduling. → [§](#the-shortfall--the-same-verdicts-other-polarity) · `test/issueShortfall.test.ts`
+
 ## One label model
 
 `src/watchLabels.ts` is the single source. An operator configures one `labelPrefix` (default

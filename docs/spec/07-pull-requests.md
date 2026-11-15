@@ -4,6 +4,19 @@ Every PR predicate lives in `src/pr/prHealth.ts`, pure and unit-tested (`test/pr
 `test/prWatch.test.ts`, `test/stackedPrs.test.ts`). The dispatcher, the cockpit and the
 `world_read` tool all read them, so all three give one account of a PR.
 
+## Invariants
+
+- **A stack landing's settlement — landed or stopped — is never written from a world any source reported stale.** It is a compare-and-set onto a terminal status, so one bad pulse would end the operator's chain for good. → [§](#landing-a-stack) · `test/stackLanding.test.ts`
+- **Whether a landing's rung merged is judged against the durable work graph before the closed-PR window.** A chain outlives `closedPrWindowMs` by design, and read off the window a rung the harness merged stops the chain as "nothing says it merged". → [§](#landing-a-stack) · `test/stackLanding.test.ts`
+- **`isOurPr` and `isSomeoneElsesPr` are not each other's inverse, and an absent `viewerAuthored` answers no to both.** Otherwise a provider that cannot name an author either hides every watched PR from the fleet or has it rename, reap and answer a colleague's. → [§](#whose-pull-request-is-it) · `test/prOwnership.test.ts`
+- **A merged branch is reaped only when its PR merged (never abandoned), it is ours, no open PR is based on it, and no agent is on it.** Deleting the base of an open PR orphans it — GitHub closes it outright — and a colleague's branch, once deleted, is gone. → [§](#reaping-a-merged-branch) · `test/branchReap.test.ts`
+- **A merge ask whose pull request has merged is withdrawn, never rejected, read off the work graph.** A rejection is a standing refusal that would stop `pr-merge-ready` proposing for a PR the graph merely read as absent. → [§](#a-merge-ask-outlives-its-pull-request) · `test/proposals.test.ts`
+- **`prAttentionStatus` is a lens: nothing in the dispatcher reads it.** A verdict the dispatcher acted on would be a second gate duplicating decisions made elsewhere. → [§](#nothing-in-the-dispatcher-reads-it) · `test/prAttention.test.ts`
+- **Whether a review reply is the fleet's is a row in `pr_replies_sent`, keyed on thread and comment ref, never the reply's author; every uncertainty leaves the thread unanswered.** On a single-operator deployment the operator's own follow-up otherwise reads as handled and is never dispatched for. → [§](#attribution-is-a-record-never-an-identity) · `test/prReplyAttribution.test.ts`
+- **An operator's thread reopen is spent by the fleet's next reply into that thread and by nothing else.** Left standing it dispatches every pulse; spent by anything else it drops the operator's ask. → [§](#reopening-a-thread) · `test/agentPrReply.test.ts`
+- **With `review.blocking` on, a pull request with no review row is not merge-ready, and unknown is never clear.** The gate asks whether a review happened, not whether it liked the diff, so findings never wedge a PR. → [§](#the-merge-gate) · `test/prReview.test.ts`
+- **The harness tags its own pull request for watching exactly once, recorded in `pr_watch_seeds`, and an operator's watch toggle writes a row too.** A seeder re-deriving from the world would re-tag a runaway agent's PR the operator just un-watched. → [§](#watching) · `test/prWatch.test.ts`
+
 ## `prState(pr)`
 
 Returns `open` \| `merged` \| `closed`, tolerant of the two shapes that reach the harness: the explicit
