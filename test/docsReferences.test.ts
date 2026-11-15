@@ -70,20 +70,23 @@ function headingSlugs(text: string): Set<string> {
   const slugs = new Set<string>();
   const counts = new Map<string, number>();
   let fenced = false;
-  for (const line of text.split('\n')) {
-    if (line.startsWith('```')) fenced = !fenced;
+  for (const line of text.split(/\r?\n/)) {
+    if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
     if (fenced) continue;
-    const heading = /^#{1,6}\s+(.*)$/.exec(line);
+    const heading = /^#{1,6}\s+(.*?)(?:\s+#+)?\s*$/.exec(line);
     if (!heading) continue;
     const base = heading[1]!
-      .trim()
       .toLowerCase()
-      .replace(/(^|[^\p{L}\p{N}])_+|_+(?=[^\p{L}\p{N}]|$)/gu, '$1')
-      .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+      .split(/(`[^`]*`)/)
+      .map((part, i) => (i % 2 ? part : part.replace(/(^|[^\p{L}\p{N}])_+|_+(?=[^\p{L}\p{N}]|$)/gu, '$1')))
+      .join('')
+      .replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, '')
       .replace(/\s/g, '-');
-    const seen = counts.get(base) ?? 0;
+    let seen = counts.get(base) ?? 0;
+    let slug = seen === 0 ? base : `${base}-${seen}`;
+    while (slugs.has(slug)) slug = `${base}-${++seen}`;
     counts.set(base, seen + 1);
-    slugs.add(seen === 0 ? base : `${base}-${seen}`);
+    slugs.add(slug);
   }
   return slugs;
 }
@@ -94,14 +97,14 @@ test('every spec opens with an Invariants list, each line linking its section an
   const problems: string[] = [];
   for (const file of readdirSync(join(ROOT, 'docs/spec')).filter((f) => f.endsWith('.md'))) {
     const text = readFileSync(join(ROOT, 'docs/spec', file), 'utf8');
-    const lines = text.split('\n');
+    const lines = text.split(/\r?\n/);
     const first = lines.findIndex((l) => l.startsWith('## '));
     if (lines[first] !== '## Invariants') {
       problems.push(`${file}: the first section is not "## Invariants"`);
       continue;
     }
-    const end = lines.findIndex((l, i) => i > first && l.startsWith('## '));
-    const bullets = lines.slice(first + 1, end).filter((l) => l.startsWith('- '));
+    const next = lines.findIndex((l, i) => i > first && l.startsWith('## '));
+    const bullets = lines.slice(first + 1, next === -1 ? lines.length : next).filter((l) => l.startsWith('- '));
     if (bullets.length === 0) problems.push(`${file}: the Invariants list is empty`);
     const slugs = headingSlugs(text);
     for (const bullet of bullets) {
