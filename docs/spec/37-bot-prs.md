@@ -20,6 +20,18 @@ row and read by no rule. Nothing is approved, merged or posted to a pull request
 states a row is meant to carry — _manual_ (leave it alone, the default), _merge_ (set autocomplete and
 see it through) and _test_ (exercise the update locally before it goes in) — are **not yet built**.
 
+## Invariants
+
+- **The bot read is a separate read scoped to `botPrs.authors`, and an empty or uncompilable list turns it off.** Turning off `ownWorkOnly` to see bot pull requests would hand the fleet every other author's work as well. → [§](#configuration) · `test/botPrs.test.ts`
+- **A failed read keeps the last good rows with `error` set, and is recorded.** A provider blip must read as stale, not as an empty repository. → [§](#the-read) · `test/botPrs.test.ts`
+- **Ownership is recorded on the provider, never in the harness, and claim, close and step-off refuse a number not in the current bot reading.** A local list would drift from the provider's, and the routes are not a general way to act on any pull request. → [§](#taking-one-on) · `test/botPrs.test.ts`
+- **An update kind the pull request does not state and the parser cannot read is `unknown`, never guessed.** A guess of _patch_ is exactly the one that tells somebody they need not look. → [§](#reading-the-update) · `test/botPrs.test.ts`
+- **An outcome other than `adapted` holds CI dispatches on that pull request's current head only, and fails open on every other arm.** Without it the fleet re-dispatches the same red build every cooldown, and a new head is one nobody has looked at. → [§](#the-hold) · `test/botPrCiOutcome.test.ts`
+- **`dependency_outcome` is accepted only from a `pr:<n>:ci` origin on a `botAuthored` pull request, and writes against the head the world holds.** A head the agent named could hold CI on work nobody examined. → [§](#the-outcome--dependency_outcome) · `test/botPrCiOutcome.test.ts`
+- **The dependency brief is appended to a CI fix only for a `botAuthored` pull request.** On the fleet's own work a red build is a break to fix, not a question about upstream. → [§](#the-brief) · `test/botPrCiOutcome.test.ts`
+- **A risk verdict is advice: no rule reads it, and nothing is approved, merged, labelled or posted from it.** That is what contains prompt injection through a release note. → [§](#the-risk-summary) · _no test_
+- **A verdict is keyed on `(pull request, head)` and written against the head the agent was shown; a new head is unread.** A verdict on the old diff is no verdict on the new one. → [§](#what-unread-means) · `test/botPrRisk.test.ts`
+
 ## Configuration
 
 `botPrs.authors` (`string[]`, default `[]`): regular expressions over the author the provider reports

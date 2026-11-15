@@ -7,6 +7,19 @@ contract in `src/wire.ts`, which is declaration-only
 and reaches the SPA through `import type`, so nothing survives erasure and the web bundle still imports
 no server code. See [16 — HTTP API](16-http-api.md#the-wire-contract).
 
+## Invariants
+
+- **`WorldSnapshot.pullRequests` holds open pull requests only, and nothing in the dispatcher reads `closedPullRequests`.** Every PR predicate trusts the list to be open by construction rather than by remembering to filter a status. → [§](#worldsnapshot) · _no test_
+- **Nothing in `decide` gates on `staleSources`.** A stale world is still the best available world, and refusing to dispatch on one would turn a provider blip into a stalled fleet. → [§](#worldsnapshot) · _no test_
+- **A decision a later pulse cannot revise — settling a stack landing — is never taken from a world any source reported stale.** A stale slice under-reports, and an under-reported rung reads as one that left the chain, revoking the operator's authorization for good. → [§](#worldsnapshot) · `test/stackLanding.test.ts`
+- **The world-event diff is never taken against, and the baseline never moved onto, a world any source reported stale.** Moving it would make the next fresh pulse re-announce everything, releasing every standing delivery verdict. → [§](#world-events-the-activity-feed) · `test/staleWorld.test.ts`
+- **An issue whose run the operator dismissed is cut from the dispatch world even while the tracker still returns it open and watched.** Abandon is a kill switch; a forgotten or failed tag removal must not undo it. → [§](#what-is-in-the-dispatchers-world-and-what-puts-it-there) · `test/endRun.test.ts`
+- **Only `issue-assess` and `issue-retro` act on a retained run; every other rule excludes it in its own body.** Relying on the stub's `closed` state refuses it by coincidence, which a later change removes with nothing failing. → [§](#what-is-in-the-dispatchers-world-and-what-puts-it-there) · `test/issueRuns.test.ts`
+- **`prState` is the only way to read a PR's state, and it never invents `closed`.** A PR nobody reported closed is open or merged; inferring abandonment from a disappearance is the bug the closed-PR list fixes. → [§](#pullrequest) · `test/closedPrs.test.ts`
+- **A newly appeared object emits a single `*_opened`/`*_added`, and a removed object emits nothing.** A merge therefore arrives only as an appearance in `closedPullRequests`. → [§](#world-events-the-activity-feed) · `test/worldDiff.test.ts`
+- **The closure signal for an issue is the ticket mirror, never `issue_closed`.** Both real providers snapshot open issues only, so `issue_closed` never fires on a real deployment; a hold designed off it ships and observes nothing. → [§](#world-events-the-activity-feed) · _no test_
+- **`Issue.linkedPrNumber` is sticky, so no gate may read it as "has an open PR".** It stays set after the PR merges, and gating on it would retire an issue that needs a second PR. → [§](#issue) · _no test_
+
 ## `WorldSnapshot`
 
 One instant of the outside world, produced by `Connector.getState()`:

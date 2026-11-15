@@ -7,6 +7,19 @@ drives the running application through the plan, and reports.
 
 Everything else in the harness reads the work. This is the one thing that **runs** it.
 
+## Invariants
+
+- **`validationRunStale` is the one staleness predicate — asked by the rule, by `local_validation_report` and by the desk's sweep — and a moved commit, or one never recorded, is a different environment.** A report accepted against a checkout that has moved is a reading of code nobody asked about. → [§](#the-pin) · `test/localValidation.test.ts`
+- **The rule never dispatches against an environment the pin no longer holds, and one agent per row is the store's `WHERE status = 'pending'` flip.** It fires on `starting` as well as `running`, and on nothing stopped, swapped, restarted or refreshed. → [§](#the-dispatch--rule-local-validation) · `test/localValidation.test.ts`
+- **A failed local validation writes the row and never a shortfall or a delivery.** A shortfall clears the delivery that parks the goal, handing delivered work back to the fleet on the strength of an exploratory run. → [§](#when-it-fails) · `test/localValidation.test.ts`
+- **One fix per reading, latched on `fix_task_id`, and none for a validation run from the integration branch.** A crashed fix is not retried behind the operator, and there is no goal branch to put one on. → [§](#when-it-fails) · `test/localValidation.test.ts`
+- **A `failed` report with no findings is refused and pointed at `blocked`.** A fix agent cannot act on a verdict with nothing in it. → [§](#the-three-tools) · `test/localValidation.test.ts`
+- **Which validation a report is about comes off the dispatch origin: `localValidationOriginParts` parses `:validate-local:` alone.** The fix agent is refused a reading by the parse, not by a sentence in a prompt. → [§](#the-three-tools) · `test/localValidation.test.ts`
+- **A browser that will not start is `blocked`, never `failed`, and the prompt offers a configured browser as a claim to check.** A `failed` dispatches a fix for a defect that is not in the goal. → [§](#the-browser) · `test/localValidation.test.ts`
+- **The swap and refresh consents are given before the runner is called, with the route's 409 as the backstop.** Once `start` is reached the previous environment is already coming down. → [§](#the-press) · `test/localValidation.test.ts`
+- **`tasks.mcp_servers` has a real `TASK_COLUMNS` entry, and a launch's servers are read off the task row rather than re-derived at spawn.** Without it every resumed validation comes back without its browser. → [§](#persistence) · _no test_
+- **The screenshot route refuses a name that is a path before the join, and re-confines the join after.** The directory comes from the stored row and the name from the request. → [§](#the-cockpit) · `test/localValidation.test.ts`
+
 ## What it is not
 
 Stated first, because each boundary is a thing the harness already does and would otherwise be

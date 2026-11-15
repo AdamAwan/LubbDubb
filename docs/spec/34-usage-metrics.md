@@ -14,6 +14,18 @@ and nothing else.** Not productivity, not throughput, not who is fast. The unit 
 was put to a person, or reached for by one; what happened_. That framing is load-bearing and is
 defended in [What this is not](#what-this-is-not).
 
+## Invariants
+
+- **Every event is either `ui` (logged at the call site) or `record` (swept from its table), never both — `UiUsageEvent` excludes the `record` half.** An act logged both ways is counted twice by two readings that disagree quietly. → [§](#each-event-declares-where-it-is-seen) · `test/usageRegistry.test.ts`
+- **Every `view` is emitted from the place, never from a navigation control.** A view logged at a button counts only while that button is the way in, and halves silently the day a second control opens the page. → [§](#the-helper) · _no test_
+- **Every button names its usage event; a `{ counted }` press logs nothing, and an `AsyncButton` logs only once its act has resolved.** A call site that has to remember to log is one that forgets, and a refused act counted says it happened. → [§](#every-button-names-its-event) · `test/cockpitButton.test.ts`
+- **A batch carrying a subject/verb pair the registry lacks is refused whole with a 400, never quietly dropped.** A dropped row is the permanent silent zero this reading exists to make impossible. → [§](#what-reach-cannot-tell-you-and-the-pairing-that-can) · `test/surfaceReach.test.ts`
+- **A ledger column whose record cannot answer ships `null`, never zero.** A zero there manufactures a finding out of a missing column. → [§](#the-operator-ledger) · `test/operatorLedger.test.ts`
+- **A quiet surface ships a verdict, not counts, and `console-dark` outranks every other verdict.** A per-surface verdict over a window nobody was in is a finding made out of an absent operator. → [§](#a-quiet-surface-is-four-different-facts) · `test/surfaceReach.test.ts`
+- **No dispatch rule, desk, ranking or prompt reads any usage data.** The moment a rule gates on a count, the measurement changes the behaviour it measures — and the breach is visible in no panel. → [§](#what-this-is-not) · _no test_
+- **`surface_reach` has no identity column, and adding one is refused.** The digest cannot withhold a field, so there must be no per-operator field to leave out. → [§](#the-one-new-table) · _no test_
+- **The `usage` digest section carries counts keyed on subject and verb — never money, and never a pair the registry does not have.** Both axes are vocabularies the harness owns, which is what keeps fleets comparable. → [§](#the-digest-section) · `test/poolUsageSection.test.ts`
+
 ## What already answers part of it
 
 Almost nothing here is new measurement, which is the same claim [28](28-cross-fleet-pool.md) makes

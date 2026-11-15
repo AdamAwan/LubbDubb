@@ -1,5 +1,18 @@
 # 10 — Agent runtimes
 
+## Invariants
+
+- **An agent never inherits the cockpit bearer or the desktop credential, and no spawn site spreads `process.env` wholesale.** The escape is over the network, so no type check sees it. → [§](#what-an-agent-does-not-inherit) · `test/spawnEnv.test.ts`
+- **A launch carries `--session-id` or `--resume`, never both, and the protocol prompt is re-appended on resume.** `claude` refuses `--session-id` on an id that already has a transcript, which reads as a process dying for no reason. → [§](#launch-arguments) · `test/agentProtocol.test.ts`
+- **Every harness path that stops an agent reaps its process subtree before signalling the root, and the reap never throws.** A shell left holding the worktree as cwd fails every later dispatch onto that branch with `EBUSY`. → [§](#reaping-the-process-subtree) · `test/agentSubtreeReap.test.ts`
+- **`PtySession.kill()` sets status `killed` before it signals the process.** A synchronously delivered exit would otherwise be reclassified as `failed`, firing a terminal event. → [§](#sharp-edges) · `test/ptySession.test.ts`
+- **`PtySession.send()` writes the text and its submitting carriage return as two separate writes.** A line editor folds one burst into a paste and the message sits unsubmitted. → [§](#sharp-edges) · `test/ptySession.test.ts`
+- **Sentinel matching goes through `src/pty/sentinelScanner.ts`, never `indexOf`.** A program that styles the line puts SGR escapes inside the token. → [§](#sentinel-scanning) · `test/ptySession.test.ts`
+- **A mid-run crash re-attaches through `resume` only after dropping the session, disposing its spool and releasing its MCP credential.** Otherwise a bearer credential is left bound and live with nothing to revoke it, and the agent visibly comes back either way. → [§](#auto-resume-on-a-mid-run-crash) · `test/streamResume.test.ts`
+- **A re-dispatch inherits a conversation through `spawn`'s `resumeSessionId` on a new agent row, never through `resume`.** Two agent rows sharing one `sessionId` is the correct shape; a cwd that differs from the previous agent's drops the inheritance. → [§](#inheriting-a-conversation-on-re-dispatch) · _no test_
+- **While any orphan awaits a verdict the whole pulse is held, before the world is fetched.** With undecided orphans every verdict a pulse reaches is reached against a fiction of the fleet. → [§](#the-hold) · `test/crashRecovery.test.ts`
+- **A usage-window reading is observation only and never parks, and the freshest reading wins by `capturedAt`, not by arrival.** `rate_limit_event` fires on every ordinary turn, so a reading folded into the park is one edit from parking the fleet. → [§](#the-account-usage-windows) · `test/rateLimitReading.test.ts`
+
 ## What an agent does not inherit
 
 An agent is launched with the harness's own environment — that is what lets it reach `gh`, the

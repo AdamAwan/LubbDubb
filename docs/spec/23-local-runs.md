@@ -12,6 +12,19 @@ the machine with the browser and the login and stalled on the one fact nobody ha
 
 This is that fact, plus the thing that acts on it.
 
+## Invariants
+
+- **`Store.beginLocalRun` ends whatever was live in the same transaction that writes the new row.** The mutual exclusion is the SQL; a read-then-write runner leaves two servers on one port. → [§](#one-at-a-time) · `test/localRun.test.ts`
+- **`localRunRoot` stays outside `worktreeRoot`, and `loadConfig` refuses an overlapping pair.** A preview checkout under the pool root is a slot: handed to an agent and wiped `git clean -ffdx`. → [§](#the-checkout) · `test/config.test.ts`
+- **A turn ending (`done`, `waiting`, `stalled`) means the environment is up, not that the run is over.** Nothing is killed; a runner that treated `done` as terminal kills the thing the run exists to hold. → [§](#the-process) · `test/localRun.test.ts`
+- **A stop reaps the process subtree before it signals the child.** Reaping after the process dies finds nothing, leaving the port held and the checkout unremovable. → [§](#the-process) · `test/localRun.test.ts`
+- **`stopping` is a live status: nothing may begin beside a run being taken down, and a restart settles it rather than resuming it.** → [§](#stopping-is-a-turn-not-a-signal) · `test/localRun.test.ts`
+- **A swap stops the old run before it prepares the checkout.** The stop instruction runs in that checkout, and `ensurePreview` resets and cleans it out from under the session shutting it down. → [§](#stopping-is-a-turn-not-a-signal) · `test/localRun.test.ts`
+- **A ref override is checked against the goal's own options before anything is prepared.** One function answers what runs, what may run and what to draw; trusted blindly, the route checks out anything in the repository. → [§](#which-ref-and-what-else-is-on-offer) · `test/localRun.test.ts`
+- **A run's usage is added as per-session deltas, never written as a cumulative total.** A run can have two sessions, and a cumulative write replaces the bring-up's cost with the teardown's. → [§](#what-it-costs) · `test/localRun.test.ts`
+- **A live row with neither `interrupted_at` nor `last_seen_at` is unknown and is not brought back.** Both null belongs to a hand-edited database, and the safe direction is to settle it. → [§](#coming-back-after-a-restart) · `test/localRun.test.ts`
+- **The boot that adds `interrupted_at` backfills it on the live row.** Without it the resume reads the age as unknown and costs the operator taking the build the environment they had up. → [§](#persistence) · `test/localRun.test.ts`
+
 ## What it is not
 
 | Not            | Because                                                                                                                                                                                                                           |

@@ -13,6 +13,19 @@ fleet whose every goal is parked on a person looks identical from outside and is
 from the other end: the fleet outrunning somebody's ability to _absorb_ work rather than to supply
 it.
 
+## Invariants
+
+- **The lead time is fleet time: each run's calendar span has its human holds subtracted, unioned per goal and clamped to the run.** Summed holds over-subtract; un-subtracted ones tell an idle operator the fleet has days of work. → [§](#the-lead-time-is-fleet-time) · `test/runway.test.ts`
+- **A run whose whole span is covered by holds is dropped from the median, never counted as zero.** Admitting it drags the median towards zero and leaves the deployment permanently `thin`. → [§](#the-lead-time-is-fleet-time) · `test/runway.test.ts`
+- **The drain is capacity over the median lead time, never the observed start rate.** A starved fleet starts nothing, so a rate-based runway rises to infinity exactly when the warning is due. → [§](#derived-never-stored) · _no test_
+- **The buckets re-read `issuePickupStatus` and never ask the world a question of their own; `blocked` is queued supply.** Dropping `blocked` reports a full backlog as a drought on the fleet working hardest. → [§](#the-buckets) · `test/runway.test.ts`
+- **`starved` and `dry` outrank `unknown` and need no history.** They are observations about this instant; withholding them until enough goals complete silences the warning in the week it matters most. → [§](#the-states) · `test/runway.test.ts`
+- **A `supply` row's title is a function of the state alone, and every figure lives in the detail.** The title is the dedup key and the notification identity, so a number in it files a new row every time the queue moves. → [§](#what-it-files) · `test/runway.test.ts`
+- **The desk's own settlements are not answers: it reopens its own row when the state comes round again.** Read as answers, every deployment gets one starvation warning in its life and then silence. → [§](#what-it-files) · `test/runway.test.ts`
+- **`validateRunwayPolicy` refuses a `clearHours` at or below `warnHours` at load.** One threshold does not fail, it flaps. → [§](#hysteresis) · `test/runway.test.ts`
+- **Whether a `supply` row is standing is read off an unbounded list, by the desk and the snapshot alike.** The hundred-row feed loses the row behind newer ones and the band reports `healthy` over a standing row. → [§](#hysteresis) · `test/runway.test.ts`
+- **`runway.enabled: false` files nothing and still settles standing rows.** Turning it off drains the bench rather than stranding a row nothing will ever close. → [§](#when-it-stays-quiet) · `test/runway.test.ts`
+
 ## The unit is time, never a count
 
 "Fewer than three eligible issues" does not survive a changing `maxConcurrentAgents`. A three-wide

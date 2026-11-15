@@ -21,6 +21,11 @@ reader can tell the two apart at a glance. So:
   still marked unbuilt after its code has landed is the failure this convention has instead of the
   one it replaced.
 
+**Every spec opens with `## Invariants`** — the few rules a change could break without noticing, each
+linking the section that explains it and the test that fails if it breaks, or saying `_no test_`. Read
+that first; read on for the why. `test/docsReferences.test.ts` holds the shape
+([19](spec/19-development.md#what-holds-the-documentation-honest)).
+
 What the specs are still not: a roadmap or a wish list. "Not yet built" is not a licence to describe
 things nobody intends to do — a spec earns its place by being what the next change is written
 against, and behaviour that is off by default is still described as off by default, and what turning

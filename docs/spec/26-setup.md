@@ -10,6 +10,19 @@ It is also the state a new operator arrives in with nothing telling them so. Eve
 Overview is legitimately empty, the fleet is idle and correct, and none of that is distinguishable
 from a harness that is broken. This document owns the surface that closes that gap.
 
+## Invariants
+
+- **A remote naming no provider this harness speaks resolves to `null`, never to `fake`.** `fake` invents a world, so an unreadable remote folded into it shows the operator a backlog that does not exist as theirs. → [§](#what-the-two-answers-derive) · `test/setup.test.ts`
+- **A key the project layer already sets is absent from the resolution's `writes`.** Copied into the operator's file it freezes at today's value, and the team's next change never reaches them. → [§](#what-gets-written-and-what-does-not) · `test/setup.test.ts`
+- **Every key Setup writes, and every `config` fix a check offers, is a config leaf path `POST /api/config` accepts.** A nested object typechecks and is refused at the preview, so the flow never completes against a real repository. → [§](#what-gets-written-and-what-does-not) · `test/setupWrites.test.ts`
+- **There is no second writer: setup and every one-click fix go through `POST /api/config/preview` and `POST /api/config`.** A writer here is a second opinion about what a save means, and gets the hand-edited file wrong first. → [§](#the-write-path) · _no test_
+- **The credential check asks every route a provider has, and an `ok` row names the route, never the variable.** A row the operator can watch being false spends the credibility every other check runs on. → [§](#the-credential-check-asks-both-routes) · `test/setup.test.ts`
+- **A check the file has already answered is restated with its verdict kept, never suppressed.** The running process is still on what it booted with, and softening the verdict states something untrue about it. → [§](#a-fault-the-file-has-already-answered) · `test/setup.test.ts`
+- **`credential` and `billing` are never in the settle map.** Both read the environment, and no config edit puts a variable into a running process, so a restatement promises a restart will fix what it will not. → [§](#a-fault-the-file-has-already-answered) · `test/setup.test.ts`
+- **Verdicts are four-valued and `unknown` never folds into `bad`; an `unknown` check draws no row.** A credential that could not be asked is different news from one that answered no. → [§](#the-verdicts-are-four-valued) · `test/setup.test.ts`
+- **A login nothing confirmed never reaches a one-click control.** With `userId` set pickup reads who added each watch tag, so a wrong guess is a fleet that picks nothing up and reports nothing wrong. → [§](#confidence-picks-the-control) · `test/setupWrites.test.ts`
+- **A `shell` fix is copied and never executed.** A button that ran it would put arbitrary execution behind the most sensitive reading the cockpit draws. → [§](#the-fixes) · _no test_
+
 ## What it is, and what it deliberately is not
 
 **A reading, not a wizard.** The config page already draws every configurable leaf

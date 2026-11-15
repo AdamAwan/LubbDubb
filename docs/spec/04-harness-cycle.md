@@ -2,6 +2,19 @@
 
 `src/harness.ts` is the pulse. `src/heartbeat.ts` is the timer that drives it.
 
+## Invariants
+
+- **An operator's `manual` cycle refused because one is in flight is run once more as soon as that cycle ends.** Without the trailing edge, a write landing mid-cycle waited for the next heartbeat with nothing saying why. → [§](#the-trailing-edge) · `test/manualCycle.test.ts`
+- **A coalesced cycle reads no world, so a route that changed the outside world folds the change onto the baseline itself.** Awaiting `runCycle('manual')` on a busy fleet returns without fetching anything. → [§](#coalescing) · _no test_
+- **The crash-recovery hold is asked before the world is fetched and holds the whole pulse, local cycles included.** The harness's model of its own fleet is a fiction while orphaned rows are undecided. → [§](#the-crash-recovery-hold) · `test/crashRecovery.test.ts`
+- **A local cycle skips every pass the pulse registry declares `readWorld: true`, and no other.** The line is held as data on the registry entry, so a new pass cannot be written without stating it. → [§](#what-runs-and-what-does-not) · `test/pulsePipeline.test.ts`
+- **A local cycle with no baseline refuses (`unbaselined`) rather than deciding against a synthesized empty world.** An empty world reads to every rule as a tracker that has just gone dark. → [§](#the-guards-unchanged) · `test/localCycle.test.ts`
+- **The dispatcher skips a pull request whose reading predates a task on it reaching a terminal, and those refs go on the next real read's `fresh` set.** Resolving a review thread moves no `updated_at`, so without both halves a second agent answers the same comments. → [§](#where-the-world-is-the-memory) · `test/readingBehindFleet.test.ts`
+- **`HydrationCache` holds no age policy of its own; the caller passes the bound its lane gives it.** A cache constant beside the lane is a second clock that silently defeats it. → [§](#who-owns-the-cold-lane-interval) · _no test_
+- **The pulse takes the fast interval while the fleet is busy — a live agent, a queued job, a candidate the fleet itself holds, a build in flight — and the slow one otherwise; a candidate held `unapproved` is not busy.** A fleet stuck on the slow interval with work queued has no other symptom. → [§](#the-adaptive-cadence) · `test/pulseLanes.test.ts`
+- **Pulse pass order is declared once in `PULSE_PIPELINE`, grouped by phase, and its load-bearing orderings are asserted by id.** Moving a pass below what it must precede — `environments` immediately under `graph`, `closeOuts` under `validationReady` — otherwise breaks silently. → [§](#the-pulse-registry) · `test/pulsePipeline.test.ts`
+- **A cycle that never returns is reported once by the watchdog, with where it is stuck, and shown live as `inFlightCycle`.** A hung `cycleInFlight` otherwise stops all dispatch while every reading looks like an idle fleet. → [§](#when-a-cycle-does-not-come-back) · `test/stuckCycle.test.ts`
+
 ## The heartbeat
 
 `Heartbeat` is deliberately dumb: it knows nothing about dispatch, and nothing about what makes a
@@ -605,18 +618,18 @@ There is one entry type, because a desk is a sweep that runs at its own phase. A
 against the declared list**, so moving a pass that must stay below another fails a test instead of
 breaking silently:
 
-| Constraint                                         | Why                                                                                                                                            |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `graph` → `environments`, immediately              | merge attribution walks `parentRef`, so a graph one pulse stale resolves nothing ([24](24-environments.md#recording-a-landing))                |
-| `environments` → `remoteValidation`                | a sheet is assembled off the arrivals the environment desk records ([36](36-remote-validation.md))                                             |
-| `environments` → `appErrors`                       | an error read is held against the head the environment desk's probe just recorded ([39](39-app-errors.md#the-deploy-window))                   |
-| `appErrors` → `appErrorTracker`                    | the tracker is searched for the groups the read just moved ([39](39-app-errors.md#the-tracker-lock))                                           |
+| Constraint                                         | Why                                                                                                                                                      |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `graph` → `environments`, immediately              | merge attribution walks `parentRef`, so a graph one pulse stale resolves nothing ([24](24-environments.md#recording-a-landing))                          |
+| `environments` → `remoteValidation`                | a sheet is assembled off the arrivals the environment desk records ([36](36-remote-validation.md))                                                       |
+| `environments` → `appErrors`                       | an error read is held against the head the environment desk's probe just recorded ([39](39-app-errors.md#the-deploy-window))                             |
+| `appErrors` → `appErrorTracker`                    | the tracker is searched for the groups the read just moved ([39](39-app-errors.md#the-tracker-lock))                                                     |
 | `appErrorTracker` → `appErrorTriage`               | a triage run's briefing names a returned group's tracker ticket, so it is assembled after the search for it starts ([39](39-app-errors.md#agent-triage)) |
-| `remoteValidation` → `validationReady`             | the validate row's detail carries **this** pulse's sheet                                                                                       |
-| `validationAsks` → `validationReady` → `closeOuts` | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                       |
-| `plans` → `graph`                                  | the part→PR observations the reconciler just made are the ones recorded                                                                        |
-| `graph` → `graduations` → `pool`                   | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([28](28-cross-fleet-pool.md)) |
-| `prWatch` → `prWorkItems`                          | one pass says the pull request is the fleet's, the other which work item it is for                                                             |
+| `remoteValidation` → `validationReady`             | the validate row's detail carries **this** pulse's sheet                                                                                                 |
+| `validationAsks` → `validationReady` → `closeOuts` | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                                 |
+| `plans` → `graph`                                  | the part→PR observations the reconciler just made are the ones recorded                                                                                  |
+| `graph` → `graduations` → `pool`                   | `graduations` reads the graph; a claim that left for the repository is out of the document before it is derived ([28](28-cross-fleet-pool.md))           |
+| `prWatch` → `prWorkItems`                          | one pass says the pull request is the fleet's, the other which work item it is for                                                                       |
 
 The same test asserts the walk reaches every entry in the declared order, and that no id is walked
 twice — a duplicate is what would make a position, and so every one of those constraints, mean

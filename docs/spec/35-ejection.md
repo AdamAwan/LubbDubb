@@ -16,6 +16,19 @@ it lands in the feed, and it is counted. A team ejecting three times a week is t
 review happens too late, and the harness should let them see that rather than make ejecting
 comfortable.
 
+## Invariants
+
+- **A live ejection's `origin_ref` is in `activeOrigins`, so no rule dispatches that origin until it is settled.** Missed, the task settles `interrupted`, the origin frees, and a second agent lands on a branch a human is editing. → [§](#holding-the-origin) · `test/ejection.test.ts`
+- **The kill, the task settle and the claim write run as one synchronous stretch with no `await` between them.** Between the settle and the claim the origin is unheld, and a pulse landing there staffs the issue again. → [§](#the-transaction) · _no test_
+- **The ejected task is settled `interrupted`, never left active.** An active task with no live agent is what `crashRecovery` hunts for, and an undecided orphan holds the entire pulse. → [§](#the-transaction) · `test/ejection.test.ts`
+- **The kill goes through `session.kill()`, which reaps the process subtree before it signals the child.** A reap after the child dies finds nothing, and every later dispatch onto the branch fails `EBUSY` for good. → [§](#the-transaction) · _no test_
+- **The slot is held by a SQLite row read on every `ensure`, never by a lease.** Leases do not survive a restart, and a slot that looks free is wiped with `git clean -ffdx`. → [§](#holding-the-slot) · `test/ejection.test.ts`
+- **The pool grows by the live ejections rather than sharing the cap's bound.** Counted against the cap, dispatches are refused for want of a directory and retried forever over an idle fleet. → [§](#holding-the-slot) · `test/ejection.test.ts`
+- **Only a settle or the expiry ends a hold; nothing dispatches, releases or nudges on `last_seen_at`.** A harness that takes work back on quiet takes it back half-done. → [§](#calling-home) · _no test_
+- **A `null` `last_seen_at` reads as `never contacted`, never as a stale timestamp.** A deep link that never fired is the likeliest real failure and must not draw as a healthy fresh hold. → [§](#calling-home) · `test/ejection.test.ts`
+- **A `requeued` settle requires a note and files a job whose `Job.originRef` stands in for the ejected origin.** The note is the fresh agent's preamble, and the stand-in keeps a rule dispatch from racing the job. → [§](#settling-it) · `test/ejection.test.ts`
+- **An expiry returns the slot, frees the origin and is announced in the feed.** Taking work back from a person silently is how they return to a branch that moved under them. → [§](#expiry) · `test/ejection.test.ts`
+
 ## What it is not
 
 | Not                        | Because                                                                                                                                                                                                                                                                                        |

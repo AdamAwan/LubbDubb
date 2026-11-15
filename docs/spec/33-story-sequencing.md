@@ -12,6 +12,19 @@ invents the schema the second was going to design.
 
 This is the record that says which of those two goes first, and the gate that makes it so.
 
+## Invariants
+
+- **An order holds work only once a person has accepted it; every uncertainty fails open.** No row, `proposed`, `declined`, a crashed sequencer, an edge naming an issue the world does not hold, or `issueSequencing` off — each leaves every story eligible in today's order, because a story that never starts shows nothing red. → [§](#fail-open) · `test/featureSequence.test.ts`
+- **A predecessor is satisfied only when it is settled, never on a push or an open pull request.** A story is cut from `defaultBranch`, so releasing on the push dispatches it against a tree missing what it waits for. → [§](#readiness-and-the-hold) · `test/storySequencing.test.ts`
+- **A predecessor nothing will work still holds, and the hold reason says waiting will not end it.** It is the one arm that does not fail open, so it must stay loud; folding `unworkable` into `on` loses the sentence. → [§](#an-unwatched-predecessor-holds) · `test/unwatchedChildren.test.ts`
+- **The appraiser is held by the order too, and a held appraisal writes no verdict.** An `unclear` cast against a repository missing its predecessor outlives the reason for it. → [§](#the-appraiser-is-held-as-well) · `test/storySequencing.test.ts`
+- **A held story is queued as `held: 'sequenced'`, never skipped, and not routed through `consider`.** A dispatch that silently never appears is invisible, and an attempt spent on it blames the planner for the hold. → [§](#a-held-story-is-queued-not-skipped) · `test/storySequencing.test.ts`
+- **`featureSequenceKey` digests membership, never movement.** A key that moved on every merge would re-propose the same order and ask the operator to re-accept it eight times. → [§](#the-sequencer) · `test/featureSequence.test.ts`
+- **The sequencer's edges are always stored `inferred`, and the fleet can only ever write `proposed`.** An agent that could mark its own guess as a person's statement defeats the provenance, and nothing the fleet says about its own output may hold work. → [§](#the-record) · `test/featureSequence.test.ts`
+- **A cycle, a self-edge or a story the Feature does not have is refused at ingestion and nothing is stored.** A silently linearised cycle holds work in an order no one chose. → [§](#a-cycle-is-refused-at-ingestion) · `test/featureSequence.test.ts`
+- **A re-proposed order keeps its acceptance only when it is provably the old one extended; anything else asks again.** A dropped edge un-holds work the operator chose to hold, and a new edge between two stories already ruled on changes their answer. → [§](#an-extension-keeps-the-acceptance) · `test/featureSequence.test.ts`
+- **The harness never writes a work-item state, a Predecessor link or a ticket comment on the strength of an order.** A written-back edge is read on the next hydration as the team's intent. → [§](#what-it-never-writes) · _no test_
+
 ## What it is not
 
 Stated first, because each boundary is a thing the harness already does and would otherwise be

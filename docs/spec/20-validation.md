@@ -19,6 +19,19 @@ reading somebody records.
 **intent hint** and nothing executable; the check set is authored by a validation planner dispatched
 once the assessor says `delivered`. → [When the check set is written](#when-the-check-set-is-written)
 
+## Invariants
+
+- **A check's letter is assigned at ingestion, stored, and never reused or reassigned** — a positional letter silently misaddresses a check named in yesterday's note. → [§](#the-letter-is-assigned-never-positional) · `test/validation.test.ts`
+- **A step the fleet cannot carry comes back to a person naming the block that would have carried it, and with nothing declared every step is a person's** — a step wrongly given to the fleet is dispatched, held, and blocking nothing. → [§](#who-carries-a-step) · `test/validationSteps.test.ts`
+- **`fleetCanStart` is three-valued, and `null` (no steps) is never folded into `false` (a person's first step)** or every prose check stops being dispatchable. → [§](#who-carries-a-step) · `test/validationSteps.test.ts`
+- **A check that declares `proof` is refused a pass that names no capture, on the tool channel and in the run alike** — a rule on one channel is one the operator's own Claude walks around. → [§](#a-check-that-declares-it-is-refused-a-pass-without-a-capture) · `test/validationProof.test.ts`
+- **A failed check is never recorded as a shortfall; its diagnosis dispatch clears no verdict and the goal stays delivered and parked** — a shortfall clears the delivery, un-parking the goal and deleting the rows the reading was reported into. → [§](#when-a-check-fails) · `test/validationFailed.test.ts`
+- **The agent sent to diagnose a failed check cannot record a reading on it** — refused structurally by the tool, since the reading belongs to whoever took it. → [§](#when-a-check-fails) · `test/validationFailed.test.ts`
+- **`deferred` and `unrun` count as not clear; only `passed` and `waived` clear a goal** so deferral can never be the quiet exit to a clear goal. → [§](#deferral-and-waiving) · `test/validationFlag.test.ts`
+- **A flagged goal blocks nothing** — no dispatch held, no merge gated, `conclude_work` untouched. → [§](#where-it-lands) · `test/validationFlag.test.ts`
+- **On a flagged goal, marking a close-out done, closing the ticket from it, and ending the run each refuse without a note** — there must be no way out that costs nothing to say. → [§](#where-it-lands) · `test/validationFlag.test.ts`
+- **Handing a settled check to the fleet is refused with a 400 pointing at `reset`** rather than accepted and never run, which would also let an agent overwrite a person's reading. → [§](#routes) · `test/validationFleet.test.ts`
+
 ## What it is not
 
 Stated first, because each boundary is a thing the harness already does and would otherwise be

@@ -20,6 +20,19 @@ them. Two things are **not yet built**, and each section that names them says so
   → [Why there is no Watch press](#why-there-is-no-watch-press)
 - **Cross-fleet links through the pool.** → [Not yet built](#not-yet-built)
 
+## Invariants
+
+- **A reading is `ok` or `unknown`, and `unknown` is never "no errors"; a failed command is `unknown` however much it printed.** A failed `az` call that printed `[]` before dying is the confident wrong answer this refuses. → [§](#the-output-contract) · `test/appErrors.test.ts`
+- **An `errors.list` with no `{since}` is refused at boot.** An unbounded query counts old errors as new on every read. → [§](#configuring-an-environment) · `test/appErrorsDesk.test.ts`
+- **A fingerprint reaches the detail command only through `LUBBDUBB_ERROR_FINGERPRINT`, never its text, and a `{fingerprint}` placeholder is refused.** It comes from the telemetry, so in a command's text it is whatever a shell makes of it. → [§](#configuring-an-environment) · `test/appErrorQuery.test.ts`
+- **`message` and `stack` go into no briefing, filed bug, pool document or prompt; a model sees one only through `app_error_detail`, which is recorded.** A message carries user data. → [§](#the-output-contract) · `test/appErrorTriage.test.ts`
+- **`ok_at` moves only on an `ok` read, so the next `{since}` reaches back over a failed one.** A read that failed for a day would otherwise skip that day. → [§](#what-is-stored-and-for-how-long) · `test/appErrorsDesk.test.ts`
+- **An undecided window is no link, never a smaller window or zero candidates.** Read as "no candidates" it says the deploy shipped nothing and points the operator at the wrong deploy. → [§](#the-window) · `test/appErrorsLink.test.ts`
+- **The key is carried by the ticket as `searchKey` on `IssueCreateInput`, never by a prompt or a template token.** A bug filed without it is invisible to every other fleet, with nothing red. → [§](#the-key-on-the-ticket) · `test/appErrorTracker.test.ts`
+- **A failed tracker search is `unknown`, never `none`, and a press whose search fails does not file unless the operator says file anyway.** Filing over an unread lock may file a duplicate. → [§](#the-search) · `test/appErrorTracker.test.ts`
+- **A link made by a route hint alone relates a filed bug to nothing.** A relation on the tracker claims the goal caused the error; a hint is only a reason to look. → [§](#the-presses) · `test/appErrorTracker.test.ts`
+- **No reading, group, link, tracker cache or triage verdict is a `WorldEvent` or a dispatch input.** `deliveryHold` expires a delivery verdict on any world event matching the goal, un-parking delivered goals. → [§](#what-it-is-not) · _no test_
+
 ## What it is not
 
 | Not                   | Because                                                                                                                                                                                                                                                                                                                                                                                                     |

@@ -3,6 +3,18 @@
 Three related mechanisms: an agent can _announce_ an artifact, the harness _observes_ every file an
 agent writes, and it _detects_ when two agents wrote the same file at the same time.
 
+## Invariants
+
+- **A flag is deduped by `(agent, ref)`, so an evolving artifact refreshes in place.** → [§](#the-flag-sentinel) · `test/agentFlags.test.ts`
+- **The file-events hook is exec form (`node -e`), never a shell string, and is a no-op unless `$LUBBDUBB_EVENTS_DIR` is set.** A shell-string body is a PowerShell parse error on Windows, so the hook silently no-ops and no artifact ever surfaces. → [§](#the-hook) · `test/fileEvents.test.ts`
+- **The hook records the written path only, never the file's content.** → [§](#the-hook) · _no test_
+- **The spool delivers each record exactly once, and a final drain runs at terminal, at kill and when parking on a human.** → [§](#draining-and-classification) · `test/fileEvents.test.ts`
+- **The plan file is read inside the drain, while `agent.cwd` still exists.** → [§](#draining-and-classification) · _no test_
+- **`GET /artifacts/:id` serves only a path taken from the stored flag row, confined lexically before any filesystem access and again through `realpath`.** The request never reaches a path expression. → [§](#serving-artifacts) · `test/agentFlags.test.ts`
+- **The artifact route sits outside `/api` and admits only a flag-scoped, short-lived HMAC capability whose key is never the cockpit token.** A capability for one artifact cannot open another or act as a cockpit credential. → [§](#the-route-lives-outside-api-and-authorizes-itself-issue-129) · `test/cockpitAuth.test.ts`
+- **The overlap window is scoped to `detectFileOverlaps`; anything judging what a particular agent wrote takes its own read.** A drift check on the window reports a part in scope because its agent was too old to be read. → [§](#file-overlap-detection) · `test/agentFilesRoute.test.ts`
+- **An overlap is two code agents whose lifetimes overlapped writing one path, and only the writers actually concurrent are named.** → [§](#file-overlap-detection) · `test/fileOverlap.test.ts`
+
 ## The flag sentinel
 
 `@@LUBBDUBB_FLAG:<payload>@@` lets an agent push an artifact or link to the cockpit mid-run — a design

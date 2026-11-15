@@ -10,6 +10,19 @@ the store, and it needs no credential in an agent's argv.
 Rate limiting is registered with `global: false`: only routes that opt in are limited, so the
 cockpit's frequent state polling is never throttled.
 
+## Invariants
+
+- **Every `/api/*` route and the `/ws` upgrade require the bearer token, matched by path prefix** so a route added later is guarded without opting in. → [§](#authentication) · `test/cockpitAuth.test.ts`
+- **A route outside `/api` authorizes itself and refuses a bare request** — moving one out of the guard is safe only because of this. → [§](#authentication) · `test/cockpitAuth.test.ts`
+- **Origin and Host are answered before the token** so a leaked credential never turns a rebinding attempt back into a way in. → [§](#authentication) · `test/cockpitAuth.test.ts`
+- **The refusal throttle counts only refusals that read a credential; a success never counts and a `429` never extends its own block** or a polling cockpit throttles itself, or renews its block forever. → [§](#authentication) · `test/cockpitAuth.test.ts`
+- **Binding a routable address with `auth.enabled: false` is refused at config load.** → [§](#authentication) · `test/cockpitAuth.test.ts`
+- **A request carrying a file extension is never answered with the app shell** — a stale chunk answered `200 text/html` leaves a cockpit that will not start, with nothing naming the bundle. → [§](#the-spa-fallback) · `test/appShell.test.ts`
+- **A handler reads no request itself; it takes `checked` input, and a refusal is a returned `400`, never a throw** — a malformed request recorded as a harness fault buries real faults under other people's typos. → [§](#request-validation) · `test/requestValidation.test.ts`
+- **Every field states its own refusal in full; no 400 opens in zod's stock words** since the 400 body drops field paths and the message is the caller's only statement of what was wrong. → [§](#request-validation) · `test/requestValidation.test.ts`
+- **Every shape a route ships is declared once under `src/wire/`, type-only, and `src/wire.ts` is the only server module `web/src/` names** — two copies of the shape compile green while a panel renders empty. → [§](#the-wire-contract) · `test/wireContract.test.ts`
+- **A `dirty` without `sections` means all of them, and slot-taking events plus `cycle:end` and `world:events` stay unscoped** — an over-narrow frame silently stops a surface updating. → [§](#what-a-dirty-may-narrow-itself-to) · `test/hub.test.ts`
+
 ## Shape
 
 `app.ts` is **wiring and nothing else**: the auth hook, the error handler, the `/ws` socket, the

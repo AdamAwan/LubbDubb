@@ -4,6 +4,19 @@
 rails. Every decision — executed, deferred, rejected or skipped — is written to the audit log with its
 reason, so "why did (or didn't) this happen" is always answerable.
 
+## Invariants
+
+- **A dispatch that throws after its task row is written settles that row `interrupted`.** A `queued` row is active, so left alone it holds its origin, its branch and whatever its job stands in for shut for good. → [§](#a-failed-dispatch-settles-its-task-row) · `test/dispatchFailure.test.ts`
+- **The harness authorizes no outbound act on its own judgement, and nothing automatic can reject.** The only authorities are a stack landing and `sendPrRepliesWithoutApproval`, both accept-only, and the proposal row is written either way as the audit trail. → [§](#2-the-two-standing-authorities) · `test/outboundAuthority.test.ts`
+- **A rejection stands until a world event on its item arrives after `decidedAt`, and there is no timer arm.** One predicate serves the dispatcher and the executor, so the two cannot disagree about a hold. → [§](#a-rejection-expires-on-signal) · `test/proposals.test.ts`
+- **A rejection's note is appended to the next dispatch on the exact origin ref, never interpolated.** An override that never learned a new placeholder would silently drop the operator's words. → [§](#a-rejections-reason-reaches-the-next-agent) · `test/proposals.test.ts`
+- **`ensure` is reuse-first and grows the pool before it evicts.** On reuse `base` is ignored; an unresolvable `base` throws rather than falling back to HEAD; and taking a free slot still on a live branch burns the tree a CI fix would come back to. → [§](#worktrees) · `test/worktreeManager.test.ts`
+- **A slot handed to a different branch is swept of processes, wiped with `git clean -ffdx`, then switched, and the reset forms are unreachable.** A weaker wipe hands another branch's build output on as the agent's own; `switch -C` silently discards a branch's commits. → [§](#handing-a-slot-over) · `test/worktreeManager.test.ts`
+- **A slot is never handed to another branch while it is leased, while its branch has outstanding work, or while it carries uncommitted tracked changes.** The lease is the only thing keeping two agents out of one directory. → [§](#the-lease) · `test/worktreeManager.test.ts`
+- **The pool bound is a live view of `RuntimeControl.cap` plus slack, read on every acquire.** Frozen at boot it silently becomes the fleet's real cap: a full queue, an idle fleet, nothing red. → [§](#exhaustion) · `test/worktreePoolSelfHealing.test.ts`
+- **A stranded slot is reclaimed only at `ensure`'s dead end, only when nothing holds it, and only after stashing its work to `refs/lubbdubb/salvage/…`.** Nothing uncommitted is ever classified or discarded. → [§](#reclaiming-a-stranded-slot) · `test/worktreePoolSelfHealing.test.ts`
+- **Every `runGit` call carries a deadline, and the deadline reaps the whole subtree and settles the promise itself.** One git that never exits holds `cycleInFlight` true and stops the fleet with nothing red. → [§](#a-git-that-never-exits) · `test/gitTimeout.test.ts`
+
 ## Outcomes
 
 | Outcome    | Meaning                                                              |

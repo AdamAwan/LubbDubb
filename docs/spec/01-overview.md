@@ -8,6 +8,16 @@ decisions a human has to make.
 It runs as a single Node process: an HTTP/WebSocket server, a timer-driven decision loop, a SQLite
 database, and a set of child processes (one per live agent).
 
+## Invariants
+
+- **Only `src/store/` touches SQLite; every other module goes through `Store`.** A second importer of the driver is a second place the schema and its migrations can disagree. → [§](#standing-invariants) · `test/storeModules.test.ts`
+- **At most one agent works a given origin.** The origin de-dup gates every dispatch, so a concern still in flight is never staffed twice. → [§](#standing-invariants) · `test/ruleDispatcher.test.ts`
+- **At most one code agent works a given branch, enforced by an explicit branch gate where origin does not determine branch.** A manual job names a free-string branch, so the origin gate alone would let two agents share one checkout. → [§](#standing-invariants) · `test/jobQueue.test.ts`
+- **The concurrency cap and the pause flag are read by reference every cycle.** A snapshot taken at boot would ignore a runtime change until restart. → [§](#standing-invariants) · `test/runtimeControl.test.ts`
+- **Nothing side-effectful leaves the machine on the harness's own authority; the only standing authorities are a clicked stack landing and `sendPrRepliesWithoutApproval`.** Every other outbound act is a proposal put to the operator. → [§](#standing-invariants) · `test/outboundAuthority.test.ts`
+- **The dispatcher's output is validated against `ActionSchema` at the boundary, and anything that does not match is rejected and audited, never executed.** → [§](#standing-invariants) · _no test_
+- **At boot, orphaned agents are parked for an operator's verdict and every pulse is held until each is decided.** Nothing new is queued in front of work that was already in flight, and nothing is resumed or discarded on the harness's own say-so. → [§](#boot-sequence) · `test/crashRecovery.test.ts`
+
 ## The loop
 
 The system is one repeating cycle, driven by a heartbeat (`heartbeatIntervalMs`, default 30s while

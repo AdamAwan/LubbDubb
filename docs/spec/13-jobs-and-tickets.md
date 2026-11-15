@@ -12,6 +12,19 @@ board that replaced it. An agent stopped by something that is not its goal concl
 goal waits for the operator ([06](06-issue-pickup.md#blocked-parks-the-goal-for-you)); nothing files a
 ticket for what an agent hit.
 
+## Invariants
+
+- **A job is marked `dispatched` only after its agent spawns; a dispatch that throws leaves it `queued` with its task row settled.** Otherwise the job is retried for ever against a claim only it holds. → [§](#dispatch--rule-manual-job) · `test/dispatchFailure.test.ts`
+- **A requeued job stands in for its `originRef` while it is queued or its task is active, asked through one predicate by dispatcher and executor.** Without it the rule that dispatched the original puts a second agent on the same work. → [§](#standing-in-for-another-origin) · `test/crashRecovery.test.ts`
+- **A requeue behind a still-queued job files nothing and hands that job back.** A requeue standing in for a queued job grows a chain in which only the newest link can ever run. → [§](#why-a-requeue-never-stands-in-for-a-queued-job) · `test/requeueChain.test.ts`
+- **No two live tasks share a branch: `findActiveTaskByBranch` refuses at the route and defers in the executor.** `manual-job` is the one path where origin and branch are not 1:1, and reuse-first worktrees make the collision silent. → [§](#the-branch-invariant) · `test/jobQueue.test.ts`
+- **A schedule firing only writes an ordinary `jobs` row, with no branch and nothing added to the prompt.** Every gate between a queued job and an agent stays untouched, so a clock adds a way for work to arrive and none for it to run. → [§](#it-queues-and-that-is-all-it-does) · `test/jobSchedules.test.ts`
+- **A missed window fires once, rescheduled from now, and a schedule never has two of its own jobs in flight.** → [§](#firing--the-scheduledesk-once-a-pulse) · `test/jobSchedules.test.ts`
+- **What a filed ticket carries — type, labels, assignee, relation — is an argument to `createIssue` resolved by `ticketFiler`, never a sentence in a prompt.** A brief's ticket without its watch label is created, shown complete and never dispatched for. → [§](#filing-a-ticket) · `test/ticketFiling.test.ts`
+- **A standalone human task blocks nothing; only a plan part a task backs holds work off the fleet.** → [§](#how-it-blocks-work-through-a-plan-part-and-only-there) · `test/humanTasks.test.ts`
+- **The close-out sweep's "gone from the open set" arm is skipped on an empty issue list.** A provider down on first boot returns nothing, and settling every obligation off that is wrong at scale. → [§](#the-step-after-the-launch-the-close-out) · `test/deliveryCloseOut.test.ts`
+- **A desk-settled bench row carries the `DESK_SETTLED` marker and is reopened when its obligation returns; a row without it is a person's answer and stands for ever.** Read off status alone, one shortfall round trip removes the validation ask for good. → [§](#the-other-step-after-the-launch-the-validation) · `test/validationReady.test.ts`
+
 ## Jobs
 
 A job is an ad-hoc prompt queued from the cockpit. Unlike a `Task` — created the instant an agent

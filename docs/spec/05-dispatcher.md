@@ -11,6 +11,19 @@ interface Dispatcher {
 
 `DispatchResult` is `{ actions, rejected, rationale, upcoming? }`.
 
+## Invariants
+
+- **Every rule in `DISPATCH_PIPELINE` has a stage of its own in `STAGES` or names, in `emittedBy`, the pass that produces it.** A rule with neither is walked every cycle and proposes nothing, with nothing red. → [§](#the-rule-book) · `test/dispatchPipeline.test.ts`
+- **An `issue:<n>:…` origin is minted and read only through `src/issueOrigins.ts`, and every family declares a role.** The strings are persisted in tasks, decisions and plan refs, so a change of shape orphans every row written in the old one. → [§](#the-issue-origin-vocabulary) · `test/issueOriginVocabulary.test.ts`
+- **`issue-appraisal` and `issue-investigate` run before the stages that read `appraising` / `investigating`, and a writer adds the issue while its own deliberation is pending or in flight.** Moved below its readers, or written only on the proposing pulse, the hold silently lapses and two agents work one issue. → [§](#where-a-rules-body-lives) · `test/dispatchPipeline.test.ts`
+- **A desk or sweep that writes a table `buildDispatchInputs` reads must run above `decide`.** Those rows are read once, below the last sweep phase, on the stated promise that nothing between writes them. → [§](#assembling-the-context) · _no test_
+- **Every agent dispatch goes through the candidate list, and a held candidate is queued with its reason and never dispatched, whatever the headroom.** An inline `raw.push` of a `dispatch_*` action bypasses both the headroom cut and Up next — "nothing happened and nobody can say why". → [§](#rank-then-slice) · `test/upNext.test.ts`
+- **Only executed dispatches count as attempts, and a spent attempt cap escalates once and then holds silently.** A deferred dispatch never ran, and re-escalating every pulse would flood the inbox. → [§](#the-re-dispatch-cooldown) · `test/dispatchCooldown.test.ts`
+- **A re-dispatch inherits only a `done` agent's conversation, at most once per transcript, on a new task and agent row.** Every other ending has an owner a re-attach would race, and reusing a row would migrate one attempt's spend onto another. → [§](#a-re-dispatch-inherits-the-last-agents-conversation) · `test/retryResume.test.ts`
+- **A concern on a branch whose agent is queued, starting or waiting is held — no note, no dispatch.** Injecting into a waiting agent flips it to running and derails the human escalation it is waiting on. → [§](#one-agent-per-branch) · `test/ruleDispatcher.test.ts`
+- **A pull request whose reading predates a task on it reaching a terminal is skipped whole by the concern pass.** Its comments, checks and merge state are world facts the agent just changed, so deciding on the old reading sends a second agent to redo the work. → [§](#a-reading-behind-the-fleet-decides-nothing) · `test/readingBehindFleet.test.ts`
+- **A `PromptId` is never deleted, only marked `retired: true`, and anything new an agent must read is appended to the rendered prompt, never interpolated.** `loadPromptTemplates` throws on an override naming an unknown id, and an override that never learned a new `{token}` silently drops it. → [§](#prompt-templates) · `test/promptTemplates.test.ts`
+
 ## Assembling the context
 
 `buildDispatchInputs(store, pulse)` in `src/dispatcher/dispatchInputs.ts` is what produces a

@@ -4,6 +4,17 @@ The harness reads the world through **one** interface and writes through **one**
 them the world is assembled from small per-capability integrations, each with interchangeable
 providers selected in config. Swapping a provider is a config change, not a code change.
 
+## Invariants
+
+- **Every provider the registry can build has an entry in `VIEWER_SCOPED`** — a provider without one defaults to unfiltered and silently drops that fleet's output from the pool. → [§](#what-a-snapshot-is-scoped-to) · `test/poolThroughputSection.test.ts`
+- **The closed-PR sweep mark moves only forward, only after a read the provider answered, and never shortens the window** — a mark ahead of a failed read puts every close it missed out of reach for good. → [§](#the-closed-pull-request-read) · `test/closedPrs.test.ts`
+- **A provider snapshot failure serves the last slice a successful read produced, marked `stale`; with no successful read yet it rejects** rather than presenting an empty world in which every PR looks closed. → [§](#snapshot-failures) · `test/githubIntegration.test.ts`
+- **A routed outbound act with no capable integration throws, except `updatePrBranch`, `linkWorkItem` and `requeueCiCheck`, which answer `ok: false`** because each has another way to get done or nothing to do. → [§](#compositeconnector) · `test/integrations.test.ts`
+- **Every piece of outbound prose is signed in `CompositeConnector.signed`, and no act is** — signing at the seam covers surfaces added later, and the sign-off is unconditional, not a config key. → [§](#signing-what-the-harness-says) · `test/signOff.test.ts`
+- **Bodies are written in Markdown and converted to HTML only at the composite's door, with markup arriving in a body escaped as content** — converting elsewhere posts a wall of punctuation, and passing markup through opens agent prose to injection. → [§](#markdown-or-html) · `test/markdownToHtml.test.ts`
+- **A ticket search by key that fails throws; a provider never answers "nothing found" for a search it could not make.** → [§](#finding-a-ticket-by-a-search-key) · `test/githubIntegration.test.ts`
+- **Both integrations of a real provider implement `RefResolvable` and answer every ref shape** — the composite routes to the first resolver, and a missing one renders every ref as plain text, silently. → [§](#reference-links) · _no test_
+
 ## The two seams
 
 ```ts

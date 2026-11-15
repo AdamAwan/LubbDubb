@@ -17,6 +17,19 @@ an order over the stories under a Feature creates nothing and cuts no branch, an
 because a decomposition written before the story it depends on has a
 branch is a decomposition of a schema that does not exist yet.
 
+## Invariants
+
+- **Nothing is implemented without a plan: a planner that spends its attempt cap with no plan escalates once, never fails open.** Worked whole with no plan, every later gate — assessment, shortfall routing, validation, close-out — has nothing to read. → [§](#a-planner-that-writes-no-plan-escalates) · `test/issuePlan.test.ts`
+- **Every plan, whatever its part count, is ingested as `awaiting_approval` and schedules nothing until an operator accepts it.** The gate is the plan's status, and there is no config or route that bypasses it. → [§](#the-approval-gate) · `test/planApproval.test.ts`
+- **The schema refuses an atom carried by no part or by two, and an atom grouping that induces a cycle between parts.** An induced cycle is a part held `pending` for ever with nothing red, so the refusal must be loud. → [§](#what-the-schema-refuses) · `test/planAtoms.test.ts`
+- **Atoms are a reading only, and a plan with no atoms behaves exactly as before they existed.** Nothing is dispatched for, branched from or blocked on an atom; old rows, human PRs and mid-upgrade replans all pass the same code. → [§](#an-atomless-plan-is-todays-plan-on-every-arm) · `test/planAtoms.test.ts`
+- **An accept is refused while any caveat on the list stored with the proposal is unticked, and only the accept is gated.** The list is never re-derived at accept time, or the operator is refused for a sentence nobody showed them. → [§](#what-the-plan-raises-is-acknowledged-not-merely-rendered) · `test/planApproval.test.ts`
+- **A refusal that retires parts declines their human-task asks through the one `withdrawPartAsks`.** An open ask on a part no plan schedules is an obligation nothing will ever settle. → [§](#a-tick-can-carry-words) · `test/planApproval.test.ts`
+- **A replan that re-declares a retired slug un-retires it.** Otherwise Reject-then-Replan releases a plan with nothing live in it, and the goal sits with nothing scheduled and nothing wedged. → [§](#a-tick-can-carry-words) · `test/planIngestion.test.ts`
+- **Declining a step for a person leaves its part `blocked`, never concluded.** Concluding it would satisfy `partSettled` and release every dependent of work nobody did. → [§](#declining-one-blocks-the-part-rather-than-concluding-it) · `test/humanTasks.test.ts`
+- **A flat `issue/<n>` branch parks every uncut code part `blocked` with one error naming the branch; human parts are outside the guard.** `issue/<n>` and `issue/<n>/<slug>` cannot coexist, so every part branch would otherwise fail to create. → [§](#the-ref-collision-guard) · `test/planReconcile.test.ts`
+- **An amendment writes nothing to `plans` or `plan_parts` until an operator accepts it, and a plan holds at most one pending amendment.** A plan that rewrote itself on an agent's say-so changes what running agents were dispatched against; two pending would let the older silently undo the newer. → [§](#amending-a-running-plan) · `test/planAmendment.test.ts`
+
 ## A plan is a list of parts
 
 **Every plan has at least one part, and a plan with one part is not a different kind of thing from a

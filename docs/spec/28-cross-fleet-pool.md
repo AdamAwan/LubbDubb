@@ -20,6 +20,19 @@ envelope with the version on the outside — is unchanged and carries the digest
 `src/insights/remedyInsights.ts` already folds why the fleet came back and what it cost; `src/insights/spendInsights.ts`
 already partitions spend by phase. Nothing here measures anything new. It moves what exists.
 
+## Invariants
+
+- **A fleet writes only its own address, and a document whose body `fleetId` does not match its address is discarded.** Publishing under another fleet's name is the one thing that can break one writer per namespace. → [§](#the-envelope) · `test/crossFleetPool.test.ts`
+- **The schema version is on the envelope, so a document from a newer harness is skipped per document, never per fetch.** A version inside the body lets one early adopter empty the pool for everybody. → [§](#the-envelope) · `test/crossFleetPool.test.ts`
+- **The `git` transport's clone is the root's own repository, checked by `--show-toplevel` against the root, never by an enclosing `--git-dir`.** Otherwise the pool document is committed into the operator's own checkout, under their name, on a schedule. → [§](#the-clone-and-its-root) · `test/crossFleetPool.test.ts`
+- **The write set is exactly `<path>/fleets/<fleetId>/`, staged by name, and a rejected push is pulled and retried, never forced.** In a shared wiki a broad stage commits other people's files and `--force` destroys their work. → [§](#living-in-somebody-elses-repository) · _no test_
+- **A kind that leaves the union leaves `fetch` in the same change, and its files are cleared by the fleet that wrote them.** A stale kind still fetched records a parse error every pulse for as long as the file exists. → [§](#what-a-retired-kind-leaves-behind) · `test/crossFleetPool.test.ts`
+- **`PoolDesk` lands its own fleet's document as a reading only, never as digest rows or a digest stamp.** Mirrored, it folds this fleet's own numbers into the aggregate as another fleet's and looks exactly like the pool working. → [§](#a-mirrored-fleet-expires-after-a-week) · `test/poolExpiry.test.ts`
+- **The digest buckets by UTC day and marks the current day partial, which counts in totals and never in averages.** Local midnights split one afternoon across two days, and an unfinished day drags every average down. → [§](#the-period-is-a-utc-day) · `test/crossFleetPool.test.ts`
+- **Only the throughput measures a fleet declared as its own are mirrored, and the cut is at the mirror.** An unnarrowed slice is the repository's, and four fleets on one project would sum the same merges four times. → [§](#only-a-slice-a-fleet-had-to-itself-may-cross) · `test/poolThroughputSection.test.ts`
+- **With the pool selected and no `fleetId`, no `PoolDesk` is wired and nothing is published or polled.** A `?? ''` publishes under `fleets//`, a document with no author in somebody else's repository. → [§](#a-fleet-with-no-name-yet) · `test/crossFleetPool.test.ts`
+- **A failed fetch leaves the last-known-good mirror in place; an unreachable pool is never folded into nobody having published.** Read as absence, an outage says that nobody else knows anything. → [§](#when-the-pool-is-unreachable) · `test/crossFleetPool.test.ts`
+
 ## What it is not
 
 **Not a central mirror of anybody's store.** The volume is wrong, the data-classification surface is

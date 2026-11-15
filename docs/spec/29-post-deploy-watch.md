@@ -15,6 +15,19 @@ The one-line version, because it is the thing most easily got wrong: **the harne
 what to watch for, and never judges a reading.** Both are declared, up front, by parties who already
 know — and everything from the declaration onwards is a scripted pass with no model in it.
 
+## Invariants
+
+- **Every watch query carries `{since}`, and a declaration without it is refused at ingestion by every writer.** An unbounded signal counts the defect from before the fix and settles `regressed` on a fix that worked. → [§](#every-query-carries-since) · `test/watchSince.test.ts`
+- **A measure's baseline is read over the window that ends at the merge, never one ending now.** Taken after a fast deployment, the baseline contains the change and reads `clean` on any regression. → [§](#until-and-the-baseline-that-ends-at-the-merge) · `test/watchUntil.test.ts`
+- **A signal query and its presence query return one row per occurrence; an aggregating one is refused at ingestion.** An aggregate always answers one row, so the verdict is permanently `regressed` and presence can never read zero. → [§](#a-signal-query-returns-rows-never-a-count) · `test/watchAggregation.test.ts`
+- **A signal reads `clean` only while its presence query answers; presence zero is `unknown`.** Zero rows is indistinguishable from a healthy release, so a typo would report a fix verified. → [§](#presence-and-why-a-signal-is-not-trusted-without-one) · `test/watchVerdict.test.ts`
+- **A result that does not carry the check's id back is `unknown`, not an answer.** A stale wrapper ignoring `LUBBDUBB_WATCH_QUERY` would otherwise answer confidently and wrongly for ever. → [§](#the-query-is-passed-by-environment-variable-and-its-return-is-verified) · `test/watchResult.test.ts`
+- **`unknown` never folds to `clean` — including a measure whose baseline was never taken.** A failed observation and a quiet release fail identically, and only one is about the work. → [§](#the-verdict) · `test/watchVerdict.test.ts`
+- **A window opens only for an arrival confirmed within two probe intervals, and the arrival is stamped either way.** Without it the first pulse after the feature ships opens a watch on every goal that ever arrived. → [§](#only-for-an-arrival-the-harness-watched) · `test/watchDesk.test.ts`
+- **Below the exposure floor every check reads `unknown` and no query is run.** A reading of tenants still on the old build is not evidence about the change, either way. → [§](#exposure) · `test/watchExposure.test.ts`
+- **The window pass runs below the arrival pass, and inside it the order is open, settle, read, file.** Above the arrival pass the whole feature runs one pulse late for ever, with nothing red. → [§](#the-window) · _no test_
+- **A watch reading is never a `WorldEvent`.** `deliveryHold` expires a delivery verdict on any world event for the goal, so a reading would un-park the goal it just reported on. → [§](#a-reading-is-never-a-worldevent) · `test/watchFinding.test.ts`
+
 ## What it is not
 
 | Not                    | Because                                                                                                                                                                                                                                                          |
