@@ -78,6 +78,7 @@ function headingSlugs(text: string): Set<string> {
     const base = heading[1]!
       .trim()
       .toLowerCase()
+      .replace(/(^|[^\p{L}\p{N}])_+|_+(?=[^\p{L}\p{N}]|$)/gu, '$1')
       .replace(/[^\p{L}\p{N}\s_-]/gu, '')
       .replace(/\s/g, '-');
     const seen = counts.get(base) ?? 0;
