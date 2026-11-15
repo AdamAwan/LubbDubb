@@ -280,6 +280,40 @@ behaviour: the lens properties (`test/workGraph.test.ts`, `test/stacks.test.ts`,
 Each exists because no behavioural test can fail on the property: a hand-rolled caller resolution
 works right up until it works for the wrong agent.
 
+### Guards
+
+A `CLAUDE.md` sharp edge whose violation a selector or a grep can see is a failing check rather than
+a paragraph every agent re-reads: a guard teaches at the line that breaks it, and the bullet it
+replaces shrinks to a line or goes. A guard is added only when it has **no false positive on the
+tree as it stands** — one that needs an exemption list is a guard nobody trusts — and its message
+says what to do instead and links the spec that owns the reason. The current set:
+
+| Guard                                                                                 | Where                                             | Spec                                               |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------- |
+| `switch -C` / `--force-create`, `checkout -B`, `worktree add -B` in an argument array | lint, `src/`                                      | [09](09-execution.md#handing-a-slot-over)          |
+| `runGit` given `timeoutMs: 0` or `Infinity`                                           | lint, `src/`                                      | [09](09-execution.md#a-git-that-never-exits)       |
+| `ANTHROPIC_API_KEY` set as a property or assigned                                     | lint, `src/`                                      | [02](02-configuration.md#secrets)                  |
+| an `issue:${n}:…` template literal (bar `:comment:`)                                  | lint, `src/` except `src/issueOrigins.ts`         | [05](05-dispatcher.md#the-issue-origin-vocabulary) |
+| a `--session-id` / `--resume` literal                                                 | lint, `src/` except `src/agents/agentProtocol.ts` | [10](10-agent-runtimes.md#launch-arguments)        |
+| `75` passed to `exit` or compared with a `…code`                                      | lint, `src/` and `scripts/`                       | [21](21-self-update.md#applying-it)                |
+| `loadDeploymentConfig` called from a test                                             | lint, `test/` except `test/config.test.ts`        | [02](02-configuration.md#two-loaders)              |
+| a write to `tasks` outside `TaskStore`, or one that does not clear its list           | `test/taskListReads.test.ts`                      | [14](14-persistence.md#tasks)                      |
+| a colour literal outside a custom-property declaration                                | `test/cockpitTheme.test.ts`                       | [17](17-cockpit.md#tokens)                         |
+| a route reading its own request                                                       | `test/requestValidation.test.ts`                  | [16](16-http-api.md#request-validation)            |
+
+The lint guards are the `SERVER_GUARDS`, `UPGRADE_EXIT` and `DEPLOYMENT_CONFIG_IN_TESTS` selectors in
+`eslint.config.js`. ESLint does not merge `no-restricted-syntax` options across config blocks, so a
+file exempt from one guard gets a block re-listing the rest (`serverGuards('issueOrigin')`) rather
+than `off`. They read the syntax, not the data flow: an argument array built by `push`, an origin
+built by concatenation, a deadline held in a variable all pass. That is the price of a guard with no
+false positives, and why the bullets that remain still name the rule.
+
+Considered and left as prose: an empty `catch` is already `no-empty` from `js.configs.recommended`,
+but a catch holding only a comment is how the tree marks a deliberately ignored failure today, so a
+stricter rule would start with exemptions; every MCP tool placed in `UNIVERSAL_TOOLS` or a
+`RULE_TOOLS` row is vacuous while `manual-job` lists them all, and excluding it flags `link_ticket`;
+`--allowedTools` in `claudeArgs` is operator configuration, not source.
+
 **What is deliberately left unchecked.** Everything that is a claim about _meaning_ — that a
 predicate is asked in two places off one definition, that an ordering is load-bearing, that a
 default was chosen for a stated reason. A test that tried to assert those would have to re-state
