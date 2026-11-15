@@ -480,7 +480,7 @@ test('the verdict is a lens: nothing in the dispatcher reads it, and computing i
     .filter((f) => readFileSync(f, 'utf8').includes('prAttention.js'));
   assert.deepEqual(
     importers,
-    ['src/server/stateSnapshot.ts', 'src/wire.ts'],
+    ['src/server/stateSnapshot.ts', 'src/wire/world.ts'],
     'the attention verdict must stay cockpit-only',
   );
 
