@@ -27,6 +27,19 @@ Three operator readings are folded out of those records rather than kept beside 
 All of that is retrospective. The [burn watch](#the-burn-watch) is the one reading taken while
 the money is still being spent — it acts on nothing and files a visible obligation to go and look.
 
+## Invariants
+
+- **Every caught failure is recorded through `errors.record`, whose event is `logged`, never `error`** — an unlistened `error` event throws, and recording a failure must never throw. → [§](#the-error-log) · `test/errorLog.test.ts`
+- **The stderr mirror writes one line per entry, flattening the header and indenting `detail`, while the stored entry keeps its exact text** so a newline in an outside value cannot forge a second log line. → [§](#the-stderr-mirror-sanitises-and-only-the-mirror-does) · `test/errorLog.test.ts`
+- **Only executed dispatches count as attempts for the re-dispatch cooldown** because a deferred one never ran. → [§](#the-decision-log) · `test/dispatchCooldown.test.ts`
+- **The first cycle over a fresh store records only the baseline**, never an "everything is new" flood of world events. → [§](#the-activity-feed) · `test/worldEvents.test.ts`
+- **Spend from the two delta tables is added in one place: `sumUsageCostSince` reads both, `listUsageEventsSince` the agents' alone** — a third source added anywhere else is money the cockpit states nowhere. → [§](#two-tables-of-deltas-added-in-one-place) · `test/localRun.test.ts`
+- **The cache hit rate is a fraction of `cacheMeasuredInputTokens`, never of total input; rows from before the split are null and left out** or unmeasured runs read as cache misses. → [§](#the-cached-share-is-stored-not-inferred) · `test/spendInsights.test.ts`
+- **Per-goal spend is derived, never stored; spend reaching no goal ships as `unattributedCostUsd`, and an unmeasured goal is `null`, never `$0`** so the per-goal figures stay a partition of fleet spend. → [§](#per-goal-spend) · `test/issueSpend.test.ts`
+- **An allowance fall contributes zero, and a rise in an interval with no fleet spend is attributed to nobody** — netting a reset against rises reports a fleet that spent almost nothing. → [§](#a-fall-is-a-reset-a-gap-is-not) · `test/allowance.test.ts`
+- **The burn watch compares a run with the median of its own rule-and-profile bucket, and a null is never a zero on any axis** — a mean raises its own threshold, and a null read as zero puts every unmeasured run infinitely over. → [§](#three-axes-because-money-alone-cannot-see-a-cheap-runaway) · `test/spendBurn.test.ts`
+- **The burn watch files one note per run under one title for every axis, and kills nothing** — a title naming the axis files a second notice about one agent. → [§](#the-ceilings-and-why-the-runtime-one-is-on) · `test/spendBurn.test.ts`
+
 ## The error log
 
 **`src/errorLog.ts` is the one error-recording path.** Anything that catches a failure calls

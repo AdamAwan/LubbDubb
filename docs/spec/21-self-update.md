@@ -7,6 +7,19 @@ to it without losing the work in flight.
 Everything else in this specification is about the codebase the fleet is pointed at. This is the one
 subsystem about the process the fleet runs inside.
 
+## Invariants
+
+- **A failed build reading is a value (`unavailable`), never a throw, and it refuses every upgrade action** — a tarball install or an air-gapped machine is a legitimate deployment, not a fault. → [§](#the-reading) · `test/selfUpdate.test.ts`
+- **`dirty` counts only tracked files** — counting an untracked one takes the upgrade button away permanently, hardest on the deployment furthest behind. → [§](#whether-an-update-can-be-taken) · `test/selfUpdate.test.ts`
+- **A cancel restores the pause only if the drain set it (`pausedByDrain`)** or a fleet the operator had paused silently starts dispatching. → [§](#the-intent) · `test/selfUpdate.test.ts`
+- **`apply` is refused while agents are live unless `interrupt` is set** — interrupting is a decision, never taken silently. → [§](#the-transitions) · `test/selfUpdate.test.ts`
+- **`autoUpdate` does nothing at all without a supervisor, and never interrupts except past the drain deadline** — an exit with nothing to relaunch it is a fleet that goes down and stays down. → [§](#taking-it-unasked) · `test/selfUpdate.test.ts`
+- **`applying` is recorded durably before the handoff** or a shutdown winning the race leaves interrupted agents with no record anyone meant it. → [§](#applying-it) · `test/selfUpdate.test.ts`
+- **Boot restores without asking only under `applying`, and only `interrupted` orphans; a `crashed` one goes to the recovery panel** — any other restart was not the upgrade's. → [§](#coming-back-up) · `test/selfUpdate.test.ts`
+- **A boot under `applying` seeds `paused` from the intent, never from `config.startPaused`** — otherwise an upgrade silently un-pauses an operator's paused fleet or parks a running one. → [§](#the-pause-the-upgrade-must-not-lose) · `test/selfUpdate.test.ts`
+- **The upgrade exit code 75 lives in one module, and the supervisor relaunches on it alone, passing every other ending straight out** — a second copy reads an upgrade as a crash and comes back on the old build, looking like success. → [§](#applying-it) · _no test_
+- **The shutdown handlers are registered in `main.ts` before anything that can start an agent** or a Ctrl-C in that window leaves agents unreaped, unrecorded and holding their worktrees. → [§](#where-the-shutdown-handlers-are-registered) · _no test_
+
 ## The repo it watches is not `repoRoot`
 
 `repoRoot` is the repository the harness operates on — where worktrees are cut, where agents commit.

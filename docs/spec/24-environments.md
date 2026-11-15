@@ -30,6 +30,19 @@ worse. That question is asked twice, in two shapes, and both hang off the arriva
 [36](36-remote-validation.md) assembles the goal's validation sheet for that environment and asks,
 at a moment somebody chooses, whether the product still works with this change in it.
 
+## Invariants
+
+- **A landing is recorded by a sweep for unattributed merges on every pulse, whether or not any environment is configured.** A hook on the merge loses landings to any restart that straddles it, and the merge SHA has a `closedPrWindowMs` shelf life. → [§](#recording-a-landing) · `test/environments.test.ts`
+- **The environment desk runs immediately below `graph.record`.** Attribution walks the graph's `parentRef` chain, and one line higher every merge on its own pulse reads a stale graph. → [§](#recording-a-landing) · `test/pulsePipeline.test.ts`
+- **The attribution walk stops on a bare `issue:<n>`, never on the `issue:` prefix.** A prefix test files a part's merge under the part, and the goal gets no environment row and no gate ever opens. → [§](#recording-a-landing) · `test/environments.test.ts`
+- **A reach verdict is three-valued, and `unknown` never folds into `absent`.** A failed probe, a missing binary and an unfetched commit are not news about deployment, and `absent` is counted and acted on. → [§](#the-three-verdicts) · `test/environments.test.ts`
+- **A stacked pull request's squash onto a topic branch is not a landing.** Counted, it is a permanent `absent` that holds the goal `partial` and every gate its arrival opens, for ever. → [§](#what-counts-as-a-landing) · `test/environments.test.ts`
+- **Only `on_integration = yes` is terminal; a `no` is provisional and re-asked every pulse.** Between a merge and the next fetch the clone says a confident no, and a terminal `no` holds the goal's gates for good. → [§](#what-counts-as-a-landing) · `test/landingPlacement.test.ts`
+- **With no environment naming a gate, `openedGoals` returns null, never an empty set.** An empty set withholds every bench row on every deployment and looks exactly like the feature working. → [§](#opens) · `test/environments.test.ts`
+- **An arrival is announced only if the harness watched it happen, and is stamped either way.** Drop either half and a rename, a new environment or a new build comments on every ticket that ever shipped. → [§](#announcing-an-arrival) · `test/environments.test.ts`
+- **An arrival is never written as a `WorldEvent`.** `deliveryHold` expires a delivery verdict on any world event for the goal, so one would un-park the goal it announced and hand the work back to the fleet. → [§](#every-part-every-environment) · _no test_
+- **`ValidationReadyDesk` runs above `DeliveryCloseOutDesk` in the pulse.** Below it, the close-out is asked for on the very pulse the delivery lands, beside the checks it should wait for. → [§](#the-bench-asks-for-one-thing-at-a-time) · `test/pulsePipeline.test.ts`
+
 ## What it is not
 
 | Not                     | Because                                                                                                                                                                                                                                                                                                     |

@@ -15,6 +15,19 @@ reports. What it buys is that the corner of the rail you already look at a hundr
 something alive in it, and that the collection ends up being a record of the nights you were in
 here.
 
+## Invariants
+
+- **The roll is a hash of the action's own identity, never a random number.** `Math.random` would turn every re-read into a fresh chance at a pet, and the tables could not tell it from a first read. → [§](#the-roll) · `test/pets.test.ts`
+- **Every qualifying operator action is rolled exactly once, so a second scan hatches nothing.** `pet_actions` and `UNIQUE (origin_kind, origin_ref)` are what make the scan idempotent. → [§](#the-roll) · `test/pets.test.ts`
+- **A new operator action is a row in `src/pets/scan.ts`'s source table and nowhere else.** Recorded from the route that settles it, it pays out only while that route is the one doing the settling. → [§](#the-sources) · _no test_
+- **No rate is configuration: `pets.enabled` and `pets.visible` are the only `pets.` keys, and `PetPolicy` holds no number.** Any settable rate hatches a vivarium indistinguishable from an earned one. → [§](#what-it-is-not) · `test/pets.test.ts`
+- **Nothing under `src/dispatcher/` imports `src/pets/`, and no prompt or MCP tool names the vivarium.** A score an agent can see is a target it can optimise. → [§](#what-it-is-not) · `test/pets.test.ts`
+- **A clearance keeps `pet_actions` and re-stamps the vivarium's start in the same transaction.** Clearing the actions too would hatch the same creatures back out of the same history on the next pulse. → [§](#clearing-the-vivarium) · `test/pets.test.ts`
+- **`VIVARIUM_RESET` is never edited in place; a further clearance is a further id.** Changing the string is a second wipe of every deployment that takes the build, with nothing to report it. → [§](#clearing-the-vivarium) · _no test_
+- **A check that could accuse a pet declines on a row it cannot judge — a null chain link is not a broken one.** The worst failure here is calling an honest operator's collection fake, on their machine, months later. → [§](#the-chain) · `test/pets.test.ts`
+- **A pool tier that already has members never gains another; only an empty tier may be filled.** Stage 3 indexes by `hash32 % length`, so a new member re-picks that tier for every past action and those honest pets fail `impossible`. → [§](#sharp-edges) · _no test_
+- **The `opened_at` backfill runs only on the boot that added the column.** Null means _still an egg_: without it every old pet becomes a shell, and run on every boot it opens the eggs an operator is saving. → [§](#persistence) · `test/pets.test.ts`
+
 ## What it is not
 
 Stated first, because each boundary is a thing that would otherwise be re-litigated by the first
