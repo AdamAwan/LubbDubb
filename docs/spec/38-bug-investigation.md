@@ -13,6 +13,18 @@ the ticket says what to build; a bug whose cause nobody knows says only what is 
 This is one read-only agent that finds the cause first, the record it writes, and the four ways an
 operator answers it.
 
+## Invariants
+
+- **The investigate label is read through `pickupLabels` exactly as the watch tag is — under `requireOwnLabel`, from `labelsAddedByViewer`.** A label somebody else put on must not send the fleet to investigate. → [§](#the-label) · `test/issueInvestigation.test.ts`
+- **An appraisal that asks for investigation has the label in the world before its verdict is recorded.** A verdict first opens a window in which the planner is dispatched, its plan row retires the rule, and the investigation never happens. → [§](#the-label) · `test/issueInvestigation.test.ts`
+- **The harness applies the investigate label once per issue, ever, and never by a sweep; only a write that landed counts.** Removing the label is the operator's _no_, and putting it back overrules them with nothing red. → [§](#the-label) · `test/issueInvestigation.test.ts`
+- **While an investigation is owed, `issue-plan` stands aside, read off the `investigating` set that `issue-investigate` writes above it.** Moved below `issue-plan`, the rule compiles, stops holding, and puts a planner beside the investigator. → [§](#the-holds) · `test/issueInvestigation.test.ts`
+- **Removing the label lifts every hold and drops the findings note from the planner's prompt.** It is the one lever, so it has to be total. → [§](#the-holds) · `test/issueInvestigation.test.ts`
+- **Findings are fingerprinted to the text the investigator was dispatched with; an edit re-arms the rule, and a resolution of a stale record is refused 409.** Findings about an earlier text are about a different report. → [§](#the-findings) · `test/issueInvestigation.test.ts`
+- **_Close_ and _ask_ close nothing and post nothing; the issue stays held while the label is on.** Closing the ticket and asking the reporter are the operator's own moves. → [§](#resolving-the-findings) · `test/issueInvestigation.test.ts`
+- **No answer sends a fix straight to pickup, and a legacy `pickup` reads as `plan`.** Every gate after the fix reads the plan, and with none the assessor reports a shortfall on finished work. → [§](#no-fix-without-a-plan) · `test/issueInvestigation.test.ts`
+- **An investigator that spent its attempt cap fails open to the planner with no escalation.** Otherwise an investigator that cannot finish becomes the most effective way to stop the fleet. → [§](#fail-open) · `test/issueInvestigation.test.ts`
+
 ## What it is not
 
 | Not                           | Because                                                                                                                                                                                                                                                                     |

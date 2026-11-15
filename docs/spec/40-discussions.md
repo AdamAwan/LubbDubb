@@ -20,6 +20,19 @@ only the ticket re-litigates a decision made last week; a coder guesses an answe
 in a call. This is the place those things are written down, in a form a person can edit in their own
 tools and an agent is handed on every dispatch.
 
+## Invariants
+
+- **With `discussionsDir` unset nothing is read or written, no prompt carries a section and no story is held.** → [§](#where-the-files-live) · `test/discussionsFile.test.ts`
+- **The question hold fails open on every arm — off, an unreadable folder, an unparseable file, no file.** It withholds work, and its quietest failure is a story that never starts. → [§](#an-open-question-holds-the-story) · `test/discussionsHold.test.ts`
+- **A story's own open question holds every new dispatch for it; its feature's holds the story only while it has no plan, and never holds a part.** A story already under way carries on. → [§](#an-open-question-holds-the-story) · `test/discussionsHold.test.ts`
+- **A held story is a queued row (`held: 'questions'`), never an `issueGates` filter, and an expedite or priority override lifts it.** A filter drops the issue silently; the operator saying go outranks the question. → [§](#an-open-question-holds-the-story) · `test/discussionsHold.test.ts`
+- **Every harness write re-reads the file and appends through a temp file and a rename, keeping every line the operator wrote.** The operator may have the file open in Obsidian while an agent adds to it. → [§](#writing-without-clobbering) · `test/discussionsFile.test.ts`
+- **A heading the parser cannot read is kept as a note, never dropped or rewritten.** The operator's file is never lost to a parser. → [§](#entries) · `test/discussionsParse.test.ts`
+- **The harness's own tracker comments are skipped on pull by record (`issue_comments_sent`, `published`), never by author.** On a single-operator deployment the operator's login is the harness's too. → [§](#pulling-tracker-comments-in) · `test/discussionsPull.test.ts`
+- **A tracker that cannot answer leaves `pulled` where it was, and a pull's notes and new `pulled` land in one write.** `pulled` must never pass a comment that is not in the file. → [§](#pulling-tracker-comments-in) · `test/discussionsPull.test.ts`
+- **A fleet agent writes only to the story behind its own origin, and is refused `kind: 'decision'`.** Decisions are the operator's. → [§](#what-fleet-agents-write) · `test/discussionsFleetTool.test.ts`
+- **Standing decisions, accepted ideas and answered questions are never cut from the prompt section; only notes fill the budget.** → [§](#what-agents-read) · `test/discussionsPrompt.test.ts`
+
 ## What it is not
 
 | Not                          | Because                                                                                                                                                                                       |

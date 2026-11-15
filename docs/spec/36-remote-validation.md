@@ -109,6 +109,19 @@ applying, and never assumes one environment has one name. Each of those is knowl
 or the operator has, and each wrong guess fails **silently** rather than loudly — which is why the
 principle is a rule rather than a preference.
 
+## Invariants
+
+- **With no environment declaring a `validate` block nothing is assembled, spawned or written, and the desk's early return stamps no arrival.** `goal_arrivals.sheeted_at` null is the freshness guard, and stamping on the way past makes turning the feature on later sheet every goal that ever arrived. → [§](#the-desk) · `test/remoteValidationOff.test.ts`
+- **The harness never generates or infers a tenant identifier, and a `tenantEnv`'s value goes into the spawn env and nowhere else.** A missing tenant is `blocked` naming the command or variable; an invented one is reaped within the hour and presents as mysterious mass failure. → [§](#tenants) · `test/remoteValidationTenants.test.ts`
+- **The runner's report is the only source of row outcomes; the exit code is never read, and a selector matching no test is `blocked`, never `passed`.** One invocation carries many rows and one exit code. → [§](#the-report-is-the-only-source-of-row-outcomes) · `test/remoteValidationReadings.test.ts`
+- **If the deployed sha moved during a run, a failure is `blocked` and a pass is still a pass, with both commits recorded.** A run against a changing build cannot support a claim the product is broken. → [§](#the-environment-moved-asymmetry) · `test/remoteValidationReadings.test.ts`
+- **A run writes on a check only where it is `unrun` or carries this instrument's own reading, and a `blocked` row writes nothing.** Overwriting a person's or another instrument's reading is the harness deciding it knows better. → [§](#what-a-spec-reading-is-worth) · `test/remoteValidationReadings.test.ts`
+- **A failed row is never a shortfall, an issue verdict, a `WorldEvent` or a `watch_readings` row.** A shortfall or a world event un-parks the delivered goal and hands its work back to the fleet. → [§](#what-a-finding-does-and-what-it-must-never-do) · `test/remoteValidationReadings.test.ts`
+- **One live run per `(environment, tenant)` is a conditional insert inside the transaction over a partial unique index, never a check the caller makes first.** Keyed on the environment alone, two operators on two tenants overwrite each other's readings silently. → [§](#uniqueness-is-environment-tenant-enforced-in-sql) · `test/remoteValidationPress.test.ts`
+- **A `state` query runs only once approved for `(query digest, environment)`; an edit drops its approvals everywhere, and an unapproved query is `blocked`.** Approval by digest alone carries consent from acceptance to production. → [§](#a-query-is-approved-by-a-person-before-it-is-ever-run) · `test/remoteValidationQueries.test.ts`
+- **The sweep settles only a `dispatched` run whose task is no longer active; a `pending` run, or one it cannot say about, is left standing.** Settling a live run loses its reading and frees the lock under an agent still driving the tenant. → [§](#the-sweep) · `test/remoteValidationDispatch.test.ts`
+- **A check's area is named by a `suite` step and read through `stepArea`, with no column, inheritance or boot repair beside it.** A second home recomputed on boot overwrites what the author's step named, silently. → [§](#how-a-check-comes-to-have-an-area) · `test/planCoverageArea.test.ts`
+
 ## Off by default, and off in one place
 
 **`environments` is an empty list by default, and `validate` is optional on an environment that
