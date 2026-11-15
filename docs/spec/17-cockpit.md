@@ -20,6 +20,18 @@ builtin or a package value — a re-export is not a declaration and would slip p
 
 `npm run web:build` bundles it into `web/dist`, which the server serves in production.
 
+## Invariants
+
+- **Nothing under `web/src/console/` imports `api.js`; every mutation is a pre-bound method on `CockpitActions`** so drawing code cannot grow a capability with no refusal rule behind it. → [§](#layers) · `test/console.test.ts`
+- **`console.css` never targets a shared component's class; shared components restyle only through tokens** or a change to one silently redraws the other. → [§](#tokens) · `test/console.test.ts`
+- **A colour appears only on a line that declares a custom property, never as a literal at a use site** because a literal is a colour no theme can reach, and nothing else in `check` reads CSS. → [§](#tokens) · `test/cockpitTheme.test.ts`
+- **Every piece of "what am I looking at" state lives on the one `Place` record in the query string, and nothing that answers "what is true" (the theme included) does** so back, reload and a bookmark restore it whole. → [§](#the-address-bar) · _no test_
+- **The browser filters the server's ask queue and never reorders it** — the rail draws array order within a group and Focus sorts by `focusRank`, so the cockpit and Claude Code see one order. → [§](#one-list-for-the-cockpit-and-for-claude-code) · `test/console.test.ts`
+- **A reference is drawn through `<Ref>` and shortened only by `refLabel`** since a ref shortened by hand is a surface that names a thing instead of pointing at it. → [§](#links) · `test/refLinks.test.ts`
+- **A reference never goes inside a button**; the name is the control and its refs sit beside it. → [§](#how-a-reference-is-drawn) · `test/refLinks.test.ts`
+- **A dispatch origin is read through `standsFor` before it is drawn or routed on**, or a requeue draws an opaque `job:` id and its goal silently reads as unstaffed. → [§](#a-job-origin-stands-in-for-other-work) · _no test_
+- **Agent-authored prose is rendered as markdown that never interprets HTML and never uses `dangerouslySetInnerHTML`** so there is no injection surface. → [§](#agent-authored-prose) · `test/markdown.test.ts`
+
 ## Layers
 
 The cockpit is three layers, split so that how it _looks_ stays separable from how it behaves:
