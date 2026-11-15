@@ -4,9 +4,9 @@
 `npm run typecheck:web` are separate passes.
 
 **The web bundle never imports server code**, and that constraint is about _runtime_. The shapes the
-routes ship are declared once in `src/wire.ts` and re-exported by `web/src/types.ts` under the
-cockpit's own names; every import along that path is `import type`, which is erased before anything is
-bundled. `test/wireContract.test.ts` asserts both halves — that the shared modules declare no runtime,
+routes ship are declared once under `src/wire/`, gathered by the `src/wire.ts` barrel and re-exported
+by `web/src/types.ts` under the cockpit's own names; every import along that path is `import type`,
+which is erased before anything is bundled. `test/wireContract.test.ts` asserts both halves — that the shared modules declare no runtime,
 and that `src/wire.ts` is the only server module the SPA names at all. See
 [16 — HTTP API](16-http-api.md#the-wire-contract).
 

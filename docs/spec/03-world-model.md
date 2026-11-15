@@ -1,7 +1,9 @@
 # 03 — World model
 
-The domain vocabulary lives in `src/types.ts`. The cockpit names the same types rather than keeping a
-copy of them: `web/src/types.ts` re-exports the wire contract in `src/wire.ts`, which is declaration-only
+The domain vocabulary lives in `src/types/`, one module per subsystem (`world.ts` holds the types this
+document describes), and every import site names the `src/types.ts` barrel that re-exports them. The
+cockpit names the same types rather than keeping a copy of them: `web/src/types.ts` re-exports the wire
+contract in `src/wire.ts`, which is declaration-only
 and reaches the SPA through `import type`, so nothing survives erasure and the web bundle still imports
 no server code. See [16 — HTTP API](16-http-api.md#the-wire-contract).
 

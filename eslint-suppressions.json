@@ -1,14 +1,4 @@
 {
-  "src/types.ts": {
-    "max-lines": {
-      "count": 1
-    }
-  },
-  "src/wire.ts": {
-    "max-lines": {
-      "count": 1
-    }
-  },
   "web/src/demo/demoBackend.ts": {
     "complexity": {
       "count": 4

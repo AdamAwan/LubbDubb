@@ -1,0 +1,76 @@
+import type { AgentUsage } from './usage.js';
+
+export type LocalRunStatus = 'starting' | 'running' | 'stopping' | 'stopped' | 'failed';
+
+export interface LocalRun {
+  id: string;
+  originRef: string;
+  ref: string;
+  dir: string;
+  commit: string | null;
+  pid: number | null;
+  status: LocalRunStatus;
+  url: string | null;
+  note: string | null;
+  startedAt: string;
+  endedAt: string | null;
+  interruptedAt: string | null;
+  lastSeenAt: string | null;
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheCreationTokens: number | null;
+  numTurns: number | null;
+}
+
+export type LocalRunUsageDelta = AgentUsage;
+
+export type LocalRunTurn = 'start' | 'stop' | 'refresh' | 'message';
+
+export interface LocalRunPorts {
+  checkedAt: string;
+  declared: { url: string; host: string; port: number; answering: boolean } | null;
+  listening: number[] | null;
+}
+
+export interface LocalRunFreshness {
+  checkedAt: string;
+  behindTip: number | null;
+  base: { ref: string; behind: number | null } | null;
+}
+
+export interface LocalRunReadings {
+  ports: LocalRunPorts | null;
+  freshness: LocalRunFreshness | null;
+}
+
+export type LocalValidationStatus = 'pending' | 'dispatched' | 'passed' | 'failed' | 'blocked' | 'abandoned';
+
+export interface LocalValidationFinding {
+  title: string;
+  detail: string;
+  severity: 'blocker' | 'defect' | 'nit';
+  url: string | null;
+  screenshot: string | null;
+}
+
+export interface LocalValidation {
+  id: string;
+  originRef: string;
+  runId: string;
+  ref: string;
+  commit: string | null;
+  status: LocalValidationStatus;
+  requestedAt: string;
+  dispatchedAt: string | null;
+  endedAt: string | null;
+  taskId: string | null;
+  fixTaskId: string | null;
+  plan: string | null;
+  summary: string | null;
+  findings: LocalValidationFinding[];
+  visited: string[];
+  screenshots: string[];
+  note: string | null;
+}

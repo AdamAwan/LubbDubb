@@ -43,15 +43,20 @@ A fresh clone needs `npm ci` first — `node-pty` is a native build.
   only for something a spec cannot hold: a local non-obvious workaround at the exact line it applies
   to. Terse, and never restating _what_ the code does.
 - **Typed `emit`/`on` overrides** on `EventEmitter` subclasses — keep event payloads typed.
-- **Domain types live in `src/types.ts`; the shapes the HTTP routes ship live in `src/wire.ts`**,
-  which `web/src/types.ts` re-exports. A wire type either **is** a domain type or `extends` it —
-  never a re-declaration, never widened. `src/wire.ts` is the only server module `web/src/` may name.
+- **Domain types live in `src/types/`; the shapes the HTTP routes ship live in `src/wire/`** — one
+  module per subsystem, each re-exported by `export type *` from the `src/types.ts` / `src/wire.ts`
+  barrel that every import site names. `web/src/types.ts` re-exports `src/wire.ts`. A wire type either
+  **is** a domain type or `extends` it — never a re-declaration, never widened. `src/wire.ts` is the
+  only server module `web/src/` may name.
 - **`src/system/system.ts` is the composition root.** A new component is threaded through it.
 - **`src/store/` is the only directory that touches SQLite.** Writes are synchronous, which keeps the
   harness logic race-free. One module per table group, each taking a `StoreContext` and reached as a
   named member — `store.tasks.getTask(id)`; `Store` forwards nothing. → [14](docs/spec/14-persistence.md#shape)
 
 ## Sharp edges
+
+The ones a selector or a grep can see are lint rules and structural tests, whose failures say the fix
+([19](docs/spec/19-development.md#guards)); what follows is what no tool catches.
 
 ### Identity
 
@@ -96,10 +101,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   callers folded rows into the claim store and went with it, so the mechanism comes back with the next migration that
   needs it. → [22](docs/spec/22-pets.md#clearing-the-vivarium),
   [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
-- **Every write to `tasks` is a `TaskStore` method that sets `this.summaries = null`.** `listTasks` is memoised there
-  and cleared only by those writes, so a `DELETE` or `UPDATE` on `tasks` from anywhere else — a retention sweep, a
-  repair pass — leaves every reader on the table as it was, with nothing red. →
-  [14](docs/spec/14-persistence.md#tasks)
 - **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the aggregate as
   another fleet's, and looks exactly like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
 - **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.** Which
@@ -150,9 +151,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   LubbDubb target — the day one is committed here every test on the default starts merging it.
   → [02](docs/spec/02-configuration.md#the-project-layer)
 - **A test touching `/api/plugin` injects `pluginCli` and a temp `desktopCredentialPath`**, or it installs into your own Claude Code. → [11](docs/spec/11-mcp-tools.md#the-plugin)
-- **A test builds its config with `loadConfig`, never `loadDeploymentConfig`.** Only the latter
-  reads `lubbdubb.config.json` and the env, so a test on it passes or fails by machine.
-  → [02](docs/spec/02-configuration.md#two-loaders)
 - **Tests build a whole `System`** via `buildSystem(config, opts)` with fakes injected (`backend`,
   `streamSpawner`, `sink`, `gitObserver`, `worktrees`, `errorMirror`) and `dbPath: ':memory:'`.
   Prefer that seam. New tests go in `test/*.test.ts`; do not edit unrelated test files.
@@ -193,11 +191,8 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
 
 ### Dispatch
 
-- **A new `issue:<n>:…` dispatch origin is a family declared in `src/issueOrigins.ts` and minted
-  through it.** The declaration carries the role, so no family lacks one — but a ref built as a template
-  literal elsewhere is in no declaration, reads `unrecognised`, and files its spend under "other" with
-  nothing red. It still expands under a goal's priority flag, which cuts on the role being non-null.
-  → [05](docs/spec/05-dispatcher.md#the-issue-origin-vocabulary), [18](docs/spec/18-observability.md)
+- **A new `issue:<n>:…` origin is a family in `src/issueOrigins.ts`**; lint catches a template literal, not a
+  concatenation. → [05](docs/spec/05-dispatcher.md#the-issue-origin-vocabulary)
 - **A new agent-dispatch rule must route through the candidate list.** An inline `raw.push` of a
   `dispatch_*` action bypasses both the headroom cut and the Up next queue. Adding a rule is a
   `DISPATCH_PIPELINE` entry in the position it should run, and a module under
@@ -205,9 +200,7 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
 - **Pipeline order is load-bearing state.** `issue-appraisal` and `issue-investigate` write
   `appraising` / `investigating` on the `StageContext` for later stages to read. Moving one below its readers silently puts two agents on one issue.
 - **The investigate label is applied once, when the appraisal asks, and never reconciled.** The appraiser's flag rides only on the `appraisal` event; storing it for a sweep to re-apply silently overrules the operator who took the label off — removing it is their _no_. → [38](docs/spec/38-bug-investigation.md#the-label)
-- **Lenses stay out of `src/dispatcher/`.** The work graph, `buildStacks`, `prAttentionStatus`,
-  `overlaps` and `src/features/` are read-only views for the cockpit. Asserted
-  structurally — if one of those tests fails, fix the file it names, not the assertion.
+- **Lenses stay out of `src/dispatcher/`** (asserted structurally) — fix the file a failure names, not the assertion.
 
 ### Agent runtimes
 
@@ -216,10 +209,8 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   shells holding the worktree as cwd, and every later dispatch onto that branch fails `EBUSY`,
   forever. Reaping _after_ the child dies finds nothing.
   → [10](docs/spec/10-agent-runtimes.md#reaping-the-process-subtree)
-- **A launch carries `--session-id` _or_ `--resume`, never both**, written only through
-  `appendSessionFlags` in `src/agents/agentProtocol.ts`. `claude` refuses `--session-id` on an id
-  that already has a transcript — exit 1, **no stream event** — which reads to the harness as a
-  process that died for no reason. → [10](docs/spec/10-agent-runtimes.md#launch-arguments)
+- **A launch carries `--session-id` _or_ `--resume`, never both** — lint keeps them inside `appendSessionFlags`.
+  → [10](docs/spec/10-agent-runtimes.md#launch-arguments)
 - **A mid-run crash re-attaches through `AgentManager.resume`, which must be handed a torn-down
   agent.** `resume` was written for boot: for an agent still in `sessions` it returns a silent
   success and overwrites the spool key and MCP token, leaking a spool dir and leaving a **bearer
@@ -231,9 +222,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
 - **Anything in `main.ts` that can start an agent goes _below_ the signal handlers.** A Ctrl-C
   above them takes Node's default path, which runs no handler: agents launched, not reaped, not
   recorded. → [21](docs/spec/21-self-update.md#where-the-shutdown-handlers-are-registered)
-- **The upgrade exit code is `UPGRADE_EXIT_CODE` in `src/selfUpdate/handoff.ts`, never a literal.**
-  An exit the supervisor reads as a crash comes back on the **old** build with its agents restored,
-  which looks like a successful upgrade. → [21](docs/spec/21-self-update.md#applying-it)
 - **`agentMode` is `stream` or `raw`, and only `stream` runs a model.** `raw` is the mock agent and
   what nearly every test drives, so a change asserted only there has not been asserted against a
   model. → [10](docs/spec/10-agent-runtimes.md#the-session-contract)
@@ -260,19 +248,15 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   `src/mcp/tools/validationReport.ts`; the operator's own Claude Code gets `src/mcp/desktopTools.ts`
   (`DESKTOP_TOOL_NAMES`, never `buildTools`). Editing one leaves the other on the old behaviour.
   → [11](docs/spec/11-mcp-tools.md#the-desktop-channel)
-- **Never add `ANTHROPIC_API_KEY` to spawn env or config to "fix" an auth problem.** Non-interactive
-  `claude` always uses the key when present, so a stray export moves the whole fleet onto API
-  billing. Fix the login instead. → [02](docs/spec/02-configuration.md#secrets)
+- **Never add `ANTHROPIC_API_KEY` to an operator's env or config to "fix" auth** (lint catches it in `src/`): the
+  whole fleet moves onto API billing. Fix the login. → [02](docs/spec/02-configuration.md#secrets)
 - `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root.
   `agentAllowedTools` plus the permission backstop complete a task unattended under `acceptEdits`.
 
 ### Cockpit
 
-- **A colour written as a literal in a stylesheet is a colour no theme can reach.** Every colour is
-  a custom property on one of two `:root` blocks; a hex at a use site stays dark when somebody
-  switches to Light, and only `test/cockpitTheme.test.ts` reads CSS. A new tint belongs on `:root`
-  — ideally a `color-mix` of the core — and in the registry in `web/src/cockpit/tokens.ts` (a derived tint in `tokenTints.ts`).
-  → [17](docs/spec/17-cockpit.md#tokens)
+- **A new colour is a `:root` token registered in `web/src/cockpit/tokens.ts`** (a derived tint in `tokenTints.ts`);
+  `test/cockpitTheme.test.ts` refuses a literal anywhere else. → [17](docs/spec/17-cockpit.md#tokens)
 - **A reference is drawn with `<Ref to={ref}/>` (`web/src/components/refs.tsx`), never as text.** A
   surface that names a goal or PR with no way there is a dead end that renders correctly. A
   reference **never goes inside a button**: draw the name as the control and the refs beside it in a
@@ -291,10 +275,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
 - **`WorktreeManager.ensure(branch, base)` is reuse-first**: an existing worktree or local branch is
   handed back and `base` is ignored. An unresolvable `base` throws rather than falling back to HEAD.
   → [09](docs/spec/09-execution.md#worktrees)
-- **Worktrees are a pool of slots leased to branches, and `git switch -C` / `checkout -B` must stay
-  unreachable.** The reset form rewinds a branch that already has commits — a re-dispatch, a retry —
-  and loses them. Check the ref exists first; only reach `switch -c` for one that does not.
-  → [09](docs/spec/09-execution.md#handing-a-slot-over)
 - **A slot handed to a _different_ branch is swept of live processes, then wiped `git clean -ffdx`.**
   A weaker wipe hands another branch's `dist/` on as the agent's own output; an unswept one leaves a mapped
   image Windows cannot unlink, and a refused wipe condemns it. → [09](docs/spec/09-execution.md#handing-a-slot-over)
@@ -313,7 +293,6 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   worktree under that root, so a preview checkout in there is a pool slot: handed to an agent and
   wiped. `localRunRoot` is separate, and only `ensurePreview` touches it.
   → [23](docs/spec/23-local-runs.md#the-checkout)
-- **Every `runGit` call carries a deadline.** A git that never exits is a promise that never settles, and the cycle's `updates` pass awaits one — so it holds `cycleInFlight` true, coalesces every later pulse and stops the fleet, with nothing thrown and nothing logged. A subcommand that legitimately runs long goes in `SLOW_SUBCOMMANDS`, never on `timeoutMs: 0`. → [09](docs/spec/09-execution.md#a-git-that-never-exits)
 - **`resolveCommit` prefers `origin/<ref>` over the local ref** and returns a SHA, because the
   harness's clone never checks the integration branch out. `GitObserver` methods stay read-only and
   fetch-free.
@@ -380,9 +359,8 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   happens once, in `mergeConfig`. A layer that arrives dense does not merge, it replaces — and
   shadows the project file with a policy no file on the machine states.
   → [02](docs/spec/02-configuration.md#precedence)
-- **A route handler never reads the request.** It is wrapped in `checked(schemas, handler)` and
-  handed `{params, body, req, reply}` already parsed. A refusal is a returned value and a 400, not a
-  throw — `setErrorHandler` means _unanticipated_. → [16](docs/spec/16-http-api.md#request-validation)
+- **A route refusal is a returned value and a 400, not a throw** — `setErrorHandler` means _unanticipated_. Handlers
+  take `checked` input (asserted). → [16](docs/spec/16-http-api.md#request-validation)
 - **A new route goes in the `src/server/routes/` module that owns its group**; a new group is a new
   module plus an entry in `app.ts`'s `ROUTE_MODULES`. A schema encoding a domain rule lives with the
   rule — `ShortfallBody` is in `src/delivery/shortfall.ts`. → [16](docs/spec/16-http-api.md#shape)

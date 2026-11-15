@@ -816,7 +816,7 @@ nobody scripted, and records every question on `calls`. A test with no landings 
 
 `GET /api/app-errors` (`src/server/routes/appErrors.ts`), not on `/api/state`: a fortnight of day
 counts per group is too much to send every couple of seconds to every open cockpit. Returns
-`AppErrorsPayload` (`src/wire.ts`):
+`AppErrorsPayload` (`src/wire/appErrors.ts`):
 
 - `project` — the key's project segment;
 - `environments` — one `AppErrorEnvironmentView` per environment that declares `errors`, in config

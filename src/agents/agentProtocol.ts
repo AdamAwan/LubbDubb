@@ -148,7 +148,9 @@ function appendMcpConfig(args: string[], opts: ClaudeArgsOptions): void {
 // no reason. A launch carries `--session-id` or `--resume`, never both.
 function appendSessionFlags(args: string[], opts: ClaudeArgsOptions): void {
   if (!opts.sessionId) return;
+  // eslint-disable-next-line no-restricted-syntax -- the one place the flag is written
   if (opts.resume) args.push('--resume', opts.sessionId);
+  // eslint-disable-next-line no-restricted-syntax -- the one place the flag is written
   else args.push('--session-id', opts.sessionId);
 }
 
