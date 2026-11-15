@@ -222,13 +222,9 @@ test('the stack model is a lens: nothing in the dispatcher reads it', () => {
 
 test('the stack model has exactly one importer, and it is the snapshot', () => {
   const importers = srcFiles('src')
-    .filter((f) => !f.startsWith('src/stacks/'))
+    .filter((f) => !f.startsWith('src/stacks/') && !f.startsWith('src/wire/'))
     .filter((f) => readFileSync(f, 'utf8').includes('stacks/stack.js'));
-  assert.deepEqual(
-    importers,
-    ['src/server/stateSnapshot.ts', 'src/wire/state.ts'],
-    'the stack model must stay cockpit-only',
-  );
+  assert.deepEqual(importers, ['src/server/stateSnapshot.ts'], 'the stack model must stay cockpit-only');
 });
 
 function srcFiles(dir: string): string[] {

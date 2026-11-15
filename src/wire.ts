@@ -1,3 +1,4 @@
+// → docs/spec/16-http-api.md
 export type * from './wire/world.js';
 export type * from './wire/localRuns.js';
 export type * from './wire/plans.js';
@@ -18,19 +19,39 @@ export type {
   AgentAskQuestion,
   AgentFile,
   AgentFlag,
+  AppErrorDetail,
+  AssessedBotPr,
+  BotPrOutcome,
+  BotPrOutcomeKind,
+  BotPrRisk,
+  BotPrRiskLevel,
+  BotPrRiskStanding,
   BugFiling,
+  CheckDecline,
+  CiCheck,
   Decision,
+  DescriptionFindingKind,
+  DescriptionQuestion,
+  DiscussionEntry,
+  DiscussionEntryState,
+  DiscussionKind,
   Ejection,
   EjectionOutcome,
   EnvironmentGate,
   EnvironmentGateRelease,
   EnvironmentHealthReading,
   Escalation,
-  PrPerson,
+  FeatureSequence,
+  FeatureSequenceEdge,
+  FeatureSummary,
   GoalArrival,
   GoalGroupReach,
   GoalLandingReach,
   GoalReachStatus,
+  GoalWatch,
+  GoalWatchDeclaration,
+  GoalWatchInput,
+  GoalWatchKind,
   HumanTask,
   InvestigationResolution,
   IssueInvestigation,
@@ -39,12 +60,17 @@ export type {
   JobAttachment,
   JobAttachmentInput,
   JobSchedule,
-  DescriptionFindingKind,
-  DescriptionQuestion,
-  PrDescriptionDraft,
-  PrDescriptionVersion,
+  LocalRunFreshness,
+  LocalRunPorts,
+  LocalRunTurn,
   LocalValidationFinding,
   LocalValidationStatus,
+  OkScope,
+  OkStatus,
+  PetActionKind,
+  PetRarity,
+  PetSpecies,
+  PetStage,
   Plan,
   PlanAtom,
   PlanCaveat,
@@ -52,49 +78,42 @@ export type {
   PlanNarrative,
   PlanPart,
   PlanRevision,
+  PoolFleetReading,
+  PrComment,
+  PrDescriptionDraft,
+  PrDescriptionVersion,
+  Proposal,
+  ProposedCheck,
+  PrPerson,
   PrReviewThread,
   PrThreadMessage,
   PrThreadState,
-  PetActionKind,
-  PetRarity,
-  PetSpecies,
-  PetStage,
-  FeatureSequence,
-  FeatureSequenceEdge,
-  FeatureSummary,
-  Proposal,
   ReadyingAction,
   ReadyingStep,
   ReadyingStepTiming,
-  Retrospective,
-  OkScope,
-  OkStatus,
+  RemedyCause,
   RemoteRowOutcome,
+  Retrospective,
   ScratchEntry,
-  GoalWatch,
-  GoalWatchDeclaration,
-  GoalWatchInput,
-  GoalWatchKind,
-  WatchHint,
   StackLanding,
   StateQuery,
   TaskSummary,
   TenantPreparation,
-  CheckDecline,
-  ProposedCheck,
+  UpdateKind,
   ValidationCheck,
   ValidationCheckActor,
   ValidationCheckResultBy,
   ValidationCheckState,
   ValidationPlanRecord,
-  WatchPlanRecord,
   ValidationStep,
   ValidationStepKind,
   ValidationVerdict,
   ViewerAssignment,
   WatchCheckVerdict,
+  WatchHint,
   WatchOutcome,
   WatchOutcomeCheck,
+  WatchPlanRecord,
   WatchReadingVerdict,
   WatchSourceDeclaration,
   WorkNode,
@@ -105,7 +124,6 @@ export type { OperatorRow } from './insights/operatorInsights.js';
 export type { SurfaceRow, SurfaceVerdict } from './insights/surfaceReachInsights.js';
 export type { ControlUsage, PlaceKey, UiUsageEvent, UsageArrival, UsageSubject } from './usage/events.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
-export type { DiscussionEntry, DiscussionEntryState, DiscussionKind } from './types.js';
 export type { BuildReading, SnoozeTarget, UpgradeAction } from './selfUpdate/upgradePlan.js';
 export type { AskGroup, AskKind, AskRow, AskUrgency } from './asks/askRow.js';
 export { buildAskQueue } from './asks/queue.js';
@@ -120,8 +138,7 @@ export type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } fr
 export type { QueueItem } from './dispatcher/dispatcher.js';
 export type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';
 export type { UnrecordedWork } from './graph/unrecorded.js';
-export type { RunningConfigGroup } from './server/runningConfig.js';
-export type { RunningConfigEntry } from './server/runningConfig.js';
+export type { RunningConfigEntry, RunningConfigGroup } from './server/runningConfig.js';
 export type { ConfigChange } from './config/configApply.js';
 export type {
   CiHealth,
@@ -143,20 +160,6 @@ export type {
 } from './insights/throughputInsights.js';
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './insights/remedyInsights.js';
 export type { ReviewAreaTotal, ReviewLabelInsights } from './insights/reviewLabelInsights.js';
-export type { RemedyCause } from './types.js';
-export type { AppErrorDetail } from './types.js';
-export type {
-  AssessedBotPr,
-  BotPrOutcome,
-  BotPrOutcomeKind,
-  BotPrRisk,
-  BotPrRiskLevel,
-  BotPrRiskStanding,
-  UpdateKind,
-} from './types.js';
-export type { CiCheck } from './types.js';
-export type { PrComment } from './types.js';
-export type { PoolFleetReading } from './types.js';
 export type { PrReviewState, PrReviewStatus } from './review/prReviewState.js';
 export type { PoolRollupRow, PoolTrends } from './pool/aggregate.js';
 export type { RunClearOut } from './runs/endRun.js';
@@ -169,7 +172,6 @@ export type {
   AllowanceReading,
 } from './insights/allowanceInsights.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './insights/spendInsights.js';
-export type { LocalRunFreshness, LocalRunPorts, LocalRunTurn } from './types.js';
 export type {
   McpChannelUsage,
   McpInsights,
@@ -189,8 +191,6 @@ export type {
   SpendTrendPhaseShift,
   SpendTrendBucket,
 } from './insights/spendTrend.js';
-// → docs/spec/16-http-api.md
-
 export type { ChecksSpend, TaskTypeSpend } from './insights/taskTypeSpend.js';
 export type { PlanDiff } from './plans/planDiff.js';
 export type { CaveatAnswerInput } from './plans/planCaveats.js';

@@ -476,13 +476,9 @@ test('a pending proposal and a standing rejection read differently through the w
 
 test('the verdict is a lens: nothing in the dispatcher reads it, and computing it decides nothing', async () => {
   const importers = srcFiles('src')
-    .filter((f) => f !== 'src/pr/prAttention.ts')
+    .filter((f) => f !== 'src/pr/prAttention.ts' && !f.startsWith('src/wire/'))
     .filter((f) => readFileSync(f, 'utf8').includes('prAttention.js'));
-  assert.deepEqual(
-    importers,
-    ['src/server/stateSnapshot.ts', 'src/wire/world.ts'],
-    'the attention verdict must stay cockpit-only',
-  );
+  assert.deepEqual(importers, ['src/server/stateSnapshot.ts'], 'the attention verdict must stay cockpit-only');
 
   const world = (system: ReturnType<typeof buildSystem>): void => {
     const watched = ['lubbdubb-watch'];

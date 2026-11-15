@@ -288,23 +288,24 @@ replaces shrinks to a line or goes. A guard is added only when it has **no false
 tree as it stands** — one that needs an exemption list is a guard nobody trusts — and its message
 says what to do instead and links the spec that owns the reason. The current set:
 
-| Guard                                                                                 | Where                                             | Spec                                               |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------------------------- |
-| `switch -C` / `--force-create`, `checkout -B`, `worktree add -B` in an argument array | lint, `src/`                                      | [09](09-execution.md#handing-a-slot-over)          |
-| `runGit` given `timeoutMs: 0` or `Infinity`                                           | lint, `src/`                                      | [09](09-execution.md#a-git-that-never-exits)       |
-| `ANTHROPIC_API_KEY` set as a property or assigned                                     | lint, `src/`                                      | [02](02-configuration.md#secrets)                  |
-| an `issue:${n}:…` template literal (bar `:comment:`)                                  | lint, `src/` except `src/issueOrigins.ts`         | [05](05-dispatcher.md#the-issue-origin-vocabulary) |
-| a `--session-id` / `--resume` literal                                                 | lint, `src/` except `src/agents/agentProtocol.ts` | [10](10-agent-runtimes.md#launch-arguments)        |
-| `75` passed to `exit` or compared with a `…code`                                      | lint, `src/` and `scripts/`                       | [21](21-self-update.md#applying-it)                |
-| `loadDeploymentConfig` called from a test                                             | lint, `test/` except `test/config.test.ts`        | [02](02-configuration.md#two-loaders)              |
-| a write to `tasks` outside `TaskStore`, or one that does not clear its list           | `test/taskListReads.test.ts`                      | [14](14-persistence.md#tasks)                      |
-| a colour literal outside a custom-property declaration                                | `test/cockpitTheme.test.ts`                       | [17](17-cockpit.md#tokens)                         |
-| a route reading its own request                                                       | `test/requestValidation.test.ts`                  | [16](16-http-api.md#request-validation)            |
+| Guard                                                                                 | Where                                           | Spec                                               |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| `switch -C` / `--force-create`, `checkout -B`, `worktree add -B` in an argument array | lint, `src/`                                    | [09](09-execution.md#handing-a-slot-over)          |
+| `runGit` given `timeoutMs: 0` or `Infinity`                                           | lint, `src/`                                    | [09](09-execution.md#a-git-that-never-exits)       |
+| `ANTHROPIC_API_KEY` set as a property or assigned                                     | lint, `src/`                                    | [02](02-configuration.md#secrets)                  |
+| an `issue:${n}:…` template literal (bar `:comment:`)                                  | lint, `src/`                                    | [05](05-dispatcher.md#the-issue-origin-vocabulary) |
+| a `--session-id` / `--resume` literal                                                 | lint, `src/` (`appendSessionFlags` disables it) | [10](10-agent-runtimes.md#launch-arguments)        |
+| `75` passed to `exit` or compared with a `…code`                                      | lint, `src/` and `scripts/`                     | [21](21-self-update.md#applying-it)                |
+| `loadDeploymentConfig` called from a test                                             | lint, `test/` except `test/config.test.ts`      | [02](02-configuration.md#two-loaders)              |
+| a write to `tasks` outside `TaskStore`, or one that does not clear its list           | `test/taskListReads.test.ts`                    | [14](14-persistence.md#tasks)                      |
+| a colour literal outside a custom-property declaration                                | `test/cockpitTheme.test.ts`                     | [17](17-cockpit.md#tokens)                         |
+| a route reading its own request                                                       | `test/requestValidation.test.ts`                | [16](16-http-api.md#request-validation)            |
 
 The lint guards are the `SERVER_GUARDS`, `UPGRADE_EXIT` and `DEPLOYMENT_CONFIG_IN_TESTS` selectors in
-`eslint.config.js`. ESLint does not merge `no-restricted-syntax` options across config blocks, so a
-file exempt from one guard gets a block re-listing the rest (`serverGuards('issueOrigin')`) rather
-than `off`. They read the syntax, not the data flow: an argument array built by `push`, an origin
+`eslint.config.js`, plus a `no-restricted-imports` pattern that keeps every import site on the
+`src/types.ts` / `src/wire.ts` barrels rather than a module behind them. The one line where a guarded
+construct is meant to live — `appendSessionFlags` writing `--resume` / `--session-id` — carries an
+`eslint-disable-next-line`, so the rest of its file stays guarded. They read the syntax, not the data flow: an argument array built by `push`, an origin
 built by concatenation, a deadline held in a variable all pass. That is the price of a guard with no
 false positives, and why the bullets that remain still name the rule.
 

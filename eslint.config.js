@@ -39,52 +39,42 @@ const STYLED_AS_BUTTON = {
 };
 
 // CLAUDE.md sharp edges a selector can see. Each names what to do instead and the spec that says why;
-// an exempt file is the one place the construct is meant to live. → docs/spec/19-development.md#guards
-const SERVER_GUARDS = {
-  branchReset: [
-    {
-      selector: "ArrayExpression > Literal[value='switch'] ~ Literal[value=/^(-C|--force-create)$/]",
-      message:
-        '`git switch -C` rewinds a branch that already has commits and loses them. Check the ref exists and `switch` to it; reach `switch -c` only for one that does not. → docs/spec/09-execution.md#handing-a-slot-over',
-    },
-    {
-      selector: "ArrayExpression > Literal[value=/^(checkout|worktree)$/] ~ Literal[value='-B']",
-      message:
-        '`-B` rewinds a branch that already has commits and loses them. Check the ref exists first; only create one that does not, with `-b`. → docs/spec/09-execution.md#handing-a-slot-over',
-    },
-  ],
-  gitDeadline: [
-    {
-      selector:
-        "CallExpression[callee.name='runGit'] Property[key.name='timeoutMs']:matches([value.value=0], [value.name='Infinity'])",
-      message:
-        'A git with no deadline is a promise that may never settle, and it stalls the whole cycle silently. A legitimately long subcommand goes in SLOW_SUBCOMMANDS (src/git/gitCli.ts). → docs/spec/09-execution.md#a-git-that-never-exits',
-    },
-  ],
-  apiKey: [
-    {
-      selector:
-        ":matches(Property[key.name='ANTHROPIC_API_KEY'], Property[key.value='ANTHROPIC_API_KEY'], AssignmentExpression > MemberExpression.left[property.name='ANTHROPIC_API_KEY'], AssignmentExpression > MemberExpression.left[property.value='ANTHROPIC_API_KEY'])",
-      message:
-        'Setting ANTHROPIC_API_KEY moves the whole fleet onto API billing — non-interactive `claude` always uses the key when present. Fix the login instead. → docs/spec/02-configuration.md#secrets',
-    },
-  ],
-  issueOrigin: [
-    {
-      selector:
-        'TemplateLiteral:has(> TemplateElement[value.raw=/(^|[^\\w])issue:$/]) > TemplateElement[value.raw=/^:(?!comment:)/]',
-      message:
-        'An issue:<n>:… origin built by hand is in no family, reads `unrecognised` and files its spend under "other". Declare the family in src/issueOrigins.ts and mint the ref through it. → docs/spec/05-dispatcher.md#the-issue-origin-vocabulary',
-    },
-  ],
-  sessionFlags: [
-    {
-      selector: 'Literal[value=/^--(session-id|resume)$/]',
-      message:
-        '`claude` refuses --session-id on an id that already has a transcript, and dies with no stream event. Write the flag through appendSessionFlags (src/agents/agentProtocol.ts), which carries exactly one. → docs/spec/10-agent-runtimes.md#launch-arguments',
-    },
-  ],
-};
+// the one line where a construct is meant to live carries an eslint-disable. → docs/spec/19-development.md#guards
+const SERVER_GUARDS = [
+  {
+    selector: "ArrayExpression > Literal[value='switch'] ~ Literal[value=/^(-C|--force-create)$/]",
+    message:
+      '`git switch -C` rewinds a branch that already has commits and loses them. Check the ref exists and `switch` to it; reach `switch -c` only for one that does not. → docs/spec/09-execution.md#handing-a-slot-over',
+  },
+  {
+    selector: "ArrayExpression > Literal[value=/^(checkout|worktree)$/] ~ Literal[value='-B']",
+    message:
+      '`-B` rewinds a branch that already has commits and loses them. Check the ref exists first; only create one that does not, with `-b`. → docs/spec/09-execution.md#handing-a-slot-over',
+  },
+  {
+    selector:
+      "CallExpression[callee.name='runGit'] Property[key.name='timeoutMs']:matches([value.value=0], [value.name='Infinity'])",
+    message:
+      'A git with no deadline is a promise that may never settle, and it stalls the whole cycle silently. A legitimately long subcommand goes in SLOW_SUBCOMMANDS (src/git/gitCli.ts). → docs/spec/09-execution.md#a-git-that-never-exits',
+  },
+  {
+    selector:
+      ":matches(Property[key.name='ANTHROPIC_API_KEY'], Property[key.value='ANTHROPIC_API_KEY'], AssignmentExpression > MemberExpression.left[property.name='ANTHROPIC_API_KEY'], AssignmentExpression > MemberExpression.left[property.value='ANTHROPIC_API_KEY'])",
+    message:
+      'Setting ANTHROPIC_API_KEY moves the whole fleet onto API billing — non-interactive `claude` always uses the key when present. Fix the login instead. → docs/spec/02-configuration.md#secrets',
+  },
+  {
+    selector:
+      'TemplateLiteral:has(> TemplateElement[value.raw=/(^|[^\\w])issue:$/]) > TemplateElement[value.raw=/^:(?!comment:)/]',
+    message:
+      'An issue:<n>:… origin built by hand is in no family, reads `unrecognised` and files its spend under "other". Declare the family in src/issueOrigins.ts and mint the ref through it. → docs/spec/05-dispatcher.md#the-issue-origin-vocabulary',
+  },
+  {
+    selector: 'Literal[value=/^--(session-id|resume)$/]',
+    message:
+      '`claude` refuses --session-id on an id that already has a transcript, and dies with no stream event. Write the flag through appendSessionFlags (src/agents/agentProtocol.ts), which carries exactly one. → docs/spec/10-agent-runtimes.md#launch-arguments',
+  },
+];
 
 const UPGRADE_EXIT = {
   selector:
@@ -92,11 +82,6 @@ const UPGRADE_EXIT = {
   message:
     'Spell the upgrade exit as UPGRADE_EXIT_CODE (src/selfUpdate/handoff.ts). An exit the supervisor reads as a crash comes back on the old build, looking like a successful upgrade. → docs/spec/21-self-update.md#applying-it',
 };
-
-function serverGuards(...exempt) {
-  const kept = Object.entries(SERVER_GUARDS).filter(([name]) => !exempt.includes(name));
-  return ['error', ...kept.flatMap(([, selectors]) => selectors), UPGRADE_EXIT];
-}
 
 const DEPLOYMENT_CONFIG_IN_TESTS = {
   selector: "CallExpression[callee.name='loadDeploymentConfig']",
@@ -138,9 +123,25 @@ export default tseslint.config(
     },
   },
 
-  { files: ['src/**/*.ts'], rules: { 'no-restricted-syntax': serverGuards() } },
-  { files: ['src/issueOrigins.ts'], rules: { 'no-restricted-syntax': serverGuards('issueOrigin') } },
-  { files: ['src/agents/agentProtocol.ts'], rules: { 'no-restricted-syntax': serverGuards('sessionFlags') } },
+  { files: ['src/**/*.ts'], rules: { 'no-restricted-syntax': ['error', ...SERVER_GUARDS, UPGRADE_EXIT] } },
+  {
+    files: ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.ts', 'web/**/*.{ts,tsx}'],
+    ignores: ['src/types/**', 'src/wire/**', 'src/types.ts', 'src/wire.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '(^|/)src/(types|wire)/|^\\.\\.?/(\\.\\./)*(types|wire)/',
+              message:
+                'Import the barrel (src/types.ts or src/wire.ts), never a module behind it. → docs/spec/19-development.md',
+            },
+          ],
+        },
+      ],
+    },
+  },
   { files: ['scripts/**/*.ts'], rules: { 'no-restricted-syntax': ['error', UPGRADE_EXIT] } },
   { files: ['test/**/*.ts'], rules: { 'no-restricted-syntax': ['error', DEPLOYMENT_CONFIG_IN_TESTS] } },
   { files: ['test/config.test.ts'], rules: { 'no-restricted-syntax': 'off' } },
