@@ -2735,10 +2735,11 @@ the check. A cockpit that assembled the path itself would be a second opinion ab
 validation directory is. → [Where a sheet-kept capture is looked at](#where-a-sheet-kept-capture-is-looked-at),
 [17](17-cockpit.md#a-sheet-row-draws-its-own-capture)
 
-**Wire types.** `RemoteSheetView`, `RemoteSheetRowView` and `RemoteReadingView` in `src/wire.ts`,
-shipped on `CockpitState.remoteSheets` and re-exported by `web/src/types.ts`. A wire type either **is**
-a domain type from `src/types.ts` or `extends` it — never a re-declaration and never widened — and
-`src/wire.ts` stays the only server module `web/src/` may name.
+**Wire types.** `RemoteSheetView`, `RemoteSheetRowView` and `RemoteReadingView` in
+`src/wire/remoteValidation.ts`, shipped on `CockpitState.remoteSheets` and re-exported by
+`web/src/types.ts`. A wire type either **is** a domain type from `src/types/remoteValidation.ts` or
+`extends` it — never a re-declaration and never widened — and `src/wire.ts` stays the only server
+module `web/src/` may name.
 
 **A new component is threaded through `src/system/system.ts`**, which is the composition root.
 
@@ -2772,8 +2773,8 @@ tint here is a `--cn-*` property on **both** `:root` blocks and an entry in
 dropped is a decision they must be able to see and take back.
 
 `RemoteSheetView`, `RemoteSheetRowView`, `RemoteReadingView`, `RemoteRunView` and `RemoteTenantView`
-are in `src/wire.ts`, shipped on `CockpitState.remoteSheets`; the card is `remoteValidation` in
-`GOAL_SECTIONS` between `localValidation` and `signals`; and which environment's sheet is
+are in `src/wire/remoteValidation.ts`, shipped on `CockpitState.remoteSheets`; the card is
+`remoteValidation` in `GOAL_SECTIONS` between `localValidation` and `signals`; and which environment's sheet is
 `Place.sheetEnvironment` (`web/src/cockpit/place.ts`), read off the `sheet` query parameter.
 
 **`RemoteTenantView` carries the tenant's _name_ and never a `tenantEnv`'s value.** Where the shape is

@@ -31,6 +31,11 @@ const RUNTIME_MODULES: string[] = [
 
 test('the contract passes through runtime from the declared modules and no others', () => {
   const source = readFileSync(join(ROOT, 'src/wire.ts'), 'utf8');
+  assert.doesNotMatch(
+    source,
+    /^export\s+\*/m,
+    'a value star-export carries runtime past this list — use `export type *`',
+  );
   const from: string[] = [];
   for (const match of source.matchAll(/^export\s+(?<type>type\s+)?\{[^}]*\}\s+from\s+'(?<spec>[^']+)'/gm)) {
     if (match.groups?.type === undefined) from.push(match.groups?.spec ?? '');

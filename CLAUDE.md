@@ -43,9 +43,11 @@ A fresh clone needs `npm ci` first — `node-pty` is a native build.
   only for something a spec cannot hold: a local non-obvious workaround at the exact line it applies
   to. Terse, and never restating _what_ the code does.
 - **Typed `emit`/`on` overrides** on `EventEmitter` subclasses — keep event payloads typed.
-- **Domain types live in `src/types.ts`; the shapes the HTTP routes ship live in `src/wire.ts`**,
-  which `web/src/types.ts` re-exports. A wire type either **is** a domain type or `extends` it —
-  never a re-declaration, never widened. `src/wire.ts` is the only server module `web/src/` may name.
+- **Domain types live in `src/types/`; the shapes the HTTP routes ship live in `src/wire/`** — one
+  module per subsystem, each re-exported by `export type *` from the `src/types.ts` / `src/wire.ts`
+  barrel that every import site names. `web/src/types.ts` re-exports `src/wire.ts`. A wire type either
+  **is** a domain type or `extends` it — never a re-declaration, never widened. `src/wire.ts` is the
+  only server module `web/src/` may name.
 - **`src/system/system.ts` is the composition root.** A new component is threaded through it.
 - **`src/store/` is the only directory that touches SQLite.** Writes are synchronous, which keeps the
   harness logic race-free. One module per table group, each taking a `StoreContext` and reached as a

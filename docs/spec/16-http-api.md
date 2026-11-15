@@ -2442,11 +2442,19 @@ anything that is not `/api` or `/ws` — so client-side routing works.
 
 ## The wire contract
 
-Every shape these routes ship is declared once, in **`src/wire.ts`**, and both ends name that
-declaration: `buildStateSnapshot` returns `CockpitState`, the fetched-on-open routes `satisfies` their
-payload types, and `web/src/types.ts` re-exports the lot under the cockpit's own names (`AppState` is
-`CockpitState`). So a key renamed, dropped or re-nested in the builder is a compile error at the site
-that caused it.
+Every shape these routes ship is declared once, in a module under **`src/wire/`** — one per area of
+the cockpit, `CockpitState` in `state.ts` — and re-exported by the **`src/wire.ts`** barrel, which is
+what both ends name: `buildStateSnapshot` returns `CockpitState`, the fetched-on-open routes
+`satisfies` their payload types, and `web/src/types.ts` re-exports the lot under the cockpit's own
+names (`AppState` is `CockpitState`). So a key renamed, dropped or re-nested in the builder is a
+compile error at the site that caused it. The domain types a wire type is or extends are laid out the
+same way: modules under `src/types/`, re-exported by the `src/types.ts` barrel.
+
+The barrels re-export their own modules with `export type *`, so splitting a module or moving a type
+between two never touches an import site — and never moves the boundary, because a type-only star
+export can carry no value. What `src/wire.ts` passes on from _elsewhere_ in the server stays a named
+list in the barrel itself: a deliberate, reviewable selection of domain names, and the one place a
+value may cross (below).
 
 It used to be two copies with nothing relating them. `buildStateSnapshot` had **no declared return
 type**, so its shape was whatever TypeScript inferred from 439 lines of object construction; `AppState`
@@ -2459,10 +2467,13 @@ Four properties hold it together:
 
 - **Type-only, so the runtime constraint is untouched.** "The web bundle imports no server code" is
   about what gets bundled; `import type` is erased first. `test/wireContract.test.ts` asserts it
-  structurally rather than trusting it: the shared modules must declare no runtime and import nothing
-  by value, and `src/wire.ts` must be the **only** server module anything under `web/src/` names.
+  structurally rather than trusting it: the shared modules — both barrels and every module under
+  `src/types/` and `src/wire/` — must declare no runtime, import nothing by value and re-export
+  nothing by value, and `src/wire.ts` must be the **only** server module anything under `web/src/`
+  names.
   A **re-export** of a value is invisible to those checks — they read declarations and `import`
-  lines — so `test/wireRuntime.test.ts` pins the modules `src/wire.ts` may pass a value through from,
+  lines — so `test/wireRuntime.test.ts` pins the modules `src/wire.ts` may pass a value through from
+  (and refuses a value `export *` there outright, which would carry a whole module past the list),
   and walks each one's transitive relative imports refusing a node builtin or a package value import.
   The list is the ask queue's three pure modules under `src/asks/` — `buildAskQueue`, which the
   demo's fake server derives its queue with, and the line-wording helpers the cockpit shares with the
@@ -2527,7 +2538,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 
 **The snapshot is a partition of nine named sections, and `/api/state` will build any subset of
 them.** `STATE_SECTIONS` in `src/server/stateSnapshot.ts` is the list; `StateSection` is the type, and
-it lives in `src/wire.ts` while the list does not — the cockpit type-imports the wire, so a runtime
+it lives in `src/wire/state.ts` while the list does not — the cockpit type-imports the wire, so a runtime
 value there would become server code in the SPA bundle
 ([the wire contract](#the-wire-contract)).
 

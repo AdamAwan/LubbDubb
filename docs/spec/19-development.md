@@ -403,9 +403,12 @@ what settle whether a new cut is worth making.
   the code.
 - **Typed `emit`/`on` overrides** on `EventEmitter` subclasses (see `AgentManager`, `Harness`,
   `ErrorLog`) — keep event payloads typed at the call site when you add events.
-- **Domain types live in `src/types.ts`**; the shapes the HTTP routes ship live in `src/wire.ts`, which
-  the cockpit re-exports through `web/src/types.ts`. Both are declaration-only and type-imported, so the
-  SPA still bundles no server code — `test/wireContract.test.ts` enforces it.
+- **Domain types live in `src/types/`**; the shapes the HTTP routes ship live in `src/wire/`, which
+  the cockpit re-exports through `web/src/types.ts`. Each directory is one module per subsystem behind
+  a barrel — `src/types.ts`, `src/wire.ts` — that re-exports it with `export type *`, and import sites
+  name the barrel, never a module behind it. A new type goes in the module its subsystem owns; a new
+  module is a new `export type *` line in its barrel. All of it is declaration-only and type-imported,
+  so the SPA still bundles no server code — `test/wireContract.test.ts` enforces it.
 - **`src/system/system.ts` is the composition root.** Every module is wired there through its interface, so
   any one is swappable. A new component is threaded through it. `buildSystem` is a sequence of
   per-area phases — foundation (store, connector, worktrees), agent runtime, the two MCP channels,

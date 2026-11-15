@@ -12,11 +12,21 @@ import type { CockpitState } from '../src/wire.js';
 import type { AppState } from '../web/src/types.js';
 import { REPO_ROOT as ROOT } from './support/paths.js';
 
-const SHARED = ['src/wire.ts', 'src/types.ts'];
+const BARRELS = ['src/wire.ts', 'src/types.ts'];
+
+const SHARED = [
+  ...BARRELS,
+  ...['src/wire', 'src/types'].flatMap((dir) =>
+    readdirSync(join(ROOT, dir))
+      .filter((f) => f.endsWith('.ts'))
+      .map((f) => `${dir}/${f}`),
+  ),
+];
 
 const RUNTIME = /^\s*(?:export\s+)?(?:const|let|var|function|class|enum|namespace)\s/m;
 
 test('the shared wire modules carry no runtime, so the cockpit imports none', () => {
+  assert.ok(SHARED.length > BARRELS.length, 'the walk must find the modules the barrels re-export');
   for (const file of SHARED) {
     const source = readFileSync(join(ROOT, file), 'utf8');
     assert.equal(
@@ -28,6 +38,10 @@ test('the shared wire modules carry no runtime, so the cockpit imports none', ()
     for (const line of source.split('\n')) {
       if (!/^import\s/.test(line)) continue;
       assert.match(line.trim(), /^import type /, `${file}: every import must be \`import type\` — got: ${line.trim()}`);
+    }
+    if (file === 'src/wire.ts') continue;
+    for (const match of source.matchAll(/^export\s+(?:\*|\{[^}]*\})\s+from\s+'[^']+'/gm)) {
+      assert.fail(`${file}: a re-export must be \`export type\` — got: ${match[0].split('\n')[0]}`);
     }
   }
 });
