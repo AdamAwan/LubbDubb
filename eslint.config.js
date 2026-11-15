@@ -135,7 +135,7 @@ export default tseslint.config(
             {
               regex: '(^|/)src/(types|wire)/|^\\.\\.?/(\\.\\./)*(types|wire)/',
               message:
-                'Import the barrel (src/types.ts or src/wire.ts), never a module behind it. → docs/spec/19-development.md',
+                'Import the barrel (src/types.ts or src/wire.ts), never a module behind it. → docs/spec/16-http-api.md#the-wire-contract',
             },
           ],
         },
