@@ -18,8 +18,16 @@ import {
   GOAL_ANCHOR,
   goalLanding,
   goalPaneOf,
-  goalPanes,
 } from '../view/goalPage.js';
+import {
+  checkTally,
+  goalTabCarrier,
+  goalTabTitle,
+  obligationChoices,
+  pickedGoalTab,
+  watchSourcesOf,
+  watchWindowOf,
+} from '../view/goalPanes.js';
 import { DiscussionPane } from '../components/DiscussionPane.js';
 import { PartDescriptionsProvider } from '../components/partDescriptions.js';
 import { Tag } from '../components/tag.js';
@@ -65,7 +73,7 @@ export function GoalPage({
   /* A `?pane=` from a deployment that draws that pane, or a bookmark from before it stopped
      doing so, would otherwise select a tab the row does not carry and leave the panel empty.
      → docs/spec/17-cockpit.md#the-panes */
-  const picked = view.goalTab !== null && goalPanes(page).includes(view.goalTab) ? view.goalTab : null;
+  const picked = pickedGoalTab(page, view.goalTab);
   const tab = picked ?? opening.tab;
   /* Which asks the open pane owns, and which stay rows above the navigation.
      → docs/spec/17-cockpit.md#an-ask-is-the-loudest-thing-on-its-page */
@@ -179,32 +187,32 @@ function useGoalLanding(ref: string, page: GoalPageView): GoalTabOpening {
  * what a band above the navigation used to say.
  */
 function goalTabs(page: GoalPageView, tab: GoalTab, chosen: GoalTab | null, opening: GoalTabOpening): PanelTab[] {
-  return buildGoalNav(page).map((entry) => ({
-    id: entry.tab,
-    tone: `cn-t-${entry.tone}`,
-    meter: entry.done,
-    reading: entry.reading,
-    title:
-      entry.tab === tab && chosen === null
-        ? `Opened here because ${opening.why}`
-        : `${entry.label}: ${entry.reading} — go to it`,
-    label: (
-      <>
-        {entry.label}
-        {/* The environment that carries this obligation, on the control that is it. A tab
+  return buildGoalNav(page).map((entry) => {
+    const carrier = goalTabCarrier(entry.on);
+    return {
+      id: entry.tab,
+      tone: `cn-t-${entry.tone}`,
+      meter: entry.done,
+      reading: entry.reading,
+      title: goalTabTitle(entry, tab, chosen, opening),
+      label: (
+        <>
+          {entry.label}
+          {/* The environment that carries this obligation, on the control that is it. A tab
             that said only "Validate" would be an obligation with nowhere to be discharged,
             and which environment owes what is configuration the operator wrote weeks ago.
             Two of them and the pane itself carries a picker.
             → docs/spec/17-cockpit.md#the-panes */}
-        {entry.on.length > 0 && (
-          <i className="cn-tabp-on" title={`Carried by ${entry.on.join(' and ')}`}>
-            {entry.on.length === 1 ? entry.on[0] : `${String(entry.on.length)} environments`}
-          </i>
-        )}
-        {entry.needsYou && <i className="cn-tabp-dot" title="Something here needs you" />}
-      </>
-    ),
-  }));
+          {carrier !== null && (
+            <i className="cn-tabp-on" title={carrier.title}>
+              {carrier.text}
+            </i>
+          )}
+          {entry.needsYou && <i className="cn-tabp-dot" title="Something here needs you" />}
+        </>
+      ),
+    };
+  });
 }
 
 function TicketPane({
@@ -376,7 +384,7 @@ function WatchPane({
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
   const showing = obligationEnvironment(page, 'watch', view.sheetEnvironment);
-  const window = page.watches.find((w) => w.environment === showing);
+  const window = watchWindowOf(page, showing);
   return (
     <>
       <WatchOutcomeCard
@@ -397,7 +405,7 @@ function WatchPane({
       <WatchWindow
         watch={window}
         environment={showing}
-        sources={view.state.config.environments.find((e) => e.name === showing)?.watchSources ?? []}
+        sources={watchSourcesOf(view.state.config.environments, showing)}
         issueNumber={page.issue.number}
         now={view.now}
         actions={actions}
@@ -426,28 +434,25 @@ function ObligationPicker({
   showing: string | null;
   actions: CockpitActions;
 }): JSX.Element | null {
-  const names = page.obligations[tab];
-  if (names.length < 2) return null;
+  const choices = obligationChoices(page, tab, showing);
+  if (choices.length === 0) return null;
   return (
     <HeadRow className="cn-envpick">
-      {names.map((name) => {
-        const env = page.environments.find((e) => e.environment === name);
-        return (
-          <Button
-            key={name}
-            usage="validation.filter"
-            onClick={() => actions.openRemoteSheet(name)}
-            title={`What this goal reads in ${name}`}
-          >
-            {name}
-            {env !== undefined && (
-              <Tag tone={REACH_TONE[env.status]} fill={name === showing}>
-                {env.status}
-              </Tag>
-            )}
-          </Button>
-        );
-      })}
+      {choices.map(({ name, status, showing: shown }) => (
+        <Button
+          key={name}
+          usage="validation.filter"
+          onClick={() => actions.openRemoteSheet(name)}
+          title={`What this goal reads in ${name}`}
+        >
+          {name}
+          {status !== null && (
+            <Tag tone={REACH_TONE[status]} fill={shown}>
+              {status}
+            </Tag>
+          )}
+        </Button>
+      ))}
     </HeadRow>
   );
 }
@@ -468,19 +473,18 @@ function Validation({
   fold: Fold;
 }): JSX.Element {
   const { issue, plan, checks } = page;
-  const live = checks.filter((c) => c.supersededReason === null);
-  const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
+  const { live, settled } = checkTally(page);
 
   return (
     <section className="cn-card" id={GOAL_ANCHOR.validation}>
       <h3>
         <Disclosure subject="validation" open={fold.open} onToggle={fold.onToggle} label="Checks" />
-        {live.length > 0 && (
+        {live > 0 && (
           <i className="cn-n">
-            {settled} of {live.length} done
+            {settled} of {live} done
           </i>
         )}
-        {live.length === 0 && <i className="cn-n">no checks</i>}
+        {live === 0 && <i className="cn-n">no checks</i>}
         {/* Where the checks come from, said on the card that manages them: an
             operator who wants the wording changed has to know it is the plan that
             writes it, and this is the only place that connection is drawn. */}

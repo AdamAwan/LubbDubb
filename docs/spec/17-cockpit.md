@@ -1440,7 +1440,8 @@ screen and a half above the environments, and which card is worth reading change
 goal nobody has planned and one held at a gate.
 
 So the cards are grouped behind **tabs**, declared once in `GOAL_TABS` (`web/src/view/goalPage.ts`)
-with `GOAL_TAB_OF` mapping each foldable section to the pane that holds it:
+with `GOAL_TAB_OF` mapping each foldable section to the pane that holds it (what each tab and pane reads
+while drawing — its title, carrier, picker choices and check tally — is `web/src/view/goalPanes.ts`):
 
 | Pane           | id           | What is behind it                                                                                                                                                                   | Carried by                                      |
 | -------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
