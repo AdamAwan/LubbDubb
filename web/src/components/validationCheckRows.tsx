@@ -6,7 +6,8 @@ import type {
   ValidationCheckView,
   ValidationResourceView,
 } from '../types.js';
-import type { CheckBand, CheckStanding } from '../view/validatePane.js';
+import { checkBoxTitle, oddState, runOutcome, type CheckStanding } from '../view/validatePane.js';
+import { isMissingFile, lineAside } from '../view/validationChecks.js';
 import { checkPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from './DesktopLink.js';
 import { AsyncButton } from './AsyncButton.js';
@@ -17,22 +18,6 @@ import { Tag, type TagTone } from './tag.js';
 import { CheckDetail, CHECK_STATE_WORDS } from './checkDetail.js';
 import { OUTCOME_TONE, rowSaid } from './RemoteValidationSection.js';
 import { Collapsible } from './collapsible.js';
-
-export function isMissingFile(resource: ValidationResourceView): boolean {
-  return !resource.present && resource.kind !== 'access';
-}
-
-/**
- * What a band already implies about the state of a check in it. A row that says it again is a chip
- * carrying no news, and a list of twelve of them is twelve boxes of shouting between the reader and
- * the two rows that are actually odd. → docs/spec/17-cockpit.md#the-validate-pane
- */
-const BAND_IMPLIES: Record<CheckBand, ValidationCheckState | null> = {
-  running: null,
-  open: 'unrun',
-  yours: 'unrun',
-  answered: 'passed',
-};
 
 /**
  * A check the sheet is not currently answering: one line, and a way to make it the one it is.
@@ -58,16 +43,9 @@ export function CheckLine({
   onOpen: () => void;
   onSelect: ((environment: string, rowId: string, selected: boolean) => Promise<unknown> | unknown) | undefined;
 }): JSX.Element {
-  const aside =
-    check.amendedAt !== null
-      ? 'changed'
-      : check.handbackNote !== null
-        ? 'back with you'
-        : check.actor === 'fleet'
-          ? 'with the fleet'
-          : null;
+  const aside = lineAside(check);
   if (standing !== undefined) {
-    const odd = BAND_IMPLIES[standing.band] === check.state ? null : CHECK_STATE_WORDS[check.state];
+    const odd = oddState(standing.band, check.state);
     const row = standing.row;
     return (
       <div className={`vq-line ${check.state}`}>
@@ -82,15 +60,7 @@ export function CheckLine({
             checked={row.selected}
             disabled={row.live}
             aria-label={`Carry “${check.title}” in ${row.environment}’s next run`}
-            title={
-              row.live
-                ? `A run on ${row.environment} is carrying it now`
-                : row.awaitingApproval
-                  ? `In ${row.environment}’s next run — but its query needs approving before a press can read it`
-                  : row.selected
-                    ? `In ${row.environment}’s next run. Untick to leave it out — you will answer it another way`
-                    : `Left out of ${row.environment}’s next run. Tick to put it back`
-            }
+            title={checkBoxTitle(row)}
             onChange={(e) => void onSelect(row.environment, row.rowId, e.target.checked)}
           />
         ) : (
@@ -100,7 +70,7 @@ export function CheckLine({
           <span className="pm-vletter">{check.letter}</span>
           <span className="vq-line-title">{check.title}</span>
           {aside !== null && <span className="vq-said">{aside}</span>}
-          {odd !== null && <span className={`vq-said ${check.state}`}>{odd}</span>}
+          {odd !== null && <span className={`vq-said ${check.state}`}>{CHECK_STATE_WORDS[odd]}</span>}
         </BareButton>
       </div>
     );
@@ -132,7 +102,7 @@ export function CheckRuns({
   return (
     <div className="vq-runs">
       {runs.map((row) => {
-        const outcome = row.blockedReason !== null ? 'blocked' : (row.reading?.outcome ?? null);
+        const outcome = runOutcome(row);
         const agentId = row.reading?.agentId ?? null;
         const captureUrl = row.reading?.captureUrl ?? null;
         const said = rowSaid(row);

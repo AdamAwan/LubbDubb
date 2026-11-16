@@ -2926,6 +2926,7 @@ are two jobs. The plan sheet writes them and amends them and still renders them
 ([the digest](#the-validation-digest)); running one is work against the _delivered_ goal, done days
 after the plan was approved and usually by somebody with no reason to open it. A control reachable
 only from inside the document that proposed it is a control nobody finds.
+Its queue, the live/withdrawn split and each line's aside are derived in `web/src/view/validationChecks.ts`; its bands in `web/src/view/validatePane.ts`.
 
 The card is **full width, above the two columns and above the plan**. Not in either stack: a check
 draws its `do` and `expect` side by side and carries a row of five verbs, and both are cramped in a

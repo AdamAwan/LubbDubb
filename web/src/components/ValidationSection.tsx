@@ -6,9 +6,17 @@ import type { ButtonLook } from './button.js';
 import { Tag } from './tag.js';
 import { Collapsible } from './collapsible.js';
 import { CheckDetail, CHECK_STATE_WORDS } from './checkDetail.js';
-import { BAND_HEADING, BAND_HINT, type CheckBand, type CheckStanding } from '../view/validatePane.js';
+import { BAND_HEADING, BAND_HINT, checkBands, type CheckBand, type CheckStanding } from '../view/validatePane.js';
+import {
+  checkQueue,
+  digestCount,
+  isMissingFile,
+  resourcesFor,
+  resourceTitle,
+  splitChecks,
+} from '../view/validationChecks.js';
 import { logUsage } from '../cockpit/usage.js';
-import { CheckBlock, CheckLine, CheckRuns, isMissingFile, stateTone } from './validationCheckRows.js';
+import { CheckBlock, CheckLine, CheckRuns, stateTone } from './validationCheckRows.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -114,9 +122,8 @@ export function ValidationSection({
   useEffect(() => {
     logUsage('validation.view');
   }, []);
-  const live = checks.filter((c) => c.supersededReason === null);
-  const withdrawn = checks.filter((c) => c.supersededReason !== null);
-  const byName = new Map(resources.map((r) => [r.name, r]));
+  const { live, withdrawn } = splitChecks(checks);
+  const usedBy = resourcesFor(resources);
 
   /* Which check the sheet is answering. Null is *the queue picks* — the first one still owed — and
      only an operator's own click pins it, so a reading recorded on the head of the queue advances to
@@ -136,10 +143,7 @@ export function ValidationSection({
     <CheckBlock
       key={check.id}
       check={check}
-      resources={check.uses.flatMap((name) => {
-        const found = byName.get(name);
-        return found ? [found] : [];
-      })}
+      resources={usedBy(check)}
       refUrls={refUrls}
       look={look}
       issueNumber={issueNumber}
@@ -225,41 +229,37 @@ function BandedChecks({
       {plan?.authoredAt != null && plan.releasedAt == null && (
         <p className="vq-band-note">Nothing in the fleet reads this set as work until you accept it in “Needs you”.</p>
       )}
-      {ALL_BANDS.map((band) => {
-        const inBand = live.filter((check) => standings.get(check.id)?.band === band);
-        if (inBand.length === 0) return null;
-        return (
-          <Collapsible
-            key={band}
-            look="panel"
-            subject="validation"
-            className="vq-band"
-            defaultOpen
-            title={
-              <>
-                <span className={`vq-band-dot ${band}`} aria-hidden="true" /> {BAND_HEADING[band]}
-              </>
-            }
-            aside={<BandAside band={band} inBand={inBand} standings={standings} />}
-          >
-            {inBand.map((check) => (
-              <div className="vq-check" key={check.id}>
-                {opened?.id === check.id ? (
-                  block(check)
-                ) : (
-                  <CheckLine
-                    check={check}
-                    standing={standings.get(check.id)}
-                    onOpen={() => onOpen(check.id)}
-                    onSelect={onSelect}
-                  />
-                )}
-                <CheckRuns runs={standings.get(check.id)?.runs ?? []} onOpenAgent={onOpenAgent} />
-              </div>
-            ))}
-          </Collapsible>
-        );
-      })}
+      {checkBands(live, standings).map(({ band, checks: inBand, runner }) => (
+        <Collapsible
+          key={band}
+          look="panel"
+          subject="validation"
+          className="vq-band"
+          defaultOpen
+          title={
+            <>
+              <span className={`vq-band-dot ${band}`} aria-hidden="true" /> {BAND_HEADING[band]}
+            </>
+          }
+          aside={<BandAside band={band} count={inBand.length} runner={runner} />}
+        >
+          {inBand.map((check) => (
+            <div className="vq-check" key={check.id}>
+              {opened?.id === check.id ? (
+                block(check)
+              ) : (
+                <CheckLine
+                  check={check}
+                  standing={standings.get(check.id)}
+                  onOpen={() => onOpen(check.id)}
+                  onSelect={onSelect}
+                />
+              )}
+              <CheckRuns runs={standings.get(check.id)?.runs ?? []} onOpenAgent={onOpenAgent} />
+            </div>
+          ))}
+        </Collapsible>
+      ))}
       {(plan?.note != null || resources.length > 0 || withdrawn.length > 0) && (
         <BandedAbout plan={plan} resources={resources} withdrawn={withdrawn} />
       )}
@@ -318,19 +318,13 @@ function CheckQueue({
   onOpen: (checkId: string) => void;
   block: (check: ValidationCheckView) => JSX.Element;
 }) {
-  const owed = live.filter(isOwed);
-  const picked = live.find((c) => c.id === focus) ?? owed[0] ?? live[0];
-  const shown = all ? live : picked === undefined ? [] : [picked];
-  const rest = {
-    owed: live.filter((c) => c !== picked && isOwed(c)),
-    done: live.filter((c) => c !== picked && !isOwed(c)),
-  };
+  const { owed, shown, rest, amended } = checkQueue(live, focus, all);
   const line = (check: ValidationCheckView): JSX.Element => (
     <CheckLine key={check.id} check={check} standing={undefined} onOpen={() => onOpen(check.id)} onSelect={undefined} />
   );
   return (
     <>
-      <QueueHead live={live} owed={owed} plan={plan} all={all} onAll={onAll} />
+      <QueueHead live={live} owed={owed} amended={amended} plan={plan} all={all} onAll={onAll} />
       {/* The planner's departure from the hint, and what the set needs to hand. Both were bands of
           their own above the rows; they are what a reader consults rather than reads, so they fold. */}
       {(plan?.note != null || resources.length > 0) && <QueueAbout plan={plan} resources={resources} />}
@@ -344,13 +338,13 @@ function CheckQueue({
           would take them, or nobody offered and they are a person's. One list of checks, banded by
           where its answers come from — never a second list per runner.
           → docs/spec/17-cockpit.md#the-validate-pane */}
-      {!all && rest.owed.length > 0 && (
+      {rest.owed.length > 0 && (
         <div className="vq-rest">
           <span className="lb lb-sm">Still to run</span>
           {rest.owed.map(line)}
         </div>
       )}
-      {!all && rest.done.length > 0 && (
+      {rest.done.length > 0 && (
         <Collapsible subject="validation" className="vq-rest vq-done" title={<>{rest.done.length} done</>}>
           {rest.done.map(line)}
         </Collapsible>
@@ -363,17 +357,18 @@ function CheckQueue({
 function QueueHead({
   live,
   owed,
+  amended,
   plan,
   all,
   onAll,
 }: {
   live: ValidationCheckView[];
   owed: ValidationCheckView[];
+  amended: ValidationCheckView[];
   plan: ValidationPlanRecord | null;
   all: boolean;
   onAll: () => void;
 }) {
-  const amended = live.filter((c) => c.amendedAt !== null);
   /* One line, not a stack of prose. What an operator needs before they start is *how much is
      left*, and it was being told to them in three paragraphs and two amber bands — which is the
      reading a card is least likely to be given. A meter is read without being read.
@@ -434,13 +429,7 @@ function QueueAbout({ plan, resources }: { plan: ValidationPlanRecord | null; re
             <Tag
               key={resource.name}
               tone={isMissingFile(resource) ? 'amber' : undefined}
-              title={`${resource.path}${
-                resource.note === null
-                  ? ''
-                  : `
-
-${resource.note}`
-              }`}
+              title={resourceTitle(resource)}
             >
               {resource.name}
               {resource.kind !== null && <i className="k">{resource.kind}</i>}
@@ -509,16 +498,14 @@ export function ValidationDigest({
   refUrls: Record<string, string>;
   onOpenGoal: (() => void) | null;
 }) {
-  const live = checks.filter((c) => c.supersededReason === null);
-  const withdrawn = checks.filter((c) => c.supersededReason !== null);
-  const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
+  const { live, withdrawn } = splitChecks(checks);
 
   if (checks.length === 0) return <EmptySet plan={plan} />;
 
   return (
     <>
       <span className="pm-section-label">
-        Checks <i className="k">{live.length > 0 ? `${settled} of ${live.length} done` : 'withdrawn'}</i>
+        Checks <i className="k">{digestCount(live)}</i>
       </span>
       {live.map((check) => (
         <div className={`pm-vrow ${check.state}`} key={check.id}>
@@ -556,45 +543,13 @@ export function ValidationDigest({
   );
 }
 
-/**
- * The runners named by a band's checks, said once on its heading. Null where they do not agree —
- * two environments across one band is a fact about the rows and belongs on them, not on a heading
- * that would then be wrong for half of what is under it.
- */
 /** What a band's header says beside its name: how many, which runner where it is one, and what to do. */
-function BandAside({
-  band,
-  inBand,
-  standings,
-}: {
-  band: CheckBand;
-  inBand: readonly ValidationCheckView[];
-  standings: Map<string, CheckStanding>;
-}): JSX.Element {
-  const runner = band === 'yours' ? null : runners(inBand, standings);
+function BandAside({ band, count, runner }: { band: CheckBand; count: number; runner: string | null }): JSX.Element {
   return (
     <>
-      <span className="vq-band-count">{inBand.length}</span>
+      <span className="vq-band-count">{count}</span>
       {runner !== null && <span className="vq-band-runner">{runner}</span>}
       <span className="vq-band-hint">{BAND_HINT[band]}</span>
     </>
   );
-}
-
-function runners(checks: readonly ValidationCheckView[], standings: Map<string, CheckStanding>): string | null {
-  const said = new Set(checks.map((check) => standings.get(check.id)?.label ?? ''));
-  return said.size === 1 ? ([...said][0] ?? null) : null;
-}
-
-/** The order the owed bands are read in: what is moving, what could move, what is waiting on a person. */
-const BANDS: CheckBand[] = ['running', 'open', 'yours'];
-
-/** The same order with what is settled at the end, which is the whole list on the goal page. */
-const ALL_BANDS: CheckBand[] = [...BANDS, 'answered'];
-
-/** Work still owed. `passed` and `waived` are the two states that settle a check; everything else —
- *  unrun, captured, failed, deferred, declined — is something somebody still has to answer.
- *  → docs/spec/20-validation.md#states */
-function isOwed(check: ValidationCheckView): boolean {
-  return check.state !== 'passed' && check.state !== 'waived';
 }
