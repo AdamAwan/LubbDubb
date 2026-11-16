@@ -4,6 +4,7 @@ import type { AskGroup, AskKind, AskRow, AskUrgency } from './askRow.js';
 import { updateAskRows } from './updateAsks.js';
 import { findingsRows, intakeRows, placementRows, profileRows } from './issueAsks.js';
 import { refusedDispatchRows } from './refusedDispatches.js';
+import { fleetStallRows } from './stallAsks.js';
 import { assignAskRows, assignedPrRows, botPrRows, descriptionFeedbackRows, undescribedPartRows } from './prAsks.js';
 import { configRows, escalationRows, humanTaskRows, limitRows, recoveryRows } from './inboxAsks.js';
 
@@ -13,6 +14,7 @@ import { configRows, escalationRows, humanTaskRows, limitRows, recoveryRows } fr
 export type AskInputs = Pick<
   CockpitState,
   | 'build'
+  | 'fleetStall'
   | 'recovery'
   | 'escalations'
   | 'proposals'
@@ -81,6 +83,7 @@ const KIND_URGENCY: Record<AskKind, AskUrgency> = {
   bot_pr: 'next',
   upgrade: 'later',
   project_pull: 'later',
+  fleet_stall: 'now',
 };
 
 /** Parts held downstream promote any ask to `now`, whatever its kind. */
@@ -126,6 +129,7 @@ const STAGE_RANK: Record<AskKind, number> = {
   config_gap: 5,
   upgrade: 5,
   project_pull: 5,
+  fleet_stall: 3,
 };
 
 const GROUP_RANK: Record<AskGroup, number> = { blocking: 0, yours: 1 };
@@ -162,6 +166,7 @@ export function buildAskQueue(
 ): AskRow[] {
   const drafts: AskDraft[] = [
     ...configRows(setup),
+    ...fleetStallRows(state),
     ...updateAskRows(state, nowIso),
     ...refusedDispatchRows(state),
     ...assignedPrRows(state),

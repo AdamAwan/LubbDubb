@@ -64,6 +64,7 @@ export const KIND_VERB: Record<NeedKind, string> = {
   bot_pr: 'Decide',
   upgrade: 'Upgrade',
   project_pull: 'Turn it on',
+  fleet_stall: 'Look',
 };
 
 const GROUP_LABEL: Record<NeedGroup, string> = {

@@ -36,6 +36,7 @@ export const KIND_LABEL: Record<AskKind, string> = {
   bot_pr: 'Bot PR',
   upgrade: 'Upgrade',
   project_pull: 'Auto-pull off',
+  fleet_stall: 'Stalled',
 };
 
 /**
@@ -93,6 +94,7 @@ export const KIND_TONE: Record<AskKind, 'red' | 'amber' | 'blue' | 'green'> = {
   bot_pr: 'amber',
   upgrade: 'amber',
   project_pull: 'amber',
+  fleet_stall: 'red',
 };
 
 /**
@@ -140,4 +142,5 @@ export const KIND_SYMBOL: Record<AskKind, string> = {
   bot_pr: '⇡',
   upgrade: '\u2191',
   project_pull: '\u21a5',
+  fleet_stall: '\u25a0',
 };

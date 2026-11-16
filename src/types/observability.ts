@@ -10,6 +10,17 @@ export interface ErrorLogEntry {
 
 export type ErrorLogInput = Omit<ErrorLogEntry, 'id' | 'createdAt' | 'detail'> & { detail?: string | null };
 
+/**
+ * The fleet has work it could start and room to start it, and has started nothing for
+ * `fleetStallCycles` pulses running. → docs/spec/04-harness-cycle.md#when-the-fleet-stops-dispatching
+ */
+export interface FleetStall {
+  since: string;
+  cycles: number;
+  candidates: string[];
+  refusal: string | null;
+}
+
 /** One window of event-loop delay, in milliseconds. → docs/spec/18-observability.md#the-runtime-watch */
 export interface EventLoopWindow {
   at: string;

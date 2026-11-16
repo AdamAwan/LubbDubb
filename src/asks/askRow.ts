@@ -34,7 +34,8 @@ export type AskKind =
   | 'assign'
   | 'bot_pr'
   | 'upgrade'
-  | 'project_pull';
+  | 'project_pull'
+  | 'fleet_stall';
 
 export type AskGroup = 'blocking' | 'yours';
 
@@ -62,7 +63,8 @@ export type AskSubject =
   | { type: 'part'; originRef: string; prNumber: number }
   | { type: 'description_check'; versionId: string; prNumber: number }
   | { type: 'issue'; issueNumber: number }
-  | { type: 'build'; target: 'upgrade' | 'project_pull' };
+  | { type: 'build'; target: 'upgrade' | 'project_pull' }
+  | { type: 'fleet_stall' };
 
 /** What a refused dispatch's row carries, so the band can say what the refusal said. */
 interface AskRefusal {

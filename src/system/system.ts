@@ -52,7 +52,8 @@ import type { IssuePickupPolicy } from '../dispatcher/issuePickup.js';
 import { featureRecords } from '../featureSummaries/featureRecord.js';
 import { standingMoves } from '../featureSummaries/featureSummary.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
-import { Harness } from '../harness.js';
+import { Harness, cycleRan } from '../harness.js';
+import { FleetStallWatch } from '../fleetStall.js';
 import { CycleTrigger } from '../cycleTrigger.js';
 import { RuntimeControl } from '../runtimeControl.js';
 import { PetKeeper } from '../pets/keeper.js';
@@ -136,6 +137,8 @@ export interface System {
   retention: Foundation['retention'];
   runtimeControl: RuntimeControl;
   pets: PetKeeper;
+  /** Work above the cut-line, room under the cap, and nothing started. → docs/spec/04-harness-cycle.md#when-the-fleet-stops-dispatching */
+  fleetStall: FleetStallWatch;
   localRun: LocalRunner;
   localValidations: LocalValidationDesk;
   localRunWatch: LocalRunWatch;
@@ -193,7 +196,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     readying: fleet.readying,
     dispatcher: fleet.dispatcher,
     harness,
-    localCycles: pulse.localCycles,
+    ...pulse,
     graph: bench.graph,
     tickets: bench.tickets,
     pool: bench.pool,
@@ -216,7 +219,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     botPrRisks: bench.botPrRisks,
     updates: bench.updates,
     runtimeControl: base.runtimeControl,
-    pets: pulse.pets,
     localRun: local.localRun,
     localRunWatch: local.localRunWatch,
     localValidations: local.localValidations,
@@ -512,5 +514,17 @@ function wirePulse(config: Config, base: Foundation, fleet: Fleet, harness: Harn
     // exists to remove back onto the critical path. → docs/spec/09-execution.md
     prewarm.run();
   });
-  return { localCycles, pets };
+  const fleetStall = new FleetStallWatch({ errors, afterCycles: config.fleetStallCycles });
+  harness.on('cycle:end', (report) => {
+    const plan = harness.upcoming;
+    if (!cycleRan(report) || plan?.cycleId !== report.cycleId) return;
+    fleetStall.observe({
+      at: report.at,
+      dispatching: plan.items.filter((i) => i.status === 'dispatching').map((i) => i.origin),
+      paused: runtimeControl.paused,
+      limitParked: agents.limitedAgentIds().length > 0,
+      decisions: store.decisions.listCycleDecisions(report.cycleId),
+    });
+  });
+  return { localCycles, pets, fleetStall };
 }

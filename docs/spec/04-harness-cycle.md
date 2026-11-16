@@ -14,6 +14,7 @@
 - **The pulse takes the fast interval while the fleet is busy — a live agent, a queued job, a candidate the fleet itself holds, a build in flight — and the slow one otherwise; a candidate held `unapproved` is not busy.** A fleet stuck on the slow interval with work queued has no other symptom. → [§](#the-adaptive-cadence) · `test/pulseLanes.test.ts`
 - **Pulse pass order is declared once in `PULSE_PIPELINE`, grouped by phase, and its load-bearing orderings are asserted by id.** Moving a pass below what it must precede — `environments` immediately under `graph`, `closeOuts` under `validationReady` — otherwise breaks silently. → [§](#the-pulse-registry) · `test/pulsePipeline.test.ts`
 - **A cycle that never returns is reported once by the watchdog, with where it is stuck, and shown live as `inFlightCycle`.** A hung `cycleInFlight` otherwise stops all dispatch while every reading looks like an idle fleet. → [§](#when-a-cycle-does-not-come-back) · `test/stuckCycle.test.ts`
+- **`fleetStallCycles` cycles running with a `dispatching` candidate, the fleet unpaused, no agent parked on the usage limit and no dispatch executed raise the fleet as stalled — once per episode, cleared by the first cycle that is not one.** It reads the symptom, never a cause, so a silent failure nobody has named yet still turns something red. → [§](#when-the-fleet-stops-dispatching) · `test/fleetStall.test.ts`
 
 ## The heartbeat
 
@@ -689,6 +690,48 @@ overdue}`, null between cycles. `overdue` is the same threshold. `fleet_status` 
 None of this unwedges anything — it makes the wedge legible. What stops the commonest cause of one is
 the deadline on every git subprocess ([09](09-execution.md#a-git-that-never-exits)): a hung git now
 rejects, `gitOrNull` catches it, the pass completes and the cycle ends.
+
+## When the fleet stops dispatching
+
+The watchdog covers a cycle that never ends. The commoner wedge is cycles that end every time and
+start nothing: a worktree pool bound snapshotted at boot refusing every lease
+([09](09-execution.md#exhaustion)), a provider that cannot report label authorship
+([06](06-issue-pickup.md)), a fold of a three-valued gate into `false`. Each has its own cause and
+its own guard; they share one symptom — **a full Up next queue, an idle fleet, nothing red** — and
+`FleetStallWatch` (`src/fleetStall.ts`) reads the symptom, so the next such failure, the one no guard
+names yet, is caught too.
+
+A cycle is **starved** when, all four at once:
+
+- the cycle's own plan (`harness.upcoming`, with its `cycleId`) has at least one item at status
+  `dispatching` — above the headroom cut-line, which already means headroom was above zero;
+- the runtime is not paused;
+- no agent is parked on the account's usage limit — a limit park explains an idle fleet, and is its
+  own ask ([10](10-agent-runtimes.md#the-limit-park));
+- not one `dispatch_code_agent` / `dispatch_desk_agent` decision the cycle recorded is `executed`.
+
+Anything else ends the episode. `fleetStallCycles` (default `10`, `0` off —
+[02](02-configuration.md#loop-and-capacity)) starved cycles running make it a **stall**. Counting cycles
+rather than time keeps it out of the adaptive cadence's way: a fleet with a `dispatching` candidate is
+busy, so it pulses on `heartbeatIntervalMs`, and ten is about five minutes at the default. A coalesced
+or held cycle never reaches `cycle:end`, and a failed one whose plan was never set has no plan to
+read, so neither counts in either direction.
+
+What it does:
+
+- **Once per episode** it records `errors.record({ source: 'cycle' })` with the count, the candidates
+  above the cut-line, and the detail of the newest refused dispatch the stalling cycle recorded, which
+  is usually the cause in its own words. Once: an hour of a standing fact as an hour of rows is the log
+  an operator learns to scroll past ([18](18-observability.md#the-error-log)).
+- **For as long as it lasts** it is `fleetStall` on the `harness` section, and a `fleet_stall` row on
+  the Needs you rail — `blocking`, `now`, red ([17](17-cockpit.md#the-queue-rail--needs-you)). The row
+  is derived from the reading, so it goes the cycle a dispatch is executed, without anything to
+  dismiss.
+
+It overlaps the rail's `dispatch` kind on purpose. That one is per origin and needs the same origin
+refused three pulses running; the stall is fleet-wide, needs no refusal at all — a dispatch that is
+never attempted reads `no dispatch was attempted` — and names the state the operator is in rather than
+one of its causes. The watch is in memory: a restart begins a fresh count.
 
 ## The world baseline
 

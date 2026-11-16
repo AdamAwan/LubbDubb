@@ -19,6 +19,7 @@ import type {
   EnvironmentGateRelease,
   EnvironmentHealthReading,
   ErrorLogEntry,
+  FleetStall,
   Escalation,
   FeatureSequence,
   GoalArrival,
@@ -142,6 +143,8 @@ export interface CockpitState {
   world: CockpitWorld;
   recovery: OrphanedWork[];
   build: BuildReading;
+  /** → docs/spec/04-harness-cycle.md#when-the-fleet-stops-dispatching */
+  fleetStall: FleetStall | null;
   retainedRuns: Issue[];
   archivedPullRequests: PullRequest[];
   plans: PlanView[];
