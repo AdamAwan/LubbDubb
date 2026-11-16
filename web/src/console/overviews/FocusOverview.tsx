@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
-import type { CockpitView } from '../../view/viewModel.js';
+import { runningAgents, type CockpitView } from '../../view/viewModel.js';
 import type { CockpitActions } from '../../cockpit/actions.js';
 import type { NeedRow } from '../../view/needsYou.js';
 import { Ref } from '../../components/refs.js';
@@ -17,7 +17,19 @@ import { waitedFor } from '../../components/util.js';
 import { PetFloor, openPets } from '../Vivarium.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
 import { FleetSlots } from './FleetSlots.js';
-import { byFocusRank, partsHeld } from './asks.js';
+import {
+  LOOK_TITLE,
+  cursorIndex,
+  focusRest,
+  focusRows,
+  partsHeld,
+  stopAriaLabel,
+  stopId,
+  stopTitle,
+  type FocusCursor,
+  type FocusStop,
+} from '../../view/focusQueue.js';
+import { plural } from '../../view/plural.js';
 import { panelUsage } from '../../cockpit/usage.js';
 import { buildLeads, type Lead, type LeadWhere } from './leads.js';
 
@@ -45,21 +57,20 @@ import { buildLeads, type Lead, type LeadWhere } from './leads.js';
  * the next ask falls into.
  */
 export function FocusOverview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const rows = [...view.needsYou].sort(byFocusRank);
-  const [cursor, setCursor] = useState<{ id: string; at: number } | null>(null);
+  const rows = focusRows(view.needsYou);
+  const [cursor, setCursor] = useState<FocusCursor | null>(null);
   const held = partsHeld(rows);
 
   /* The queue is the asks and then one stop that is not an ask: the leads, which
      used to be reachable only by emptying the queue. A null stop rather than a
      row of its own kind, because it answers nothing and carries no tone, holding
      or goal — everything a `NeedRow` is. */
-  const stops: (NeedRow | null)[] = [...rows, null];
-  const found = cursor === null ? -1 : stops.findIndex((s) => (s?.id ?? LOOK_ID) === cursor.id);
-  const at = Math.min(found === -1 ? (cursor?.at ?? 0) : found, stops.length - 1);
+  const stops: FocusStop[] = [...rows, null];
+  const at = cursorIndex(stops, cursor);
   const row = stops[at] ?? null;
   const go = (to: number): void => {
     if (to < 0 || to >= stops.length) return;
-    setCursor({ id: stops[to]?.id ?? LOOK_ID, at: to });
+    setCursor({ id: stopId(stops[to] ?? null), at: to });
   };
 
   /* The arrows move the cursor, except where the operator is writing — every ask
@@ -108,15 +119,7 @@ export function FocusOverview({ view, actions }: { view: CockpitView; actions: C
   );
 }
 
-function FocusProgress({
-  stops,
-  at,
-  go,
-}: {
-  stops: (NeedRow | null)[];
-  at: number;
-  go: (to: number) => void;
-}): JSX.Element {
+function FocusProgress({ stops, at, go }: { stops: FocusStop[]; at: number; go: (to: number) => void }): JSX.Element {
   return (
     <div className="cn-ov-focus-progress">
       <span className="cn-ov-pips">
@@ -124,15 +127,11 @@ function FocusProgress({
           <BareButton
             usage="fleet.filter"
             logs={i !== at}
-            key={r?.id ?? LOOK_ID}
+            key={stopId(r)}
             className={`cn-ov-pip ${r === null ? 'cn-ov-pip-look' : `cn-t-${KIND_TONE[r.kind]}`} ${i === at ? 'cn-ov-pip-here' : ''}`}
-            aria-label={
-              r === null
-                ? `${i + 1} of ${stops.length} — ${LOOK_TITLE}`
-                : `${i + 1} of ${stops.length} — ${KIND_LABEL[r.kind]}: ${r.title}`
-            }
+            aria-label={stopAriaLabel(r, i, stops.length)}
             aria-current={i === at}
-            title={r === null ? LOOK_TITLE : `${KIND_LABEL[r.kind]} — ${r.title}`}
+            title={stopTitle(r)}
             onClick={() => go(i)}
           />
         ))}
@@ -229,11 +228,7 @@ function Ask({
         <div className="cn-ov-focus-body">{needBody(row, view, actions)}</div>
 
         <footer className="cn-ov-focus-foot">
-          <span className="cn-ov-focus-rest">
-            {after === 0
-              ? 'last ask — what is worth a look is next'
-              : `${after} after this · ${held} ${held === 1 ? 'part' : 'parts'} held in total`}
-          </span>
+          <span className="cn-ov-focus-rest">{focusRest(after, held)}</span>
         </footer>
       </div>
     </div>
@@ -257,7 +252,7 @@ function Pets({ view, actions }: { view: CockpitView; actions: CockpitActions })
     <div className="cn-ov-focus-pets">
       <PetFloor
         pets={view.state.pets}
-        runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
+        runningAgents={runningAgents(view.state.agents)}
         paused={view.state.control.paused}
         onOpen={() => openPets(actions)}
         onHatch={(id) => actions.hatchEgg(id)}
@@ -384,9 +379,6 @@ export function Look({ view, actions }: { view: CockpitView; actions: CockpitAct
   );
 }
 
-const LOOK_ID = 'focus:look';
-const LOOK_TITLE = 'Worth a look';
-
 /**
  * What the surface says when the ask queue is empty.
  *
@@ -453,7 +445,7 @@ function Leads({ view, actions }: { view: CockpitView; actions: CockpitActions }
   return (
     <>
       <h3 className="cn-ov-ctx-label">
-        {LOOK_TITLE} <span>{leads.length === 1 ? '1 reading' : `${leads.length} readings`}</span>
+        {LOOK_TITLE} <span>{plural(leads.length, 'reading')}</span>
       </h3>
       <ul className="cn-ov-leads">
         {leads.map((lead) => (

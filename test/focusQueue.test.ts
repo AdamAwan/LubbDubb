@@ -1,0 +1,74 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import type { NeedRow } from '../web/src/view/needsYou.js';
+import { KIND_LABEL } from '../web/src/view/askKinds.js';
+import {
+  LOOK_TITLE,
+  cursorIndex,
+  focusRest,
+  focusRows,
+  partsHeld,
+  stopAriaLabel,
+  stopId,
+  stopTitle,
+  type FocusStop,
+} from '../web/src/view/focusQueue.js';
+
+const LOOK_ID = stopId(null);
+
+function stopsOf(rows: NeedRow[]): FocusStop[] {
+  return [...rows, null];
+}
+
+function row(id: string, focusRank: number, holding = 0): NeedRow {
+  return { id, kind: 'escalation', title: `ask ${id}`, focusRank, holding } as NeedRow;
+}
+
+test('focusRows sorts by focusRank and leaves the input alone', () => {
+  const input = [row('b', 2), row('a', 0), row('c', 1)];
+  assert.deepEqual(
+    focusRows(input).map((r) => r.id),
+    ['a', 'c', 'b'],
+  );
+  assert.deepEqual(
+    input.map((r) => r.id),
+    ['b', 'a', 'c'],
+  );
+});
+
+test('partsHeld totals holding across the queue', () => {
+  assert.equal(partsHeld([]), 0);
+  assert.equal(partsHeld([row('a', 0, 2), row('b', 1, 0), row('c', 2, 3)]), 5);
+});
+
+test('a stop is named by its ask, and the look stop by an id no ask carries', () => {
+  assert.equal(stopId(row('a', 0)), 'a');
+  assert.equal(LOOK_ID, 'focus:look');
+});
+
+test('cursorIndex holds the cursor by id when the queue shifts under it', () => {
+  const stops = stopsOf([row('a', 0), row('b', 1), row('c', 2)]);
+  assert.equal(cursorIndex(stops, null), 0);
+  assert.equal(cursorIndex(stops, { id: 'c', at: 0 }), 2);
+  assert.equal(cursorIndex(stops, { id: LOOK_ID, at: 0 }), 3);
+});
+
+test('cursorIndex falls back to the held position, clamped to the queue, when the id is gone', () => {
+  const stops = stopsOf([row('a', 0), row('c', 2)]);
+  assert.equal(cursorIndex(stops, { id: 'b', at: 1 }), 1);
+  assert.equal(cursorIndex(stops, { id: 'gone', at: 9 }), 2);
+});
+
+test('a stop is labelled by its place, its kind and its title, or as the look stop', () => {
+  const ask = row('a', 0);
+  assert.equal(stopAriaLabel(ask, 0, 3), `1 of 3 — ${KIND_LABEL.escalation}: ask a`);
+  assert.equal(stopAriaLabel(null, 2, 3), `3 of 3 — ${LOOK_TITLE}`);
+  assert.equal(stopTitle(ask), `${KIND_LABEL.escalation} — ask a`);
+  assert.equal(stopTitle(null), LOOK_TITLE);
+});
+
+test('focusRest says what is after the ask, or that the leads are next', () => {
+  assert.equal(focusRest(0, 4), 'last ask — what is worth a look is next');
+  assert.equal(focusRest(2, 1), '2 after this · 1 part held in total');
+  assert.equal(focusRest(3, 0), '3 after this · 0 parts held in total');
+});

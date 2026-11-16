@@ -1,11 +1,14 @@
 import type {
   CockpitEnvironment,
   GoalEnvironmentReachView,
+  RemoteRowOutcome,
   RemoteSheetRowView,
   RemoteSheetView,
   ValidationCheckResultBy,
+  ValidationCheckState,
   ValidationCheckView,
 } from '../types.js';
+import { isOwed } from './validationChecks.js';
 
 // → docs/spec/17-cockpit.md#the-validate-pane
 
@@ -66,6 +69,68 @@ export const BAND_HINT: Record<CheckBand, string> = {
   answered: 'passed or waived',
 };
 
+/** The bands in reading order: what is moving, what could move, what waits on a person, what is settled. */
+const BANDS: readonly CheckBand[] = ['running', 'open', 'yours', 'answered'];
+
+interface BandGroup {
+  band: CheckBand;
+  checks: ValidationCheckView[];
+  /**
+   * The runners named by a band's checks, said once on its heading. Null where they do not agree —
+   * two environments across one band is a fact about the rows and belongs on them, not on a heading
+   * that would then be wrong for half of what is under it.
+   */
+  runner: string | null;
+}
+
+/** The goal page's bands in reading order, each with the live checks in it; an empty band is left out. */
+export function checkBands(
+  live: readonly ValidationCheckView[],
+  standings: ReadonlyMap<string, CheckStanding>,
+): BandGroup[] {
+  return BANDS.flatMap((band): BandGroup[] => {
+    const checks = live.filter((check) => standings.get(check.id)?.band === band);
+    if (checks.length === 0) return [];
+    return [{ band, checks, runner: band === 'yours' ? null : runners(checks, standings) }];
+  });
+}
+
+function runners(checks: readonly ValidationCheckView[], standings: ReadonlyMap<string, CheckStanding>): string | null {
+  const said = new Set(checks.map((check) => standings.get(check.id)?.label ?? ''));
+  return said.size === 1 ? ([...said][0] ?? null) : null;
+}
+
+/**
+ * What a band already implies about the state of a check in it. A row that says it again is a chip
+ * carrying no news, and a list of twelve of them is twelve boxes of shouting between the reader and
+ * the two rows that are actually odd. → docs/spec/17-cockpit.md#the-validate-pane
+ */
+const BAND_IMPLIES: Record<CheckBand, ValidationCheckState | null> = {
+  running: null,
+  open: 'unrun',
+  yours: 'unrun',
+  answered: 'passed',
+};
+
+/** The check's state where its band does not already say it, or null where it does. */
+export function oddState(band: CheckBand, state: ValidationCheckState): ValidationCheckState | null {
+  return BAND_IMPLIES[band] === state ? null : state;
+}
+
+/** What a check's box says about the sheet row it writes. */
+export function checkBoxTitle(row: CheckRow): string {
+  if (row.live) return `A run on ${row.environment} is carrying it now`;
+  if (row.awaitingApproval)
+    return `In ${row.environment}’s next run — but its query needs approving before a press can read it`;
+  if (row.selected) return `In ${row.environment}’s next run. Untick to leave it out — you will answer it another way`;
+  return `Left out of ${row.environment}’s next run. Tick to put it back`;
+}
+
+/** What a run made of a check's row, in the row's own vocabulary: a block outranks any reading. */
+export function runOutcome(row: RemoteSheetRowView): RemoteRowOutcome | null {
+  return row.blockedReason !== null ? 'blocked' : (row.reading?.outcome ?? null);
+}
+
 /** A run that is still going. The sheet's own vocabulary — `pending` is dispatched-for, not idle. */
 function live(sheet: RemoteSheetView): boolean {
   return sheet.run !== null && (sheet.run.status === 'pending' || sheet.run.status === 'dispatched');
@@ -120,7 +185,7 @@ export function checkStandings(
     if (check.supersededReason !== null) continue;
     const row = boxRow(sheets, check.id, showing);
     const runs = checkRuns(sheets, check.id);
-    if (check.state === 'passed' || check.state === 'waived') {
+    if (!isOwed(check)) {
       standings.set(check.id, { band: 'answered', label: answeredBy(check, sheets), row, runs });
       continue;
     }

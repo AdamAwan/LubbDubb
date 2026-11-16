@@ -1440,7 +1440,8 @@ screen and a half above the environments, and which card is worth reading change
 goal nobody has planned and one held at a gate.
 
 So the cards are grouped behind **tabs**, declared once in `GOAL_TABS` (`web/src/view/goalPage.ts`)
-with `GOAL_TAB_OF` mapping each foldable section to the pane that holds it:
+with `GOAL_TAB_OF` mapping each foldable section to the pane that holds it (what each tab and pane reads
+while drawing — its title, carrier, picker choices and check tally — is beside them):
 
 | Pane           | id           | What is behind it                                                                                                                                                                   | Carried by                                      |
 | -------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
@@ -2789,6 +2790,20 @@ reads is the table above. The pane ids are **not** in that group — they are `v
 folds sit behind **Validate**: a sheet row carries a check's `sourceId` and writes its outcome back
 onto that check, so the set, the local run and the sheet are one list seen at three distances.
 
+#### A sheet of checks is a queue
+
+The needs band's validation ask body (`GoalChecks`, `web/src/console/taskAsks.tsx`) draws the
+goal's checks as a **queue, not a table** — the goal page bands them instead
+([the validate pane](#the-validate-pane)), and the plan sheet draws [the digest](#the-validation-digest).
+Nine checks drawn open together is nine checks' worth of prose and controls competing for a decision
+that is always about one of them. So
+exactly one check is drawn in full — the one the operator pinned, else the first still owed, else the
+first — and every other live check is a one-line `vq-line`, the owed ones before the settled ones. A
+check is owed until it has passed or been waived. A line's aside says the loudest of three facts:
+_changed_ by an amendment, _back with you_ from the fleet, or _with the fleet_. The operator can ask
+for every check drawn open at once; the lines then go. `checkQueue` in
+`web/src/view/validationChecks.ts` holds the rule, and `test/askBodies.test.ts` asserts one full row.
+
 #### The validate pane
 
 **One list of checks, and a panel per runner.** The pane draws `Checks` first, full width, and below
@@ -2817,7 +2832,9 @@ those columns exist for ([36](36-remote-validation.md#a-row-no-press-can-read)).
 is therefore the **residue**: nobody offered a run. It is not the cockpit's reading of whether the
 fleet could carry the check's first step — that is `fleetCanStart`, three-valued and the server's
 ([20](20-validation.md#who-carries-a-step)) — and a second opinion on it drawn beside the sheet's own
-is exactly what this pane had too much of.
+is exactly what this pane had too much of. `checkBands`, beside it in `web/src/view/validatePane.ts`,
+lays the live checks out in those bands in reading order and names the one runner a band's header
+carries.
 
 **A banded row says as little as the band leaves unsaid.** The runner rides the _band's header_ — once,
 and only where every check under it names the same one — because five rows reading "staging can take
@@ -4513,7 +4530,7 @@ was ever a control.
 removes it — and an index would slide a _different_ ask under the cursor. On a surface whose next
 control is `Approve merge`, that is how somebody approves what they were not looking at. The id is
 resolved back to an index each render; where it is gone, the position it held is where the next ask
-falls.
+falls. The queue's order, its stops and that resolution are `web/src/view/focusQueue.ts`.
 
 **The pips are the whole queue and each is a way into it.** A bar that only reports a position, on a
 surface whose complaint about the rail was that it could not be acted on, would be that mistake one

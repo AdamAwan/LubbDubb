@@ -28,6 +28,7 @@ import {
 import { Disclosure, type Fold } from './goalFold.js';
 import { BareButton } from '../components/button.js';
 import { awaitingAccept } from '../view/goalStages.js';
+import { plural } from '../view/plural.js';
 
 export const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
 
@@ -319,7 +320,7 @@ export function Signals({
       <h3>
         <Disclosure subject="watch" open={fold.open} onToggle={fold.onToggle} label="Signals" />
         <i className="cn-n">
-          {signals.length === 1 ? '1 reading' : `${signals.length} readings`}
+          {plural(signals.length, 'reading')}
           {pending > 0 && ` · ${pending} awaiting you`}
           {asked.size > 0 && ` · ${asked.size} waiting on you to run`}
         </i>

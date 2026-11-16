@@ -42,6 +42,7 @@ import {
   type GoalStage,
   type GoalStageTone,
 } from './goalStages.js';
+import { settledCount, splitChecks } from './validationChecks.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -392,7 +393,12 @@ function shipped(page: GoalPageView): boolean {
 }
 
 export function livePageChecks(page: GoalPageView): ValidationCheckView[] {
-  return page.checks.filter((c) => c.supersededReason === null);
+  return splitChecks(page.checks).live;
+}
+
+export function checkTally(page: GoalPageView): { live: number; settled: number } {
+  const live = livePageChecks(page);
+  return { live: live.length, settled: settledCount(live) };
 }
 
 function tailBegun(page: GoalPageView): boolean {
@@ -468,6 +474,10 @@ export function goalPanes(page: GoalPageView): GoalTab[] {
   );
 }
 
+export function pickedGoalTab(page: GoalPageView, picked: GoalTab | null): GoalTab | null {
+  return picked !== null && goalPanes(page).includes(picked) ? picked : null;
+}
+
 /**
  * The pane a section is actually drawn behind on *this* deployment. `GOAL_TAB_OF` says
  * where it belongs; this is that answer folded onto a pane the row draws. No card may
@@ -514,6 +524,21 @@ export function obligationEnvironment(page: GoalPageView, tab: ObligationTab, pi
   const names = page.obligations[tab];
   const reached = page.environments.filter((e) => e.status === 'reached').map((e) => e.environment);
   return names.find((n) => n === picked) ?? [...names].reverse().find((n) => reached.includes(n)) ?? names[0] ?? null;
+}
+
+interface ObligationChoice {
+  name: string;
+  status: GoalEnvironmentReachView['status'] | null;
+}
+
+/** Empty where fewer than two environments carry the obligation: one is named on the tab already. */
+export function obligationChoices(page: GoalPageView, tab: ObligationTab): ObligationChoice[] {
+  const names = page.obligations[tab];
+  if (names.length < 2) return [];
+  return names.map((name) => ({
+    name,
+    status: page.environments.find((e) => e.environment === name)?.status ?? null,
+  }));
 }
 
 export interface GoalTabOpening {
@@ -681,6 +706,25 @@ export function buildGoalNav(page: GoalPageView): GoalNavEntry[] {
     const on = tab === 'ask' || tab === 'discussion' || tab === 'plan' ? [] : page.obligations[tab];
     return { tab, label: GOAL_TAB_LABEL[tab], ...stages[tab], needsYou, on };
   });
+}
+
+export function goalTabTitle(
+  entry: Pick<GoalNavEntry, 'tab' | 'label' | 'reading'>,
+  selected: GoalTab,
+  chosen: GoalTab | null,
+  opening: GoalTabOpening,
+): string {
+  return entry.tab === selected && chosen === null
+    ? `Opened here because ${opening.why}`
+    : `${entry.label}: ${entry.reading} — go to it`;
+}
+
+export function goalTabCarrier(on: readonly string[]): { text: string; title: string } | null {
+  if (on.length === 0) return null;
+  return {
+    text: on.length === 1 ? (on[0] ?? '') : `${String(on.length)} environments`,
+    title: `Carried by ${on.join(' and ')}`,
+  };
 }
 
 /** → docs/spec/17-cockpit.md#a-goal-with-no-parent-feature */

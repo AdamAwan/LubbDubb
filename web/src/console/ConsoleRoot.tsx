@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { CockpitView } from '../view/viewModel.js';
+import { runningAgents, type CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { tabUsage } from '../cockpit/usage.js';
 import type { PrPageView } from '../view/prPage.js';
@@ -77,7 +77,7 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
         {view.state.pets !== null && !railless(view) && (
           <Vivarium
             pets={view.state.pets}
-            runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
+            runningAgents={runningAgents(view.state.agents)}
             paused={view.state.control.paused}
             onOpen={() => openPets(actions)}
             onHatch={(id) => actions.hatchEgg(id)}
