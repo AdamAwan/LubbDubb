@@ -640,7 +640,7 @@ function goalPaneAsks(page: GoalPageView, tab: GoalTab): NeedRow[] {
   });
 }
 
-interface GoalNavEntry {
+export interface GoalNavEntry {
   tab: GoalTab;
   label: string;
   reading: string;
