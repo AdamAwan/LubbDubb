@@ -126,6 +126,10 @@ export interface CockpitView {
 
 const LIVE_STATUSES = ['starting', 'running', 'waiting'];
 
+export function runningAgents(agents: readonly Agent[]): number {
+  return agents.filter((a) => a.status === 'running').length;
+}
+
 export interface DeskRun {
   checkId: string;
   letter: string;

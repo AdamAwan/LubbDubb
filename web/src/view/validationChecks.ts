@@ -18,7 +18,7 @@ export function splitChecks(checks: readonly ValidationCheckView[]): CheckSet {
 /** Work still owed. `passed` and `waived` are the two states that settle a check; everything else —
  *  unrun, captured, failed, deferred, declined — is something somebody still has to answer.
  *  → docs/spec/20-validation.md#states */
-export function isOwed(check: ValidationCheckView): boolean {
+export function isOwed(check: Pick<ValidationCheckView, 'state'>): boolean {
   return check.state !== 'passed' && check.state !== 'waived';
 }
 
@@ -28,8 +28,6 @@ interface CheckQueue {
   shown: ValidationCheckView[];
   /** The rest as lines, owed apart from settled. Empty while the whole set is drawn. */
   rest: { owed: ValidationCheckView[]; done: ValidationCheckView[] };
-  /** Reworded since the plan was written. */
-  amended: ValidationCheckView[];
 }
 
 /**
@@ -46,15 +44,18 @@ export function checkQueue(live: readonly ValidationCheckView[], focus: string |
       owed: all ? [] : live.filter((c) => c !== picked && isOwed(c)),
       done: all ? [] : live.filter((c) => c !== picked && !isOwed(c)),
     },
-    amended: live.filter((c) => c.amendedAt !== null),
   };
+}
+
+/** How many of the live checks are settled: the *N* of every "N of M done". */
+export function settledCount(live: readonly Pick<ValidationCheckView, 'state'>[]): number {
+  return live.filter((c) => !isOwed(c)).length;
 }
 
 /** The digest's count beside its heading. */
 export function digestCount(live: readonly ValidationCheckView[]): string {
   if (live.length === 0) return 'withdrawn';
-  const settled = live.filter((c) => !isOwed(c)).length;
-  return `${String(settled)} of ${String(live.length)} done`;
+  return `${String(settledCount(live))} of ${String(live.length)} done`;
 }
 
 /** What a queue line says beside its title, if anything: the loudest of the three facts it could. */

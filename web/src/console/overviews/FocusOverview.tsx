@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
-import type { CockpitView } from '../../view/viewModel.js';
+import { runningAgents, type CockpitView } from '../../view/viewModel.js';
 import type { CockpitActions } from '../../cockpit/actions.js';
 import type { NeedRow } from '../../view/needsYou.js';
 import { Ref } from '../../components/refs.js';
@@ -22,16 +22,14 @@ import {
   cursorIndex,
   focusRest,
   focusRows,
-  focusStops,
-  mergedParts,
   partsHeld,
-  readingsCount,
-  runningAgents,
   stopAriaLabel,
   stopId,
   stopTitle,
+  type FocusCursor,
   type FocusStop,
 } from '../../view/focusQueue.js';
+import { plural } from '../../view/plural.js';
 import { panelUsage } from '../../cockpit/usage.js';
 import { buildLeads, type Lead, type LeadWhere } from './leads.js';
 
@@ -60,14 +58,14 @@ import { buildLeads, type Lead, type LeadWhere } from './leads.js';
  */
 export function FocusOverview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const rows = focusRows(view.needsYou);
-  const [cursor, setCursor] = useState<{ id: string; at: number } | null>(null);
+  const [cursor, setCursor] = useState<FocusCursor | null>(null);
   const held = partsHeld(rows);
 
   /* The queue is the asks and then one stop that is not an ask: the leads, which
      used to be reachable only by emptying the queue. A null stop rather than a
      row of its own kind, because it answers nothing and carries no tone, holding
      or goal — everything a `NeedRow` is. */
-  const stops = focusStops(rows);
+  const stops: FocusStop[] = [...rows, null];
   const at = cursorIndex(stops, cursor);
   const row = stops[at] ?? null;
   const go = (to: number): void => {
@@ -288,7 +286,7 @@ function Context({ row, view, actions }: { row: NeedRow; view: CockpitView; acti
   const issue = goal?.issue;
   const parts = goal?.parts ?? [];
   const siblings = goal?.otherAsks ?? 0;
-  const merged = mergedParts(parts);
+  const merged = parts.filter((p) => p.group === 'merged').length;
 
   return (
     <div className="cn-ov-ctx">
@@ -447,7 +445,7 @@ function Leads({ view, actions }: { view: CockpitView; actions: CockpitActions }
   return (
     <>
       <h3 className="cn-ov-ctx-label">
-        {LOOK_TITLE} <span>{readingsCount(leads.length)}</span>
+        {LOOK_TITLE} <span>{plural(leads.length, 'reading')}</span>
       </h3>
       <ul className="cn-ov-leads">
         {leads.map((lead) => (

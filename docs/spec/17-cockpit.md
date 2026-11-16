@@ -1441,7 +1441,7 @@ goal nobody has planned and one held at a gate.
 
 So the cards are grouped behind **tabs**, declared once in `GOAL_TABS` (`web/src/view/goalPage.ts`)
 with `GOAL_TAB_OF` mapping each foldable section to the pane that holds it (what each tab and pane reads
-while drawing — its title, carrier, picker choices and check tally — is `web/src/view/goalPanes.ts`):
+while drawing — its title, carrier, picker choices and check tally — is beside them):
 
 | Pane           | id           | What is behind it                                                                                                                                                                   | Carried by                                      |
 | -------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
@@ -2790,6 +2790,20 @@ reads is the table above. The pane ids are **not** in that group — they are `v
 folds sit behind **Validate**: a sheet row carries a check's `sourceId` and writes its outcome back
 onto that check, so the set, the local run and the sheet are one list seen at three distances.
 
+#### A sheet of checks is a queue
+
+The needs band's validation ask body (`GoalChecks`, `web/src/console/taskAsks.tsx`) draws the
+goal's checks as a **queue, not a table** — the goal page bands them instead
+([the validate pane](#the-validate-pane)), and the plan sheet draws [the digest](#the-validation-digest).
+Nine checks drawn open together is nine checks' worth of prose and controls competing for a decision
+that is always about one of them. So
+exactly one check is drawn in full — the one the operator pinned, else the first still owed, else the
+first — and every other live check is a one-line `vq-line`, the owed ones before the settled ones. A
+check is owed until it has passed or been waived. A line's aside says the loudest of three facts:
+_changed_ by an amendment, _back with you_ from the fleet, or _with the fleet_. The operator can ask
+for every check drawn open at once; the lines then go. `checkQueue` in
+`web/src/view/validationChecks.ts` holds the rule, and `test/askBodies.test.ts` asserts one full row.
+
 #### The validate pane
 
 **One list of checks, and a panel per runner.** The pane draws `Checks` first, full width, and below
@@ -2818,7 +2832,9 @@ those columns exist for ([36](36-remote-validation.md#a-row-no-press-can-read)).
 is therefore the **residue**: nobody offered a run. It is not the cockpit's reading of whether the
 fleet could carry the check's first step — that is `fleetCanStart`, three-valued and the server's
 ([20](20-validation.md#who-carries-a-step)) — and a second opinion on it drawn beside the sheet's own
-is exactly what this pane had too much of.
+is exactly what this pane had too much of. `checkBands`, beside it in `web/src/view/validatePane.ts`,
+lays the live checks out in those bands in reading order and names the one runner a band's header
+carries.
 
 **A banded row says as little as the band leaves unsaid.** The runner rides the _band's header_ — once,
 and only where every check under it names the same one — because five rows reading "staging can take
@@ -2926,7 +2942,6 @@ are two jobs. The plan sheet writes them and amends them and still renders them
 ([the digest](#the-validation-digest)); running one is work against the _delivered_ goal, done days
 after the plan was approved and usually by somebody with no reason to open it. A control reachable
 only from inside the document that proposed it is a control nobody finds.
-Its queue, the live/withdrawn split and each line's aside are derived in `web/src/view/validationChecks.ts`; its bands in `web/src/view/validatePane.ts`.
 
 The card is **full width, above the two columns and above the plan**. Not in either stack: a check
 draws its `do` and `expect` side by side and carries a row of five verbs, and both are cramped in a
@@ -3035,17 +3050,6 @@ here — the snapshot projects every check through `withLiveClaim` — so this c
 nothing at all, because that is already what a validation checklist means — the markers are the
 exceptions, which is exactly what a reader deciding how much a tick is worth needs.
 → [20](20-validation.md#the-desktop-channel)
-
-#### A sheet of checks is a queue
-
-The section draws its checks as a **queue, not a table**: nine checks drawn open together is nine
-checks' worth of prose and controls competing for a decision that is always about one of them. So
-exactly one check is drawn in full — the one the operator pinned, else the first still owed, else the
-first — and every other live check is a one-line `vq-line`, the owed ones before the settled ones. A
-check is owed until it has passed or been waived. A line's aside says the loudest of three facts:
-_changed_ by an amendment, _back with you_ from the fleet, or _with the fleet_. The operator can ask
-for every check drawn open at once; the lines then go. `checkQueue` in
-`web/src/view/validationChecks.ts` holds the rule, and `test/askBodies.test.ts` asserts one full row.
 
 ### A sheet row draws its own capture
 

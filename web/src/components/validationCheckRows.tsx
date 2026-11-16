@@ -89,7 +89,7 @@ export function CheckLine({
  * What each environment's run made of one check, under the check: the environment, the outcome in the
  * row's own vocabulary, the sentence the run left, and the way to its screen and its agent. The same
  * facts the environment panel used to list as a second copy of the set, now read where the check is.
- * → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue
+ * → docs/spec/17-cockpit.md#a-check-carries-its-runs
  */
 export function CheckRuns({
   runs,

@@ -171,10 +171,6 @@ test('the queue opens the first check owed, and lists the rest owed apart from d
     q.rest.done.map((c) => c.id),
     ['a', 'd'],
   );
-  assert.deepEqual(
-    q.amended.map((c) => c.id),
-    ['d'],
-  );
 });
 
 test('a pin wins over the queue, and a pin the set no longer holds falls back to it', () => {

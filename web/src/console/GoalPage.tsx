@@ -18,16 +18,12 @@ import {
   GOAL_ANCHOR,
   goalLanding,
   goalPaneOf,
-} from '../view/goalPage.js';
-import {
   checkTally,
   goalTabCarrier,
   goalTabTitle,
   obligationChoices,
   pickedGoalTab,
-  watchSourcesOf,
-  watchWindowOf,
-} from '../view/goalPanes.js';
+} from '../view/goalPage.js';
 import { DiscussionPane } from '../components/DiscussionPane.js';
 import { PartDescriptionsProvider } from '../components/partDescriptions.js';
 import { Tag } from '../components/tag.js';
@@ -384,7 +380,7 @@ function WatchPane({
   folds: Record<GoalSection, Fold>;
 }): JSX.Element {
   const showing = obligationEnvironment(page, 'watch', view.sheetEnvironment);
-  const window = watchWindowOf(page, showing);
+  const window = page.watches.find((w) => w.environment === showing);
   return (
     <>
       <WatchOutcomeCard
@@ -405,7 +401,7 @@ function WatchPane({
       <WatchWindow
         watch={window}
         environment={showing}
-        sources={watchSourcesOf(view.state.config.environments, showing)}
+        sources={view.state.config.environments.find((e) => e.name === showing)?.watchSources ?? []}
         issueNumber={page.issue.number}
         now={view.now}
         actions={actions}
@@ -434,11 +430,11 @@ function ObligationPicker({
   showing: string | null;
   actions: CockpitActions;
 }): JSX.Element | null {
-  const choices = obligationChoices(page, tab, showing);
+  const choices = obligationChoices(page, tab);
   if (choices.length === 0) return null;
   return (
     <HeadRow className="cn-envpick">
-      {choices.map(({ name, status, showing: shown }) => (
+      {choices.map(({ name, status }) => (
         <Button
           key={name}
           usage="validation.filter"
@@ -447,7 +443,7 @@ function ObligationPicker({
         >
           {name}
           {status !== null && (
-            <Tag tone={REACH_TONE[status]} fill={shown}>
+            <Tag tone={REACH_TONE[status]} fill={name === showing}>
               {status}
             </Tag>
           )}

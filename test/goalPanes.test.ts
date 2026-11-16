@@ -1,21 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type {
-  CockpitEnvironment,
-  GoalEnvironmentReachView,
-  GoalWatchView,
-  ValidationCheckView,
-} from '../web/src/types.js';
-import { buildGoalPage, buildGoalNav, type GoalPageView } from '../web/src/view/goalPage.js';
+import type { GoalEnvironmentReachView, ValidationCheckView } from '../web/src/types.js';
 import {
+  buildGoalPage,
+  buildGoalNav,
   checkTally,
   goalTabCarrier,
   goalTabTitle,
   obligationChoices,
   pickedGoalTab,
-  watchSourcesOf,
-  watchWindowOf,
-} from '../web/src/view/goalPanes.js';
+  type GoalPageView,
+} from '../web/src/view/goalPage.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 
@@ -57,15 +52,15 @@ test('a tab names the one environment carrying it, and counts several', () => {
 test('the obligation picker draws only where two or more environments carry it', () => {
   const page = basePage();
   const one = { ...page, obligations: { ...page.obligations, validate: ['test'] } };
-  assert.deepEqual(obligationChoices(one, 'validate', 'test'), []);
+  assert.deepEqual(obligationChoices(one, 'validate'), []);
   const two = {
     ...page,
     obligations: { ...page.obligations, validate: ['test', 'prod'] },
     environments: [reach('test', 'reached')],
   };
-  assert.deepEqual(obligationChoices(two, 'validate', 'prod'), [
-    { name: 'test', status: 'reached', showing: false },
-    { name: 'prod', status: null, showing: true },
+  assert.deepEqual(obligationChoices(two, 'validate'), [
+    { name: 'test', status: 'reached' },
+    { name: 'prod', status: null },
   ]);
 });
 
@@ -81,15 +76,4 @@ test('the check tally counts live checks, and passed or waived as done', () => {
     }),
     { live: 4, settled: 2 },
   );
-});
-
-test('the watch pane reads the window and sources of the environment it shows', () => {
-  const page = basePage();
-  const prod = { environment: 'prod' } as GoalWatchView;
-  assert.equal(watchWindowOf({ ...page, watches: [prod] }, 'prod'), prod);
-  assert.equal(watchWindowOf({ ...page, watches: [prod] }, 'test'), undefined);
-  const sources = [{}] as CockpitEnvironment['watchSources'];
-  const envs = [{ name: 'prod', watchSources: sources }] as CockpitEnvironment[];
-  assert.equal(watchSourcesOf(envs, 'prod'), sources);
-  assert.deepEqual(watchSourcesOf(envs, null), []);
 });

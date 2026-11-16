@@ -8,6 +8,7 @@ import type {
   ValidationCheckState,
   ValidationCheckView,
 } from '../types.js';
+import { isOwed } from './validationChecks.js';
 
 // → docs/spec/17-cockpit.md#the-validate-pane
 
@@ -68,11 +69,8 @@ export const BAND_HINT: Record<CheckBand, string> = {
   answered: 'passed or waived',
 };
 
-/** The order the owed bands are read in: what is moving, what could move, what is waiting on a person. */
-const BANDS: CheckBand[] = ['running', 'open', 'yours'];
-
-/** The same order with what is settled at the end, which is the whole list on the goal page. */
-const ALL_BANDS: CheckBand[] = [...BANDS, 'answered'];
+/** The bands in reading order: what is moving, what could move, what waits on a person, what is settled. */
+const BANDS: readonly CheckBand[] = ['running', 'open', 'yours', 'answered'];
 
 interface BandGroup {
   band: CheckBand;
@@ -90,7 +88,7 @@ export function checkBands(
   live: readonly ValidationCheckView[],
   standings: ReadonlyMap<string, CheckStanding>,
 ): BandGroup[] {
-  return ALL_BANDS.flatMap((band): BandGroup[] => {
+  return BANDS.flatMap((band): BandGroup[] => {
     const checks = live.filter((check) => standings.get(check.id)?.band === band);
     if (checks.length === 0) return [];
     return [{ band, checks, runner: band === 'yours' ? null : runners(checks, standings) }];
@@ -187,7 +185,7 @@ export function checkStandings(
     if (check.supersededReason !== null) continue;
     const row = boxRow(sheets, check.id, showing);
     const runs = checkRuns(sheets, check.id);
-    if (check.state === 'passed' || check.state === 'waived') {
+    if (!isOwed(check)) {
       standings.set(check.id, { band: 'answered', label: answeredBy(check, sheets), row, runs });
       continue;
     }

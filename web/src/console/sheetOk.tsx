@@ -4,6 +4,7 @@ import type { OkScope, OkStatus, RemoteSheetView } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { Button } from '../components/button.js';
 import { Tag, type TagTone } from '../components/tag.js';
+import { plural } from '../view/plural.js';
 
 // → docs/spec/36-remote-validation.md#the-ok
 
@@ -117,8 +118,4 @@ function scopeLine({ checks, queries, approvals }: OkScope): string {
   ];
   const runs = `runs ${parts.join(' and ')}`;
   return approvals > 0 ? `${runs} · approves ${plural(approvals, 'query', 'queries')}` : runs;
-}
-
-function plural(n: number, one: string, many = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`;
 }

@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { CockpitView } from '../view/viewModel.js';
+import { runningAgents, type CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { tabUsage } from '../cockpit/usage.js';
 import type { PrPageView } from '../view/prPage.js';
@@ -24,7 +24,6 @@ import { InsightsPage } from '../components/InsightsPage.js';
 import { BotPrsPage } from '../components/BotPrsPage.js';
 import { AppErrorsPage } from '../components/AppErrorsPage.js';
 import { Ref } from '../components/refs.js';
-import { runningAgents } from '../view/focusQueue.js';
 import { PluginBand } from './PluginBand.js';
 
 // → docs/spec/17-cockpit.md

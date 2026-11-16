@@ -1,16 +1,16 @@
-import type { Agent, AskGoalPart } from '../types.js';
 import type { NeedRow } from './needsYou.js';
 import { KIND_LABEL } from './askKinds.js';
+import { plural } from './plural.js';
 
 // → docs/spec/17-cockpit.md#one-ask-at-a-time
 
-export const LOOK_ID = 'focus:look';
+const LOOK_ID = 'focus:look';
 export const LOOK_TITLE = 'Worth a look';
 
 /** A stop on the queue: an ask, or null for the leads that end it. */
 export type FocusStop = NeedRow | null;
 
-interface FocusCursor {
+export interface FocusCursor {
   id: string;
   at: number;
 }
@@ -23,10 +23,6 @@ export function focusRows(needsYou: readonly NeedRow[]): NeedRow[] {
 /** How many parts are stalled behind the whole set. */
 export function partsHeld(rows: readonly NeedRow[]): number {
   return rows.reduce((sum, row) => sum + row.holding, 0);
-}
-
-export function focusStops(rows: readonly NeedRow[]): FocusStop[] {
-  return [...rows, null];
 }
 
 export function stopId(stop: FocusStop): string {
@@ -53,17 +49,5 @@ export function stopTitle(stop: FocusStop): string {
 export function focusRest(after: number, held: number): string {
   return after === 0
     ? 'last ask — what is worth a look is next'
-    : `${after} after this · ${held} ${held === 1 ? 'part' : 'parts'} held in total`;
-}
-
-export function mergedParts(parts: readonly AskGoalPart[]): number {
-  return parts.filter((p) => p.group === 'merged').length;
-}
-
-export function runningAgents(agents: readonly Agent[]): number {
-  return agents.filter((a) => a.status === 'running').length;
-}
-
-export function readingsCount(n: number): string {
-  return n === 1 ? '1 reading' : `${n} readings`;
+    : `${after} after this · ${plural(held, 'part')} held in total`;
 }

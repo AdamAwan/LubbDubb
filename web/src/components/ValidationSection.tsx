@@ -318,13 +318,13 @@ function CheckQueue({
   onOpen: (checkId: string) => void;
   block: (check: ValidationCheckView) => JSX.Element;
 }) {
-  const { owed, shown, rest, amended } = checkQueue(live, focus, all);
+  const { owed, shown, rest } = checkQueue(live, focus, all);
   const line = (check: ValidationCheckView): JSX.Element => (
     <CheckLine key={check.id} check={check} standing={undefined} onOpen={() => onOpen(check.id)} onSelect={undefined} />
   );
   return (
     <>
-      <QueueHead live={live} owed={owed} amended={amended} plan={plan} all={all} onAll={onAll} />
+      <QueueHead live={live} owed={owed} plan={plan} all={all} onAll={onAll} />
       {/* The planner's departure from the hint, and what the set needs to hand. Both were bands of
           their own above the rows; they are what a reader consults rather than reads, so they fold. */}
       {(plan?.note != null || resources.length > 0) && <QueueAbout plan={plan} resources={resources} />}
@@ -357,18 +357,17 @@ function CheckQueue({
 function QueueHead({
   live,
   owed,
-  amended,
   plan,
   all,
   onAll,
 }: {
   live: ValidationCheckView[];
   owed: ValidationCheckView[];
-  amended: ValidationCheckView[];
   plan: ValidationPlanRecord | null;
   all: boolean;
   onAll: () => void;
 }) {
+  const amended = live.filter((c) => c.amendedAt !== null);
   /* One line, not a stack of prose. What an operator needs before they start is *how much is
      left*, and it was being told to them in three paragraphs and two amber bands — which is the
      reading a card is least likely to be given. A meter is read without being read.
