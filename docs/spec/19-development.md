@@ -354,24 +354,23 @@ it to understand why a decision was made, and check the code before relying on a
 
 ## Scripts
 
-| Script                   | Does                                                                            |
-| ------------------------ | ------------------------------------------------------------------------------- |
-| `npm start`              | Builds the cockpit bundle, then runs the server via tsx.                        |
-| `npm run start:server`   | The server alone, serving whatever `web/dist` already holds.                    |
-| `npm run serve`          | The cockpit bundle, then the server **under a supervisor** that can replace it. |
-| `npm run serve:server`   | The supervised server alone. See [21](21-self-update.md#applying-it).           |
-| `npm run dev`            | The server with `--watch`, no cockpit build (see below).                        |
-| `npm test`               | Builds `.testbuild/`, then `node --test` over `.testbuild/test/*.test.js`.      |
-| `npm run test:build`     | `scripts/testBuild.ts` — the esbuild pass into `.testbuild/` (see above).       |
-| `npm run test:coverage`  | The suite under c8 (`.c8rc.json`; `src/server/main.ts` excluded).               |
-| `npm run smoke`          | The real end-to-end run (see below).                                            |
-| `npm run build`          | TypeScript 7's `tsc -p tsconfig.json` (see the two TypeScripts above).          |
-| `npm run web:dev`        | Vite dev server for the cockpit.                                                |
-| `npm run web:build`      | Production bundle into `web/dist`.                                              |
-| `npm run web:build:demo` | The demo bundle for GitHub Pages — the only demo build there is.                |
-| `npm run audit`          | The advisory gate over runtime dependencies (see below).                        |
-| `npm run audit:all`      | The same scan over the whole tree, dev toolchain included.                      |
-| `npm run check`          | The one gate: the six stages above, concurrently, via `scripts/check.ts`.       |
+| Script                  | Does                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| `npm start`             | Builds the cockpit bundle, then runs the server via tsx.                        |
+| `npm run start:server`  | The server alone, serving whatever `web/dist` already holds.                    |
+| `npm run serve`         | The cockpit bundle, then the server **under a supervisor** that can replace it. |
+| `npm run serve:server`  | The supervised server alone. See [21](21-self-update.md#applying-it).           |
+| `npm run dev`           | The server with `--watch`, no cockpit build (see below).                        |
+| `npm test`              | Builds `.testbuild/`, then `node --test` over `.testbuild/test/*.test.js`.      |
+| `npm run test:build`    | `scripts/testBuild.ts` — the esbuild pass into `.testbuild/` (see above).       |
+| `npm run test:coverage` | The suite under c8 (`.c8rc.json`; `src/server/main.ts` excluded).               |
+| `npm run smoke`         | The real end-to-end run (see below).                                            |
+| `npm run build`         | TypeScript 7's `tsc -p tsconfig.json` (see the two TypeScripts above).          |
+| `npm run web:dev`       | Vite dev server for the cockpit.                                                |
+| `npm run web:build`     | Production bundle into `web/dist`.                                              |
+| `npm run audit`         | The advisory gate over runtime dependencies (see below).                        |
+| `npm run audit:all`     | The same scan over the whole tree, dev toolchain included.                      |
+| `npm run check`         | The one gate: the six stages above, concurrently, via `scripts/check.ts`.       |
 
 ### The advisory gate
 

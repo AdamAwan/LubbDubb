@@ -130,7 +130,6 @@ offers no such control, and the day it does, the cell is where it is added.
 | `notification`   | `edit` `send`                                                                                           |
 | `project`        | `accept`                                                                                                |
 | `scan`           | `create`                                                                                                |
-| `demo`           | `expand` `create` `close`                                                                               |
 | `code`           | `copy`                                                                                                  |
 | `menu`           | `expand` `close`                                                                                        |
 | `reason`         | `expand`                                                                                                |

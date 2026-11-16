@@ -22,7 +22,7 @@ import { decode } from './support/html.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { ParentPicker } = await import('../web/src/components/ParentPicker.js');
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
@@ -115,7 +115,7 @@ test('the snapshot carries the candidate containers, derived once for the whole 
 });
 
 function pickerHtml(candidates: IssueRelative[], goalNumber = 12, proposed: number | null = null): string {
-  const state = buildDemoState().state as AppState;
+  const state = buildFixtureState() as AppState;
   state.world.parentCandidates = candidates;
   const view = { state, now: Date.now() } as unknown as CockpitView;
   const goal = { ...issue({ number: goalNumber, parent: null }) } as unknown as WebIssue;

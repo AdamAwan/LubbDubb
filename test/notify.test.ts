@@ -9,8 +9,7 @@ import {
   sendTestNotification,
 } from '../web/src/cockpit/notify.js';
 
-const { buildDemoState: buildDemoSeed } = await import('../web/src/demo/fixtures.js');
-const buildDemoState = () => buildDemoSeed().state;
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 
 function snap(over: Partial<Snapshot> = {}) {
   return { needsYou: [], errors: [], agents: [], validations: [], environments: [], ...over };
@@ -35,14 +34,14 @@ function health(over: Partial<EnvironmentHealthReading> & { environment: string 
 }
 
 test('the first snapshot notifies nothing, however much is already waiting', () => {
-  const state = buildDemoState();
+  const state = buildFixtureState();
   const first = notifySnapshot(state);
   assert.ok(first.needsYou.length > 0, 'the demo seed should carry needs-you rows for this to prove anything');
   assert.deepEqual(notifiableChanges(null, first), []);
 });
 
 test('an unchanged snapshot notifies nothing', () => {
-  const state = buildDemoState();
+  const state = buildFixtureState();
   const before = notifySnapshot(state);
   assert.deepEqual(notifiableChanges(before, notifySnapshot(state)), []);
 });
@@ -403,7 +402,7 @@ test('several environments changing at once is one notification that says how ma
 });
 
 test('notifySnapshot reduces a whole AppState to the four lists', () => {
-  const state = buildDemoState();
+  const state = buildFixtureState();
   const reduced = notifySnapshot(state);
   assert.equal(reduced.agents.length, state.agents.length);
   assert.equal(reduced.errors.length, state.errors.length);
@@ -519,7 +518,7 @@ test('a remote validation run says which environment it ran against', () => {
 });
 
 test('notifySnapshot carries only validations that ended with something to review', () => {
-  const state = buildDemoState();
+  const state = buildFixtureState();
   const reduced = notifySnapshot(state);
   const local = state.world.issues.filter(
     (i) => i.localValidation && ['passed', 'failed', 'blocked'].includes(i.localValidation.status),

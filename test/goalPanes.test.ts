@@ -12,10 +12,10 @@ import {
   type GoalPageView,
 } from '../web/src/view/goalPage.js';
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 
 function basePage(): GoalPageView {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const page = buildGoalPage(state, `issue:${issue.number}`, []);
   assert.ok(page);

@@ -1,24 +1,2 @@
 {
-  "web/src/demo/demoBackend.ts": {
-    "complexity": {
-      "count": 4
-    },
-    "max-depth": {
-      "count": 2
-    },
-    "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 8
-    }
-  },
-  "web/src/demo/fixtures.ts": {
-    "max-lines": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 2
-    }
-  }
 }

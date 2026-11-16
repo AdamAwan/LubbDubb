@@ -11,8 +11,8 @@ and that `src/wire.ts` is the only server module the SPA names at all. See
 [16 — HTTP API](16-http-api.md#the-wire-contract).
 
 **One thing is passed through by value: the ask queue.** `src/wire.ts` re-exports runtime from three
-pure leaf modules under `src/asks/` — `buildAskQueue`, which the demo's fake server derives its queue
-with ([demo mode](#demo-mode)), and `askLine`, `oneLine`, `upgradeHeadline` and `projectName`, which
+pure leaf modules under `src/asks/` — `buildAskQueue`, which the test fixtures derive their queue
+with ([the fixture world](#the-fixture-world)), and `askLine`, `oneLine`, `upgradeHeadline` and `projectName`, which
 the cockpit words its own lines with so that a line it composes cannot word the server's row
 differently. `test/wireRuntime.test.ts` pins that list and walks each module's imports refusing a node
 builtin or a package value — a re-export is not a declaration and would slip past
@@ -50,7 +50,7 @@ What keeps that from swallowing the cockpit's rules is the split on **behaviour 
 
 - **Shared** (`web/src/components/`) — anything with an async flow, a refusal rule or hold semantics:
   `EscalationCard`, `RecoveryPanel`, `HumanTaskActions`, `LaunchPanel`,
-  `SchedulePanel`, `InjectPanel`, `FleetControl`, `AgentDrawer`, the modals, the buttons and the leaf
+  `SchedulePanel`, `FleetControl`, `AgentDrawer`, the modals, the buttons and the leaf
   helpers. The escalation 409 rules, the recovery verdicts and the decline-needs-a-note refusal get
   exactly one implementation, and the console **embeds** them rather than redrawing them.
 - **Drawn** (`web/src/console/`) — anything that draws over data it was handed: the rail rows, the
@@ -582,8 +582,7 @@ once.
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
-stripped to `pathname + search` ([tokens](#tokens)), the demo is published wherever it is published,
-and the harness's SPA fallback answers every non-`/api` path with `index.html`.
+stripped to `pathname + search` ([tokens](#tokens)), and the harness's SPA fallback answers every non-`/api` path with `index.html`.
 
 **Defaults are omitted**, so the overview with nothing open is a bare URL and each place has exactly
 one spelling. That is what makes the comparison in `useNavigation` sound: it pushes nothing when the
@@ -659,9 +658,8 @@ tier, the group, `holding`, the rail's sort and the Focus order all live in `src
   config tab, where they are answered ([11](11-mcp-tools.md#the-next-ask-loop)).
 - **The clock is the server's.** A snoozed upgrade row comes back on the first snapshot after the
   snooze expires — a pulse at most — rather than on the browser's next tick.
-- **The demo derives it with the same code.** The Pages build has no server, so its fake one calls
-  `buildAskQueue` over its own state on every `getState` — the queue's modules are runtime the wire
-  passes through ([above](#17--the-cockpit)), beside the tables that name an ask's kind
+- **The fixtures derive it with the same code.** `buildFixtureState` calls `buildAskQueue` over its
+  own state — the queue's modules are runtime the wire passes through ([above](#17--the-cockpit)), beside the tables that name an ask's kind
   (`src/asks/kinds.ts`), place a goal's parts (`src/plans/partGroup.ts`) and read the goal beside an
   ask (`src/asks/askGoal.ts`), which `ask_next`'s card reads too ([11](11-mcp-tools.md#the-card)).
 
@@ -1223,11 +1221,11 @@ and its Done / Decline. It never falls to the escalation body: that one finds no
 row's id and draws nothing, so the row opens an empty panel and the click reads as dead. That is how
 the `unwatched` row shipped.
 
-**The demo carries no goal-less ask.** Every fixture pull request under work is owned by a ticket
+**The fixtures carry no goal-less ask.** Every fixture pull request under work is owned by a ticket
 (`#388` → PR #412, `#376` → PR #409, `#396` → PR #426, `#390` → PRs #413 and #414), so every row in
-the demo's rail leads to a goal page. The
+the fixtures' rail leads to a goal page. The
 goal-less reading is still exercised — `test/console.test.ts` builds the orphan rather than fishing
-one out of the fixtures — because what the harness does is not what a demo should teach.
+one out of the fixtures — because the fixtures are meant to read as a typical run.
 
 **The destination is decided in `buildAskQueue`, never in the rail**, and this is the load-bearing
 part: only the derivation can tell a `goalRef` that _has_ a page from one that merely looks like it
@@ -4206,9 +4204,6 @@ blocking a dispatch, and the sheet's **running at ‹label›** chip appears and
 `claimedBy` alone, a claim whose session died would stand in the list forever while the rule had long
 since stopped honouring it.
 
-The demo backend holds its own clock and reports the claim two beats after load, so the ending — the
-entry leaving with nobody having pressed anything — is visible in the Pages build.
-
 ### Work a person took off the fleet
 
 The Fleet card carries one more kind of row: a slot an operator **ejected** an agent out of and is now
@@ -4745,13 +4740,6 @@ Four things it does deliberately:
 
 Both surfaces wrap it in `RefLinksExtended` with the **route's** `refUrls`, never the shell's: the
 shell's map is assembled from the world, and the graph's whole job is remembering what left it.
-
-The demo derives this from `buildGoalPage` rather than returning the empty graph `getWorkRoots` does.
-The two are asked different questions — the panel lists roots _nothing has claimed_, and a world rebuilt
-each load has none, but answering "nothing is recorded" for a goal the demo is visibly working
-misrepresents the surface rather than under-claiming it. It is derived so it cannot contradict the
-cards above it; what it cannot show is the one thing the record is _for_, since this world has never
-forgotten anything.
 
 ## The tickets tab
 
@@ -5616,10 +5604,9 @@ Four panels open from the bar, the ask panel opens from a queue row ([the rail](
   Amber, never red — the log blocks nothing.
 - **Launch** — the shared `LaunchPanel` and `SchedulePanel` together, since a recurrence is the same
   act with a `when` attached: a firing writes the identical job the composer writes, into the identical
-  queue drawn below both. `InjectPanel` rides here under **`view.demo`** alone. Injection fakes a world
-  change, which only the static demo has any use for — a real run against a fake provider is still a
-  real run, and a panel that lies to the harness there is a way to lie to yourself about what it is
-  reacting to. There is no server route behind it for a second predicate to disagree with.
+  queue drawn below both. There is no event injector: a real run against a fake provider is still a real
+  run, and a panel that lies to the harness there is a way to lie to yourself about what it is
+  reacting to.
 
 - **Build** — what is waiting for the running build and how to take it, `BuildPanel`. It puts the two
   facts that decide which control to press next to each other: what changed upstream, and what the
@@ -5787,7 +5774,7 @@ pinned by the environment, a file changed underneath) comes back in the banner i
 words. `featureBoard` has a live arm ([02](02-configuration.md#liveness)), so
 the save applies at once: the cockpit refreshes, the banner goes, and the summariser starts on the next
 pulse. A deployment whose save came back pending anyway is told the harness applies it on restart,
-rather than shown a success it has not had. The demo opens with summaries off (`DEMO_FEATURE_SUMMARIES`), so the tab shows what a deployment without the flag sees, and honours the same button by flipping its own summaries on.
+rather than shown a success it has not had.
 
 **Not now** hides it for that browser (`localStorage`, read in a `try`); it is a preference, not a
 place, so it is not on the query string.
@@ -6346,9 +6333,7 @@ and leave the modal behind it standing. Two listeners would close both layers on
 The prompt book lists the prompt ids (each with the opening sentence of its doc and an `overridden`
 badge), and a row opens a modal carrying the doc in full, the placeholders an override may use, the
 path of the override file, and the effective template text. It is read-only: the path is what makes it
-actionable, since overriding is a file drop ([16](16-http-api.md#get-apiprompts)). The demo build
-serves an empty book — the web bundle imports no server code, and a copy of eighteen prompts shipped to
-fill the panel would be free to drift from the originals with nothing to catch it.
+actionable, since overriding is a file drop ([16](16-http-api.md#get-apiprompts)).
 
 ### Configuration
 
@@ -6534,14 +6519,6 @@ is indistinguishable from one that did nothing — press, no prompt, no change, 
 where this bites: _Block new requests asking to allow notifications_ (Settings → Privacy & Security →
 Permissions → Notifications) answers `default` with no prompt at all, permanently, and the panel now
 names that setting instead of leaving a dead button.
-
-**The demo cannot demonstrate this, and that is not a bug in the demo.** Nothing on the demo's
-heartbeat produces a notifiable change — the beat moves `worldObservedAt` and settles the desktop
-claim two beats after load, and neither is a needs-you row, an error or an agent ending.
-Every change that _would_ notify is driven by a click, and a click means the window is focused, which
-is the suppression. So on the Pages build the automatic path is unreachable by construction, in every
-browser, and the button is the whole of what the demo has to show. Anyone concluding "notifications
-are broken" from the demo has learned nothing about their browser.
 
 **Decided from state, not from websocket frames.** `notifiableChanges` (`web/src/cockpit/notify.ts`)
 is a pure diff of two reduced snapshots, and the needs-you half diffs the **rendered** queue —
@@ -8836,23 +8813,16 @@ from a reader that broke, and because each of these is a decision rather than an
 Each of these is a surface's absence, not a wire change: removing the field would make re-adding the
 surface a server change, and the fold under it is what a future one is built from.
 
-## Demo mode
+## The fixture world
 
-`npm run web:build:demo` builds with `mode: demo`. `web/src/api.ts` then swaps `api` and `connectWs`
-for `demoApi` / `connectDemoWs` (`web/src/demo/`), which serve a scripted fixture world with no server
-and no real integrations. The top bar shows a `demo` mark beside the ident.
-
-**The statically hosted Pages build is the only demo there is**, and that is the whole of what the demo
-code has to serve. There is no second demo entry point — no dev-server demo mode, and no server-side
-demo either: the harness has no `/api/inject` route, no `config.injectable` flag and no inject panel of
-its own. Injection lives entirely in the browser fake, reached through `injectDemoEvent` in
-`web/src/api.ts`, which folds on the same `VITE_DEMO` constant `api` does so the demo module stays out
-of the production bundle.
+The cockpit tests render against one shared fixture world, `buildFixtureState` in
+`test/support/cockpitFixtures.ts`. There is no demo build: the cockpit only ever talks to a real
+harness, and the fixtures exist to give the view-model and render tests a full, coherent `AppState`.
 
 **The fixture world is one product, and the product is Inkwell Books** — a small online bookshop:
 browse and search a catalogue, a basket, checkout and payment, orders, refunds, and one background job
 that emails confirmations. Every goal, pull request, plan, claim, transcript and spend row in
-`fixtures.ts` and `demoBackend.ts` is work on that one codebase, with its real file paths and its real
+the fixtures is work on that one codebase, with its real file paths and its real
 vocabulary. The theme is load-bearing rather than decorative: an operator meeting the cockpit for the
 first time is trying to follow one story across nine panels, and a fixture set drawn from three
 unrelated products reads to them as a console that is showing them noise. A bookshop is chosen because
@@ -8871,7 +8841,7 @@ closed (#352, #357). Scrolling the rail is meant to teach the loop, so a new fix
 stage puts it rather than wherever there is room.
 
 **One ask per goal, with two deliberate exceptions.** A goal carrying four cards reads as a pile rather
-than a situation, and the thing a demo has to teach is what _one_ ask looks like and what answering it
+than a situation, and the thing the fixtures have to show is what _one_ ask looks like and what answering it
 does. So each goal carries exactly one — `intake` #379, `placement` #392, `profile` #394, `plan` #333,
 `escalation` #368 and #376, `permission` #399, `reply` #388, `describe` #396, `shortfall` #382,
 `validation_plan` #364, `close_out` #398 — and the three goals that carry two do so because the second
@@ -8879,23 +8849,18 @@ is the point: **#390** carries a merge and a plan step only a person can do, whi
 human arm together; **#395** carries its bench row and its outcome marks, which are the two things
 delivery asks for and neither of which holds anything up; and **#333** carries the plan proposal and the
 discussion of that plan, which are one moment and two controls — approving and arguing are the two
-things an operator does at the gate, and a demo showing only the first teaches that the second does not
+things an operator does at the gate, and a fixture set showing only the first implies that the second does not
 exist. The limitation and the judgement are also kept
 apart deliberately, because they are different mechanisms: #359's missing email-provider key is a human
 task nothing can route around, while #368's question about rows with no ISBN is an `answer_question` an
 agent could have got wrong on its own.
 
-**A demo interaction commits.** Where the real cockpit writes, the fake writes to its own world and
-the card stays where it was dropped — `setIssueState` moves the work item for real. A drop that
-animates and springs back teaches a visitor that the feature does not work, which is worse than not
-demonstrating it at all.
-
 **Every pickup status has a goal in the fixtures.** `issuePickupStatus` answers thirteen ways
 ([06](06-issue-pickup.md)), and each answer is somebody's whole explanation of why nothing is happening
 to their ticket — so `done`, `retained`, `has_pr`, `active`, `container`, `unwatched`, `planning`,
 `delivered`, `appraisal`, `cooldown`, `escalated`, `blocked` and `eligible` are each carried by at least
-one issue, with the reason string the real gate would have written. A demo showing eight of them
-teaches an operator that the rest are a bug on the day they first appear. The roll-call is
+one issue, with the reason string the real gate would have written. A fixture set carrying eight of them
+leaves untested an operator that the rest are a bug on the day they first appear. The roll-call is
 stated in a comment above the `issues` array, and the arithmetic around it has to hold as well: the cap
 is 5 with four agents out, so exactly one goal is `eligible` — the one Up next is dispatching into the
 last slot — and the rest of the ready ones are `blocked` for want of capacity. A world with six
@@ -8935,37 +8900,12 @@ demonstrate another's half, and a fixture that put two of them on one goal was d
 **Every state a check can be in has a check in the fixtures.** Goal #395 carries thirteen, for the reason
 the pickup roll-call carries thirteen: `passed`, `failed`, `waived`, `deferred` and `unrun` are each
 weighted differently on the card ([Validation on the goal](#validation-on-the-goal)), and a weighting
-is not a thing anybody can judge from a demo that only ever shows two of them. The three readings that
-are not a pass are the ones a demo would otherwise never reach — recording one needs a note, and a note
+is not a thing anybody can judge from a fixture set that only ever carries two of them. The three readings that
+are not a pass are the ones a fixture set would otherwise never reach — recording one needs a note, and a note
 needs somebody to type it — and the withdrawn check is there because nothing in the cockpit amends a
 plan, so the fold that lists what an amendment dropped would never draw at all. The same fixture set
 carries every marker for _who_ ran a check: by hand, by the fleet, from a desktop session, claimed by
 one right now, handed back, and amended out from under a reading.
-
-**The demo's setup reading is every check `ok`, and carries no `config` or `config_gap` row.** Those
-two kinds are real and the rail draws them ([Setup](#setup)); what the demo has no honest way to show
-is the _fix_. A config row's body opens the key on the config page and its strip applies a remedy, and
-the Pages build writes no file and restarts no harness — so every config row in the demo was a red or
-amber alert whose every control was a dead end, four of them, sitting above the work the demo exists to
-show. Worse, they were alerts about the demo's own fixture: `agentMode is raw`, `no config file at all`,
-`userId is unset` are true of the mock and false of anything a visitor would run, so the first thing the
-cockpit said to a new reader was that it was broken. The fake reports a harness that is configured and
-healthy, and the rail opens on the fleet.
-
-**Schedules are real in the demo, and never fire there.** Writing a recurrence, editing it, pausing it
-and deleting it all work against the fixture state, and "run now" queues the job exactly as the launch
-composer does — which is the honest demo of the feature, since what a schedule _does_ is queue a job and
-the queue is on the same panel. What is missing is the clock: nothing in the browser drives a pulse, and
-`nextRunAt` is left null rather than computed, for the reason `getPrompts` ships an empty book — the
-cron parser is server code, and a second implementation here would be a copy free to disagree with the
-only one that schedules anything.
-
-That is the bar for anything under `web/src/demo/`: it earns its place by being something the Pages
-build reaches. What that does **not** license is trimming the constant-answering arms of `demoApi`
-(`getPrompts`, `getConfig`, `getWorkRoots`, `decideRecovery` and the rest). They answer a constant
-because the demo has no server to ask, and they exist because `api` is one seam both halves satisfy
-structurally — a missing arm is a compile error at the call site, not dead weight. The honest reading of
-"unused" here is the panel that never draws, not the method that never runs.
 
 ## Tests
 
@@ -8978,7 +8918,7 @@ Eleven files, split on what they can see:
   `askQueue` walks it one at a time; `test/overviewAskOrder.test.ts` — the one-at-a-time order.
 - `test/goalPage.test.ts` — the page's assembly: which parts, PRs, agents and decisions belong to a
   goal, and the prefix trap `issue:14` versus `issue:1`.
-- `test/console.test.ts` — the structural rules and the renders, against the demo fixtures.
+- `test/console.test.ts` — the structural rules and the renders, against the shared fixtures.
 - `test/cockpitPlace.test.ts` — the [address bar](#the-address-bar)'s codec: the round trip, the one
   spelling per place, and what a hand-typed URL that names nothing reads as. Both whitelists are read
   off their types rather than listed, so a panel or a config section added to one and forgotten in the
@@ -9013,7 +8953,7 @@ what it proposed rather than only saying it has no live parts, an HTML ticket dr
 no measured spend drawing no `$0.00`, the overview's three cards, the environments chip drawing only where something is not well, an empty rack still drawing, the
 the intake hold arriving on the rail rather than on the tickets tab, that tab's rows being ways into
 their goals and its container cascade, the fault
-log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence
+log keeping its clear at zero, a panel's two ways out, the precedence
 between a goal and whichever tab the nav is on, all three tabs appearing in the nav (a destination added
 to `ConsoleTab` and forgotten there is a view nothing can reach) and `Work` appearing in none of them,
 the work graph reachable from the bar at every tab and over an open goal, the tickets tab mounting the

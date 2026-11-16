@@ -1,4 +1,4 @@
-import { buildAskQueue } from './askQueue.js';
+import { buildAskQueue } from '../../src/wire.js';
 import type {
   AppState,
   Issue,
@@ -6,29 +6,21 @@ import type {
   LocalRunTargetView,
   OpenPullRequest,
   PullRequest,
-  PlanHistory,
-  PlanNarrative,
   PlanPart,
   PlanPartView,
-  PlanRevision,
   ValidationCheck,
   ValidationCheckView,
   ValidationStep,
-} from '../types.js';
+} from '../../web/src/types.js';
 
 // → docs/spec/17-cockpit.md
 
 /**
- * The screen the staging run handed back, inlined so the demo needs no harness behind it. On a real
+ * The screen the staging run handed back, inlined so the fixtures need no harness behind them. On a real
  * deployment this is the signed `/validation-captures/run/...` URL the server mints for the row.
  * → docs/spec/36-remote-validation.md#where-a-sheet-kept-capture-is-looked-at
  */
-const DEMO_CAPTURE = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NDAnIGhlaWdodD0nMzYwJz48cmVjdCB3aWR0aD0nNjQwJyBoZWlnaHQ9JzM2MCcgZmlsbD0nI2Y0ZjVmNycvPjxyZWN0IHg9JzAnIHk9JzAnIHdpZHRoPSc2NDAnIGhlaWdodD0nNDQnIGZpbGw9JyMxZjI5MzMnLz48dGV4dCB4PScxOCcgeT0nMjknIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxNScgZmlsbD0nI2ZmZmZmZic+SW5rd2VsbCBCb29rcyAmIzgyMTI7IHJlZnVuZCBpc3N1ZWQ8L3RleHQ+PHJlY3QgeD0nMjQnIHk9JzcyJyB3aWR0aD0nNTkyJyBoZWlnaHQ9JzcyJyBmaWxsPScjZmZmZmZmJyBzdHJva2U9JyNkNWQ5ZTAnLz48dGV4dCB4PSc0NCcgeT0nMTA0JyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTgnIGZpbGw9JyMxZjI5MzMnPk9yZGVyIDQ4MjEzIGhhcyBiZWVuIHJlZnVuZGVkPC90ZXh0Pjx0ZXh0IHg9JzQ0JyB5PScxMjgnIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxMycgZmlsbD0nIzYxNzA3ZCc+JiMxNjM7MjQuOTkgaXMgb24gaXRzIHdheSBiYWNrIHRvIHRoZSBjYXJkIGVuZGluZyA0NDExPC90ZXh0PjxyZWN0IHg9JzI0JyB5PScxNjQnIHdpZHRoPSc1OTInIGhlaWdodD0nMTUwJyBmaWxsPScjZmZmZmZmJyBzdHJva2U9JyNkNWQ5ZTAnLz48dGV4dCB4PSc0NCcgeT0nMTkyJyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTMnIGZpbGw9JyM2MTcwN2QnPjEgJiMyMTU7IFBpcmFuZXNpICYjODIxMjsgU3VzYW5uYSBDbGFya2U8L3RleHQ+PHRleHQgeD0nNTIwJyB5PScxOTInIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxMycgZmlsbD0nIzFmMjkzMyc+JiMxNjM7MTYuOTk8L3RleHQ+PHRleHQgeD0nNDQnIHk9JzIyMCcgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjNjE3MDdkJz5SZXR1cm4gcG9zdGFnZTwvdGV4dD48dGV4dCB4PSc1MjAnIHk9JzIyMCcgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjMWYyOTMzJz4mIzE2Mzs4LjAwPC90ZXh0PjxsaW5lIHgxPSc0NCcgeTE9JzI0NCcgeDI9JzU5NicgeTI9JzI0NCcgc3Ryb2tlPScjZDVkOWUwJy8+PHRleHQgeD0nNDQnIHk9JzI3NicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzE1JyBmaWxsPScjMWYyOTMzJz5SZWZ1bmRlZDwvdGV4dD48dGV4dCB4PSc1MDgnIHk9JzI3NicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzE1JyBmaWxsPScjMWYyOTMzJz4mIzE2MzsyNC45OTwvdGV4dD48dGV4dCB4PScyNCcgeT0nMzQwJyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTEnIGZpbGw9JyM4Nzk1YTEnPnN0YWdpbmcgJiMxODM7IHZhbGlkYXRpb24tY3VzdG9tZXItMTwvdGV4dD48L3N2Zz4K`;
-
-interface DemoSeed {
-  state: AppState;
-  transcripts: Record<string, string>;
-}
+const FIXTURE_CAPTURE = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc2NDAnIGhlaWdodD0nMzYwJz48cmVjdCB3aWR0aD0nNjQwJyBoZWlnaHQ9JzM2MCcgZmlsbD0nI2Y0ZjVmNycvPjxyZWN0IHg9JzAnIHk9JzAnIHdpZHRoPSc2NDAnIGhlaWdodD0nNDQnIGZpbGw9JyMxZjI5MzMnLz48dGV4dCB4PScxOCcgeT0nMjknIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxNScgZmlsbD0nI2ZmZmZmZic+SW5rd2VsbCBCb29rcyAmIzgyMTI7IHJlZnVuZCBpc3N1ZWQ8L3RleHQ+PHJlY3QgeD0nMjQnIHk9JzcyJyB3aWR0aD0nNTkyJyBoZWlnaHQ9JzcyJyBmaWxsPScjZmZmZmZmJyBzdHJva2U9JyNkNWQ5ZTAnLz48dGV4dCB4PSc0NCcgeT0nMTA0JyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTgnIGZpbGw9JyMxZjI5MzMnPk9yZGVyIDQ4MjEzIGhhcyBiZWVuIHJlZnVuZGVkPC90ZXh0Pjx0ZXh0IHg9JzQ0JyB5PScxMjgnIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxMycgZmlsbD0nIzYxNzA3ZCc+JiMxNjM7MjQuOTkgaXMgb24gaXRzIHdheSBiYWNrIHRvIHRoZSBjYXJkIGVuZGluZyA0NDExPC90ZXh0PjxyZWN0IHg9JzI0JyB5PScxNjQnIHdpZHRoPSc1OTInIGhlaWdodD0nMTUwJyBmaWxsPScjZmZmZmZmJyBzdHJva2U9JyNkNWQ5ZTAnLz48dGV4dCB4PSc0NCcgeT0nMTkyJyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTMnIGZpbGw9JyM2MTcwN2QnPjEgJiMyMTU7IFBpcmFuZXNpICYjODIxMjsgU3VzYW5uYSBDbGFya2U8L3RleHQ+PHRleHQgeD0nNTIwJyB5PScxOTInIGZvbnQtZmFtaWx5PSdzeXN0ZW0tdWksc2Fucy1zZXJpZicgZm9udC1zaXplPScxMycgZmlsbD0nIzFmMjkzMyc+JiMxNjM7MTYuOTk8L3RleHQ+PHRleHQgeD0nNDQnIHk9JzIyMCcgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjNjE3MDdkJz5SZXR1cm4gcG9zdGFnZTwvdGV4dD48dGV4dCB4PSc1MjAnIHk9JzIyMCcgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzEzJyBmaWxsPScjMWYyOTMzJz4mIzE2Mzs4LjAwPC90ZXh0PjxsaW5lIHgxPSc0NCcgeTE9JzI0NCcgeDI9JzU5NicgeTI9JzI0NCcgc3Ryb2tlPScjZDVkOWUwJy8+PHRleHQgeD0nNDQnIHk9JzI3NicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzE1JyBmaWxsPScjMWYyOTMzJz5SZWZ1bmRlZDwvdGV4dD48dGV4dCB4PSc1MDgnIHk9JzI3NicgZm9udC1mYW1pbHk9J3N5c3RlbS11aSxzYW5zLXNlcmlmJyBmb250LXNpemU9JzE1JyBmaWxsPScjMWYyOTMzJz4mIzE2MzsyNC45OTwvdGV4dD48dGV4dCB4PScyNCcgeT0nMzQwJyBmb250LWZhbWlseT0nc3lzdGVtLXVpLHNhbnMtc2VyaWYnIGZvbnQtc2l6ZT0nMTEnIGZpbGw9JyM4Nzk1YTEnPnN0YWdpbmcgJiMxODM7IHZhbGlkYXRpb24tY3VzdG9tZXItMTwvdGV4dD48L3N2Zz4K`;
 
 type IssueSeed = Omit<
   Issue,
@@ -49,7 +41,7 @@ type IssueSeed = Omit<
 > &
   Partial<Issue>;
 
-function demoIssue(seed: IssueSeed): Issue {
+function fixtureIssue(seed: IssueSeed): Issue {
   return {
     conclusion: { verdict: 'undeclared', by: null, note: '', at: null },
     shortfall: null,
@@ -69,7 +61,7 @@ function demoIssue(seed: IssueSeed): Issue {
   };
 }
 
-function demoCheck(
+function fixtureCheck(
   seed: Partial<ValidationCheckView> &
     Pick<ValidationCheck, 'id' | 'letter' | 'seq' | 'title' | 'createdAt' | 'updatedAt'>,
 ): ValidationCheckView {
@@ -102,7 +94,7 @@ function demoCheck(
   };
 }
 
-function demoStep(seed: Partial<ValidationStep> & Pick<ValidationStep, 'kind' | 'do'>): ValidationStep {
+function fixtureStep(seed: Partial<ValidationStep> & Pick<ValidationStep, 'kind' | 'do'>): ValidationStep {
   return {
     area: null,
     expects: null,
@@ -115,7 +107,7 @@ function demoStep(seed: Partial<ValidationStep> & Pick<ValidationStep, 'kind' | 
   };
 }
 
-function demoSpend(issueNumber: number, costUsd: number, agents: number, localRuns = 0): Issue['spend'] {
+function fixtureSpend(issueNumber: number, costUsd: number, agents: number, localRuns = 0): Issue['spend'] {
   return {
     originRef: `issue:${issueNumber}`,
     issueNumber,
@@ -137,7 +129,7 @@ const NO_CI_DETAIL: OpenPullRequest['ciVerdict'] = {
 
 type OpenPrSeed = Omit<OpenPullRequest, 'ciVerdict'> & Partial<OpenPullRequest>;
 
-function demoPr(seed: OpenPrSeed): OpenPullRequest {
+function fixturePr(seed: OpenPrSeed): OpenPullRequest {
   return { ciVerdict: NO_CI_DETAIL, ...seed };
 }
 
@@ -159,7 +151,7 @@ type PartSeed = Omit<
     depth?: number;
   };
 
-function demoPart(seed: PartSeed): PlanPartView {
+function fixturePart(seed: PartSeed): PlanPartView {
   const part: PlanPart = {
     expectedKind: null,
     touches: [],
@@ -185,33 +177,10 @@ function demoPart(seed: PartSeed): PlanPartView {
   };
 }
 
-/**
- * The demo world is one project — **Inkwell Books**, a small online bookshop: browse and search a
- * catalogue, a basket, checkout and payment, orders, refunds, and one background job that emails
- * confirmations. One domain, so nothing has to be learnt before the cockpit makes sense.
- *
- * The goals below are laid out as **one pipeline with a goal parked at each point along it**, in
- * roughly the order the workflow runs: held at intake, planning, at the plan gate, in flight, in
- * review, delivered, validated, closed. Scrolling the rail is meant to teach the loop.
- *
- * Two invariants the fixture is built to keep, because breaking either teaches an operator something
- * false about the harness:
- *
- * - **No goal carries a validation check until every part of its plan has merged and an assessor has
- *   answered `delivered`.** Checks are authored late, against merged code, and a goal still planning
- *   has nothing to write them against. So `validationChecks`, `remoteSheets`, `goalWatchWindows` and
- *   `environmentArrivals` name only #364, #395 and #398. → docs/spec/20-validation.md#when-the-check-set-is-written
- * - **One ask per goal**, with one deliberate exception where a second thing is the point: #390
- *   carries a merge and a person's plan step.
- *   A goal with four cards on it reads as a pile rather than a situation.
- *
- * → docs/spec/17-cockpit.md#demo-mode
- */
-/** Off, so the demo's Features tab is what a deployment that has not set `featureBoard` sees:
- *  the board without the summariser's prose, under the banner offering it. */
-export const DEMO_FEATURE_SUMMARIES = false;
+// → docs/spec/17-cockpit.md#the-fixture-world
+const FIXTURE_FEATURE_SUMMARIES = false;
 
-export function buildDemoState(): DemoSeed {
+export function buildFixtureState(): AppState {
   const now = Date.now();
   const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
   const ahead = (mins: number) => new Date(now + mins * 60_000).toISOString();
@@ -244,7 +213,7 @@ export function buildDemoState(): DemoSeed {
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
       featureBoard: true,
-      featureSummaries: DEMO_FEATURE_SUMMARIES,
+      featureSummaries: FIXTURE_FEATURE_SUMMARIES,
       discussions: false,
       botPrs: true,
       appErrors: true,
@@ -281,7 +250,7 @@ export function buildDemoState(): DemoSeed {
     world: {
       takenAt: ago(0),
       pullRequests: [
-        demoPr({
+        fixturePr({
           id: 'pr-412',
           number: 412,
           title: 'Index author names alongside titles',
@@ -356,7 +325,7 @@ export function buildDemoState(): DemoSeed {
             headSha: '2b8e4d1f9c',
           },
         }),
-        demoPr({
+        fixturePr({
           id: 'pr-411',
           number: 411,
           title: 'Reuse book cover thumbnails across catalogue rebuilds',
@@ -397,7 +366,7 @@ export function buildDemoState(): DemoSeed {
             headSha: '9f21c0e447',
           },
         }),
-        demoPr({
+        fixturePr({
           id: 'pr-409',
           number: 409,
           title: 'Price the order with the discount code applied',
@@ -436,7 +405,7 @@ export function buildDemoState(): DemoSeed {
             headSha: null,
           },
         }),
-        demoPr({
+        fixturePr({
           id: 'pr-408',
           number: 408,
           title: 'Retire the ISBN-10 lookup path',
@@ -468,7 +437,7 @@ export function buildDemoState(): DemoSeed {
             headSha: null,
           },
         }),
-        demoPr({
+        fixturePr({
           id: 'pr-413',
           number: 413,
           title: '#390 [2/3] feat(checkout): take card payment through the new provider',
@@ -497,7 +466,7 @@ export function buildDemoState(): DemoSeed {
             headSha: null,
           },
         }),
-        demoPr({
+        fixturePr({
           id: 'pr-414',
           number: 414,
           title: '#390 [3/3] feat(checkout): move refunds onto the new provider',
@@ -525,7 +494,7 @@ export function buildDemoState(): DemoSeed {
             headSha: null,
           },
         }),
-        demoPr({
+        fixturePr({
           id: 'pr-426',
           number: 426,
           title: 'Fold the admin console header into one bar',
@@ -553,7 +522,7 @@ export function buildDemoState(): DemoSeed {
             headSha: null,
           },
         }),
-        demoPr({
+        fixturePr({
           id: 'pr-407',
           number: 407,
           title: 'Spike: replace the nightly stock feed with a webhook',
@@ -572,7 +541,7 @@ export function buildDemoState(): DemoSeed {
             reasons: ['not tagged "lubbdubb-watch" — the harness is leaving it alone'],
           },
         }),
-        demoPr({
+        fixturePr({
           id: 'pr-415',
           number: 415,
           title: 'Retry the shipping-rate lookup on a 429',
@@ -630,7 +599,7 @@ export function buildDemoState(): DemoSeed {
             reviewWaitingSince: ago(60 * 26),
           },
         }),
-        demoPr({
+        fixturePr({
           id: 'pr-417',
           number: 417,
           title: 'Drop the retired VAT band columns from the seed',
@@ -657,7 +626,7 @@ export function buildDemoState(): DemoSeed {
             ],
           },
         }),
-        demoPr({
+        fixturePr({
           id: 'pr-418',
           number: 418,
           title: 'Update dependency dotenv to v17',
@@ -761,9 +730,9 @@ export function buildDemoState(): DemoSeed {
       // The arithmetic has to hold too: the cap is 5 with four agents out, so exactly one goal is
       // `eligible` — #341, which Up next is dispatching into the last slot — and the ready rest are
       // `blocked` for want of capacity.
-      // → docs/spec/17-cockpit.md#demo-mode
+      // → docs/spec/17-cockpit.md#the-fixture-world
       issues: [
-        demoIssue({
+        fixtureIssue({
           id: 'iss-300',
           number: 300,
           title: 'Finding a book',
@@ -803,7 +772,7 @@ export function buildDemoState(): DemoSeed {
             reasons: ['Feature is a container — work its 3 child items (2 still open)'],
           },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-333',
           number: 333,
           title: 'Let customers save books for later',
@@ -839,7 +808,7 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'planning', reasons: ['awaiting your approval of the 3-part plan'] },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-332',
           number: 332,
           title: 'Filter search results by format and price',
@@ -859,7 +828,7 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'blocked', reasons: ['no agent capacity'] },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-341',
           number: 341,
           title: 'The book page shows the first edition’s cover for a reissue',
@@ -872,7 +841,7 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: { eligible: true, status: 'eligible', reasons: [] },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-368',
           number: 368,
           title: 'Import the distributor’s nightly stock feed',
@@ -881,9 +850,9 @@ export function buildDemoState(): DemoSeed {
           state: 'open',
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'active', reasons: ['agent running'] },
-          spend: demoSpend(368, 0.27, 1),
+          spend: fixtureSpend(368, 0.27, 1),
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-388',
           number: 388,
           title: 'Search by author as well as title',
@@ -893,7 +862,7 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: 412,
           pickup: { eligible: false, status: 'has_pr', reasons: ['has open PR #412'] },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-376',
           number: 376,
           title: 'Apply discount codes at checkout',
@@ -903,7 +872,7 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: 409,
           pickup: { eligible: false, status: 'has_pr', reasons: ['has open PR #409'] },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-396',
           number: 396,
           title: 'Rebuild the admin console header',
@@ -912,9 +881,9 @@ export function buildDemoState(): DemoSeed {
           state: 'open',
           linkedPrNumber: 426,
           pickup: { eligible: false, status: 'has_pr', reasons: ['has open PR #426'] },
-          spend: demoSpend(396, 1.12, 1),
+          spend: fixtureSpend(396, 1.12, 1),
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-364',
           number: 364,
           title: 'Order the homepage shelves by last week’s sales',
@@ -951,9 +920,9 @@ export function buildDemoState(): DemoSeed {
             updatedAt: ago(60),
           },
           scratchpad: { entries: 4, updatedAt: ago(70) },
-          spend: demoSpend(364, 6.14, 4),
+          spend: fixtureSpend(364, 6.14, 4),
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-390',
           number: 390,
           title: 'Move checkout to the new payment provider',
@@ -962,7 +931,7 @@ export function buildDemoState(): DemoSeed {
           state: 'open',
           linkedPrNumber: 413,
           pickup: { eligible: false, status: 'planning', reasons: ['1/5 parts done'] },
-          spend: demoSpend(390, 19.16, 7, 2),
+          spend: fixtureSpend(390, 19.16, 7, 2),
           localValidation: {
             id: 'lv-390-1',
             originRef: 'issue:390',
@@ -1018,7 +987,7 @@ export function buildDemoState(): DemoSeed {
             fixAgent: null,
           },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-395',
           number: 395,
           title: 'Every refund writes a ledger entry',
@@ -1033,7 +1002,7 @@ export function buildDemoState(): DemoSeed {
             by: 'assessor',
             decidedAt: ago(200),
           },
-          spend: demoSpend(395, 9.42, 5),
+          spend: fixtureSpend(395, 9.42, 5),
           validation: {
             state: 'flagged',
             /* The live rows below, tallied: `total` counts every check the goal carries less
@@ -1084,7 +1053,7 @@ export function buildDemoState(): DemoSeed {
             fixAgent: null,
           },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-398',
           number: 398,
           title: 'Halve the book page’s image weight',
@@ -1115,9 +1084,9 @@ export function buildDemoState(): DemoSeed {
             declined: 0,
             waived: 0,
           },
-          spend: demoSpend(398, 2.61, 2),
+          spend: fixtureSpend(398, 2.61, 2),
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-371',
           number: 371,
           title: 'Post new five-star reviews to a Slack channel',
@@ -1127,7 +1096,7 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'unwatched', reasons: ['no watch label "lubbdubb-watch"'] },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-379',
           number: 379,
           title: 'Make checkout better',
@@ -1160,7 +1129,7 @@ export function buildDemoState(): DemoSeed {
             commentRef: 'issue:379:comment:8402',
           },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-392',
           number: 392,
           title: 'Sell and redeem gift cards',
@@ -1197,7 +1166,7 @@ export function buildDemoState(): DemoSeed {
             commentRef: 'issue:392:comment:8510',
           },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-394',
           number: 394,
           title: 'Rebuild the basket on the new component library',
@@ -1229,7 +1198,7 @@ export function buildDemoState(): DemoSeed {
             commentRef: 'issue:394:comment:8506',
           },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-399',
           number: 399,
           title: 'Anonymise customer emails in the analytics export',
@@ -1257,9 +1226,9 @@ export function buildDemoState(): DemoSeed {
             decidedAt: ago(20),
             commentRef: 'issue:399:comment:8516',
           },
-          spend: demoSpend(399, 0.41, 1),
+          spend: fixtureSpend(399, 0.41, 1),
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-382',
           number: 382,
           title: 'Let a customer cancel an order before it is dispatched',
@@ -1277,9 +1246,9 @@ export function buildDemoState(): DemoSeed {
             by: 'assessor',
             decidedAt: ago(4),
           },
-          spend: demoSpend(382, 4.38, 3, 1),
+          spend: fixtureSpend(382, 4.38, 3, 1),
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-345',
           number: 345,
           title: 'The stock sync drops its claim when the shop restarts mid-run',
@@ -1294,9 +1263,9 @@ export function buildDemoState(): DemoSeed {
             note: 'Both attempts fixed the symptom in the importer. The claim is the shop process’s to release.',
             at: ago(80),
           },
-          spend: demoSpend(345, 3.08, 2),
+          spend: fixtureSpend(345, 3.08, 2),
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-359',
           number: 359,
           title: 'Send order confirmations through the new email provider',
@@ -1309,9 +1278,9 @@ export function buildDemoState(): DemoSeed {
             status: 'escalated',
             reasons: ['3 failed attempts — escalated to a human'],
           },
-          spend: demoSpend(359, 7.36, 3),
+          spend: fixtureSpend(359, 7.36, 3),
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-352',
           number: 352,
           title: 'Show stock levels on the book page',
@@ -1321,7 +1290,7 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'done', reasons: ['closed'] },
         }),
-        demoIssue({
+        fixtureIssue({
           id: 'iss-366',
           number: 366,
           title: 'Rewrite the shop front in Svelte',
@@ -1591,7 +1560,7 @@ export function buildDemoState(): DemoSeed {
               runId: 'run-395-staging-2',
               outcome: 'captured' as const,
               capture: 'capture-refund-screen-reads-at-1280.png',
-              captureUrl: DEMO_CAPTURE,
+              captureUrl: FIXTURE_CAPTURE,
               rows: null,
               value: null,
               detail: 'A screen was handed back for somebody to look at. A screenshot asserts nothing on its own.',
@@ -2777,7 +2746,7 @@ export function buildDemoState(): DemoSeed {
     undescribedParts: [{ originRef: 'issue:396:part:header', prNumber: 426, openedAt: ago(30) }],
     descriptionFeedback: [],
     planParts: [
-      demoPart({
+      fixturePart({
         id: 'plan-390:client',
         atoms: ['provider-client', 'port-calls'],
         planId: 'plan-390',
@@ -2799,7 +2768,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(300),
         updatedAt: ago(30),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-390:payment',
         atoms: ['take-payment', 'drop-gateway'],
         planId: 'plan-390',
@@ -2817,7 +2786,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(300),
         updatedAt: ago(6),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-390:refunds',
         planId: 'plan-390',
         slug: 'refunds',
@@ -2832,7 +2801,7 @@ export function buildDemoState(): DemoSeed {
         touches: [],
         acceptanceMet: [],
         size: null,
-        // PR #414 is open on this branch in the demo world and its CI is failing, so
+        // PR #414 is open on this branch in the fixture world and its CI is failing, so
         // the part has to carry it: a part reading "not started" beside its own open
         // pull request is the board disagreeing with the pull-request list below it.
         branch: 'issue/390/refunds',
@@ -2842,7 +2811,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(300),
         updatedAt: ago(6),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-390:cutover',
         planId: 'plan-390',
         slug: 'cutover',
@@ -2863,7 +2832,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(300),
         updatedAt: ago(6),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-390:soak',
         planId: 'plan-390',
         slug: 'soak',
@@ -2883,7 +2852,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(300),
         updatedAt: ago(6),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-333:list',
         planId: 'plan-333',
         slug: 'list',
@@ -2908,7 +2877,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(14),
         updatedAt: ago(14),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-333:add',
         planId: 'plan-333',
         slug: 'add',
@@ -2933,7 +2902,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(14),
         updatedAt: ago(14),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-333:account',
         planId: 'plan-333',
         slug: 'account',
@@ -2956,7 +2925,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(14),
         updatedAt: ago(14),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-396:header',
         planId: 'plan-396',
         slug: 'header',
@@ -2978,7 +2947,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(40),
         updatedAt: ago(30),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-395:writer',
         planId: 'plan-395',
         slug: 'writer',
@@ -3006,7 +2975,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(3600),
         updatedAt: ago(900),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-395:refund-path',
         planId: 'plan-395',
         slug: 'refund-path',
@@ -3035,7 +3004,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(3400),
         updatedAt: ago(640),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-395:nightly',
         planId: 'plan-395',
         slug: 'nightly',
@@ -3062,7 +3031,7 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(3100),
         updatedAt: ago(420),
       }),
-      demoPart({
+      fixturePart({
         id: 'plan-395:e2e-refund',
         planId: 'plan-395',
         slug: 'e2e-refund',
@@ -3126,7 +3095,7 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     validationChecks: [
-      demoCheck({
+      fixtureCheck({
         id: 'refund-writes-a-ledger-entry',
         createdAt: ago(12),
         updatedAt: ago(12),
@@ -3136,13 +3105,13 @@ export function buildDemoState(): DemoSeed {
         do: 'Refund an order in full from the admin console, then open the ledger for that day.',
         expect: 'One entry, for the order total, carrying the provider’s refund reference.',
         covers: ['refund-path', 'e2e-refund'],
-        steps: [demoStep({ kind: 'suite', do: 'Run the Refunds area of the browser suite.', area: 'Refunds' })],
+        steps: [fixtureStep({ kind: 'suite', do: 'Run the Refunds area of the browser suite.', area: 'Refunds' })],
         state: 'passed',
         resultNote: 'Refunded order 48213 in full — one entry, £24.99, reference matches the provider’s.',
         resultBy: 'operator',
         resultAt: ago(2),
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'partial-refund-writes-the-part',
         createdAt: ago(12),
         updatedAt: ago(12),
@@ -3165,7 +3134,7 @@ export function buildDemoState(): DemoSeed {
           note: 'Refunded the middle line: £8.99 plus £1.00 of delivery, as expected.',
         },
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'failed-refund-writes-nothing',
         createdAt: ago(12),
         updatedAt: ago(12),
@@ -3181,7 +3150,7 @@ export function buildDemoState(): DemoSeed {
         claimedBy: 'desktop (studio)',
         claimedAt: ago(9),
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'timed-out-refund-writes-nothing',
         createdAt: ago(12),
         updatedAt: ago(1),
@@ -3199,7 +3168,7 @@ export function buildDemoState(): DemoSeed {
         resultBy: 'agent',
         resultAt: ago(1),
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'refund-button-reachable-on-mobile',
         createdAt: ago(12),
         updatedAt: ago(1),
@@ -3211,7 +3180,7 @@ export function buildDemoState(): DemoSeed {
         covers: ['refund-path'],
         handbackNote: 'An agent could not run this check: it needs a browser at a set viewport, and I have none.',
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'ledger-page-scrolls-on-a-phone',
         createdAt: ago(12),
         updatedAt: ago(1),
@@ -3226,7 +3195,7 @@ export function buildDemoState(): DemoSeed {
         resultBy: 'desktop',
         resultAt: ago(1),
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'nightly-job-writes-no-refunds',
         createdAt: ago(12),
         updatedAt: ago(1),
@@ -3243,7 +3212,7 @@ export function buildDemoState(): DemoSeed {
         resultBy: 'operator',
         resultAt: ago(1),
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'reversed-refund-is-noticed',
         createdAt: ago(12),
         updatedAt: ago(2),
@@ -3261,7 +3230,7 @@ export function buildDemoState(): DemoSeed {
         resultBy: 'operator',
         resultAt: ago(2),
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'refunds-work-in-safari',
         createdAt: ago(12),
         updatedAt: ago(2),
@@ -3277,7 +3246,7 @@ export function buildDemoState(): DemoSeed {
         resultBy: 'operator',
         resultAt: ago(2),
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'no-card-number-in-the-ledger',
         createdAt: ago(12),
         updatedAt: ago(3),
@@ -3291,7 +3260,7 @@ export function buildDemoState(): DemoSeed {
           'Folded into check A when the entry stopped carrying a payment blob at all: there is no longer a field ' +
           'a card number could be in, so this checked for the absence of something that cannot exist.',
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'refund-screen-reads-at-1280',
         createdAt: ago(12),
         updatedAt: ago(1),
@@ -3303,20 +3272,20 @@ export function buildDemoState(): DemoSeed {
         covers: ['refund-path'],
         uses: ['a seeded order set', 'the admin console login'],
         steps: [
-          demoStep({ kind: 'browser', do: 'Refund a seeded two-line order at 1280', actor: 'fleet' }),
-          demoStep({ kind: 'screenshot', do: 'The confirmation as it draws', actor: 'fleet' }),
+          fixtureStep({ kind: 'browser', do: 'Refund a seeded two-line order at 1280', actor: 'fleet' }),
+          fixtureStep({ kind: 'screenshot', do: 'The confirmation as it draws', actor: 'fleet' }),
         ],
         fleetCandidate: true,
         candidateWhy: 'drives the console and takes a picture; asserts nothing on its own',
         actor: 'fleet',
         state: 'captured',
         capture: 'capture-refund-screen-reads-at-1280.png',
-        captureUrl: DEMO_CAPTURE,
+        captureUrl: FIXTURE_CAPTURE,
         resultNote: 'A screen was taken and nobody has looked at it yet. A screenshot asserts nothing.',
         resultBy: 'agent',
         resultAt: ago(1),
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'ledger-paginates-past-fifty',
         createdAt: ago(12),
         updatedAt: ago(4),
@@ -3333,7 +3302,7 @@ export function buildDemoState(): DemoSeed {
         resultBy: 'operator',
         resultAt: ago(4),
       }),
-      demoCheck({
+      fixtureCheck({
         id: 'ledger-write-does-not-slow-a-refund',
         createdAt: ago(12),
         updatedAt: ago(1),
@@ -3345,10 +3314,10 @@ export function buildDemoState(): DemoSeed {
         covers: ['refund-path', 'writer'],
         uses: ['a staging tenant with sixty refundable orders'],
         steps: [
-          demoStep({ kind: 'suite', do: 'Run the Refunds area of the browser suite.', area: 'Refunds' }),
-          demoStep({ kind: 'measure', do: 'Read the p95 of POST /api/refunds', actor: 'fleet' }),
-          demoStep({ kind: 'signal', do: 'No 5xx from the ledger writer while the suite runs', actor: 'fleet' }),
-          demoStep({
+          fixtureStep({ kind: 'suite', do: 'Run the Refunds area of the browser suite.', area: 'Refunds' }),
+          fixtureStep({ kind: 'measure', do: 'Read the p95 of POST /api/refunds', actor: 'fleet' }),
+          fixtureStep({ kind: 'signal', do: 'No 5xx from the ledger writer while the suite runs', actor: 'fleet' }),
+          fixtureStep({
             kind: 'manual',
             do: 'Sanity-read the numbers against the pre-ledger baseline',
             when: 'deferred',
@@ -3362,7 +3331,7 @@ export function buildDemoState(): DemoSeed {
       // Issue #364's set: written, proposed, and waiting on the card in "Needs you". Every row is
       // `unrun` and nothing has been handed to the fleet, because a set nobody has accepted is not
       // work yet. → docs/spec/20-validation.md#the-check-set-is-proposed-before-it-is-work
-      demoCheck({
+      fixtureCheck({
         originRef: 'issue:364',
         id: 'empty-shelf-still-draws',
         createdAt: ago(18),
@@ -3374,13 +3343,13 @@ export function buildDemoState(): DemoSeed {
         expect: 'The shelf draws in its curated order rather than empty.',
         covers: ['shelf-order'],
         steps: [
-          demoStep({ kind: 'browser', do: 'Open the homepage with a zero-sales shelf configured', actor: 'fleet' }),
-          demoStep({ kind: 'screenshot', do: 'The shelf as it draws', actor: 'fleet' }),
+          fixtureStep({ kind: 'browser', do: 'Open the homepage with a zero-sales shelf configured', actor: 'fleet' }),
+          fixtureStep({ kind: 'screenshot', do: 'The shelf as it draws', actor: 'fleet' }),
         ],
         fleetCandidate: true,
         candidateWhy: 'drives the shop front and reads a shelf; writes nothing',
       }),
-      demoCheck({
+      fixtureCheck({
         originRef: 'issue:364',
         id: 'order-matches-the-sales-report',
         createdAt: ago(18),
@@ -3391,9 +3360,9 @@ export function buildDemoState(): DemoSeed {
         do: 'Read the fiction shelf against last week’s sales report.',
         expect: 'Same books, same order, and neither claims a sale the other does not.',
         covers: ['shelf-order'],
-        steps: [demoStep({ kind: 'manual', do: 'Read the two side by side', when: 'deferred' })],
+        steps: [fixtureStep({ kind: 'manual', do: 'Read the two side by side', when: 'deferred' })],
       }),
-      demoCheck({
+      fixtureCheck({
         originRef: 'issue:364',
         id: 'rollup-rows-for-a-quiet-day',
         createdAt: ago(18),
@@ -3405,7 +3374,7 @@ export function buildDemoState(): DemoSeed {
         expect: 'One row per shelf, with a zero on it — not a missing row.',
         covers: ['shelf-order'],
         steps: [
-          demoStep({
+          fixtureStep({
             kind: 'state',
             do: 'Count `shelf_sales_rollup` rows for the quietest day',
             actor: 'fleet',
@@ -3415,7 +3384,7 @@ export function buildDemoState(): DemoSeed {
       }),
       // Issue #398's set: released, run, and every row passed. This is what a goal looks like once
       // validation is behind it and the only thing left is the close-out.
-      demoCheck({
+      fixtureCheck({
         originRef: 'issue:398',
         id: 'phone-page-under-a-megabyte',
         createdAt: ago(68),
@@ -3426,7 +3395,7 @@ export function buildDemoState(): DemoSeed {
         do: 'Load a book page at 390px wide and total the image bytes.',
         expect: 'Under a megabyte, from over four before.',
         covers: ['covers'],
-        steps: [demoStep({ kind: 'measure', do: 'Total the image transfer at 390px', actor: 'fleet' })],
+        steps: [fixtureStep({ kind: 'measure', do: 'Total the image transfer at 390px', actor: 'fleet' })],
         fleetCandidate: true,
         candidateWhy: 'loads a page and adds up the network panel',
         actor: 'fleet',
@@ -3435,7 +3404,7 @@ export function buildDemoState(): DemoSeed {
         resultBy: 'agent',
         resultAt: ago(64),
       }),
-      demoCheck({
+      fixtureCheck({
         originRef: 'issue:398',
         id: 'cover-is-not-visibly-worse',
         createdAt: ago(68),
@@ -3446,7 +3415,7 @@ export function buildDemoState(): DemoSeed {
         do: 'Open the same book page at 1440 beside the old one and look at the jacket.',
         expect: 'No visible difference — no soft text on the spine, no banding in a flat colour.',
         covers: ['covers'],
-        steps: [demoStep({ kind: 'manual', do: 'Read the two jackets side by side' })],
+        steps: [fixtureStep({ kind: 'manual', do: 'Read the two jackets side by side' })],
         state: 'passed',
         resultNote: 'Read them side by side at 1440. Indistinguishable, including the spine text.',
         resultBy: 'operator',
@@ -3804,7 +3773,7 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     retainedRuns: [
-      demoIssue({
+      fixtureIssue({
         id: 'iss-357',
         number: 357,
         title: 'The basket page 500s when it is empty',
@@ -3821,7 +3790,7 @@ export function buildDemoState(): DemoSeed {
           note: 'An empty basket draws its own empty state and the estimate is not read at all.',
           at: ago(120),
         },
-        spend: demoSpend(357, 5.51, 3),
+        spend: fixtureSpend(357, 5.51, 3),
         stale: {
           lastSeenAt: ago(95),
           tracker: { state: 'closed', workItemState: 'Resolved', changedAt: ago(90) },
@@ -4761,70 +4730,6 @@ export function buildDemoState(): DemoSeed {
     runOutcomes: { settled: 24, live: 4, completed: 20, lost: 3, stopped: 1, completionRate: 20 / 24 },
   };
 
-  const transcripts: Record<string, string> = {
-    'agent-a1': [
-      'Reading feature/author-search — the failing case is an author whose name is also a title word.\n',
-      '\x1b[2m[10:14:02]\x1b[0m \x1b[36m⚙ Bash\x1b[0m \x1b[2mnpm test -w packages/search\x1b[0m\n',
-      '\n',
-      '\x1b[31m  ↳ error\x1b[0m\x1b[2m [10:14:51]\x1b[0m\x1b[2m · 5 lines\x1b[0m\n',
-      '  ✗ search › an exact author match ranks above a title match\n',
-      '    Expected "Ali Smith — Autumn", got "The Smith of Wootton Major"\n',
-      '    at search.test.ts:118\n',
-      '  \n',
-      '  1 failing, 82 passing\n',
-      'So the author weighting is applied inside the rank loop, not at the boundary. Let me read the fold.\n',
-      '\x1b[2m[10:15:07]\x1b[0m \x1b[36m⚙ Read\x1b[0m \x1b[2mpackages/search/src/rank.ts\x1b[0m\n',
-      '\n',
-      '\x1b[90m  ↳ result\x1b[0m\x1b[2m [10:15:08]\x1b[0m\x1b[2m · 18 lines\x1b[0m\n',
-      '  30	  const chosen = scored.slice(0, topK);\n',
-      '  31	  const chosen = scored.slice(0, topK);\n',
-      '  32	  const chosen = scored.slice(0, topK);\n',
-      '  33	  const chosen = scored.slice(0, topK);\n',
-      '  34	  const chosen = scored.slice(0, topK);\n',
-      '  35	  const chosen = scored.slice(0, topK);\n',
-      '  36	  const chosen = scored.slice(0, topK);\n',
-      '  37	  const chosen = scored.slice(0, topK);\n',
-      '  38	  const chosen = scored.slice(0, topK);\n',
-      '  39	  const chosen = scored.slice(0, topK);\n',
-      '  40	  const chosen = scored.slice(0, topK);\n',
-      '  41	  const chosen = scored.slice(0, topK);\n',
-      '  42	  const chosen = scored.slice(0, topK);\n',
-      '  43	  const chosen = scored.slice(0, topK);\n',
-      '  44	  const chosen = scored.slice(0, topK);\n',
-      '  45	  const chosen = scored.slice(0, topK);\n',
-      '  46	  const chosen = scored.slice(0, topK);\n',
-      '  47	  const chosen = scored.slice(0, topK);\n',
-      '`topK` cuts before the author weight is added, so an exact author match can be cut. Patching.\n',
-    ].join(''),
-    'agent-a2': [
-      '$ claude --resume rebase-409',
-      'git fetch origin main',
-      'git rebase origin/main',
-      'CONFLICT (content): Merge conflict in packages/orders/src/pricing.ts',
-      'Both sides changed how the line total is rounded. Need a human call.',
-      '@@LUBBDUBB_WAITING: which rounding wins?@@',
-    ].join('\n'),
-    'agent-a4': [
-      '$ claude implement-368',
-      'Reading last night’s feed — 8,412 rows, and 40 of them have an empty ISBN-13 column.',
-      'Those 40 are all one publisher, and they do have an ISBN-10.',
-      '@@LUBBDUBB_WAITING: skip the 40 and import the rest, or fail the run?@@',
-    ].join('\n'),
-    'agent-a5': [
-      '$ claude implement-399',
-      'The export writes `customer_email` straight through. Hashing it is one line.',
-      'The warehouse column is varchar(64) in the migration — a sha256 hex is 64, so it just fits.',
-      'I would rather check what is actually deployed than trust the migration.',
-      '@@LUBBDUBB_WAITING: may I run psql against the warehouse?@@',
-    ].join('\n'),
-    'agent-a0': [
-      '$ claude implement-364',
-      'Ranked each homepage shelf on the trailing-seven-day sales rollup',
-      'npm run build && npm test … all green',
-      'git push && opened PR #410',
-      '@@LUBBDUBB_DONE@@',
-    ].join('\n'),
-  };
   const stale = (status: PlanPart['status']): boolean =>
     status === 'merged' || status === 'retired' || status === 'concluded';
   const allPrs: PullRequest[] = [...state.world.pullRequests, ...(state.world.closedPullRequests ?? [])];
@@ -4923,173 +4828,5 @@ export function buildDemoState(): DemoSeed {
   }
 
   state.asks = buildAskQueue(state);
-  return { state, transcripts };
+  return state;
 }
-
-export function demoPlanHistory(planId: string): PlanHistory {
-  if (planId !== 'plan-395') return { revisions: [], diff: null, pending: null };
-  const at = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString();
-  const narrative = (over: Partial<PlanNarrative>): PlanNarrative => ({
-    reason: null,
-    diagnosis: null,
-    approach: null,
-    risks: null,
-    outOfScope: null,
-    alternatives: null,
-    openQuestions: null,
-    verification: null,
-    document: null,
-    evidence: [],
-    ...over,
-  });
-  const part = (over: Partial<PlanPartInputView> & { slug: string; seq: number }): PlanPartInputView => ({
-    title: over.slug,
-    scope: '',
-    touches: [],
-    atoms: [],
-    dependsOn: [],
-    rationale: null,
-    acceptance: null,
-    size: null,
-    expectedKind: null,
-    ...over,
-  });
-  const revisions: PlanRevision[] = [
-    {
-      id: 'rev-395-1',
-      planId,
-      seq: 1,
-      at: at(4320),
-      narrative: narrative({
-        reason: 'The writer has to exist before the refund path can call it, and the nightly job touches finance.',
-        approach: 'Write the ledger entry from the refund path and stop the nightly job inferring one.',
-      }),
-      parts: [
-        part({
-          slug: 'writer',
-          seq: 1,
-          title: 'Add the ledger entry writer',
-          touches: ['apps/api/src/features/ledger/writeRefundEntry.ts'],
-          size: 's',
-        }),
-        part({
-          slug: 'refund-path',
-          seq: 2,
-          title: 'Write the entry from the refund path',
-          touches: ['apps/api/src/features/refunds/issue.ts'],
-          dependsOn: ['writer'],
-          size: 'm',
-        }),
-        part({
-          slug: 'nightly',
-          seq: 3,
-          title: 'Stop the nightly job inferring refunds',
-          touches: ['apps/api/src/jobs/nightly-ledger.ts'],
-          dependsOn: ['refund-path'],
-          size: 's',
-        }),
-        part({
-          slug: 'finance-page',
-          seq: 4,
-          title: 'Point the finance page at the ledger',
-          touches: ['apps/web/src/app/finance/page.tsx'],
-          dependsOn: ['nightly'],
-          size: 's',
-        }),
-      ],
-    },
-    {
-      id: 'rev-395-2',
-      planId,
-      seq: 2,
-      at: at(4200),
-      narrative: narrative({
-        reason:
-          'The ledger writer has to exist before the refund path can call it, and the nightly job cannot stop inferring until something else is recording.',
-        approach:
-          'Write the ledger entry where the refund happens, after the provider answers, and stop the nightly job inferring refunds at all.',
-        openQuestions: 'Whether the entry is written before or after the provider call.',
-      }),
-      parts: [
-        part({
-          slug: 'writer',
-          seq: 1,
-          title: 'Add the ledger entry writer',
-          touches: ['apps/api/src/features/ledger/writeRefundEntry.ts'],
-          size: 's',
-        }),
-        part({
-          slug: 'refund-path',
-          seq: 2,
-          title: 'Write the entry from the refund path, after the provider answers',
-          touches: ['apps/api/src/features/refunds/issue.ts'],
-          dependsOn: ['writer'],
-          size: 'm',
-        }),
-        part({
-          slug: 'nightly',
-          seq: 3,
-          title: 'Stop the nightly job inferring refunds from the orders table',
-          touches: ['apps/api/src/jobs/nightly-ledger.ts', 'apps/web/src/app/finance/page.tsx'],
-          dependsOn: ['writer', 'refund-path'],
-          size: 'm',
-        }),
-      ],
-    },
-  ];
-  return {
-    pending: null,
-    revisions,
-    diff: {
-      seq: 2,
-      againstSeq: 1,
-      parts: [
-        { slug: 'writer', kind: 'unchanged', title: 'Add the ledger entry writer', fields: [] },
-        {
-          slug: 'refund-path',
-          kind: 'changed',
-          title: 'Write the entry from the refund path, after the provider answers',
-          fields: [
-            {
-              field: 'title',
-              from: 'Write the entry from the refund path',
-              to: 'Write the entry from the refund path, after the provider answers',
-            },
-          ],
-        },
-        {
-          slug: 'nightly',
-          kind: 'changed',
-          title: 'Stop the nightly job inferring refunds from the orders table',
-          fields: [
-            {
-              field: 'title',
-              from: 'Stop the nightly job inferring refunds',
-              to: 'Stop the nightly job inferring refunds from the orders table',
-            },
-            {
-              field: 'touches',
-              from: 'apps/api/src/jobs/nightly-ledger.ts',
-              to: 'apps/api/src/jobs/nightly-ledger.ts, apps/web/src/app/finance/page.tsx',
-            },
-            { field: 'dependsOn', from: 'refund-path', to: 'writer, refund-path' },
-            { field: 'size', from: 's', to: 'm' },
-          ],
-        },
-        {
-          slug: 'finance-page',
-          kind: 'dropped',
-          title: 'Point the finance page at the ledger',
-          fields: [],
-        },
-      ],
-      narrative: [
-        { field: 'approach', kind: 'rewritten' },
-        { field: 'reason', kind: 'rewritten' },
-        { field: 'openQuestions', kind: 'written' },
-      ],
-    },
-  };
-}
-
-type PlanPartInputView = PlanRevision['parts'][number];

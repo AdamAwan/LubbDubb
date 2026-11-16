@@ -191,10 +191,6 @@
   font-weight: inherit;
   color: var(--cn-red);
 }
-.cn-ident-demo {
-  color: var(--cn-fg-faint);
-  font-size: 11px;
-}
 .cn-logo {
   flex: none;
   contain: paint;

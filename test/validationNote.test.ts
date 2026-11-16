@@ -10,7 +10,7 @@ import type { ValidationVerdict } from '../src/wire.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { needBody } = await import('../web/src/console/NeedsBand.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
@@ -45,19 +45,18 @@ const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
 function closeOutGoal(state: CockpitView['state']): string {
   const task = (state.humanTasks ?? []).find((t) => t.kind === 'close_out' && t.status === 'open');
-  assert.ok(task?.originRef, 'the demo fixtures must carry an open close-out on a goal');
+  assert.ok(task?.originRef, 'the fixtures must carry an open close-out on a goal');
   return task.originRef;
 }
 
 function goalView(mutate: (state: CockpitView['state']) => void): CockpitView {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const target = closeOutGoal(state);
   mutate(state);
   return buildViewModel({
     state,
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),
@@ -78,7 +77,7 @@ function goalView(mutate: (state: CockpitView['state']) => void): CockpitView {
 /** The close-out ask as the panel draws it, which is where its verbs live. */
 function closeOutAsk(v: CockpitView): string {
   const row = v.needsYou.find((n) => n.kind === 'close_out');
-  assert.ok(row, 'the demo fixtures must carry an open close-out ask');
+  assert.ok(row, 'the fixtures must carry an open close-out ask');
   return renderInRefs(v, needBody(row, v, actions));
 }
 

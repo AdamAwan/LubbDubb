@@ -18,7 +18,7 @@ import { median, prNumberOf } from '../primitives.js';
 
 const TOP_ROWS = 10;
 
-export type RunOutcome = Extract<AgentStatus, 'done' | 'failed' | 'crashed' | 'killed' | 'interrupted'>;
+type RunOutcome = Extract<AgentStatus, 'done' | 'failed' | 'crashed' | 'killed' | 'interrupted'>;
 
 const OUTCOME_ORDER: readonly RunOutcome[] = ['done', 'failed', 'crashed', 'killed', 'interrupted'];
 

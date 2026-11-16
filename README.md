@@ -49,7 +49,7 @@ Grouped by where in the loop it sits. Each line links to the spec that owns it.
 | Feature                | What it is                                                                                                                                   |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Opt-in watching**    | One `${labelPrefix}-watch` tag decides what is acted on, on issues and pull requests alike. Nothing outside it is touched. → [06][s06]       |
-| **Two providers**      | GitHub and Azure DevOps behind per-capability seams, plus a `fake` provider the whole suite and the demo run on. → [15][s15]                 |
+| **Two providers**      | GitHub and Azure DevOps behind per-capability seams, plus a `fake` provider the whole suite runs on. → [15][s15]                             |
 | **Tracker states**     | Where the provider has workflow states, pickup is gated on them and the harness moves the item to in-progress and in-review. → [06][s06]     |
 | **Priority and order** | Priority labels weight pickup; the ranked plan ships as **Up next** with a cut-line at current headroom, re-orderable by you. → [05][s05]    |
 | **Tickets board**      | Every open and closed item, as a table or a column-per-state board you drag cards across — the drop's cost said before it lands. → [17][s17] |
@@ -296,7 +296,7 @@ whether a deployment works at all:
 | Key                            | Default                     | Why it matters                                                                                                                                            |
 | ------------------------------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `repoRoot`                     | the directory you launch in | The git repository worktrees are cut from. Left alone, the harness works on **its own** checkout.                                                         |
-| `integrations`                 | all `fake`                  | Which provider serves each capability — `sourceControl`, `issues`, `pool`. `fake` is the mock world the demo and the suite run on.                        |
+| `integrations`                 | all `fake`                  | Which provider serves each capability — `sourceControl`, `issues`, `pool`. `fake` is the mock world the suite runs on.                                    |
 | `github` / `azureDevOps`       | unset                       | The provider's own target: owner and repo, or organization, project and repository.                                                                       |
 | `userId`                       | unset                       | Who you are to the provider. **Pickup reads label authorship**, so without it nothing is ever picked up and nothing says why. → [06][s06]                 |
 | `ownWorkOnly`                  | `true`                      | Whether the world arrives filtered to you: your watch tags, your pull requests. A team decision, so it belongs in the project layer.                      |
@@ -361,7 +361,7 @@ npm run check      # format, lint, typecheck ×2, knip, test — concurrently, i
 rather than stopping at the first; a warm run costs about as long as the test suite alone.
 
 See [`docs/spec/19-development.md`](docs/spec/19-development.md) for the test seams, the coverage and
-security workflows, and the hosted GitHub Pages demo build.
+and security workflows.
 
 ## Documentation
 

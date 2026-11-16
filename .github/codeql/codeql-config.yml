@@ -10,4 +10,3 @@ queries:
 # code that actually serves requests is all under `src/`, which is analysed.
 paths-ignore:
   - test
-  - web/src/demo

@@ -27,7 +27,7 @@ import { standsFor } from '../web/src/view/goalRefs.js';
 import type { NeedRow } from '../web/src/view/needsYou.js';
 import { askRows } from './support/asks.js';
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 
 function part(over: Partial<PlanPart>): PlanPartView {
   return {
@@ -145,7 +145,7 @@ function decision(over: Partial<CockpitDecision>): CockpitDecision {
 }
 
 test('an unknown goal ref yields null rather than an empty page', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   assert.equal(buildGoalPage(state, 'issue:99999', []), null);
 });
 
@@ -157,7 +157,7 @@ test('parts group by status, and a retired part joins none of the groups', () =>
     part({ id: 'p:4', slug: 'four', status: 'pending' }),
     part({ id: 'p:5', slug: 'five', status: 'retired' }),
   ];
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const page: GoalPageView | null = buildGoalPage(
     { ...state, planParts: parts, plans: [plan(`issue:${issue.number}`)] },
@@ -175,7 +175,7 @@ test('parts group by status, and a retired part joins none of the groups', () =>
 });
 
 test('a part’s agent is live only while it is running', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const parts = [part({ id: 'p:1', slug: 'one', status: 'in_review' })];
@@ -209,7 +209,7 @@ test('the track folds the same groups the page draws, so the two cannot disagree
     part({ id: 'p:3', slug: 'three', status: 'dispatched' }),
     part({ id: 'p:4', slug: 'four', status: 'blocked' }),
   ];
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const page = buildGoalPage(
     { ...state, planParts: parts, plans: [plan(`issue:${issue.number}`)] },
@@ -222,7 +222,7 @@ test('the track folds the same groups the page draws, so the two cannot disagree
 });
 
 test('only this goal’s asks reach its page', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const needs = askRows(state);
   const page = buildGoalPage(state, `issue:${issue.number}`, needs);
@@ -231,7 +231,7 @@ test('only this goal’s asks reach its page', () => {
 });
 
 test('the activity list is this goal’s decisions, read off subjectRef', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const page = buildGoalPage(state, `issue:${issue.number}`, []);
 
@@ -241,7 +241,7 @@ test('the activity list is this goal’s decisions, read off subjectRef', () => 
 });
 
 test('a goal whose number is a prefix of another does not inherit that goal’s agents or decisions', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const otherRef = `issue:${issue.number}9`;
@@ -266,7 +266,7 @@ test('a goal whose number is a prefix of another does not inherit that goal’s 
 });
 
 test('an agent dispatched at this goal’s pull request is one of its agents, and says which PR', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const open: OpenPullRequest = {
@@ -304,7 +304,7 @@ test('an agent dispatched at this goal’s pull request is one of its agents, an
 });
 
 test('a part wears the agent on its pull request, preferring the live one', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const parts = [part({ id: 'p:1', slug: 'one', status: 'in_review', prNumber: 921 })];
@@ -331,7 +331,7 @@ test('a part wears the agent on its pull request, preferring the live one', () =
 });
 
 test('a goal worked whole owns its pull requests by branch, and a merged one is still shown', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const open: OpenPullRequest = {
@@ -380,7 +380,7 @@ test('a goal worked whole owns its pull requests by branch, and a merged one is 
 });
 
 test('a goal keeps its closed pull requests after the world’s window has forgotten them', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const archived: PullRequest = {
@@ -414,7 +414,7 @@ test('a goal keeps its closed pull requests after the world’s window has forgo
 });
 
 test('the world’s reading of a closed PR wins over the archived copy of it', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const stale: PullRequest = {
@@ -448,7 +448,7 @@ test('the world’s reading of a closed PR wins over the archived copy of it', (
 });
 
 test('a PR the provider linked is the goal’s, whatever its branch is called', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = { ...state.world.issues[0]!, linkedPrNumber: 904 };
   const linked: PullRequest = {
     id: 'pr-904',
@@ -479,7 +479,7 @@ test('a PR the provider linked is the goal’s, whatever its branch is called', 
 });
 
 test('a goal’s validation checks reach its own page, and only its own', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const checks = state.validationChecks ?? [];
   assert.ok(checks.length > 0, 'the demo writes a validation plan, which this test reads');
 
@@ -507,7 +507,7 @@ test('a goal’s validation checks reach its own page, and only its own', () => 
 });
 
 test('the header’s validation chip agrees with the checks the card under it draws', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const ref = (state.validationChecks ?? [])[0]!.originRef;
   const page = buildGoalPage(state, ref, []);
   const verdict = page?.issue.validation;
@@ -521,7 +521,7 @@ test('the header’s validation chip agrees with the checks the card under it dr
 });
 
 test('a check on a goal does not reach the page through a part ref that starts the same way', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const ref = (state.validationChecks ?? [])[0]!.originRef;
   const strayed = { ...(state.validationChecks ?? [])[0]!, id: 'strayed', originRef: `${ref}:part:signer` };
   const page = buildGoalPage({ ...state, validationChecks: [...(state.validationChecks ?? []), strayed] }, ref, []);
@@ -534,7 +534,7 @@ test('a check on a goal does not reach the page through a part ref that starts t
 });
 
 test('a plan with no live parts still carries what it proposed', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const parts = [
     part({ id: 'p:1', slug: 'one', seq: 2, status: 'retired' }),
@@ -556,7 +556,7 @@ test('a plan with no live parts still carries what it proposed', () => {
 });
 
 test('a stage with nothing to measure draws no proportion', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const page = buildGoalPage({ ...state, plans: [], planParts: [], environmentReach: [] }, ref, [])!;
@@ -576,7 +576,7 @@ test('a stage with nothing to measure draws no proportion', () => {
 });
 
 test('a tab quotes the parts and the checks rather than re-reading them', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const parts = [
@@ -615,7 +615,7 @@ test('a tab quotes the parts and the checks rather than re-reading them', () => 
 });
 
 test('the close tab is drawn without environments, and never folds unknown into absent', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const bare = buildGoalPage({ ...state, environmentReach: [] }, ref, [])!;
@@ -644,7 +644,7 @@ test('the close tab is drawn without environments, and never folds unknown into 
 });
 
 test('validation and signals stay folded until the work is somewhere', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const nowhere: GoalPageView = {
     ...buildGoalPage(state, `issue:${issue.number}`, [])!,
@@ -726,7 +726,7 @@ test('validation and signals stay folded until the work is somewhere', () => {
 });
 
 test('a check anyone has ruled on opens validation wherever the work is', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues.find((i) =>
     state.validationChecks.some((c) => c.originRef === `issue:${i.number}`),
   )!;
@@ -756,7 +756,7 @@ test('a check anyone has ruled on opens validation wherever the work is', () => 
 });
 
 test('a superseded check is not something in the card', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues.find((i) =>
     state.validationChecks.some((c) => c.originRef === `issue:${i.number}`),
   )!;
@@ -782,14 +782,14 @@ test('a superseded check is not something in the card', () => {
 });
 
 test('the record has no relevant moment, so it never opens itself', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
   assert.equal(goalSectionsOpen(page).record, false);
 });
 
 test('the local validation card opens exactly when there is something in it', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
 
@@ -804,7 +804,7 @@ test('the local validation card opens exactly when there is something in it', ()
 });
 
 test('standsFor reads a job origin through to the work it is redoing', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const jobs = [
     { id: 'j1', originRef: 'issue:41:retro' },
     { id: 'j2', originRef: 'job:j1' },
@@ -860,7 +860,7 @@ function planEscalation(id: string, planId: string): Escalation {
 }
 
 test('the plan’s verdict is asked beside the plan while it is still undecided', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const base = buildGoalPage({ ...state, plans: [plan(ref)] }, ref, [])!;
@@ -885,7 +885,7 @@ test('the plan’s verdict is asked beside the plan while it is still undecided'
 });
 
 test('an ask is drawn in the pane it is about, and keeps its row everywhere, dimmed where the pane draws it', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const ref = `issue:${issue.number}`;
   const base = buildGoalPage({ ...state, plans: [plan(ref)] }, ref, [])!;
@@ -933,7 +933,7 @@ test('an ask is drawn in the pane it is about, and keeps its row everywhere, dim
 });
 
 test('the Ask tab meters readiness: workable, and on a placing tracker a feature and a path', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
   const appraisal = {

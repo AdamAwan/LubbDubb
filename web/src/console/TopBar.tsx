@@ -84,7 +84,6 @@ function Ident({ view }: { view: CockpitView }): JSX.Element {
       <span className="cn-wordmark">
         Lubb<b>Dubb</b>
       </span>
-      {view.demo && <span className="cn-ident-demo">demo</span>}
     </div>
   );
 }

@@ -474,20 +474,6 @@ every save already broadcast. It shells out to git and to the agent binary, whic
 on a heartbeat, and `/api/state` is the wrong home for a reading whose subject is the configuration
 that snapshot is built from.
 
-## In the demo
-
-The Pages demo ([19](19-development.md)) runs the flow end to end against `example/inkwell-books`,
-the repository its scripted world is already built on, with the config file held as a text buffer in
-memory. That is a narrower fabrication than the demo's usual refusal implies: what it declines to
-invent is the _running_ config, which `describeRunningConfig` resolves server-side and a copy of which
-would be free to drift. A file's bytes are not that.
-
-Two things stay honest there. Pointing the demo at any other directory shows the other half of the
-design — a repository that could not be read, said out loud rather than papered over. And a demo save
-reports `applied: false` for every key, because there is no live config object behind it to re-seat,
-and claiming otherwise would be the one lie this whole surface exists to prevent an operator from
-being told.
-
 ## Routes
 
 Two, and **neither writes anything** — see [16](16-http-api.md).

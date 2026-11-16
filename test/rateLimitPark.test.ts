@@ -399,13 +399,13 @@ test('a limit park still lets an operator kill the agent, and killing ends the p
 });
 
 test('the cockpit draws the park where the agent is, with a way out of it', async () => {
-  const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+  const { buildFixtureState } = await import('./support/cockpitFixtures.js');
   const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
   const { RefLinks } = await import('../web/src/components/refs.js');
   const { goalIssue } = await import('../web/src/view/goalRefs.js');
   const { hasPrPage } = await import('../web/src/view/prPage.js');
 
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const parked = state.agents.find((a) => a.endedAt === null)!;
   parked.status = 'waiting';
   parked.waitingReason = "Parked on a usage limit: this account's five-hour usage limit is spent.";
@@ -422,7 +422,6 @@ test('the cockpit draws the park where the agent is, with a way out of it', asyn
     state,
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),

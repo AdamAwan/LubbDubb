@@ -87,7 +87,7 @@ const NAMING_COPY: Record<McpNaming, { label: string; blurb: string }> = {
   },
 };
 
-export type McpNaming = 'addendum' | 'point-of-use' | 'desktop' | 'retired' | 'unknown';
+type McpNaming = 'addendum' | 'point-of-use' | 'desktop' | 'retired' | 'unknown';
 
 export interface McpToolUsage {
   tool: string;

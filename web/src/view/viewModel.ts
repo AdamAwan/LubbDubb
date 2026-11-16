@@ -42,7 +42,6 @@ export interface CockpitView {
   state: AppState;
   now: number;
   connected: boolean;
-  demo: boolean;
   setup: SetupPayload | null;
 
   crashed: OrphanedWork[];
@@ -159,7 +158,6 @@ interface ViewInputs {
   state: AppState;
   now: number;
   connected: boolean;
-  demo: boolean;
   setup: SetupPayload | null;
   appliedFixes?: readonly AppliedFix[];
   selected: string | null;
@@ -258,7 +256,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     state,
     now,
     connected: input.connected,
-    demo: input.demo,
     setup: input.setup,
 
     crashed,

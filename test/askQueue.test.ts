@@ -5,8 +5,7 @@ import { askRows } from './support/asks.js';
 import { partHolding } from '../src/asks/inboxAsks.js';
 import type { NeedGroup, NeedKind, NeedRow } from '../web/src/view/needsYou.js';
 
-const { buildDemoState: buildDemoSeed } = await import('../web/src/demo/fixtures.js');
-const buildDemoState = () => buildDemoSeed().state;
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 
 function part(over: Partial<PlanPart>): PlanPartView {
   return {
@@ -98,13 +97,13 @@ function orphan(over: Partial<OrphanedWork> = {}): OrphanedWork {
 }
 
 function stateWith(over: Partial<AppState>): AppState {
-  const base = buildDemoState();
+  const base = buildFixtureState();
   const world = {
     ...base.world,
     issues: base.world.issues.map((i) => ({ ...i, appraisal: null })),
     pullRequests: unassignedPrs(base),
   };
-  // The demo carries one undescribed part, so the rail has a `describe` row. These tests each
+  // The fixtures carry one undescribed part, so the rail has a `describe` row. These tests each
   // build the ask they are about and assert the whole list, so the baseline clears it alongside
   // the appraisals and the reviewer assignments.
   return { ...base, world, build: currentBuild(base), undescribedParts: [], ...over };
@@ -169,9 +168,9 @@ test('recovery sorts above everything, because no pulse runs while it is up', ()
 });
 
 test('an ask opens its goal when that goal has a page, and the ask panel when it does not', () => {
-  const state = buildDemoState();
+  const state = buildFixtureState();
   const known = state.world.issues[0];
-  assert.ok(known, 'the demo fixtures must carry an issue');
+  assert.ok(known, 'the fixtures must carry an issue');
 
   const rows = askRows(
     stateWith({
@@ -197,9 +196,9 @@ test('an ask opens its goal when that goal has a page, and the ask panel when it
 });
 
 test('an ask raised on a pull request opens the goal that pull request belongs to', () => {
-  const state = buildDemoState();
+  const state = buildFixtureState();
   const linked = state.world.issues.find((i) => i.linkedPrNumber !== null);
-  assert.ok(linked?.linkedPrNumber, 'the demo fixtures must carry an issue with a linked pull request');
+  assert.ok(linked?.linkedPrNumber, 'the fixtures must carry an issue with a linked pull request');
 
   const rows = askRows(
     stateWith({
@@ -267,14 +266,13 @@ test('within a group the row holding more work sorts first', () => {
 
 test('the view model exposes the queue and the selected goal together', async () => {
   const { buildViewModel } = await import('../web/src/view/viewModel.js');
-  const state = buildDemoState();
+  const state = buildFixtureState();
   const ref = `issue:${state.world.issues[0]!.number}`;
 
   const view = buildViewModel({
     state,
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),
@@ -299,13 +297,12 @@ test('the view model exposes the queue and the selected goal together', async ()
 
 test('no selected goal means no goal page', async () => {
   const { buildViewModel } = await import('../web/src/view/viewModel.js');
-  const state = buildDemoState();
+  const state = buildFixtureState();
 
   const view = buildViewModel({
     state,
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),
@@ -326,7 +323,7 @@ test('no selected goal means no goal page', async () => {
 });
 
 test('an unanswered profile proposal is a row, and an answered one is not', () => {
-  const base = buildDemoState();
+  const base = buildFixtureState();
   const goal = base.world.issues[0]!;
   const proposed = (over: { awaiting: boolean }) =>
     stateWith({
@@ -374,10 +371,10 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
 });
 
 test('a goal the appraisal refused is a row, and an unwatched or workable one is not', () => {
-  const base = buildDemoState();
+  const base = buildFixtureState();
   const goal = base.world.issues[0]!;
   const watchLabel = base.config.watchLabel;
-  assert.ok(watchLabel, 'the demo config must name a watch tag for this to be a filter at all');
+  assert.ok(watchLabel, 'the fixture config must name a watch tag for this to be a filter at all');
 
   const held = (over: { verdict: 'unclear' | 'workable'; watched: boolean }) =>
     stateWith({
@@ -435,7 +432,7 @@ test('a goal the appraisal refused is a row, and an unwatched or workable one is
 });
 
 test('each open placement question is its own row, and a settled one is gone', () => {
-  const base = buildDemoState();
+  const base = buildFixtureState();
   const goal = base.world.issues[0]!;
   const withAsks = (
     placement: { field: 'parent' | 'areaPath'; proposedParent: number | null; proposedAreaPath: string | null }[],
@@ -497,14 +494,14 @@ function agentWithTask(state: AppState) {
     const t = state.tasks.find((x) => x.id === agent.taskId);
     if (t) return { agent, task: t };
   }
-  throw new Error('the demo carries no agent with a task — this suite needs one');
+  throw new Error('the fixtures carry no agent with a task — this suite needs one');
 }
 
 test('a parked agent’s row says what that run is on, and never its id', () => {
-  const demo = buildDemoState();
-  const { agent, task: onIt } = agentWithTask(demo);
+  const fixture = buildFixtureState();
+  const { agent, task: onIt } = agentWithTask(fixture);
   const rows = askRows({
-    ...demo,
+    ...fixture,
     escalations: [escalation({ id: 'e1', agentId: agent.id })],
     humanTasks: [],
     proposals: [],
@@ -518,10 +515,10 @@ test('a parked agent’s row says what that run is on, and never its id', () => 
 });
 
 test('a usage-limit park is named by the work it stopped', () => {
-  const demo = buildDemoState();
-  const { agent, task: onIt } = agentWithTask(demo);
+  const fixture = buildFixtureState();
+  const { agent, task: onIt } = agentWithTask(fixture);
   const rows = askRows({
-    ...demo,
+    ...fixture,
     escalations: [],
     humanTasks: [],
     proposals: [],
@@ -534,11 +531,11 @@ test('a usage-limit park is named by the work it stopped', () => {
 });
 
 test('a title over more than one line is clamped to its first', () => {
-  const demo = buildDemoState();
-  const { agent, task: onIt } = agentWithTask(demo);
+  const fixture = buildFixtureState();
+  const { agent, task: onIt } = agentWithTask(fixture);
   const rows = askRows({
-    ...demo,
-    tasks: demo.tasks.map((t) => (t.id === onIt.id ? { ...t, title: `${onIt.title}\nand a second paragraph` } : t)),
+    ...fixture,
+    tasks: fixture.tasks.map((t) => (t.id === onIt.id ? { ...t, title: `${onIt.title}\nand a second paragraph` } : t)),
     escalations: [escalation({ id: 'e1', agentId: agent.id })],
     humanTasks: [],
     proposals: [],
@@ -550,9 +547,9 @@ test('a title over more than one line is clamped to its first', () => {
 });
 
 test('an agent the snapshot no longer carries resolves to no label, not to its id', () => {
-  const demo = buildDemoState();
+  const fixture = buildFixtureState();
   const rows = askRows({
-    ...demo,
+    ...fixture,
     escalations: [escalation({ id: 'e1', agentId: 'agent_gone01234' })],
     humanTasks: [],
     proposals: [],
@@ -565,10 +562,10 @@ test('an agent the snapshot no longer carries resolves to no label, not to its i
 });
 
 test('a burn notice names the spending run; every other human task carries neither id nor label', () => {
-  const demo = buildDemoState();
-  const { agent, task: onIt } = agentWithTask(demo);
+  const fixture = buildFixtureState();
+  const { agent, task: onIt } = agentWithTask(fixture);
   const rows = askRows({
-    ...demo,
+    ...fixture,
     escalations: [],
     proposals: [],
     recovery: [],
@@ -588,14 +585,14 @@ test('a burn notice names the spending run; every other human task carries neith
 });
 
 test('urgency ranks the queue, and a watch holding parts is not filed under "whenever"', () => {
-  const demo = buildDemoState();
+  const fixture = buildFixtureState();
   const parts = [
     part({ id: 'p:a', slug: 'a', dependsOn: [] }),
     part({ id: 'p:b', slug: 'b', dependsOn: ['a'] }),
     part({ id: 'p:c', slug: 'c', dependsOn: ['a'] }),
   ];
   const rows = askRows({
-    ...demo,
+    ...fixture,
     planParts: parts,
     escalations: [escalation({ id: 'e1' })],
     proposals: [],
@@ -719,7 +716,7 @@ test('an assign ask opens where its buttons are drawn, never the pull request pa
   assert.ok(rows.length > 0);
   assert.ok(
     rows.some((r) => r.goalRef !== null),
-    'the demo has a pull request under a goal',
+    'the fixtures have a pull request under a goal',
   );
   for (const row of rows) assert.equal(row.opens, row.goalRef === null ? 'ask' : 'goal', row.id);
 });

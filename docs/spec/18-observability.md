@@ -595,7 +595,7 @@ that has nothing in it on a real deployment: `diffWorlds` emits that event only 
 transition seen **in place**, and both real issue providers snapshot the tracker's open set
 (`listOpenWorkItems`, `listOpenIssues`), so a closed item simply leaves `next.issues` and the
 transition is never evaluated. `FakeIssuesIntegration` keeps closed issues in its world, which is why
-the suite and the demo site were the only places the cohort ever filled. The mirror is fed by
+the suite was the only place the cohort ever filled. The mirror is fed by
 `listTicketHistory`, which asks by last-changed and returns both states, so the closures are already
 there on every existing database — no migration, and nothing to wait a sweep for.
 

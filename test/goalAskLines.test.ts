@@ -10,7 +10,7 @@ import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { groupAsks } = await import('../web/src/view/askGroups.js');
 const { askRows } = await import('./support/asks.js');
 const { CheckSetAsk } = await import('../web/src/components/CheckSetAsk.js');
@@ -21,7 +21,7 @@ const sam = { id: 'u1', name: 'Sam' };
 const kim = { id: 'u2', name: 'Kim' };
 
 function stateWithShortlists(lists: Record<number, (typeof sam)[]>): AppState {
-  const base = buildDemoState().state;
+  const base = buildFixtureState();
   const pullRequests = Object.keys(lists).map((n) => ({
     ...base.world.pullRequests[0]!,
     id: `pr-${n}`,
@@ -63,7 +63,7 @@ function check(letter: string, title: string): Record<string, unknown> {
 }
 
 function checkSetState(set: Record<string, unknown>[]): AppState {
-  const base = buildDemoState().state;
+  const base = buildFixtureState();
   const escalation: Escalation = {
     id: 'e-vp',
     type: 'approve_change',

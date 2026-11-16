@@ -6,7 +6,7 @@ import { askRows } from './support/asks.js';
 import type { AppState } from '../web/src/types.js';
 import type { PullRequest, Task, TaskSummary } from '../src/types.js';
 
-const { buildDemoState: buildDemoSeed } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 
 const NOW = '2026-07-26T12:00:00.000Z';
 
@@ -154,7 +154,7 @@ test('a merged pull request assigned to you says nothing about the assignment', 
 });
 
 function stateWithPrs(prs: AppState['world']['pullRequests']): AppState {
-  const base = buildDemoSeed().state;
+  const base = buildFixtureState();
   const world = {
     ...base.world,
     issues: base.world.issues.map((i) => ({ ...i, appraisal: null })),
@@ -164,9 +164,9 @@ function stateWithPrs(prs: AppState['world']['pullRequests']): AppState {
 }
 
 test('an assigned pull request becomes a queue row, and a staffed one does not', () => {
-  const base = buildDemoSeed().state;
+  const base = buildFixtureState();
   const sample = base.world.pullRequests[0];
-  assert.ok(sample, 'the demo fixtures must carry a pull request');
+  assert.ok(sample, 'the fixtures must carry a pull request');
 
   const assigned = {
     ...sample,
@@ -201,9 +201,9 @@ test('an assigned pull request becomes a queue row, and a staffed one does not',
 });
 
 test('an assigned row opens the pull request on the provider, and carries the ask as its second destination', () => {
-  const base = buildDemoSeed().state;
+  const base = buildFixtureState();
   const sample = base.world.pullRequests[0];
-  assert.ok(sample, 'the demo fixtures must carry a pull request');
+  assert.ok(sample, 'the fixtures must carry a pull request');
   const assigned = {
     ...sample,
     number: 9101,
@@ -233,9 +233,9 @@ test('an assigned row opens the pull request on the provider, and carries the as
 });
 
 test('an assigned row with no clock running draws no age', () => {
-  const base = buildDemoSeed().state;
+  const base = buildFixtureState();
   const sample = base.world.pullRequests[0];
-  assert.ok(sample, 'the demo fixtures must carry a pull request');
+  assert.ok(sample, 'the fixtures must carry a pull request');
 
   const rows = askRows(
     stateWithPrs([

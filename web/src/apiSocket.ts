@@ -97,6 +97,6 @@ export interface WsClient {
   close(): void;
 }
 
-export function connectRealWs(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {
+export function connectWs(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {
   return new ReconnectingWs(onEvent, onStatus);
 }

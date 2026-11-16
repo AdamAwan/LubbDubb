@@ -271,8 +271,6 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'notification.send': { label: 'Sent a test notification', blurb: 'A test notification was raised' },
   'project.accept': { label: 'Pulled the project', blurb: 'The project checkout took its waiting commits' },
   'scan.create': { label: 'Ran a scan', blurb: 'A pulse was run on demand' },
-  'demo.expand': { label: 'Opened the raw injector', blurb: 'The raw JSON event form was shown' },
-  'demo.create': { label: 'Injected a demo event', blurb: 'A synthetic world event was injected' },
   'code.copy': { label: 'Copied a code block', blurb: 'A fenced block’s text was copied' },
   'menu.expand': { label: 'Opened the bar menu', blurb: 'The top bar’s More menu was opened' },
   'menu.close': { label: 'Closed the bar menu', blurb: 'The top bar’s More menu was shut from its button' },
@@ -280,7 +278,6 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'validation.close': { label: 'Closed a check pane', blurb: 'The Checks card or a run pane was folded away' },
   'feature.close': { label: 'Folded a feature', blurb: 'One feature’s work on the tickets page was folded' },
   'schedule.close': { label: 'Closed a schedule form', blurb: 'The new-schedule form was hidden' },
-  'demo.close': { label: 'Closed the raw injector', blurb: 'The raw JSON event form was hidden' },
   'watch.close': { label: 'Folded the signals', blurb: 'The goal’s signals section was folded away' },
   'plan.open': { label: 'Discussed a plan', blurb: 'The plan was taken into the operator’s own Claude Code' },
   'goal.open': {

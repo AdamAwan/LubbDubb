@@ -450,8 +450,7 @@ Implements both seams:
 - **`inject(event)`** — routes to the fake that owns the event kind and logs it. An event with no fake
   owner is recorded as `inject_unhandled` rather than throwing: you cannot fake-inject onto a real
   provider. **There is no HTTP route behind this**: it is the test suite's world driver (316 call
-  sites) and nothing else. Faking a world change is a demo affordance, and the only demo is the
-  static Pages build, which has its own in-browser injection ([17](17-cockpit.md#demo-mode)).
+  sites) and nothing else.
 
 ## Signing what the harness says
 

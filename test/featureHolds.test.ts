@@ -4,11 +4,10 @@ import type { AppState, Escalation, OpenPullRequest, Proposal } from '../web/src
 import { askRows } from './support/asks.js';
 import { featureHolds, goalPullRequests } from '../web/src/view/featureHolds.js';
 
-const { buildDemoState: buildDemoSeed } = await import('../web/src/demo/fixtures.js');
-const buildDemoState = () => buildDemoSeed().state;
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 
 function stateWith(over: Partial<AppState>): AppState {
-  const base = buildDemoState();
+  const base = buildFixtureState();
   const world = {
     ...base.world,
     issues: base.world.issues.map((i) => ({ ...i, appraisal: null })),

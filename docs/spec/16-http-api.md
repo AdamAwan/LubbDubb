@@ -2501,7 +2501,7 @@ Four properties hold it together:
   (and refuses a value `export *` there outright, which would carry a whole module past the list),
   and walks each one's transitive relative imports refusing a node builtin or a package value import.
   The list is the ask queue's three pure modules under `src/asks/` — `buildAskQueue`, which the
-  demo's fake server derives its queue with, and the line-wording helpers the cockpit shares with the
+  cockpit test fixtures derive their queue with, and the line-wording helpers the cockpit shares with the
   rows it draws ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)) — among the
   others the test names, `isProposed` (`src/validation/watchProposed.ts`), so the Signals card reads a
   proposed watch check exactly as the window pass does
