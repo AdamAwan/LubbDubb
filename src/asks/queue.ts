@@ -29,11 +29,10 @@ export type AskInputs = Pick<
   | 'descriptionFeedback'
   | 'archivedPullRequests'
   | 'retainedRuns'
+  | 'upcoming'
 > & {
   world: Pick<CockpitState['world'], 'takenAt' | 'pullRequests' | 'closedPullRequests' | 'issues'>;
   config: Pick<CockpitState['config'], 'watchLabel' | 'desktopFolder'>;
-  /** Up next, which carries a story held on open discussion questions. */
-  upcoming?: CockpitState['upcoming'];
 };
 
 /** The standing asks in the one-at-a-time order, beside the inputs they were derived from. */
