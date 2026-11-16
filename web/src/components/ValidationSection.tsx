@@ -332,7 +332,7 @@ function CheckQueue({
           prose, chips and controls competing for one decision — and the decision is always about
           *one* of them. So the sheet leads with the check that is next and keeps the rest as a line
           each: the set stays visible and countable, and only the one being answered is loud.
-          → docs/spec/17-cockpit.md#a-check-carries-its-runs */}
+          → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue */}
       {shown.map(block)}
       {/* Still to run, in the bands the pane's runner panels answer from: a run is on them, a press
           would take them, or nobody offered and they are a person's. One list of checks, banded by
@@ -372,7 +372,7 @@ function QueueHead({
   /* One line, not a stack of prose. What an operator needs before they start is *how much is
      left*, and it was being told to them in three paragraphs and two amber bands — which is the
      reading a card is least likely to be given. A meter is read without being read.
-     → docs/spec/17-cockpit.md#a-check-carries-its-runs */
+     → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue */
   return (
     <div className="vq-head">
       <span className="vq-count">

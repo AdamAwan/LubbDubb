@@ -1,6 +1,6 @@
 import type { ValidationCheckView, ValidationResourceView } from '../types.js';
 
-// → docs/spec/17-cockpit.md#a-check-carries-its-runs
+// → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue
 
 interface CheckSet {
   live: ValidationCheckView[];

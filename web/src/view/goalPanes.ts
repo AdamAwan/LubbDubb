@@ -8,6 +8,7 @@ import {
   type GoalTabOpening,
   type ObligationTab,
 } from './goalPage.js';
+import { isOwed } from './validationChecks.js';
 
 // → docs/spec/17-cockpit.md#the-panes
 
@@ -53,7 +54,7 @@ export function obligationChoices(page: GoalPageView, tab: ObligationTab, showin
 
 export function checkTally(page: GoalPageView): { live: number; settled: number } {
   const live = livePageChecks(page);
-  return { live: live.length, settled: live.filter((c) => c.state === 'passed' || c.state === 'waived').length };
+  return { live: live.length, settled: live.filter((c) => !isOwed(c)).length };
 }
 
 export function watchWindowOf(page: GoalPageView, showing: string | null): GoalWatchView | undefined {

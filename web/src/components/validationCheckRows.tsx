@@ -24,7 +24,7 @@ import { Collapsible } from './collapsible.js';
  *
  * It carries the letter, the title and the state and nothing else. The set has to stay countable —
  * an operator needs to see that there are four left and what they are about — and none of the rest
- * of a check helps with that. → docs/spec/17-cockpit.md#a-check-carries-its-runs
+ * of a check helps with that. → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue
  *
  * **Banded, it says less.** The queue draws chips because its lines sit under one heading and have
  * to carry their own state; a banded line sits under a heading that already said where its answer is
@@ -89,7 +89,7 @@ export function CheckLine({
  * What each environment's run made of one check, under the check: the environment, the outcome in the
  * row's own vocabulary, the sentence the run left, and the way to its screen and its agent. The same
  * facts the environment panel used to list as a second copy of the set, now read where the check is.
- * → docs/spec/17-cockpit.md#a-check-carries-its-runs
+ * → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue
  */
 export function CheckRuns({
   runs,

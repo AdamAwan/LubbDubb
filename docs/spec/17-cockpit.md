@@ -3036,6 +3036,17 @@ nothing at all, because that is already what a validation checklist means — th
 exceptions, which is exactly what a reader deciding how much a tick is worth needs.
 → [20](20-validation.md#the-desktop-channel)
 
+#### A sheet of checks is a queue
+
+The section draws its checks as a **queue, not a table**: nine checks drawn open together is nine
+checks' worth of prose and controls competing for a decision that is always about one of them. So
+exactly one check is drawn in full — the one the operator pinned, else the first still owed, else the
+first — and every other live check is a one-line `vq-line`, the owed ones before the settled ones. A
+check is owed until it has passed or been waived. A line's aside says the loudest of three facts:
+_changed_ by an amendment, _back with you_ from the fleet, or _with the fleet_. The operator can ask
+for every check drawn open at once; the lines then go. `checkQueue` in
+`web/src/view/validationChecks.ts` holds the rule, and `test/askBodies.test.ts` asserts one full row.
+
 ### A sheet row draws its own capture
 
 A `screenshot` step hands a screen back, and a `captured` row asks for exactly one thing: somebody's

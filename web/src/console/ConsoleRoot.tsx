@@ -24,6 +24,7 @@ import { InsightsPage } from '../components/InsightsPage.js';
 import { BotPrsPage } from '../components/BotPrsPage.js';
 import { AppErrorsPage } from '../components/AppErrorsPage.js';
 import { Ref } from '../components/refs.js';
+import { runningAgents } from '../view/focusQueue.js';
 import { PluginBand } from './PluginBand.js';
 
 // → docs/spec/17-cockpit.md
@@ -77,7 +78,7 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
         {view.state.pets !== null && !railless(view) && (
           <Vivarium
             pets={view.state.pets}
-            runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
+            runningAgents={runningAgents(view.state.agents)}
             paused={view.state.control.paused}
             onOpen={() => openPets(actions)}
             onHatch={(id) => actions.hatchEgg(id)}
