@@ -2465,6 +2465,15 @@ log the harness tees it into, so it survives a restart. Fetched for the same rea
 When `web/dist` exists it is served statically, with a not-found handler that returns `index.html` for
 anything that is not `/api` or `/ws` — so client-side routing works.
 
+## Byte ranges
+
+The routes that serve a validation's files — `/local-validations/:id/files/:name` and the three
+`/validation-captures/…` routes — stream the file and answer one `Range: bytes=…` request with a
+`206` and its `content-range`, which is what lets a `<video>` seek before it has loaded. Every answer
+carries `accept-ranges: bytes`. `parseByteRange` (`src/server/byteRange.ts`) reads the header: several
+ranges, another unit or anything malformed serve the whole file with a `200`, which a server may always
+do, and a range starting past the end is a `416`.
+
 ## The wire contract
 
 Every shape these routes ship is declared once, in a module under **`src/wire/`** — one per area of

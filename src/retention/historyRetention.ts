@@ -1,6 +1,6 @@
 import type { ErrorRecorder } from '../errorLog.js';
-import { DAY_MS } from '../primitives.js';
 import type { Store } from '../store/store.js';
+import { DailySweep } from './dailySweep.js';
 
 // → docs/spec/14-persistence.md#history-retention
 
@@ -43,23 +43,19 @@ function nextTurn(): Promise<void> {
 }
 
 export class HistoryRetentionDesk {
-  private readonly now: () => number;
-  private lastSweptAt: number | null = null;
+  private readonly window: DailySweep;
   private running = false;
 
   constructor(private readonly deps: HistoryRetentionDeps) {
-    this.now = deps.now ?? (() => Date.now());
+    this.window = new DailySweep(deps.retentionDays, deps.now);
   }
 
   get enabled(): boolean {
-    return Number.isFinite(this.deps.retentionDays) && this.deps.retentionDays > 0;
+    return this.window.enabled;
   }
 
   run(): void {
-    if (!this.enabled || this.running) return;
-    const now = this.now();
-    if (this.lastSweptAt !== null && now - this.lastSweptAt < DAY_MS) return;
-    this.lastSweptAt = now;
+    if (this.running || !this.window.due()) return;
     void this.sweep();
   }
 
@@ -84,7 +80,7 @@ export class HistoryRetentionDesk {
 
   private async sweepAll(tally: RetentionSweep): Promise<void> {
     const { store } = this.deps;
-    const before = new Date(this.now() - this.deps.retentionDays * DAY_MS).toISOString();
+    const before = this.window.cutoff();
     const held = this.held();
     const rows = this.deps.batchRows ?? BATCH_ROWS;
     const chunkRows = this.deps.batchRows ?? TRANSCRIPT_BATCH_ROWS;

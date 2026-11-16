@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system/system.js';
@@ -15,6 +15,9 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { FakeEnvironmentObserver } from '../src/environments/fakeObserver.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { remoteValidationRunDir } from '../src/validation/remote/origin.js';
+import { RecordingRetentionDesk } from '../src/retention/recordingRetention.js';
+import { localValidationOutputDir } from '../src/validation/local/origin.js';
+import { validationGoalDir } from '../src/validation/resources.js';
 import { commentSink } from './support/commentSink.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { IssueCommentInput, IssueImageInput, IssueImageResult } from '../src/sink/actionSink.js';
@@ -218,5 +221,74 @@ test('a run that recorded nothing has no recording, and the route says so', asyn
   const served = await app.inject({ method: 'GET', url: `/validation-captures/recording/${b.runId}` });
   assert.equal(served.statusCode, 404);
   await app.close();
+  close(b);
+});
+
+test('a recording can be fetched a byte range at a time, so a player can seek', async () => {
+  const b = bench();
+  writeFileSync(join(artefactsOf(b), 'video-1.webm'), VIDEO);
+  await settle(b);
+  const { app } = await buildApp(b.system);
+  const url = `/validation-captures/recording/${b.runId}`;
+
+  const part = await app.inject({ method: 'GET', url, headers: { range: 'bytes=4-9' } });
+  assert.equal(part.statusCode, 206);
+  assert.equal(part.headers['content-range'], `bytes 4-9/${String(VIDEO.length)}`);
+  assert.deepEqual(part.rawPayload, VIDEO.subarray(4, 10));
+
+  const whole = await app.inject({ method: 'GET', url });
+  assert.equal(whole.headers['accept-ranges'], 'bytes', 'a player is told it may ask for ranges');
+
+  const past = await app.inject({ method: 'GET', url, headers: { range: 'bytes=999-' } });
+  assert.equal(past.statusCode, 416);
+  await app.close();
+  close(b);
+});
+
+test('videos older than the retention window are deleted, and nothing else is', async () => {
+  const b = bench();
+  const { store, config } = b.system;
+  writeFileSync(join(artefactsOf(b), 'video-1.webm'), VIDEO);
+  await settle(b);
+  const kept = join(validationGoalDir(config.validationRoot, GOAL), `recording-${b.runId}.webm`);
+  assert.ok(existsSync(kept));
+
+  const local = store.localValidations.createLocalValidation({
+    originRef: GOAL,
+    runId: 'lr1',
+    ref: 'main',
+    commit: null,
+  });
+  const dir = localValidationOutputDir(config.validationRoot, GOAL, local.id);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'shot.png'), PIXEL);
+  writeFileSync(join(dir, 'video-1.webm'), VIDEO);
+  store.localValidations.recordLocalValidationReport(local.id, {
+    status: 'passed',
+    summary: 'it worked',
+    findings: [],
+    visited: [],
+    screenshots: ['shot.png', 'video-1.webm'],
+    note: null,
+  });
+
+  const desk = (days: number, ahead: number): RecordingRetentionDesk =>
+    new RecordingRetentionDesk({
+      store,
+      validationRoot: config.validationRoot,
+      retentionDays: days,
+      errors: b.system.errors,
+      now: () => Date.now() + ahead * 86_400_000,
+    });
+
+  assert.equal(desk(14, 1).sweep(), 0, 'nothing is old enough yet');
+  assert.equal(desk(0, 30).sweep(), 0, '0 keeps every video');
+  assert.equal(desk(14, 15).sweep(), 2);
+
+  assert.ok(!existsSync(kept), 'the remote recording is gone');
+  assert.equal(store.remoteValidation.getRemoteRun(b.runId)?.recording, null, 'and the run no longer names it');
+  assert.ok(!existsSync(join(dir, 'video-1.webm')), 'the local video is gone');
+  assert.ok(existsSync(join(dir, 'shot.png')), 'screenshots stay');
+  assert.deepEqual(store.localValidations.getLocalValidation(local.id)?.screenshots, ['shot.png']);
   close(b);
 });

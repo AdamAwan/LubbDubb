@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createReadStream, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import { mintArtifactCapability, verifyArtifactCapability } from '../artifactCapability.js';
+import { parseByteRange } from '../byteRange.js';
 import { z } from 'zod';
 import { checked, IdParams } from '../validation.js';
 import { localValidationOutputDir } from '../../validation/local/origin.js';
@@ -91,13 +92,7 @@ function registerLocalValidationFiles(app: FastifyInstance, { system, artifactKe
       const dir = localValidationOutputDir(config.validationRoot, row.originRef, row.id);
       const file = confinedTo(dir, resolve(dir, name));
       if (!file) return reply.code(404).send({ error: 'screenshot not found' });
-      reply
-        .header('content-type', artifactMime(file))
-        .header('content-security-policy', 'sandbox')
-        .header('x-content-type-options', 'nosniff')
-        .header('cache-control', 'private, max-age=300, immutable')
-        .header('content-length', statSync(file).size);
-      return reply.send(createReadStream(file));
+      return streamFile(req, reply, file);
     }),
   );
 }
@@ -121,7 +116,7 @@ function registerValidationCaptures(app: FastifyInstance, { system, artifactKey 
       const check = store.validation.getValidationCheck(originRef, checkId);
       if (!check?.capture) return reply.code(404).send({ error: 'capture not found' });
       return (
-        sendGoalFile(reply, config.validationRoot, originRef, check.capture) ??
+        sendGoalFile(req, reply, config.validationRoot, originRef, check.capture) ??
         reply.code(404).send({ error: 'capture not found' })
       );
     }),
@@ -147,7 +142,7 @@ function registerValidationCaptures(app: FastifyInstance, { system, artifactKey 
       const reading = store.remoteValidation.getRemoteReading(runId, rowId);
       if (!reading?.capture) return reply.code(404).send({ error: 'capture not found' });
       return (
-        sendGoalFile(reply, config.validationRoot, reading.goalRef, reading.capture) ??
+        sendGoalFile(req, reply, config.validationRoot, reading.goalRef, reading.capture) ??
         reply.code(404).send({ error: 'capture not found' })
       );
     }),
@@ -167,7 +162,7 @@ function registerValidationCaptures(app: FastifyInstance, { system, artifactKey 
       const run = store.remoteValidation.getRemoteRun(runId);
       if (!run?.recording) return reply.code(404).send({ error: 'recording not found' });
       return (
-        sendGoalFile(reply, config.validationRoot, run.goalRef, run.recording) ??
+        sendGoalFile(req, reply, config.validationRoot, run.goalRef, run.recording) ??
         reply.code(404).send({ error: 'recording not found' })
       );
     }),
@@ -265,16 +260,37 @@ function capabilityRefused(artifactKey: Buffer | null, req: FastifyRequest, subj
 }
 
 /** A file held in a goal's validation directory, confined and streamed. Null where there is none. */
-function sendGoalFile(reply: FastifyReply, root: string, goalRef: string, name: string): FastifyReply | null {
+function sendGoalFile(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  root: string,
+  goalRef: string,
+  name: string,
+): FastifyReply | null {
   const file = confinedTo(validationGoalDir(root, goalRef), validationResourcePath(root, goalRef, name));
-  if (!file) return null;
-  return reply
+  return file === null ? null : streamFile(req, reply, file);
+}
+
+/**
+ * A validation file, sandboxed, or the one byte range asked for — what lets a `<video>` seek before
+ * it has loaded. → docs/spec/16-http-api.md#byte-ranges
+ */
+function streamFile(req: FastifyRequest, reply: FastifyReply, file: string): FastifyReply {
+  const size = statSync(file).size;
+  reply
     .header('content-type', artifactMime(file))
     .header('content-security-policy', 'sandbox')
     .header('x-content-type-options', 'nosniff')
     .header('cache-control', 'private, max-age=300, immutable')
-    .header('content-length', statSync(file).size)
-    .send(createReadStream(file));
+    .header('accept-ranges', 'bytes');
+  const range = parseByteRange(req.headers.range, size);
+  if (range === 'unsatisfiable') return reply.code(416).header('content-range', `bytes */${size}`).send();
+  if (range === null) return reply.header('content-length', size).send(createReadStream(file));
+  return reply
+    .code(206)
+    .header('content-range', `bytes ${range.start}-${range.end}/${size}`)
+    .header('content-length', range.end - range.start + 1)
+    .send(createReadStream(file, range));
 }
 
 function confinedTo(root: string, path: string): string | null {

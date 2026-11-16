@@ -238,6 +238,12 @@ export const FLEET_FIELDS: readonly ConfigField[] = [
     why: 'How long finished agents keep their transcripts, the decision log keeps its rows, and finished tasks keep their prompts, in days. Task and agent rows themselves are kept. 0 keeps everything.',
   },
   {
+    path: 'recordingRetentionDays',
+    type: 'number',
+    access: 'plain',
+    why: 'How long a validation video is kept after the run that recorded it ended, in days. Screenshots and readings stay. 0 keeps every video.',
+  },
+  {
     path: 'whitelistedApprovals',
     type: 'json',
     access: 'fileOnly',

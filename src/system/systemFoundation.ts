@@ -20,6 +20,7 @@ import { defaultPoolSize, WorktreeManager, type Worktrees } from '../worktree/wo
 import { GitCliObserver, type GitObserver } from '../git/gitObserver.js';
 import { CloneUpkeepDesk, GitCloneKeeper, type CloneKeeper } from '../git/cloneUpkeep.js';
 import { HistoryRetentionDesk } from '../retention/historyRetention.js';
+import { RecordingRetentionDesk } from '../retention/recordingRetention.js';
 import { AreaPathDirectory } from '../intake/areaPaths.js';
 import { AgentManager } from '../agents/agentManager.js';
 import { buildClaudeStreamArgs, buildInitialMessage, buildResumeMessage } from '../agents/agentProtocol.js';
@@ -240,6 +241,12 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
   const keeper = opts.cloneKeeper ?? (realClone(opts) ? new GitCloneKeeper(config.repoRoot) : undefined);
   const cloneUpkeep = keeper === undefined ? undefined : new CloneUpkeepDesk({ keeper, errors });
   const retention = new HistoryRetentionDesk({ store, retentionDays: config.historyRetentionDays, errors });
+  const recordingRetention = new RecordingRetentionDesk({
+    store,
+    validationRoot: config.validationRoot,
+    retentionDays: config.recordingRetentionDays,
+    errors,
+  });
   return {
     store,
     now,
@@ -256,6 +263,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     gitObserver,
     cloneUpkeep,
     retention,
+    recordingRetention,
     appErrorDetails: opts.appErrorDetailRunner ?? new CommandAppErrorDetailRunner(config.repoRoot),
     watchLabel: watchLabelFor(config.labelPrefix),
     discussions,

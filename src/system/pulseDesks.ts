@@ -72,6 +72,7 @@ export interface PulseDeps {
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   ejections?: { sweepExpiries(): unknown[] };
   retention?: { run(): void };
+  recordingRetention?: { run(): void };
   burn?: SpendBurnDesk;
   cloneUpkeep?: CloneUpkeepDesk;
   escalations?: {
@@ -158,6 +159,7 @@ const ENTRIES = [
     { id: 'stalls', readWorld: false, run: (d) => d.fleet?.completeExpiredStalls() },
     { id: 'ejectionExpiries', readWorld: false, run: (d) => d.ejections?.sweepExpiries() },
     { id: 'retention', readWorld: false, run: (d) => d.retention?.run() },
+    { id: 'recordingRetention', readWorld: false, run: (d) => d.recordingRetention?.run() },
   ]),
   ...phase('afterTasks', [{ id: 'reviewWaits', readWorld: false, run: (d, at) => foldReviewWaits(d, at) }]),
   ...phase('afterAgents', [
