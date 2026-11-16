@@ -373,7 +373,7 @@ security workflows, and the hosted GitHub Pages demo build.
 | [`docs/spec/`](docs/README.md)                         | The specification of every subsystem as it behaves today                       |
 | [`docs/feature-timeline.md`](docs/feature-timeline.md) | What landed when, from the walking skeleton onwards                            |
 | [`docs/prompt-templates/`](docs/prompt-templates/)     | The rule dispatcher's built-in prompt bodies, ready to override                |
-| [`CLAUDE.md`](CLAUDE.md)                               | Operating notes for agents working in this repo — the sharp edges              |
+| [`CLAUDE.md`](CLAUDE.md)                               | Operating notes for agents — the sharp edges, and the per-directory notes      |
 
 ## License
 

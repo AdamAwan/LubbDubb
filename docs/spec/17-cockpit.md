@@ -6433,7 +6433,7 @@ edit is a first-class state — the page is told, and says so, rather than writi
 **Paths, Server and the agent command line sit behind an advanced disclosure** with a warning. Not
 because they are harder, but because `repoRoot`, `dbPath`, `host`, `port` and `auth` can leave an
 operator unable to reach their own cockpit, and an `--allowedTools` in `claudeArgs` silently drops the
-harness's own MCP grants (`CLAUDE.md`).
+harness's own MCP grants (`src/agents/CLAUDE.md`).
 
 What has reached the file and is waiting for a restart is drawn as a **pending block**, with an
 _Apply and restart_ control that pauses dispatch and hands this process off to the supervisor. Where no

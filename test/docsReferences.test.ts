@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { REPO_ROOT as ROOT } from './support/paths.js';
 
 const CHECKED_PREFIXES = ['src/', 'web/', 'test/', 'scripts/', 'docs/spec/'];
@@ -10,8 +10,14 @@ const BUILD_OUTPUTS = new Set(['web/dist']);
 
 const PATH_TOKEN = /`([A-Za-z0-9._/-]+\/[A-Za-z0-9._/-]*)`/g;
 
+function directoryNotes(): string[] {
+  return ['src', 'test', 'web']
+    .flatMap((dir) => readdirSync(join(ROOT, dir), { recursive: true, encoding: 'utf8' }).map((p) => `${dir}/${p}`))
+    .filter((p) => p.endsWith('/CLAUDE.md'));
+}
+
 function markdownFiles(): string[] {
-  const files = ['CLAUDE.md', 'README.md', 'docs/README.md', 'docs/workflow.md'];
+  const files = ['CLAUDE.md', ...directoryNotes(), 'README.md', 'docs/README.md', 'docs/workflow.md'];
   for (const dir of ['docs/spec', 'docs/prompt-templates']) {
     for (const entry of readdirSync(join(ROOT, dir))) {
       if (entry.endsWith('.md')) files.push(`${dir}/${entry}`);
@@ -47,6 +53,23 @@ test('CLAUDE.md stays small enough to load into every agent', () => {
   const lines = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8').split('\n').length;
 
   assert.ok(lines < 400, `CLAUDE.md is ${lines} lines; the always-loaded file is capped at 400.`);
+});
+
+test('every relative link in a CLAUDE.md resolves, and the root lists every directory note', () => {
+  const broken: string[] = [];
+  for (const file of ['CLAUDE.md', ...directoryNotes()]) {
+    const text = readFileSync(join(ROOT, file), 'utf8');
+    for (const match of text.matchAll(/\]\(([^)#\s]+)(?:#[^)]*)?\)/g)) {
+      const target = match[1]!;
+      if (/^[a-z]+:/.test(target)) continue;
+      if (!existsSync(join(ROOT, dirname(file), target))) broken.push(`${file}: ${target}`);
+    }
+  }
+  const root = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8');
+  const unlisted = directoryNotes().filter((note) => !root.includes(`](${note})`));
+
+  assert.deepEqual(broken, [], `A CLAUDE.md links to something that does not exist:\n  ${broken.join('\n  ')}`);
+  assert.deepEqual(unlisted, [], `The root CLAUDE.md's Directory notes omit:\n  ${unlisted.join('\n  ')}`);
 });
 
 test('every spec document the index lists exists, and every spec is listed', () => {
