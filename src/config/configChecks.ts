@@ -104,3 +104,11 @@ export function validateAppErrors(merged: Config): void {
         `automatic triage may hand an agent each day, 0 for none. Got ${JSON.stringify(merged.appErrorTriagePerDay)}.`,
     );
 }
+
+export function validateFleetStall(merged: Config): void {
+  if (!Number.isInteger(merged.fleetStallCycles) || merged.fleetStallCycles < 0)
+    throw new Error(
+      `fleetStallCycles: must be a whole number of at least 0 — how many cycles running with nothing started ` +
+        `read as a stalled fleet, 0 for never. Got ${JSON.stringify(merged.fleetStallCycles)}.`,
+    );
+}

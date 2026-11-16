@@ -32,6 +32,7 @@ const ASK_READS: Record<Exclude<StateSection, 'control' | 'asks'>, (r: Reads) =>
   harness: (r) => ({
     config: { watchLabel: r.watchLabel, desktopFolder: r.config.repoRoot },
     build: r.system.updates.reading(),
+    fleetStall: r.system.fleetStall.reading(),
     recovery: r.system.recovery.pending(),
   }),
   goals: (r) => ({

@@ -403,6 +403,11 @@ const ANSWER_WITH: Record<AskKind, Answerer> = {
     'A dispatch the harness keeps refusing, for the reason the row names. There is no verdict to give: the ' +
       'answer is fixing what the refusal says.',
   ),
+  fleet_stall: nowhere(
+    'The fleet has work above the cut-line and room under the cap, and has started nothing for many cycles. ' +
+      'There is no verdict to give: the answer is finding what refuses the dispatch, and the row clears itself ' +
+      'on the cycle one gets through.',
+  ),
 };
 
 export function answerWith(row: AskRow, ctx: AnswerContext): AnswerWith {

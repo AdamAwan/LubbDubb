@@ -46,6 +46,7 @@ const FLEET_WIDE = new Set<NeedKind>([
   'dispatch',
   'upgrade',
   'project_pull',
+  'fleet_stall',
 ]);
 
 const WORLD_PR = new Set<string>(['elsewhere', 'stalled']);

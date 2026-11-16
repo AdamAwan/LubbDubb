@@ -48,6 +48,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'closedPrWindowMs',
       'closedPrCatchUpMs',
       'upNextOverrideTtlMs',
+      'fleetStallCycles',
       'prewarmWorktrees',
     ],
   },

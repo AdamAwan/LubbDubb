@@ -45,6 +45,13 @@ export class DecisionStore {
     return rows.map(rowToDecision);
   }
 
+  listCycleDecisions(cycleId: string): Decision[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM decisions WHERE cycle_id = ? ORDER BY created_at DESC`)
+      .all(cycleId) as DecisionRow[];
+    return rows.map(rowToDecision);
+  }
+
   workItemStateMovesWithin(number: number, windowMs: number): { executed: number; lastHeld: boolean } {
     const since = new Date(Date.parse(this.ctx.now()) - windowMs).toISOString();
     const rows = this.ctx

@@ -144,6 +144,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   bot_pr: 'A bot pull request on you is failing',
   upgrade: 'An update to the harness is waiting',
   project_pull: 'The project checkout cannot be pulled',
+  fleet_stall: 'The fleet has work and room, and is starting nothing',
 };
 
 export function notifySnapshot(state: AppState): NotifySnapshot {

@@ -3594,6 +3594,7 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     recovery: [],
+    fleetStall: null,
     build: {
       state: 'behind',
       label: '14 behind',

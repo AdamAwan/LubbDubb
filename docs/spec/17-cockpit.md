@@ -862,6 +862,14 @@ cases — a checkout of the operator's own standing on the branch, or a cap that
 a button that could perform neither is the dead end this cockpit's rules exist to prevent. The band
 draws the thrower's own message instead, which already names the branch, the path and what clears it.
 
+**`fleet_stall` is `dispatch` read across the whole fleet**, off `state.fleetStall` rather than the
+decision log (`src/asks/stallAsks.ts`): one row, `blocking` and `now`, while the harness has had a
+candidate above the cut-line, room under the cap and started nothing for `fleetStallCycles` cycles
+running ([04](04-harness-cycle.md#when-the-fleet-stops-dispatching)). It needs no refusal — a
+dispatch never attempted stalls the fleet too — and its title quotes the newest refusal when there is
+one. It has no control and opens nothing, for `dispatch`'s reason, and it clears itself the cycle a
+dispatch is executed.
+
 **`describe` is the one kind built from an _absence_, and the server decides it.** Every other row is
 raised by something — an escalation, a bench task, a reading. This one is the parts whose pull request
 is open and which nobody has written a word about, so there is nothing to read it off in the cockpit:
@@ -962,7 +970,7 @@ _complete_ and, past about a dozen rows, that was the whole of its cost.
 
 `KIND_URGENCY` (`src/asks/queue.ts`) is total over `AskKind`, so a new kind is placed deliberately rather than inheriting
 the last one's. `now` is what the fleet cannot get past — `recovery`, `escalation`, `permission`,
-`dispatch`, `config`, the two proposals that gate work, `plan` and `merge`, and the ask planning waits on, `findings`. `next` is an
+`dispatch`, `fleet_stall`, `config`, the two proposals that gate work, `plan` and `merge`, and the ask planning waits on, `findings`. `next` is an
 obligation of the operator's that gates something: `reply`, `shortfall`, `intake`, `profile`,
 `close_out`, `validate`, `bench`, `config_gap`, `supply`, `describe`, `description_wrong`, `bot_pr`. `later` is an ask holding nothing at all —
 `description_note`, `watch`, `burn`, `placement`, `assigned`, `upgrade`, `project_pull`, and `limit`.
@@ -1009,33 +1017,34 @@ and an operator glancing at the rail could not tell a queue of successes from a 
 reading every row. The palette now answers _what the ask is_, and the group is carried as weight
 within it.
 
-| Kind                | Tag              | Tone  | Glyph | Why that tone                                                   |
-| ------------------- | ---------------- | ----- | ----- | --------------------------------------------------------------- |
-| `recovery`          | Recovery         | red   | `↺`   | A restart left runs orphaned. Something went wrong.             |
-| `escalation`        | Escalation       | red   | `?`   | An agent hit a question it cannot get past.                     |
-| `permission`        | Permission       | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.            |
-| `limit`             | Usage limit      | amber | `‖`   | Nothing broke; an allowance window has to turn over.            |
-| `burn`              | Runaway          | amber | `▲`   | A heads-up on a run that carries on either way.                 |
-| `plan`              | Plan             | blue  | `◇`   | A plan to read and decide on.                                   |
-| `reply`             | Reply            | amber | `↵`   | A drafted reply, held until you send it.                        |
-| `merge`             | Merge            | amber | `⊕`   | A merge waiting on your verdict.                                |
-| `describe`          | Describe         | blue  | `✎`   | An open pull request carries nobody's account of itself.        |
-| `description_wrong` | Description      | amber | `≠`   | A check found the description saying what the diff does not do. |
-| `description_note`  | Description note | blue  | `¶`   | The diff raises something the description does not. A note.     |
-| `shortfall`         | Shortfall        | blue  | `✗`   | Delivered work that did not reach its goal.                     |
-| `intake`            | Intake           | blue  | `◌`   | The appraisal could not say a goal is workable.                 |
-| `findings`          | Findings         | blue  | `⌕`   | An investigation found a cause; you say what happens next.      |
-| `profile`           | Profile          | blue  | `⊙`   | Which profile a goal runs on.                                   |
-| `placement`         | Backlog          | amber | `▣`   | Nothing is held; the ticket is off the board.                   |
-| `bench`             | Bench            | blue  | `◆`   | Work only a person can do. Informative, not broken.             |
-| `close_out`         | Close-out        | green | `⚑`   | A goal was **delivered**; this is the step after it.            |
-| `validate`          | Validate         | green | `✓`   | The other step after a delivery — run its checks.               |
-| `watch`             | Watch            | amber | `◎`   | The running system is answering outside what a goal declared.   |
-| `unwatched`         | Unseen stories   | amber | `○`   | A watched Feature has stories no agent has ever read.           |
-| `dispatch`          | Refused          | red   | `⊠`   | The harness keeps trying this and keeps being told no.          |
-| `bot_pr`            | Bot PR           | amber | `⇡`   | A bot's bump on you is failing; watch, close or step off it.    |
-| `upgrade`           | Upgrade          | amber | `↑`   | A newer build exists; nothing broke and nothing is parked.      |
-| `project_pull`      | Auto-pull off    | amber | `↥`   | Something is stopping a pull the harness would have done.       |
+| Kind                | Tag              | Tone  | Glyph | Why that tone                                                        |
+| ------------------- | ---------------- | ----- | ----- | -------------------------------------------------------------------- |
+| `recovery`          | Recovery         | red   | `↺`   | A restart left runs orphaned. Something went wrong.                  |
+| `escalation`        | Escalation       | red   | `?`   | An agent hit a question it cannot get past.                          |
+| `permission`        | Permission       | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.                 |
+| `limit`             | Usage limit      | amber | `‖`   | Nothing broke; an allowance window has to turn over.                 |
+| `burn`              | Runaway          | amber | `▲`   | A heads-up on a run that carries on either way.                      |
+| `plan`              | Plan             | blue  | `◇`   | A plan to read and decide on.                                        |
+| `reply`             | Reply            | amber | `↵`   | A drafted reply, held until you send it.                             |
+| `merge`             | Merge            | amber | `⊕`   | A merge waiting on your verdict.                                     |
+| `describe`          | Describe         | blue  | `✎`   | An open pull request carries nobody's account of itself.             |
+| `description_wrong` | Description      | amber | `≠`   | A check found the description saying what the diff does not do.      |
+| `description_note`  | Description note | blue  | `¶`   | The diff raises something the description does not. A note.          |
+| `shortfall`         | Shortfall        | blue  | `✗`   | Delivered work that did not reach its goal.                          |
+| `intake`            | Intake           | blue  | `◌`   | The appraisal could not say a goal is workable.                      |
+| `findings`          | Findings         | blue  | `⌕`   | An investigation found a cause; you say what happens next.           |
+| `profile`           | Profile          | blue  | `⊙`   | Which profile a goal runs on.                                        |
+| `placement`         | Backlog          | amber | `▣`   | Nothing is held; the ticket is off the board.                        |
+| `bench`             | Bench            | blue  | `◆`   | Work only a person can do. Informative, not broken.                  |
+| `close_out`         | Close-out        | green | `⚑`   | A goal was **delivered**; this is the step after it.                 |
+| `validate`          | Validate         | green | `✓`   | The other step after a delivery — run its checks.                    |
+| `watch`             | Watch            | amber | `◎`   | The running system is answering outside what a goal declared.        |
+| `unwatched`         | Unseen stories   | amber | `○`   | A watched Feature has stories no agent has ever read.                |
+| `dispatch`          | Refused          | red   | `⊠`   | The harness keeps trying this and keeps being told no.               |
+| `bot_pr`            | Bot PR           | amber | `⇡`   | A bot's bump on you is failing; watch, close or step off it.         |
+| `upgrade`           | Upgrade          | amber | `↑`   | A newer build exists; nothing broke and nothing is parked.           |
+| `project_pull`      | Auto-pull off    | amber | `↥`   | Something is stopping a pull the harness would have done.            |
+| `fleet_stall`       | Stalled          | red   | `■`   | The fleet has work and room and has started nothing for many cycles. |
 
 **`upgrade` and `project_pull` are the two kinds derived from a _reading_ rather than from anything
 raised** — `src/asks/updateAsks.ts`, off `state.build`. They are here for the membership test

@@ -74,18 +74,20 @@ harness made and audits as such, and the failure mode worth catching is not the 
 _repetition_ — which the queue rail derives from `decisions`
 ([09](09-execution.md#a-refusal-that-keeps-repeating)). Recording it here instead would put a hundred
 rows an hour of one standing fact into the one list whose shape means "something threw once", in the
-one record an operator clears.
+one record an operator clears. What the log does get is the fleet-wide consequence, once: the
+[stalled-fleet watch](04-harness-cycle.md#when-the-fleet-stops-dispatching) writes one entry per
+episode of work waiting, room free and nothing started, however many refusals it spans.
 
 ### Who records what
 
-| `source`   | Recorded by                                                                                                                                                                                                   |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard.                                                                           |
-| `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; an Azure request that spent every retry (a recovered one records nothing); GitHub rate-limit notices.                         |
-| `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; terminal-runtime warnings; invalid or unreadable `plan.json`; MCP channel/config/frame failures. |
-| `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                  |
-| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                          |
-| `runtime`  | The [runtime watch](#the-runtime-watch): a blocked event loop; a slow store read.                                                                                                                             |
+| `source`   | Recorded by                                                                                                                                                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard; the stuck-cycle watchdog; the [stalled-fleet watch](04-harness-cycle.md#when-the-fleet-stops-dispatching), once per episode. |
+| `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; an Azure request that spent every retry (a recovered one records nothing); GitHub rate-limit notices.                                                                            |
+| `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; terminal-runtime warnings; invalid or unreadable `plan.json`; MCP channel/config/frame failures.                                                    |
+| `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                                                                     |
+| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                                                                             |
+| `runtime`  | The [runtime watch](#the-runtime-watch): a blocked event loop; a slow store read.                                                                                                                                                                                |
 
 **Do not add new swallowed `catch`es — route them here.** Tests silence the stderr mirror with
 `buildSystem(config, { errorMirror: () => {} })`.
