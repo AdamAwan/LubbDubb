@@ -3,6 +3,7 @@ import { AsyncButton } from './AsyncButton.js';
 import { Modal } from './Modal.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
+import { plural } from '../view/plural.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -82,11 +83,11 @@ function RunCosts({ agents, prAgents, instructions }: { agents: number; prAgents
   return (
     <ul className="rb-costs">
       <li>
-        {agents === 0 ? 'No agent is running on this goal.' : `${count(agents, 'running agent')} killed mid-turn.`}
+        {agents === 0 ? 'No agent is running on this goal.' : `${plural(agents, 'running agent')} killed mid-turn.`}
       </li>
       {prAgents > 0 && (
         <li>
-          {count(prAgents, 'agent')} on this goal’s pull requests {prAgents === 1 ? 'keeps' : 'keep'} running — end
+          {plural(prAgents, 'agent')} on this goal’s pull requests {prAgents === 1 ? 'keeps' : 'keep'} running — end
           {prAgents === 1 ? ' it' : ' them'} from the fleet if you want {prAgents === 1 ? 'it' : 'them'} stopped too.
         </li>
       )}
@@ -94,7 +95,7 @@ function RunCosts({ agents, prAgents, instructions }: { agents: number; prAgents
       <li>
         {instructions === 0
           ? 'Nothing you have asked for is still standing.'
-          : `${count(instructions, 'standing instruction')} settled unread.`}
+          : `${plural(instructions, 'standing instruction')} settled unread.`}
       </li>
     </ul>
   );
@@ -137,8 +138,4 @@ function NoteField({
       />
     </>
   );
-}
-
-function count(n: number, noun: string): string {
-  return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }

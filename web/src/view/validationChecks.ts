@@ -41,7 +41,7 @@ export function checkQueue(live: readonly ValidationCheckView[], focus: string |
     owed,
     shown: all ? [...live] : picked === undefined ? [] : [picked],
     rest: {
-      owed: all ? [] : live.filter((c) => c !== picked && isOwed(c)),
+      owed: all ? [] : owed.filter((c) => c !== picked),
       done: all ? [] : live.filter((c) => c !== picked && !isOwed(c)),
     },
   };
