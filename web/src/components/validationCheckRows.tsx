@@ -24,7 +24,7 @@ import { Collapsible } from './collapsible.js';
  *
  * It carries the letter, the title and the state and nothing else. The set has to stay countable —
  * an operator needs to see that there are four left and what they are about — and none of the rest
- * of a check helps with that. → docs/spec/17-cockpit.md#a-sheet-of-checks-is-a-queue
+ * of a check helps with that. → docs/spec/17-cockpit.md#a-check-carries-its-runs
  *
  * **Banded, it says less.** The queue draws chips because its lines sit under one heading and have
  * to carry their own state; a banded line sits under a heading that already said where its answer is
