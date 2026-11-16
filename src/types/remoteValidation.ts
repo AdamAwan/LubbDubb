@@ -205,6 +205,8 @@ export interface RemoteRun {
   listingPath: string | null;
   /** The URL the publish command printed, where it ran. */
   artefacts: string | null;
+  /** The video the run recorded: a file name in the goal's validation directory, never a path. */
+  recording: string | null;
 }
 
 /**

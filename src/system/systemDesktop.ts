@@ -77,7 +77,7 @@ export function desktopRemoteValidation(
         store,
         config.environments,
         [],
-        undefined,
+        {},
         config.remoteValidation.tenants,
         store.validation.listAllValidationChecks(),
       ).filter((sheet) => sheet.goalRef === goalRef),

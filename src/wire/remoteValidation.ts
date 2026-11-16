@@ -28,7 +28,14 @@ export interface RemoteSheetView extends RemoteSheet {
   tenant: RemoteTenantView;
 }
 
-export type RemoteRunView = RemoteRun;
+export interface RemoteRunView extends RemoteRun {
+  /**
+   * Where the run's video can be watched, keyed on the run alone. The run carries the recording's
+   * **name**; minting a URL is the server's job. Null where the run recorded nothing.
+   * → docs/spec/36-remote-validation.md#the-runs-recording
+   */
+  recordingUrl: string | null;
+}
 
 /**
  * What the gate draws about a tenant. It carries the name a surface may draw — a literal `tenant`,

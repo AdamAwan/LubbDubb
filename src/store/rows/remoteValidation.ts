@@ -117,6 +117,7 @@ export interface RunRow {
   report_path: string | null | undefined;
   listing_path: string | null | undefined;
   artefacts: string | null | undefined;
+  recording: string | null | undefined;
 }
 
 export function toTenantPreparation(r: PrepareRow): TenantPreparation {
@@ -180,6 +181,7 @@ export function toRemoteRun(row: RunRow): RemoteRun {
     reportPath: row.report_path ?? null,
     listingPath: row.listing_path ?? null,
     artefacts: row.artefacts ?? null,
+    recording: row.recording ?? null,
   };
 }
 

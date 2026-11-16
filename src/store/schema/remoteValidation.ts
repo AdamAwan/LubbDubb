@@ -134,7 +134,8 @@ CREATE TABLE IF NOT EXISTS remote_runs (
   note        TEXT,               -- why an abandoned run was abandoned, in the sheet's own words
   task_id     TEXT,               -- the dispatched agent's task, written by the conditional flip that claimed it
   report_path TEXT,               -- where the agent said the runner's machine-readable report landed
-  artefacts   TEXT                -- the URL the publish command printed, where it ran
+  artefacts   TEXT,               -- the URL the publish command printed, where it ran
+  recording   TEXT                -- the run's video, a file name in the goal's validation directory
 );
 
 -- The lock is over both live statuses. The old index named only 'running', which this

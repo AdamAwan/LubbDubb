@@ -4,7 +4,7 @@ import type { ErrorRecorder } from '../../errorLog.js';
 import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
 import type { LocalRun, LocalValidation, LocalValidationFinding, Task } from '../../types.js';
-import { mediaKind } from './media.js';
+import { mediaKind } from '../media.js';
 import { localValidationOriginParts, localValidationOutputDir } from './origin.js';
 import { localValidationIsOpen, validationRunStale } from './stale.js';
 

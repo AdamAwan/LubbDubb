@@ -55,7 +55,7 @@ export interface LocalValidationFinding {
   screenshot: string | null;
 }
 
-export type LocalValidationMediaKind = 'image' | 'video';
+export type ValidationMediaKind = 'image' | 'video';
 
 export interface LocalValidation {
   id: string;

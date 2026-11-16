@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createReadStream, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import { mintArtifactCapability, verifyArtifactCapability } from '../artifactCapability.js';
@@ -116,27 +116,14 @@ function registerValidationCaptures(app: FastifyInstance, { system, artifactKey 
     { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } },
     checked({ params: ValidationCaptureParams }, async ({ params, req, reply }) => {
       const { originRef, checkId } = params;
-      if (artifactKey) {
-        const tk = (req.query as { tk?: unknown })?.tk;
-        if (
-          typeof tk !== 'string' ||
-          !verifyArtifactCapability(artifactKey, tk, validationCaptureSubject(originRef, checkId), Date.now())
-        )
-          return reply.code(401).send({ error: 'missing or invalid capture capability' });
-      }
+      if (capabilityRefused(artifactKey, req, validationCaptureSubject(originRef, checkId)))
+        return reply.code(401).send({ error: 'missing or invalid capture capability' });
       const check = store.validation.getValidationCheck(originRef, checkId);
       if (!check?.capture) return reply.code(404).send({ error: 'capture not found' });
-      const file = confinedTo(
-        validationGoalDir(config.validationRoot, originRef),
-        validationResourcePath(config.validationRoot, originRef, check.capture),
+      return (
+        sendGoalFile(reply, config.validationRoot, originRef, check.capture) ??
+        reply.code(404).send({ error: 'capture not found' })
       );
-      if (!file) return reply.code(404).send({ error: 'capture not found' });
-      reply
-        .header('content-type', artifactMime(file))
-        .header('content-security-policy', 'sandbox')
-        .header('x-content-type-options', 'nosniff')
-        .header('cache-control', 'private, max-age=300, immutable');
-      return reply.send(readFileSync(file));
     }),
   );
 
@@ -155,29 +142,46 @@ function registerValidationCaptures(app: FastifyInstance, { system, artifactKey 
     { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } },
     checked({ params: RemoteCaptureParams }, async ({ params, req, reply }) => {
       const { runId, rowId } = params;
-      if (artifactKey) {
-        const tk = (req.query as { tk?: unknown })?.tk;
-        if (
-          typeof tk !== 'string' ||
-          !verifyArtifactCapability(artifactKey, tk, remoteCaptureSubject(runId, rowId), Date.now())
-        )
-          return reply.code(401).send({ error: 'missing or invalid capture capability' });
-      }
+      if (capabilityRefused(artifactKey, req, remoteCaptureSubject(runId, rowId)))
+        return reply.code(401).send({ error: 'missing or invalid capture capability' });
       const reading = store.remoteValidation.getRemoteReading(runId, rowId);
       if (!reading?.capture) return reply.code(404).send({ error: 'capture not found' });
-      const file = confinedTo(
-        validationGoalDir(config.validationRoot, reading.goalRef),
-        validationResourcePath(config.validationRoot, reading.goalRef, reading.capture),
+      return (
+        sendGoalFile(reply, config.validationRoot, reading.goalRef, reading.capture) ??
+        reply.code(404).send({ error: 'capture not found' })
       );
-      if (!file) return reply.code(404).send({ error: 'capture not found' });
-      reply
-        .header('content-type', artifactMime(file))
-        .header('content-security-policy', 'sandbox')
-        .header('x-content-type-options', 'nosniff')
-        .header('cache-control', 'private, max-age=300, immutable');
-      return reply.send(readFileSync(file));
     }),
   );
+
+  /**
+   * A remote run's video. The file name is never a parameter: it is read off the run's own row, so
+   * the only thing a caller can name is a run. → docs/spec/36-remote-validation.md#the-runs-recording
+   */
+  app.get(
+    '/validation-captures/recording/:runId',
+    { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } },
+    checked({ params: RemoteRecordingParams }, async ({ params, req, reply }) => {
+      const { runId } = params;
+      if (capabilityRefused(artifactKey, req, remoteRecordingSubject(runId)))
+        return reply.code(401).send({ error: 'missing or invalid recording capability' });
+      const run = store.remoteValidation.getRemoteRun(runId);
+      if (!run?.recording) return reply.code(404).send({ error: 'recording not found' });
+      return (
+        sendGoalFile(reply, config.validationRoot, run.goalRef, run.recording) ??
+        reply.code(404).send({ error: 'recording not found' })
+      );
+    }),
+  );
+}
+
+const RemoteRecordingParams = z.object({ runId: z.string().min(1).max(200) });
+
+function remoteRecordingSubject(runId: string): string {
+  return `remote-recording:${runId}`;
+}
+
+export function remoteRecordingSignerFor(key: Buffer): (runId: string) => string {
+  return (runId) => bucketedCapability(key, remoteRecordingSubject(runId));
 }
 
 const RemoteCaptureParams = z.object({
@@ -190,10 +194,7 @@ function remoteCaptureSubject(runId: string, rowId: string): string {
 }
 
 export function remoteCaptureSignerFor(key: Buffer): (runId: string, rowId: string) => string {
-  return (runId, rowId) => {
-    const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;
-    return mintArtifactCapability(key, remoteCaptureSubject(runId, rowId), bucket * ARTIFACT_CAP_TTL_MS);
-  };
+  return (runId, rowId) => bucketedCapability(key, remoteCaptureSubject(runId, rowId));
 }
 
 /**
@@ -224,10 +225,7 @@ function validationCaptureSubject(originRef: string, checkId: string): string {
 }
 
 export function validationCaptureSignerFor(key: Buffer): (originRef: string, checkId: string) => string {
-  return (originRef, checkId) => {
-    const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;
-    return mintArtifactCapability(key, validationCaptureSubject(originRef, checkId), bucket * ARTIFACT_CAP_TTL_MS);
-  };
+  return (originRef, checkId) => bucketedCapability(key, validationCaptureSubject(originRef, checkId));
 }
 
 function attachmentSubject(id: string): string {
@@ -248,17 +246,35 @@ function localValidationFileSubject(id: string, name: string): string {
 }
 
 export function localValidationFileSignerFor(key: Buffer): (id: string, name: string) => string {
-  return (id, name) => {
-    const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;
-    return mintArtifactCapability(key, localValidationFileSubject(id, name), bucket * ARTIFACT_CAP_TTL_MS);
-  };
+  return (id, name) => bucketedCapability(key, localValidationFileSubject(id, name));
 }
 
 export function attachmentSignerFor(key: Buffer): (attachmentId: string) => string {
-  return (id) => {
-    const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;
-    return mintArtifactCapability(key, attachmentSubject(id), bucket * ARTIFACT_CAP_TTL_MS);
-  };
+  return (id) => bucketedCapability(key, attachmentSubject(id));
+}
+
+function bucketedCapability(key: Buffer, subject: string): string {
+  const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;
+  return mintArtifactCapability(key, subject, bucket * ARTIFACT_CAP_TTL_MS);
+}
+
+function capabilityRefused(artifactKey: Buffer | null, req: FastifyRequest, subject: string): boolean {
+  if (!artifactKey) return false;
+  const tk = (req.query as { tk?: unknown })?.tk;
+  return typeof tk !== 'string' || !verifyArtifactCapability(artifactKey, tk, subject, Date.now());
+}
+
+/** A file held in a goal's validation directory, confined and streamed. Null where there is none. */
+function sendGoalFile(reply: FastifyReply, root: string, goalRef: string, name: string): FastifyReply | null {
+  const file = confinedTo(validationGoalDir(root, goalRef), validationResourcePath(root, goalRef, name));
+  if (!file) return null;
+  return reply
+    .header('content-type', artifactMime(file))
+    .header('content-security-policy', 'sandbox')
+    .header('x-content-type-options', 'nosniff')
+    .header('cache-control', 'private, max-age=300, immutable')
+    .header('content-length', statSync(file).size)
+    .send(createReadStream(file));
 }
 
 function confinedTo(root: string, path: string): string | null {

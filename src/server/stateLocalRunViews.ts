@@ -23,7 +23,7 @@ import { issueConclusionOrigin } from '../issueConclusion.js';
 import { localRunIsLive } from '../store/localRuns.js';
 import { localRunChoices } from '../localRun/ref.js';
 import { isActiveTask } from '../tasks.js';
-import { mediaKind } from '../validation/local/media.js';
+import { mediaKind } from '../validation/media.js';
 
 // → docs/spec/16-http-api.md
 

@@ -1455,6 +1455,8 @@ export function buildFixtureState(): AppState {
           reportPath: '.lubbdubb/validation/issue-395/staging/report.json',
           listingPath: '.lubbdubb/validation/issue-395/staging/listing.json',
           artefacts: 'https://ci.example.com/runs/395-staging-2',
+          recording: null,
+          recordingUrl: null,
         },
         tenant: {
           tenant: 'validation-customer-2',
@@ -1668,6 +1670,8 @@ export function buildFixtureState(): AppState {
           reportPath: null,
           listingPath: null,
           artefacts: null,
+          recording: null,
+          recordingUrl: null,
         },
         tenant: {
           tenant: 'validation-prod-readonly',
@@ -1771,6 +1775,8 @@ export function buildFixtureState(): AppState {
           reportPath: '.lubbdubb/validation/issue-398/staging/report.json',
           listingPath: '.lubbdubb/validation/issue-398/staging/listing.json',
           artefacts: 'https://ci.example.com/runs/398-staging-1',
+          recording: null,
+          recordingUrl: null,
         },
         tenant: {
           tenant: 'validation-customer-1',

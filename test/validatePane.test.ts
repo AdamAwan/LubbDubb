@@ -103,6 +103,8 @@ function run(status: 'pending' | 'dispatched' | 'ended'): RemoteSheetView['run']
     reportPath: null,
     listingPath: null,
     artefacts: null,
+    recording: null,
+    recordingUrl: null,
   };
 }
 

@@ -19,6 +19,7 @@ import {
   localValidationFileSignerFor,
   remoteCaptureLinkSignerFor,
   remoteCaptureSignerFor,
+  remoteRecordingSignerFor,
   validationCaptureSignerFor,
   register as registerArtifacts,
 } from './routes/artifacts.js';
@@ -161,6 +162,7 @@ function routeContext(system: System, hub: Hub, artifactKey: Buffer | null): Rou
     localValidationFileSigner: artifactKey ? localValidationFileSignerFor(artifactKey) : undefined,
     validationCaptureSigner: artifactKey ? validationCaptureSignerFor(artifactKey) : undefined,
     remoteCaptureSigner: artifactKey ? remoteCaptureSignerFor(artifactKey) : undefined,
+    remoteRecordingSigner: artifactKey ? remoteRecordingSignerFor(artifactKey) : undefined,
   };
 }
 

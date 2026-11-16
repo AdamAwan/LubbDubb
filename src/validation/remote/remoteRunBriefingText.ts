@@ -1,3 +1,4 @@
+import { recordingInstructions } from '../recording.js';
 import { SELECTOR_DELIMITER } from './runner.js';
 
 // → docs/spec/36-remote-validation.md#the-dispatch--rule-remote-validation
@@ -68,6 +69,11 @@ function browserSection(input: BriefingInput): string[] {
     '**It acts, so it stays inside this run’s tenant** — ' +
       `${input.tenant === null || input.tenant === '' ? 'and this environment declares none, which is why any row that needed one is blocked rather than driven' : `\`${input.tenant}\``}` +
       '. Do not sign in to any other tenant, and do not invent one.',
+    '',
+    recordingInstructions(input.browserKey, {
+      where: 'this run’s artefacts directory',
+      chapter: 'the id of the check it serves',
+    }),
   ];
 }
 

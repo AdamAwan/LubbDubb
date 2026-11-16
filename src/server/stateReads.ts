@@ -40,6 +40,7 @@ export interface SnapshotOpts {
   localValidationFileSigner?: (id: string, name: string) => string;
   validationCaptureSigner?: (originRef: string, checkId: string) => string;
   remoteCaptureSigner?: (runId: string, rowId: string) => string;
+  remoteRecordingSigner?: (runId: string) => string;
   /** The last setup reading `/api/setup` took, which the queue's config rows are read off. */
   setup?: SetupReading | null;
 }

@@ -89,6 +89,7 @@ function registerStateRoute(
     localValidationFileSigner,
     validationCaptureSigner,
     remoteCaptureSigner,
+    remoteRecordingSigner,
     setup,
   }: RouteContext,
 ): void {
@@ -102,6 +103,7 @@ function registerStateRoute(
             localValidationFileSigner,
             validationCaptureSigner,
             remoteCaptureSigner,
+            remoteRecordingSigner,
             setup: setup.latest,
           })
         : buildStateSections(system, query.sections, {
@@ -110,6 +112,7 @@ function registerStateRoute(
             localValidationFileSigner,
             validationCaptureSigner,
             remoteCaptureSigner,
+            remoteRecordingSigner,
             setup: setup.latest,
           }),
     ),

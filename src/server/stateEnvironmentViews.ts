@@ -239,6 +239,11 @@ export function buildGoalWatchOutcomes(
   });
 }
 
+interface RemoteSheetSigners {
+  capture?: (runId: string, rowId: string) => string;
+  recording?: (runId: string) => string;
+}
+
 /**
  * The sheets an arrival assembled, with the latest reading on every row folded in here rather than
  * in the cockpit — a cockpit that worked an outcome out for itself would be a second opinion drawn
@@ -249,7 +254,7 @@ export function buildRemoteSheets(
   store: System['store'],
   environments: EnvironmentConfig[],
   tasks: readonly TaskSummary[],
-  captureSigner?: (runId: string, rowId: string) => string,
+  signers: RemoteSheetSigners,
   operatorTenants?: OperatorTenants,
   checks: readonly ValidationCheck[] = [],
 ): RemoteSheetView[] {
@@ -272,7 +277,7 @@ export function buildRemoteSheets(
       ...r,
       taskId,
       agentId: taskId === null ? null : (agentOfTask.get(taskId) ?? null),
-      captureUrl: remoteCaptureUrl(r, captureSigner),
+      captureUrl: remoteCaptureUrl(r, signers.capture),
     });
   }
   const rowsByGoalEnvironment = groupBy(
@@ -295,7 +300,8 @@ export function buildRemoteSheets(
         : resolveTenant({ environment, stamped: tenants, now, operatorTenants }).standing;
     const rows = pageRows(rowsByGoalEnvironment.get(key) ?? [], gone);
     const intent = intents.get(key) ?? null;
-    const run = runsByGoalEnvironment.get(key)?.at(-1) ?? null;
+    const latest = runsByGoalEnvironment.get(key)?.at(-1) ?? null;
+    const run = latest === null ? null : { ...latest, recordingUrl: remoteRecordingUrl(latest, signers.recording) };
     return {
       ...sheet,
       rows: rows.map((row) => ({
@@ -334,6 +340,15 @@ export function tenantCommandViews(
   });
 }
 
+function remoteRecordingUrl(
+  run: { id: string; recording: string | null },
+  signer?: (runId: string) => string,
+): string | null {
+  if (run.recording === null) return null;
+  const base = `/validation-captures/recording/${encodeURIComponent(run.id)}`;
+  return signed(base, signer?.(run.id));
+}
+
 /**
  * Where a **sheet row's** capture can be looked at, keyed on the run and the row rather than on the
  * check. A run that declined to overwrite a check somebody else settled keeps its reading — and the
@@ -346,5 +361,9 @@ function remoteCaptureUrl(
 ): string | null {
   if (reading.capture === null || reading.runId === null) return null;
   const base = `/validation-captures/run/${encodeURIComponent(reading.runId)}/${encodeURIComponent(reading.rowId)}`;
-  return signer ? `${base}?tk=${encodeURIComponent(signer(reading.runId, reading.rowId))}` : base;
+  return signed(base, signer?.(reading.runId, reading.rowId));
+}
+
+function signed(base: string, token: string | undefined): string {
+  return token === undefined ? base : `${base}?tk=${encodeURIComponent(token)}`;
 }

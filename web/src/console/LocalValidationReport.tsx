@@ -93,7 +93,7 @@ export function LocalValidationReport({
           of the page that worked is how somebody tells "it passed" from "it was
           never opened". */}
       {videos.map((file) => (
-        <video key={file.name} className="cn-lv-video" src={file.url} controls preload="metadata" title={file.name} />
+        <video key={file.name} className="cn-recording" src={file.url} controls preload="metadata" title={file.name} />
       ))}
 
       {shots.length > 0 && (

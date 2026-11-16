@@ -1591,6 +1591,34 @@ Both numbers are in one object by the time the fold runs and the wrong one is a 
 taking it off the report is exactly the shape that makes a selector matching **zero** read as a
 clean pass.
 
+### The run's recording
+
+**Built.** A run that drives the browser records itself, so the operator can judge it by watching it.
+The browser is the local validation's ([the browser the run drives](#the-browser-the-run-drives)), so
+its `--caps devtools` video tools are on offer here too, and the briefing asks for a recording in the
+same words a local validation's does — `recordingInstructions` (`src/validation/recording.ts`) is the
+one copy ([32](32-local-validation.md#the-recording)). Here a chapter is named by the id of the check
+it serves, the id every row of the report is keyed on.
+
+**The report never names it.** The browser saves the video into the run's `artefacts` directory, and
+when `RemoteReadingDesk.settle` folds the report it takes the last video there by name — the browser names them by time; `mediaKind`
+(`src/validation/media.ts`) says which files are videos — and copies it into the goal's validation
+directory as `recording-<run id>.<ext>`, a capture's arrangement and for a capture's reason: the
+artefacts are swept on the runner's schedule, and a video somebody still has to watch outlives the
+run that took it. The name lands on `remote_runs.recording`, a column on an existing table with its
+`ALTER TABLE` in `REMOTE_VALIDATION_COLUMNS`; null means _no recording_, true of every run from before
+it, so nothing is backfilled.
+
+**A recording is evidence, never a reading.** It is not on any row, colours nothing and is not counted:
+every outcome still comes off the report. So a run that recorded nothing, or whose copy failed, settles
+exactly as it would have — the copy's failure goes to the error log rather than onto a row, because no
+row is about it — and a run abandoned through `blocked` keeps no recording.
+
+`GET /validation-captures/recording/:runId` serves it, capability-signed on the run alone (`remote-recording:<run>`)
+and streamed rather than read into memory. **The file name is never a parameter**: it is read off the
+run's own row, the capture route's rule. The signed URL reaches the cockpit as
+`RemoteRunView.recordingUrl`, and the sheet card draws a player under the run line.
+
 ### Handing a screen back to look at
 
 **Built.** A `screenshot` step ([20](20-validation.md#the-test-plan)) captures the screen and
@@ -2483,7 +2511,7 @@ writes are synchronous, which is what keeps the harness logic race-free.
 | ------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `remote_sheets`          | `(goal_ref, environment)`     | **built.** `OR IGNORE` — a second arrival re-runs the sheet that exists rather than opening a second one                                                                                                                                                                                                    |
 | `remote_sheet_rows`      | `(sheet, row_id)`             | **built.** `OR REPLACE` on assembly and where a re-fold moved a row's causes; `selected` and `blocked_reason` updated in place                                                                                                                                                                              |
-| `remote_runs`            | one press                     | **built.** conditional insert inside the transaction, unique on `(environment, tenant)` while live, with a partial unique index behind it; `task_id`, `report_path`, `listing_path` and `artefacts` written by the dispatch flip, the listing and the report                                                |
+| `remote_runs`            | one press                     | **built.** conditional insert inside the transaction, unique on `(environment, tenant)` while live, with a partial unique index behind it; `task_id`, `report_path`, `listing_path`, `artefacts` and `recording` written by the dispatch flip, the listing and the report                                   |
 | `remote_readings`        | `(run, row_id)`               | **built.** append-only; a later run supersedes rather than deletes. `run_id` is null for a reading taken at assembly, `started_sha` / `ended_sha` carry the commits the run that took it straddled, and `executed`, `retries`, `duration_ms` and `artefacts` carry what the report said about a browser row |
 | `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is                                                                                                                                                                                                      |
 | `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                                                                                                                                                                                                                               |

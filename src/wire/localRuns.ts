@@ -7,7 +7,7 @@ import type {
   LocalRunPorts,
   LocalRunTurn,
   LocalValidation,
-  LocalValidationMediaKind,
+  ValidationMediaKind,
   PlanPart,
   PrState,
 } from '../types.js';
@@ -34,7 +34,7 @@ export type LocalValidationPhase = 'queued' | 'planning' | 'environment' | 'driv
 interface LocalValidationFile {
   name: string;
   url: string;
-  kind: LocalValidationMediaKind;
+  kind: ValidationMediaKind;
 }
 
 export interface LocalValidationAgentView {

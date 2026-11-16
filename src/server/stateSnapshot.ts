@@ -283,7 +283,7 @@ function goalsSection(
       store,
       config.environments,
       tasks,
-      opts?.remoteCaptureSigner,
+      { capture: opts?.remoteCaptureSigner, recording: opts?.remoteRecordingSigner },
       config.remoteValidation.tenants,
       r.validationChecks(),
     ),
