@@ -4513,7 +4513,7 @@ was ever a control.
 removes it — and an index would slide a _different_ ask under the cursor. On a surface whose next
 control is `Approve merge`, that is how somebody approves what they were not looking at. The id is
 resolved back to an index each render; where it is gone, the position it held is where the next ask
-falls.
+falls. The queue's order, its stops and that resolution are `web/src/view/focusQueue.ts`.
 
 **The pips are the whole queue and each is a way into it.** A bar that only reports a position, on a
 surface whose complaint about the rail was that it could not be acted on, would be that mistake one
