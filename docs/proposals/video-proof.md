@@ -2,7 +2,9 @@
 
 **Status: under discussion.** Recording is built on both channels: a local validation records itself
 ([32](../spec/32-local-validation.md#the-recording)), and so does a remote validation run
-([36](../spec/36-remote-validation.md#the-runs-recording)). What follows is not.
+([36](../spec/36-remote-validation.md#the-runs-recording)). Videos seek
+([16](../spec/16-http-api.md#byte-ranges)) and age out
+([14](../spec/14-persistence.md#recording-retention)). What follows is not built.
 
 ## The problem
 
@@ -13,11 +15,9 @@ one goal's sheet — so goals that arrived together still record one after anoth
 
 ## Direction
 
-- **Batch goals into one run without loosening the lock.** Goals that arrived in the same environment
-  share one run — one agent, one video, chaptered by goal and then by check — and a second tenant,
-  where configured, is a second run in parallel.
-- **Range requests** on the recording routes, so a long video can seek before it has loaded.
-- **Retention.** Videos are large; delete them a fixed number of days after the run settles.
+**Batch goals into one run without loosening the lock.** Goals that arrived in the same environment
+share one run — one agent, one video, chaptered by goal and then by check — and a second tenant, where
+configured, is a second run in parallel.
 
 ## Known problems to settle first
 

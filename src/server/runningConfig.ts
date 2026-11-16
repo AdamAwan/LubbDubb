@@ -69,6 +69,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'agentResumeAttempts',
       'mcpArgsRetentionDays',
       'historyRetentionDays',
+      'recordingRetentionDays',
       'whitelistedApprovals',
       'claudeCommand',
       'claudeArgs',

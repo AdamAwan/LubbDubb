@@ -356,9 +356,10 @@ What is listed is every image (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`) and vid
 in the output directory, read by the desk into the row's `screenshots` column at report time. The
 one table of which extension is which is `mediaKind` (`src/validation/media.ts`): the desk
 lists by it, and the view tags each file with its `kind`, so the cockpit draws a `<video>` or an
-`<img>` without an extension list of its own. The route streams the file rather than reading it into
-memory, but answers it whole, with no range requests, so a long recording may not seek until it has
-loaded.
+`<img>` without an extension list of its own. The route streams the file and answers a byte range
+([16](16-http-api.md#byte-ranges)), so a long recording seeks before it has loaded. A video is deleted
+`recordingRetentionDays` after the run ended, and its name taken off the row; the screenshots stay
+([14](14-persistence.md#recording-retention)).
 
 The **local run panel** carries the same control as `Validate #N`, while the environment is running
 and idle. The swap question cannot arise there — the run in front of it is the goal — so the only

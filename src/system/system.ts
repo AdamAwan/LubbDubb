@@ -358,6 +358,7 @@ function buildHarness(
     burn: bench.burn,
     cloneUpkeep: base.cloneUpkeep,
     retention: base.retention,
+    recordingRetention: base.recordingRetention,
     runway: bench.runway,
     issuePickup: fleet.issuePickup,
     branchReaps: intake.branchReaps,

@@ -1615,7 +1615,9 @@ exactly as it would have — the copy's failure goes to the error log rather tha
 row is about it — and a run abandoned through `blocked` keeps no recording.
 
 `GET /validation-captures/recording/:runId` serves it, capability-signed on the run alone (`remote-recording:<run>`)
-and streamed rather than read into memory. **The file name is never a parameter**: it is read off the
+streamed, and answers a byte range so the player can seek ([16](16-http-api.md#byte-ranges)). It
+is deleted `recordingRetentionDays` after the run ended, and `recording` set back to null
+([14](14-persistence.md#recording-retention)). **The file name is never a parameter**: it is read off the
 run's own row, the capture route's rule. The signed URL reaches the cockpit as
 `RemoteRunView.recordingUrl`, and the sheet card draws a player under the run line.
 

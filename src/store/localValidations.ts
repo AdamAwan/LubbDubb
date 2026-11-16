@@ -93,6 +93,17 @@ export class LocalValidationStore {
     return rows.map(toLocalValidation);
   }
 
+  listLocalValidationsEndedBefore(before: string): LocalValidation[] {
+    const rows = this.ctx
+      .prep(`SELECT * FROM local_validations WHERE ended_at IS NOT NULL AND ended_at < ?`)
+      .all(before) as Row[];
+    return rows.map(toLocalValidation);
+  }
+
+  setLocalValidationMedia(id: string, names: readonly string[]): void {
+    this.ctx.prep(`UPDATE local_validations SET screenshots = ? WHERE id = ?`).run(JSON.stringify(names), id);
+  }
+
   markLocalValidationDispatched(id: string, taskId: string): void {
     this.ctx
       .prep(

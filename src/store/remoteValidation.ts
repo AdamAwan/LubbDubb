@@ -316,6 +316,10 @@ export class RemoteValidationStore {
     this.ctx.prep(`UPDATE remote_runs SET listing_path=? WHERE id=?`).run(listingPath, id);
   }
 
+  clearRemoteRunRecording(id: string): void {
+    this.ctx.prep(`UPDATE remote_runs SET recording = NULL WHERE id = ?`).run(id);
+  }
+
   blockRemoteSheetRow(goalRef: string, environment: string, rowId: string, reason: string): void {
     this.ctx
       .prep(

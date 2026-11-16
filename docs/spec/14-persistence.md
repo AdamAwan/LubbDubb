@@ -1057,6 +1057,20 @@ decisions (72 MB), tasks (64 MB, almost all prompt text) and the error log (52 M
 then rewrites the same file at the same size. The first sweep turns what it takes into free pages; a
 `VACUUM` after it is what returns them.
 
+### Recording retention
+
+Validation videos are large and are only worth anything while somebody might still watch them, so
+`RecordingRetentionDesk` (`src/retention/recordingRetention.ts`) deletes each one
+`recordingRetentionDays` (default **14**) after the run that recorded it **ended** — a remote run's
+`recording` file in the goal's validation directory, with the column set back to null, and every
+video a local validation listed in its output directory, with the name taken off its `screenshots`
+list. Screenshots, readings and the rows themselves stay: only the video and the name that points at
+it go, so nothing a reading or a person relies on is lost. A name left behind for a file that was
+already gone would draw a player that 404s, which is why the name goes with the file.
+
+It runs from the pulse's `open` phase beside the history sweep, at most once a day. `0` (or negative)
+keeps every video, the same reading as `historyRetentionDays: 0`.
+
 ### Issue verdicts, and the exclusion matrix
 
 Four tables record a verdict about an issue, keyed on the same `issue:<n>` origin:
