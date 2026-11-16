@@ -51,7 +51,7 @@ function PromptList({
   onShow: (p: PromptTemplateView) => void;
 }) {
   if (book.templates.length === 0) {
-    return <p className="empty">No prompt book to show — this cockpit is running against the demo backend.</p>;
+    return <p className="empty">No prompt book to show — the harness returned none.</p>;
   }
   return (
     <ul className="prompt-list">

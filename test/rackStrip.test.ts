@@ -11,19 +11,18 @@ import { repoPath } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { Overview } = await import('../web/src/console/Overview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
 
 function view(over: Partial<CockpitView['state']> = {}): CockpitView {
-  const state = { ...buildDemoState().state, ...over };
+  const state = { ...buildFixtureState(), ...over };
   return buildViewModel({
     state,
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),

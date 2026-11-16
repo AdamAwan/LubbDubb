@@ -31,7 +31,7 @@ interface RemedyGuardTotal {
   costUsd: number;
 }
 
-export interface RemedyRow {
+interface RemedyRow {
   id: string;
   kind: RemedyKind;
   ref: string;

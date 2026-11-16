@@ -10,7 +10,7 @@ import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { Overview } = await import('../web/src/console/Overview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalRefs.js');
@@ -20,12 +20,11 @@ const { initials } = await import('../web/src/components/who.js');
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
 function view(over: Partial<CockpitView['state']> = {}): CockpitView {
-  const state = { ...buildDemoState().state, ...over };
+  const state = { ...buildFixtureState(), ...over };
   return buildViewModel({
     state,
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),
@@ -58,7 +57,7 @@ const render = (v: CockpitView): string =>
 const rack = (html: string): string => html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
 
 test('the rack puts the pull requests a person handed you above the fleet’s', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const yours = state.world.pullRequests.filter((pr) => pr.attention.assignedToYou !== undefined);
   assert.ok(yours.length > 0, 'the fixtures must carry a pull request somebody assigned to the operator');
 
@@ -74,7 +73,7 @@ test('the rack puts the pull requests a person handed you above the fleet’s', 
 });
 
 test('the mark on an assigned row carries the tracker’s own name for the person', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const assigned = state.world.pullRequests.find((pr) => pr.attention.assignedToYou !== undefined);
   assert.ok(assigned, 'the fixtures must carry an assigned pull request');
   const author = assigned.author;
@@ -87,7 +86,7 @@ test('the mark on an assigned row carries the tracker’s own name for the perso
 });
 
 test('an assignment the operator has answered keeps its band and its mark', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   // What the provider reports once the operator votes: the assignment stands, the court does not.
   const world = {
     ...state.world,
@@ -116,7 +115,7 @@ test('an assignment the operator has answered keeps its band and its mark', () =
 });
 
 test('the rack draws no band and no marks when nothing is anybody else’s', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const world = {
     ...state.world,
     pullRequests: state.world.pullRequests.map((pr) => ({

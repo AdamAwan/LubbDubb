@@ -3,15 +3,15 @@ import assert from 'node:assert/strict';
 import { askGoal } from '../src/asks/askGoal.js';
 import type { AppState, Issue, PlanPartView, PlanView } from '../web/src/types.js';
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 
 /* → docs/spec/17-cockpit.md#the-setting-beside-the-act */
 
-const demo: AppState = buildDemoState().state;
-const [baseIssue] = demo.world.issues;
-const [basePlan] = demo.plans;
-const [basePart] = demo.planParts;
-assert.ok(baseIssue && basePlan && basePart, 'the demo state carries an issue, a plan and a part to vary');
+const fixture: AppState = buildFixtureState();
+const [baseIssue] = fixture.world.issues;
+const [basePlan] = fixture.plans;
+const [basePart] = fixture.planParts;
+assert.ok(baseIssue && basePlan && basePart, 'the fixture state carries an issue, a plan and a part to vary');
 
 const issue = (number: number, title: string): Issue => ({ ...baseIssue, id: `i${number}`, number, title });
 

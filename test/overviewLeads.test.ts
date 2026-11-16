@@ -12,7 +12,7 @@ import { repoText } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { FocusOverview, Look } = await import('../web/src/console/overviews/FocusOverview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalRefs.js');
@@ -21,12 +21,11 @@ const { hasPrPage } = await import('../web/src/view/prPage.js');
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
 function built(): CockpitView {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   return buildViewModel({
     state,
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),

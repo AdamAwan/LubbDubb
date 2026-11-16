@@ -13,18 +13,17 @@ import { decode } from './support/html.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { needBody } = await import('../web/src/console/NeedsBand.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
 
-function view(state: CockpitView['state'] = buildDemoState().state): CockpitView {
+function view(state: CockpitView['state'] = buildFixtureState()): CockpitView {
   return buildViewModel({
     state: withAsks(state),
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),
@@ -245,7 +244,7 @@ test('an assigned pull request draws its waiting threads and its reasons apart',
    → docs/spec/17-cockpit.md#an-ask-that-asks-for-work-draws-the-work */
 
 test('a profile proposal is answered on the ask, both ways', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues.find((i) => i.number === 395);
   assert.ok(issue, 'the fixture goal must be in the world');
   issue.appraisal = {
@@ -269,9 +268,9 @@ test('a profile proposal is answered on the ask, both ways', () => {
 });
 
 test('an escalation’s offered choices stay one click on the ask', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const row = view(state).needsYou.find((n) => n.goalRef !== null && n.kind === 'escalation');
-  assert.ok(row, 'the demo fixtures must carry a goal-scoped question an agent is parked on');
+  assert.ok(row, 'the fixtures must carry a goal-scoped question an agent is parked on');
   const asked = state.escalations.find((e) => e.id === row.id);
   assert.ok(asked, 'the escalation the row names must be in the state');
   asked.context = { ...asked.context, options: ['Take ours', 'Take theirs'] };
@@ -281,9 +280,9 @@ test('an escalation’s offered choices stay one click on the ask', () => {
 });
 
 test('a decision on an escalation reads as one, and is never free text', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const row = view(state).needsYou.find((n) => n.goalRef !== null && n.kind === 'escalation');
-  assert.ok(row, 'the demo fixtures must carry a goal-scoped question an agent is parked on');
+  assert.ok(row, 'the fixtures must carry a goal-scoped question an agent is parked on');
   state.escalations = state.escalations.filter((e) => e.id === row.id);
   state.proposals = [{ ...state.proposals![0]!, id: 'p-band', kind: 'merge', status: 'pending', escalationId: row.id }];
   const html = askBody(view(state), row);

@@ -78,7 +78,7 @@ function McpToolsStep({ tools }: { tools: McpChannelPayload['tools'] }) {
         structural rather than a filter — there is no code path from this channel to the tools the fleet gets.
       </p>
       {tools.length === 0 ? (
-        <p className="cfg-hint mcp-foot">No tools to list — this cockpit is running against the demo backend.</p>
+        <p className="cfg-hint mcp-foot">No tools to list — the harness returned none.</p>
       ) : (
         <ul className="mcp-tools">
           {tools.map((tool) => (

@@ -18,7 +18,7 @@ import { decode } from './support/html.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { needBody } = await import('../web/src/console/NeedsBand.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalRefs.js');
@@ -195,7 +195,6 @@ function view(state: CockpitView['state']): CockpitView {
     state: withAsks(state),
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),
@@ -221,7 +220,7 @@ function investigated(
     reasons: [hold ?? 'awaiting a planning agent'],
   },
 ) {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const target = state.world.issues.find((i) => i.state === 'open') as WireIssue;
   const issues = state.world.issues.map((i) =>
     i === target

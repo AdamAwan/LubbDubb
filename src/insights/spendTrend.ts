@@ -33,7 +33,7 @@ export interface SpendTrendBucket {
   redsPerGoal: number | null;
 }
 
-export interface SpendTrendPeriod {
+interface SpendTrendPeriod {
   startsAt: string;
   endsAt: string;
   weeks: number;

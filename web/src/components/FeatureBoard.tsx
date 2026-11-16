@@ -42,7 +42,7 @@ function useFeatureBoard(): { board: FeatureBoardPayload | null; failed: boolean
 }
 
 /** A closed Feature is off the board unless the operator asks for it back. → docs/spec/17-cockpit.md#closed-features */
-export function shownFeatures(board: FeatureBoardPayload, showClosed: boolean): FeatureBoardPayload {
+function shownFeatures(board: FeatureBoardPayload, showClosed: boolean): FeatureBoardPayload {
   return showClosed ? board : { ...board, features: board.features.filter((f) => f.state !== 'closed') };
 }
 

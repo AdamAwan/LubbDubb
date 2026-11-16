@@ -12,7 +12,7 @@ import { repoPath, repoText } from './support/paths.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { Ref, RefLinks, TicketLink, refLabel } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalRefs.js');
@@ -21,13 +21,12 @@ const { hasPrPage } = await import('../web/src/view/prPage.js');
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
 function view(over: Partial<CockpitView> = {}, selectedGoal: string | null = null): CockpitView {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   return {
     ...buildViewModel({
       state,
       now: Date.now(),
       connected: true,
-      demo: true,
       setup: null,
       selected: null,
       liveOutput: new Map(),
@@ -139,7 +138,7 @@ test('a fleet row is a way to the goal it is working and to the pull request it 
   const v = view();
   const html = render(v);
   const ci = v.state.tasks.find((t) => t.originRef?.startsWith('pr:'));
-  assert.ok(ci?.originRef, 'the demo fixtures must carry an agent dispatched at a pull request');
+  assert.ok(ci?.originRef, 'the fixtures must carry an agent dispatched at a pull request');
   const prNumber = ci.originRef.slice('pr:'.length);
 
   const fleet = html.slice(html.indexOf('>Fleet'), html.indexOf('Goals in flight'));
@@ -147,7 +146,7 @@ test('a fleet row is a way to the goal it is working and to the pull request it 
   assert.match(fleet, /<span class="cn-refs">/, 'the refs sit beside the row’s control, never inside it');
 
   const goal = ci.originRef && v.state.world.issues.find((i) => i.linkedPrNumber === Number(prNumber));
-  assert.ok(goal, 'the demo fixtures must carry a goal that pull request delivers');
+  assert.ok(goal, 'the fixtures must carry a goal that pull request delivers');
   assert.ok(fleet.includes(`>#${goal.number}<`), 'and the goal it is delivering');
 });
 
@@ -164,9 +163,9 @@ test('the pull request rack is a way to the goal each PR delivers', () => {
   const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
 
   const pr = v.state.world.pullRequests[0];
-  assert.ok(pr, 'the demo fixtures must carry an open pull request');
+  assert.ok(pr, 'the fixtures must carry an open pull request');
   const goal = v.state.world.issues.find((i) => i.linkedPrNumber === pr.number);
-  assert.ok(goal, 'the demo fixtures must carry a goal one of those pull requests delivers');
+  assert.ok(goal, 'the fixtures must carry a goal one of those pull requests delivers');
   assert.ok(rack.includes(`>#${goal.number}<`), 'the rack names the goal, and names it as a way onto its page');
 });
 
@@ -176,7 +175,7 @@ test('the pull request rack is a way onto each pull request’s own page', () =>
   const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
 
   const pr = v.state.world.pullRequests[0];
-  assert.ok(pr, 'the demo fixtures must carry an open pull request');
+  assert.ok(pr, 'the fixtures must carry an open pull request');
   const named = rack.indexOf(`>${pr.title}<`);
   assert.notEqual(named, -1, 'the rack must name the pull request');
   assert.match(
@@ -210,7 +209,7 @@ test('a queued dispatch is a way to what it is queued against', () => {
 test('a part row links the pull request that carries it', () => {
   const v = view();
   const withParts = v.state.planParts?.find((p) => p.prNumber !== null);
-  assert.ok(withParts, 'the demo fixtures must carry a part with a pull request open on it');
+  assert.ok(withParts, 'the fixtures must carry a part with a pull request open on it');
   const plan = v.state.plans?.find((p) => p.id === withParts.planId);
   assert.ok(plan, 'that part must belong to a plan');
 
@@ -321,7 +320,7 @@ test('the references slot is a column, drawn on rows that have nothing to put in
   const card = html.slice(html.indexOf('>Fleet'), html.indexOf('Goals in flight'));
   const fleet = card.slice(card.search(/<div class="cn-row[ "]/));
   const rows = fleet.match(/<div class="cn-row[ "]/g) ?? [];
-  assert.ok(rows.length > 0, 'the demo fixtures must carry fleet rows');
+  assert.ok(rows.length > 0, 'the fixtures must carry fleet rows');
   assert.equal(
     (fleet.match(/class="cn-refs"/g) ?? []).length,
     rows.length,

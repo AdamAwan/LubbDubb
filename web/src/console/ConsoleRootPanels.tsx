@@ -18,7 +18,6 @@ import { BuildPanel } from '../components/BuildPanel.js';
 import { LocalRunPanel } from '../components/LocalRunPanel.js';
 import { TenantCommandsPanel } from '../components/TenantCommandsPanel.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
-import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { Modal } from '../components/Modal.js';
 import { BareButton, Button, ButtonRow } from '../components/button.js';
@@ -297,13 +296,6 @@ function LaunchBody({ view, actions }: { view: CockpitView; actions: CockpitActi
         onChanged={() => void actions.refresh()}
       />
       <SchedulePanel schedules={state.schedules} onChanged={() => void actions.refresh()} />
-      {/* Injection fakes a world change, which only the static demo has any
-          use for: a real run against a fake provider is still a real run, and
-          a panel that lies to the harness there is a way to lie to yourself
-          about what it is reacting to. `view.demo` is the whole gate — there
-          is no server route behind it for a second predicate to disagree
-          with. */}
-      {view.demo && <InjectPanel onInjected={() => void actions.refresh()} world={state.world} />}
     </>
   );
 }

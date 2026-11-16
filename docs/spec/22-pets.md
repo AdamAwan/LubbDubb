@@ -1022,9 +1022,7 @@ nothing at all instead of an enclosure that reads as a deployment nobody has use
 The **catalogue** is the opposite case and so is fetched: it is the same bytes on every request of
 a build, and a constant riding a snapshot that ships every heartbeat is paid for forever. It takes
 no parameters and reads no state — what exists and what it costs are decided by tables this build
-ships, which is the point of the surface. The demo backend serves an empty catalogue and the page
-says why: what exists is decided in `src/pets/`, which the web bundle deliberately does not import,
-and a hand-written demo copy of twenty species would be stale the first time one was added.
+ships, which is the point of the surface.
 
 ## Persistence
 

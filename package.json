@@ -22,7 +22,6 @@
     "smoke": "node --import tsx scripts/smoke.ts",
     "web:dev": "vite --config web/vite.config.ts",
     "web:build": "vite --config web/vite.config.ts build",
-    "web:build:demo": "vite --config web/vite.config.ts build --mode demo --base=/LubbDubb/",
     "typecheck": "node --import tsx scripts/tsc.ts -p tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/server.tsbuildinfo",
     "typecheck:web": "node --import tsx scripts/tsc.ts -p web/tsconfig.json --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/web.tsbuildinfo",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",

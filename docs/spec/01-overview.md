@@ -97,7 +97,7 @@ are agnostic to which is running:
 
 - **`stream`** (default) — `claude -p --output-format stream-json`. No terminal, no TUI.
 - **`raw`** — runs `claudeCommand`/`claudeArgs` verbatim over a PTY with the prompt in
-  `LUBBDUBB_PROMPT`. Used by the mock-agent demo and tests.
+  `LUBBDUBB_PROMPT`. Used by tests.
 
 ## Standing invariants
 

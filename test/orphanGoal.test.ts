@@ -15,7 +15,7 @@ import { decode } from './support/html.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalRefs.js');
@@ -24,7 +24,7 @@ const { hasPrPage } = await import('../web/src/view/prPage.js');
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
 function stateWith(mutate: (state: AppState, goal: Issue) => void = () => {}): AppState {
-  const state = buildDemoState().state as AppState;
+  const state = buildFixtureState() as AppState;
   state.config = { ...state.config, canPlaceWorkItem: true };
   const goal = firstGoal(state);
   goal.parent = null;
@@ -35,7 +35,7 @@ function stateWith(mutate: (state: AppState, goal: Issue) => void = () => {}): A
 /* A container's goal page is its Feature page, so the goal is the first item that is not one. */
 function firstGoal(state: AppState): Issue {
   const goal = state.world.issues.find((i) => !isContainerType(i, state.config.containerTypes));
-  assert.ok(goal, 'the demo fixtures must carry at least one goal');
+  assert.ok(goal, 'the fixtures must carry at least one goal');
   return goal;
 }
 
@@ -44,7 +44,6 @@ function view(state: AppState, selectedGoal: string | null = null, goalTab: Goal
     state,
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),

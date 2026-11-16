@@ -22,7 +22,7 @@ import { decode } from './support/html.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalRefs.js');
@@ -34,13 +34,12 @@ const { RaiseIssueModal, composeGate, canFile } = await import('../web/src/compo
 const { usageReading, environmentsReading, menuEntries } = await import('../web/src/console/topBarReadings.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   return {
     ...buildViewModel({
       state,
       now: Date.now(),
       connected: true,
-      demo: true,
       setup: null,
       selected: null,
       liveOutput: new Map(),
@@ -361,7 +360,7 @@ function railFold(count: number, hint: 'show' | 'hide'): string {
 test('the rail carries every ask that holds something, and folds the rest behind a count', () => {
   const html = render(view());
   const v = view();
-  assert.ok(v.needsYou.length > 0, 'the demo fixtures must carry at least one ask');
+  assert.ok(v.needsYou.length > 0, 'the fixtures must carry at least one ask');
   const decoded = decode(html);
   const pressing = v.needsYou.filter((row) => row.urgency !== 'later');
   const folded = v.needsYou.filter((row) => row.urgency === 'later');
@@ -378,7 +377,7 @@ test('the whenever fold opens on its own once no ask is left that the fleet cann
   const all = view().needsYou;
   const later = all.filter((row) => row.urgency === 'later');
   const mine = all.filter((row) => row.urgency === 'next');
-  assert.ok(later.length > 0 && mine.length > 0, 'the demo fixtures must carry both tiers');
+  assert.ok(later.length > 0 && mine.length > 0, 'the fixtures must carry both tiers');
 
   const shut = decode(render(view({ needsYou: all })));
   assert.ok(
@@ -728,7 +727,7 @@ test("the group is drawn as weight within the kind's own hue", () => {
 
 function goalRef(): string {
   const ref = view().needsYou.find((n) => n.kind === 'plan' && n.goalRef !== null)?.goalRef;
-  assert.ok(ref, 'the demo fixtures must carry a plan ask that names a goal');
+  assert.ok(ref, 'the fixtures must carry a plan ask that names a goal');
   return ref;
 }
 
@@ -739,7 +738,7 @@ function goalView(
   goalShut: readonly string[] = [],
   goalTab: GoalTab | null = null,
 ): CockpitView {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   mutate(state);
   return buildViewModel({
     goalTab,
@@ -748,7 +747,6 @@ function goalView(
     state: withAsks(state),
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),
@@ -767,12 +765,11 @@ function goalView(
 }
 
 function prView(prNumber: number, ref: string | null = 'issue:412'): CockpitView {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   return buildViewModel({
     state,
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),
@@ -1160,7 +1157,7 @@ test('a plan with no live parts draws what it proposed rather than only saying s
 
 test('the plan card is a way into the whole plan, not only its shape', () => {
   const planned = view().state.plans?.[0];
-  assert.ok(planned, 'the demo fixtures must carry a plan');
+  assert.ok(planned, 'the fixtures must carry a plan');
   const v = goalView(() => {}, planned.originRef);
   assert.ok(v.goalPage?.plan, 'the plan must reach the page of the goal it hangs off');
 
@@ -1262,7 +1259,7 @@ test('validation and signals are folded on a goal that has not shipped', () => {
 test('a held goal is a way into the goal it names', () => {
   const v = view();
   const row = v.needsYou.find((n) => n.kind === 'intake');
-  assert.ok(row, 'the demo fixtures must carry a goal the appraisal refused');
+  assert.ok(row, 'the fixtures must carry a goal the appraisal refused');
   assert.equal(row.opens, 'goal', 'a held goal has a page, so the row opens it');
   assert.ok(decode(render(v)).includes(row.title), 'and the rail draws it');
 });
@@ -1580,7 +1577,7 @@ test('an unwatched PR is drawn spent, not at the same weight as the ones being w
   const v = view();
   const prs = v.state.world.pullRequests;
   const first = prs[0];
-  assert.ok(first, 'the demo fixtures must carry an open PR');
+  assert.ok(first, 'the fixtures must carry an open PR');
   const ignored = {
     ...first,
     labels: [],
@@ -1610,7 +1607,7 @@ test('a goal row is a way into its page', () => {
 test('a goal the appraisal refused is raised on the rail, quoted whole, with its override under it', () => {
   const v = view();
   const row = v.needsYou.find((n) => n.kind === 'intake');
-  assert.ok(row, 'the demo fixtures must carry a goal the appraisal refused');
+  assert.ok(row, 'the fixtures must carry a goal the appraisal refused');
   const appraisal = v.state.world.issues.find((i) => `issue:${i.number}` === row.goalRef)?.appraisal;
   assert.ok(appraisal);
 
@@ -1642,7 +1639,7 @@ test('the fault log keeps its clear even when it is empty', () => {
 
   const full = render(v);
   const first = v.state.errors[0];
-  assert.ok(first, 'the demo fixtures must carry a recorded fault');
+  assert.ok(first, 'the fixtures must carry a recorded fault');
   assert.ok(
     full.indexOf('Clear') < full.indexOf(first.message),
     'one misclick between “leave” and “delete the only copy” is too few',
@@ -1664,7 +1661,7 @@ test('a reading opens the panel behind it, in front of the console', () => {
 test('the local run panel names the ref each goal would run', () => {
   const v = view({ consolePanel: 'localRun' });
   const runnable = v.state.localRunTargets.filter((t) => t.runnable);
-  assert.ok(runnable.length > 0, 'the demo fixtures must carry a goal with a branch of its own');
+  assert.ok(runnable.length > 0, 'the fixtures must carry a goal with a branch of its own');
   const html = decode(render(v));
   for (const target of runnable) assert.ok(html.includes(target.target.ref), `no row names ${target.target.ref}`);
 
@@ -1737,7 +1734,7 @@ test('the local run panel offers the message box only while something holds an i
 function orphanAsk(): { v: CockpitView; row: CockpitView['needsYou'][number] } {
   const base = view();
   const found = base.needsYou.find((n) => n.kind === 'escalation' || n.kind === 'plan' || n.kind === 'permission');
-  assert.ok(found, 'the demo fixtures must carry an escalation to build the orphan from');
+  assert.ok(found, 'the fixtures must carry an escalation to build the orphan from');
   const row = { ...found, goalRef: null, originRef: 'pr:9999', opens: 'ask' as const };
   return { v: { ...base, needsYou: [row, ...base.needsYou.filter((n) => n.id !== row.id)] }, row };
 }
@@ -1762,7 +1759,7 @@ test('the ask panel says what the ask is about, and says so when there is no goa
   assert.match(orphan, /#9999/, 'and still name the pull request it was raised on');
 
   const onGoal = v.needsYou.find((n) => n.goalRef !== null);
-  assert.ok(onGoal, 'the demo fixtures must carry an ask that names a goal');
+  assert.ok(onGoal, 'the fixtures must carry an ask that names a goal');
   const linked = decode(render({ ...v, consolePanel: { ask: onGoal.id } }));
   assert.match(linked, /read it in context/, 'the panel must say where the ask came from, and offer the way there');
   assert.match(linked, new RegExp(`cn-goto[^<]*>\\s*${onGoal.goalRef!.replace('issue:', '#')}`));
@@ -1771,19 +1768,10 @@ test('the ask panel says what the ask is about, and says so when there is no goa
 test('the ask panel closes itself once the row it was drawing is settled', () => {
   const v = view();
   const row = v.needsYou[0];
-  assert.ok(row, 'the demo fixtures must carry an ask');
+  assert.ok(row, 'the fixtures must carry an ask');
 
   const html = render({ ...v, consolePanel: { ask: row.id }, needsYou: v.needsYou.filter((n) => n.id !== row.id) });
   assert.ok(!html.includes('cn-backdrop'), 'a settled ask must not leave a panel standing');
-});
-
-test('injection rides in the launch panel, and the demo build is the whole of it', () => {
-  assert.match(render(view({ consolePanel: 'launch' })), /class="inject"/);
-  assert.doesNotMatch(
-    render(view({ consolePanel: 'launch', demo: false })),
-    /class="inject"/,
-    'a real run must not offer a panel that lies to the harness',
-  );
 });
 
 test('each tab replaces the last, and a selected goal outranks every one of them', () => {
@@ -2118,7 +2106,7 @@ test('a passed local validation reads settled and offers nothing to do', () => {
 
 test('the local run panel offers Validate only while the environment is idle', () => {
   const panel = (mutate: (state: CockpitView['state']) => void = () => undefined): string => {
-    const state = buildDemoState().state;
+    const state = buildFixtureState();
     mutate(state);
     return decode(
       render({
@@ -2126,7 +2114,6 @@ test('the local run panel offers Validate only while the environment is idle', (
           state,
           now: Date.now(),
           connected: true,
-          demo: true,
           setup: null,
           selected: null,
           liveOutput: new Map(),

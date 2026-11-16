@@ -23,13 +23,11 @@ export type {
   AssessedBotPr,
   BotPrOutcome,
   BotPrOutcomeKind,
-  BotPrRisk,
   BotPrRiskLevel,
   BotPrRiskStanding,
   BugFiling,
   CheckDecline,
   CiCheck,
-  Decision,
   DescriptionFindingKind,
   DescriptionQuestion,
   DiscussionEntry,
@@ -75,9 +73,7 @@ export type {
   PlanAtom,
   PlanCaveat,
   PlanCaveatAnswer,
-  PlanNarrative,
   PlanPart,
-  PlanRevision,
   PoolFleetReading,
   PrComment,
   PrDescriptionDraft,
@@ -91,7 +87,6 @@ export type {
   ReadyingAction,
   ReadyingStep,
   ReadyingStepTiming,
-  RemedyCause,
   RemoteRowOutcome,
   Retrospective,
   ScratchEntry,
@@ -118,10 +113,9 @@ export type {
   WatchSourceDeclaration,
   WorkNode,
   WorldEvent,
-  WorldEventKind,
 } from './types.js';
 export type { OperatorRow } from './insights/operatorInsights.js';
-export type { SurfaceRow, SurfaceVerdict } from './insights/surfaceReachInsights.js';
+export type { SurfaceRow } from './insights/surfaceReachInsights.js';
 export type { ControlUsage, PlaceKey, UiUsageEvent, UsageArrival, UsageSubject } from './usage/events.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
 export type { BuildReading, SnoozeTarget, UpgradeAction } from './selfUpdate/upgradePlan.js';
@@ -144,7 +138,6 @@ export type {
   CiHealth,
   CiSubject,
   ReliabilityInsights,
-  RunOutcome,
   RunOutcomeTotal,
   RunPhaseHealth,
   RunRepeat,
@@ -154,11 +147,10 @@ export type {
   ThroughputConversation,
   ThroughputInsights,
   ThroughputLanding,
-  ThroughputMeasure,
   ThroughputSubject,
   ThroughputTotal,
 } from './insights/throughputInsights.js';
-export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './insights/remedyInsights.js';
+export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth } from './insights/remedyInsights.js';
 export type { ReviewAreaTotal, ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 export type { PrReviewState, PrReviewStatus } from './review/prReviewState.js';
 export type { PoolRollupRow, PoolTrends } from './pool/aggregate.js';
@@ -175,7 +167,6 @@ export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } 
 export type {
   McpChannelUsage,
   McpInsights,
-  McpNaming,
   McpNamingTotal,
   McpPhaseUsage,
   McpQuietTool,
@@ -187,7 +178,6 @@ export type { InsightsWindow, InsightsWindowView } from './insights/insightsWind
 export type {
   SpendTrend,
   SpendTrendComparison,
-  SpendTrendPeriod,
   SpendTrendPhaseShift,
   SpendTrendBucket,
 } from './insights/spendTrend.js';

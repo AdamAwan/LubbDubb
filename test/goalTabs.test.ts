@@ -16,10 +16,10 @@ import { buildGoalReachMatrix } from '../web/src/view/goalReachMatrix.js';
 import { openGoalForAsk } from '../web/src/console/jump.js';
 import { GOAL_SECTIONS } from '../web/src/view/goalPage.js';
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 
 function bare(): GoalPageView {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const issue = state.world.issues[0]!;
   const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
   return {
@@ -101,7 +101,7 @@ test('a plan, a pull request or an agent moves the landing to the plan', () => {
 
 test('a pull request in the operator’s court outranks a running check', () => {
   const page = bare();
-  const checks = [{ ...(buildDemoState().state.validationChecks ?? [])[0] }] as ValidationCheckView[];
+  const checks = [{ ...(buildFixtureState().validationChecks ?? [])[0] }] as ValidationCheckView[];
   const validating: GoalPageView = {
     ...page,
     checks,
@@ -401,7 +401,7 @@ test('a landing on no integration branch is not reported as a goal that can neve
 });
 
 test('the matrix gives a row to every part, and to every merge no part claims', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const page = buildGoalPage(state, 'issue:390', [])!;
   const matrix = buildGoalReachMatrix(page);
   assert.deepEqual(matrix.environments, ['staging', 'prod']);
@@ -415,7 +415,7 @@ test('the matrix gives a row to every part, and to every merge no part claims', 
 });
 
 test('a part with no landing reads pending, which is not the same as absent', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const matrix = buildGoalReachMatrix(buildGoalPage(state, 'issue:390', [])!);
   const landed = matrix.rows.find((r) => r.prNumber === 406)!;
   const unwritten = matrix.rows.find((r) => r.prNumber === null)!;
@@ -424,7 +424,7 @@ test('a part with no landing reads pending, which is not the same as absent', ()
 });
 
 test('an unplaced landing marks its row and reads unplaced in every environment', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const matrix = buildGoalReachMatrix(buildGoalPage(state, 'issue:376', [])!);
   const row = matrix.rows.find((r) => r.unplaced)!;
   assert.ok(row, 'the stranded landing has a row of its own');
@@ -435,7 +435,7 @@ test('a goal that has landed nothing does not read as one that has arrived', () 
   /* `owed` is a fraction of `total`, and a goal with nothing placed has a total of nothing — so
      `owed === 0` is true both for a goal every landing of which has arrived and for one that has
      never reached anywhere. Told apart by `arrived` alone, which asks the rollup directly. */
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const matrix = buildGoalReachMatrix(buildGoalPage(state, 'issue:376', [])!);
   assert.equal(matrix.owed, 0);
   assert.equal(matrix.arrived, false, 'nothing has reached an environment, so no sheet exists to read');
@@ -450,7 +450,7 @@ test('an ask opens the goal on the pane it is answered in, not where the lifecyc
 
   /* The goal this ask is about is one whose landing rule answers Validate, which is what the
      pane has to beat: `selectGoal` alone would land the operator on the checks. */
-  assert.equal(goalTabOpening(buildGoalPage(buildDemoState().state, 'issue:395', [])!).tab, 'validate');
+  assert.equal(goalTabOpening(buildGoalPage(buildFixtureState(), 'issue:395', [])!).tab, 'validate');
 
   openGoalForAsk(actions, 'issue:395', 'describe');
   assert.deepEqual(moves, [{ ref: 'issue:395', pane: 'plan' }], 'a description is written in the plan pane');

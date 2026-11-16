@@ -12,16 +12,15 @@ import { withAsks } from './support/asks.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { NeedsBand } = await import('../web/src/console/NeedsBand.js');
 const { quickAnswer } = await import('../web/src/view/quickAnswer.js');
 
-function view(state: CockpitView['state'] = buildDemoState().state): CockpitView {
+function view(state: CockpitView['state'] = buildFixtureState()): CockpitView {
   return buildViewModel({
     state: withAsks(state),
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),
@@ -66,7 +65,7 @@ test('a profile ask with a proposal draws accept and change on its row', () => {
 });
 
 test('an area-path ask answers on its row and says Pick a board', () => {
-  const base = buildDemoState().state;
+  const base = buildFixtureState();
   const issue = base.world.issues.find((i) => i.appraisal?.placement.some((p) => p.field === 'parent'));
   assert.ok(issue?.appraisal);
   issue.appraisal.placement = [{ field: 'areaPath', proposedParent: null, proposedAreaPath: 'NXG\\Statements' }];

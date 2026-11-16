@@ -19,7 +19,7 @@ import type { GoalTab } from '../view/goalPage.js';
 
 // → docs/spec/17-cockpit.md#the-address-bar
 
-export type ValidationAct =
+type ValidationAct =
   | { kind: 'result'; result: 'passed' | 'failed'; note: string }
   | { kind: 'defer'; reason: string }
   | { kind: 'waive'; reason: string }

@@ -10,19 +10,18 @@ import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
 (globalThis as { React?: typeof React }).React = React;
 
-const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { Overview, queueRow } = await import('../web/src/console/Overview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
 
 function view(over: Partial<CockpitView['state']> = {}): CockpitView {
-  const state = { ...buildDemoState().state, ...over };
+  const state = { ...buildFixtureState(), ...over };
   return buildViewModel({
     state,
     now: Date.now(),
     connected: true,
-    demo: true,
     setup: null,
     selected: null,
     liveOutput: new Map(),
@@ -106,7 +105,7 @@ test('every row of a card sits on that card’s own grid', () => {
 });
 
 test('a fleet row wears the state it is in, and the strongest one it is in', () => {
-  const base = buildDemoState().state;
+  const base = buildFixtureState();
   const live = base.agents.filter((a) => a.endedAt === null);
   const waiting = live.find((a) => a.status === 'waiting');
   assert.ok(live[0] && waiting, 'the fixtures must carry a live agent and a waiting one');
@@ -138,7 +137,7 @@ test('a fleet row wears the state it is in, and the strongest one it is in', () 
 });
 
 test('a pull-request row keeps the court’s reasons and wears none of its words', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const html = render(view());
   const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Build'));
   const rows = rack.split(ROW).slice(1);
@@ -171,7 +170,7 @@ test('a pull-request row keeps the court’s reasons and wears none of its words
 });
 
 test('a pull-request row draws the agent on its branch instead of its checks', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const live = state.agents.filter((a) => a.endedAt === null);
   const branches = new Set(
     live.map((a) => state.tasks.find((t) => t.id === a.taskId)?.branch).filter((b) => b != null),
@@ -201,7 +200,7 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
 });
 
 test('the agent mark is the row’s first slot, on both racks', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const html = render(view());
   const racks = {
     'Goals in flight': html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests')),
@@ -237,7 +236,7 @@ test('the agent mark says what it is without spelling it out', () => {
 });
 
 test('a goal row wears its pickup verdict in words, not as an enum', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const html = render(view());
   const card = html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests'));
   const rows = card.split(ROW).slice(1);
@@ -257,7 +256,7 @@ test('a goal row wears its pickup verdict in words, not as an enum', () => {
 });
 
 test('a goal row says so while an agent is on it', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const card = (html: string): string => html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests'));
 
   const html = render(view());
@@ -273,7 +272,7 @@ test('a goal row says so while an agent is on it', () => {
 });
 
 test('a finished retained run is behind the kept disclosure, not among the goals in flight', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const retained = state.retainedRuns ?? [];
   assert.ok(retained.length > 0, 'the fixtures must carry a retained run');
   const kept = retained[0]!;
@@ -321,7 +320,7 @@ test('a queued row quotes the queue: its status as the word, its reason as the s
 });
 
 test('the fleet card’s rows are a budget the agents spend first', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const queued = state.upcoming?.items.length ?? 0;
   assert.ok(queued > 1, 'the fixtures must carry more than one queued item');
   const live = state.agents.filter((a) => a.endedAt === null);
@@ -351,7 +350,7 @@ test('the fleet card’s rows are a budget the agents spend first', () => {
 });
 
 test('the up next band states the whole queue, and offers the rest', () => {
-  const state = buildDemoState().state;
+  const state = buildFixtureState();
   const items = state.upcoming?.items ?? [];
   assert.ok(items.length > 0, 'the fixtures must carry a queued item');
 

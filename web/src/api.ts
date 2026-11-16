@@ -65,16 +65,14 @@ import type {
   WorkSubtreePayload,
   TenantCommandOutput,
 } from '../../src/wire.js';
-import { demoApi, connectDemoWs } from './demo/demoBackend.js';
 import { authFetch, del, json, post, put } from './apiTransport.js';
-import { connectRealWs } from './apiSocket.js';
 
 export { UnauthorizedError } from './apiTransport.js';
 export type { WsClient } from './apiSocket.js';
 
 // → docs/spec/16-http-api.md
 
-const realApi = {
+export const api = {
   getState: (sections?: ReadonlySet<StateSection> | null) =>
     authFetch(
       sections === undefined || sections === null ? '/api/state' : `/api/state?sections=${[...sections].join(',')}`,
@@ -426,13 +424,3 @@ const realApi = {
   settleEjection: (id: string, outcome: EjectionOutcome, note?: string) =>
     post<{ ok: true; ejection: Ejection; jobId: string | null }>(`/api/ejections/${id}/settle`, { outcome, note }),
 };
-
-const DEMO = typeof import.meta.env !== 'undefined' && import.meta.env.VITE_DEMO === '1';
-
-export const isDemo = DEMO;
-export const api = DEMO ? demoApi : realApi;
-export const connectWs: typeof connectRealWs = DEMO ? connectDemoWs : connectRealWs;
-
-export const injectDemoEvent: (event: unknown) => Promise<{ ok: true }> = DEMO
-  ? demoApi.inject
-  : () => Promise.reject(new Error('event injection is a demo-only control'));

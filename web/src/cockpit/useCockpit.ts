@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, connectWs, isDemo, UnauthorizedError } from '../api.js';
+import { api, UnauthorizedError } from '../api.js';
+import { connectWs } from '../apiSocket.js';
 import type { WsClient } from '../api.js';
 import type { AppState, GoalAgentsPayload, SetupPayload, StateSection } from '../types.js';
 import { useNow } from '../hooks.js';
@@ -244,7 +245,6 @@ export function useCockpit(): CockpitStatus {
       state,
       now,
       connected,
-      demo: isDemo,
       setup,
       appliedFixes,
       selected: place.agent,
