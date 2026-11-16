@@ -16,6 +16,7 @@ export type AskKind =
   | 'description_note'
   | 'shortfall'
   | 'intake'
+  | 'questions'
   | 'findings'
   | 'profile'
   | 'placement'

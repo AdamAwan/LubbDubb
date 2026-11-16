@@ -258,6 +258,26 @@ const intake: Answerer = (row, ctx) => {
   };
 };
 
+const questions: Answerer = (row, ctx) => {
+  const issue = issueNumberOf(row);
+  if (issue === null) return unanswerable(ctx);
+  return {
+    in: 'claude-code',
+    tool: 'discussion_settle',
+    args: { issue, action: 'answer' },
+    choose: {
+      entry: 'The open question’s id, from discussion_read’s `open` — one call per question.',
+      text: 'The answer, as the operator agreed it.',
+    },
+    readFirst: [{ tool: 'discussion_read', args: { issue } }],
+    note:
+      `The story is held until every question is answered — its feature’s too, while it has no plan; a question ` +
+      'discussion_read lists under `related` is settled with that issue’s `number` as `issue`. Talking ' +
+      `them through is \`/lubbdubb:discuss ${issue}\`: offer it, and hand off there rather than answer here ` +
+      'when the operator wants to talk rather than answer.',
+  };
+};
+
 const profile: Answerer = (row, ctx) => {
   const issue = issueNumberOf(row);
   if (issue === null) return unanswerable(ctx);
@@ -353,6 +373,7 @@ const ANSWER_WITH: Record<AskKind, Answerer> = {
   supply,
   burn,
   intake,
+  questions,
   profile,
   placement,
   assign,

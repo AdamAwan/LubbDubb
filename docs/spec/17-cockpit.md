@@ -616,7 +616,8 @@ reads the `ticket*` fields off `place.ts` and asserts the hook forwards every on
 ## The queue rail — "Needs you"
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
-permission requests, goals the appraisal refused at intake, unanswered goal-profile proposals, usage-limit
+permission requests, goals the appraisal refused at intake, stories held on open discussion questions,
+unanswered goal-profile proposals, usage-limit
 parks, bench tasks, close-outs, validate rows, dispatches the executor keeps refusing, pull requests
 somebody assigned to the operator and the recovery hold. `buildAskQueue` (`src/asks/queue.ts`) is
 the merge, it is pure, and **it runs on the server**: `/api/state` ships its output as `asks`, and the
@@ -821,6 +822,16 @@ chip for a current record (`investigationChip`, `web/src/view/issueAsks.ts`) —
 once resolved, amber _waiting on you_ only while the ask itself would stand (`awaitedFindings`:
 `investigationHold` set), with the root cause and confidence on its title. Unanswered findings with
 the label off wait on nobody, so the header says nothing about them.
+
+**`questions` is a story Up next holds on open discussion questions** ([40](40-discussions.md#where-else-it-is-reached-from)).
+`questionRows` (`src/asks/issueAsks.ts`) reads it off `upcoming` — the dispatcher's own held rows with status
+`questions`, one ask per story — and never off the discussion files, so it stands exactly while the
+hold does, and an expedite or a priority that lifts the hold takes the row with it. It was drawn in Up
+next and nowhere else, which says the story is waiting but not that the wait is the operator's. It is
+`yours` and `next`, on intake's terms, in amber — a gate, nothing broken — and belongs to the goal's
+`discussion` pane. The band quotes the hold's reason (the count and the files) and carries the
+Discussion tab's `DesktopLink`, `discussionPrompt(n)`: the questions are answered in Claude or in the
+file, never by a button here.
 
 **`limit` is the one kind with no row of its own underneath it.** It is built from the _fleet_ —
 `state.parkedOnLimit`, keyed on the agent — because a usage-limit park raises no escalation on purpose:

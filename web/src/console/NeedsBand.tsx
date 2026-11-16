@@ -17,7 +17,7 @@ import { taskBody } from './taskAsks.js';
 import { placementBody } from './placementAsks.js';
 import { AssignButtons, assignBody } from './assignAsks.js';
 import { botPrBody } from './botPrAsks.js';
-import { findingsBody, intakeBody, Lines, profileBody } from './appraisalAsks.js';
+import { findingsBody, intakeBody, Lines, profileBody, questionsBody } from './appraisalAsks.js';
 import { assignAskOf } from '../view/askGroups.js';
 import { quickAnswer } from '../view/quickAnswer.js';
 import type { QuickAnswer } from '../view/quickAnswer.js';
@@ -243,6 +243,7 @@ const BODY_OF: Partial<Record<NeedRow['kind'], BodyOf>> = {
   bench: taskBody,
   burn: taskBody,
   intake: intakeBody,
+  questions: questionsBody,
   profile: profileBody,
   findings: findingsBody,
   placement: placementBody,

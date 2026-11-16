@@ -25,7 +25,8 @@ than in the cockpit. You put each ask in front of them, help them decide, and se
 2. **Read more only where it helps them decide.** `answerWith.readFirst` names the
    read that matters for this kind — `proposal_read` before any proposal, and
    `plan_read` for a plan,
-   `pr_assign` with just `pr` for the shortlist, `validation_read` for checks. Beyond
+   `pr_assign` with just `pr` for the shortlist, `validation_read` for checks,
+   `discussion_read` for a story's open questions. Beyond
    that, `goal_read`, `agent_read` and the real diff or code in this checkout are
    there when the decision turns on them. Do not read everything for every ask; an
    operator clearing ten asks does not want ten essays.
@@ -214,10 +215,14 @@ terminal, and carry on.
 - **An agent's question is typed straight into a running agent**, and it acts on
   it. If the operator is unsure, leave it open and skip it rather than send a
   guess.
-- **A story waiting on open questions is not an ask here.** It shows in the
-  cockpit's Up next as _waiting on N open questions_. When the operator wants to
-  clear one, hand off to `/lubbdubb:discuss <n>`, which reads the questions and
-  writes the answers.
+- **A `questions` ask is a story held on open discussion questions.** Read them
+  with `discussion_read` (`answerWith.readFirst`) and put them to the operator —
+  the story's own and, under `related`, its feature's. An answer they give is
+  sent with `discussion_settle`, one call per question, each with the `issue` the
+  question's file is for; show the wording before you send it. Where the
+  questions want talking through rather than a one-line answer, hand off to
+  `/lubbdubb:discuss <n>` — a fork or a new chat, as for any discussion — and
+  `ask_skip` it here. The row goes once none is open, on the next cycle.
 
 ### What not to do
 

@@ -1,5 +1,6 @@
 import type { AskDraft, AskInputs } from './queue.js';
 import { askLine, opensAt } from './lines.js';
+import { issueSubtreeNumber } from '../issueOrigins.js';
 
 // → docs/spec/17-cockpit.md#the-queue-rail--needs-you
 
@@ -38,6 +39,30 @@ export function intakeRows(state: AskInputs): AskDraft[] {
     });
   }
   return rows;
+}
+
+// A story Up next holds on open discussion questions, one row per story however many of its dispatches
+// wait. It stands exactly while the dispatcher holds it. → docs/spec/40-discussions.md#where-else-it-is-reached-from
+export function questionRows(state: AskInputs): AskDraft[] {
+  const held = new Map<number, string>();
+  for (const item of state.upcoming?.items ?? []) {
+    if (item.status !== 'questions') continue;
+    const number = issueSubtreeNumber(item.origin);
+    if (number !== null && !held.has(number)) held.set(number, item.reason);
+  }
+  return [...held].map(([number, reason]) => {
+    const base = issueRow(number);
+    return {
+      ...base,
+      id: `questions:${base.goalRef}`,
+      kind: 'questions',
+      group: 'yours',
+      title: askLine('Waiting on open questions', base.goalRef, state),
+      opens: opensAt(base.goalRef, state),
+      raisedAt: '',
+      note: reason,
+    };
+  });
 }
 
 // The findings hold planning and pickup, so the ask blocks. It stands exactly while the findings
