@@ -10,14 +10,12 @@ const BUILD_OUTPUTS = new Set(['web/dist']);
 
 const PATH_TOKEN = /`([A-Za-z0-9._/-]+\/[A-Za-z0-9._/-]*)`/g;
 
-function directoryNotes(): string[] {
-  return ['src', 'test', 'web']
-    .flatMap((dir) => readdirSync(join(ROOT, dir), { recursive: true, encoding: 'utf8' }).map((p) => `${dir}/${p}`))
-    .filter((p) => p.endsWith('/CLAUDE.md'));
-}
+const DIRECTORY_NOTES = ['src', 'test', 'web']
+  .flatMap((dir) => readdirSync(join(ROOT, dir), { recursive: true, encoding: 'utf8' }).map((p) => `${dir}/${p}`))
+  .filter((p) => p.endsWith('/CLAUDE.md'));
 
 function markdownFiles(): string[] {
-  const files = ['CLAUDE.md', ...directoryNotes(), 'README.md', 'docs/README.md', 'docs/workflow.md'];
+  const files = ['CLAUDE.md', ...DIRECTORY_NOTES, 'README.md', 'docs/README.md', 'docs/workflow.md'];
   for (const dir of ['docs/spec', 'docs/prompt-templates']) {
     for (const entry of readdirSync(join(ROOT, dir))) {
       if (entry.endsWith('.md')) files.push(`${dir}/${entry}`);
@@ -57,7 +55,7 @@ test('CLAUDE.md stays small enough to load into every agent', () => {
 
 test('every relative link in a CLAUDE.md resolves, and the root lists every directory note', () => {
   const broken: string[] = [];
-  for (const file of ['CLAUDE.md', ...directoryNotes()]) {
+  for (const file of ['CLAUDE.md', ...DIRECTORY_NOTES]) {
     const text = readFileSync(join(ROOT, file), 'utf8');
     for (const match of text.matchAll(/\]\(([^)#\s]+)(?:#[^)]*)?\)/g)) {
       const target = match[1]!;
@@ -66,7 +64,7 @@ test('every relative link in a CLAUDE.md resolves, and the root lists every dire
     }
   }
   const root = readFileSync(join(ROOT, 'CLAUDE.md'), 'utf8');
-  const unlisted = directoryNotes().filter((note) => !root.includes(`](${note})`));
+  const unlisted = DIRECTORY_NOTES.filter((note) => !root.includes(`](${note})`));
 
   assert.deepEqual(broken, [], `A CLAUDE.md links to something that does not exist:\n  ${broken.join('\n  ')}`);
   assert.deepEqual(unlisted, [], `The root CLAUDE.md's Directory notes omit:\n  ${unlisted.join('\n  ')}`);
