@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS remote_tenants (
   tenant      TEXT NOT NULL,
   ensured_at  TEXT,
   reseeded_at TEXT,
+  reseed_launched_at TEXT,
   PRIMARY KEY (environment, tenant)
 );
 

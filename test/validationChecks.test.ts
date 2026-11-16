@@ -101,6 +101,7 @@ function sheet(over: Partial<RemoteSheetView> = {}): RemoteSheetView {
       ageMs: null,
       freshnessMs: null,
       stale: false,
+      halfSeeded: false,
       blockedReason: null,
       reseedable: false,
       destructive: false,

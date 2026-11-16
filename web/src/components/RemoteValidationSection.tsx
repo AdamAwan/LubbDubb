@@ -290,6 +290,15 @@ function TenantLine({ tenant, environment }: { tenant: RemoteTenantView; environ
       <Tag lower title="The tenant every row on this sheet is put to">
         {tenant.tenant}
       </Tag>
+      {tenant.halfSeeded && (
+        <Tag
+          tone="red"
+          fill
+          title="A reseed launched since the last one that finished, so its data may be part-way to the seed"
+        >
+          may be half-seeded
+        </Tag>
+      )}
       {tenant.stale ? (
         <Tag tone="amber" fill title="Beyond the freshness window this environment declared">
           {ageOf(tenant)}

@@ -113,6 +113,7 @@ principle is a rule rather than a preference.
 
 - **With no environment declaring a `validate` block nothing is assembled, spawned or written, and the desk's early return stamps no arrival.** `goal_arrivals.sheeted_at` null is the freshness guard, and stamping on the way past makes turning the feature on later sheet every goal that ever arrived. → [§](#the-desk) · `test/remoteValidationOff.test.ts`
 - **The harness never generates or infers a tenant identifier, and a `tenantEnv`'s value goes into the spawn env and nowhere else.** A missing tenant is `blocked` naming the command or variable; an invented one is reaped within the hour and presents as mysterious mass failure. → [§](#tenants) · `test/remoteValidationTenants.test.ts`
+- **A reseed that launched marks its tenant `halfSeeded` on the tenant's own row until a reseed finishes, and that is a qualifier on every reading, never a block or a fourth outcome.** Only a successful reseed stamps its age, so without it the gate draws the last good age beside a half-wiped tenant and its red rows read as the code's fault; read off the per-environment preparation row instead, the next press clears it with nothing repaired. → [§](#a-reseed-that-did-not-finish) · `test/remoteValidationTenants.test.ts`
 - **The runner's report is the only source of row outcomes; the exit code is never read, and a selector matching no test is `blocked`, never `passed`.** One invocation carries many rows and one exit code. → [§](#the-report-is-the-only-source-of-row-outcomes) · `test/remoteValidationReadings.test.ts`
 - **If the deployed sha moved during a run, a failure is `blocked` and a pass is still a pass, with both commits recorded.** A run against a changing build cannot support a claim the product is broken. → [§](#the-environment-moved-asymmetry) · `test/remoteValidationReadings.test.ts`
 - **A run writes on a check only where it is `unrun` or carries this instrument's own reading, and a `blocked` row writes nothing.** Overwriting a person's or another instrument's reading is the harness deciding it knows better. → [§](#what-a-spec-reading-is-worth) · `test/remoteValidationReadings.test.ts`
@@ -1470,9 +1471,35 @@ operator can act on it: reseed first, then press.
 **Staleness is a qualifier on the reading, never a fourth outcome.** A fourth state multiplies against
 every row kind and every environment and needs teaching to every consumer of a reading, where _failed,
 against a tenant 19 days old, beyond the declared 7-day window_ tells the reader everything without
-touching the state machine. `stalenessNote` is the one place that sentence is written, appended to a
+touching the state machine. `tenantNote` is the one place that sentence is written, appended to a
 reading's own detail; the vocabulary stays `passed | failed | blocked`, asserted on the vocabulary
 itself rather than on one row.
+
+### A reseed that did not finish
+
+**Built**, in `dated` (`src/validation/remote/tenants.ts`) off `remote_tenants.reseed_launched_at`. A
+reseed that fails, times out or ends with no outcome after it launched has run the project's own wipe
+for some unknown part of its length, so the tenant may hold neither what it held nor the seed. Only a
+reseed that succeeds stamps `reseeded_at`, so without more the gate would draw the **last good age**,
+often _reseeded today_, beside a tenant that is broken — and a red row against it looks exactly like the
+code's fault.
+
+So the moment a reseed **launches**, `reseedStep` stamps `reseed_launched_at` on the tenant's own row,
+and `TenantStanding.halfSeeded` is _launched later than last reseeded_. Only a reseed that finishes
+clears it. It is marked on the tenant — keyed `(environment, tenant)` — and **never read off
+`remote_tenant_prepares`**: that row is one per environment and the next preparation replaces it, so a
+later press whose `ensureTenant` fails, a reseed refused before it launched, a restart that closed the
+row, or a preparation for another operator's tenant would each have cleared the mark with nothing
+repaired. A reseed refused before it launched stamps nothing, because it touched nothing. It is true
+while a reseed runs as well, which is honest: the tenant is being wiped. The column has no backfill —
+null is _none launched since it existed_, read as not half-seeded.
+
+It is a **qualifier**, like staleness, and reaches every place the tenant is read: `tenantNote` appends
+_whose last reseed did not finish, so its data may be half-seeded_ to every reading the run takes; the
+pane's banner leads with it ([17](17-cockpit.md#the-validate-pane)), carrying the preparation's detail
+only where that preparation was the reseed; the gate draws _may be half-seeded_ beside the age; the
+tenant chip goes amber on any finished preparation that did not end `ok`. It **blocks nothing** — an
+operator may still want to read a half-seeded tenant — and it is never a fourth outcome.
 
 ## One environment has several names
 
@@ -2517,7 +2544,7 @@ writes are synchronous, which is what keeps the harness logic race-free.
 | `remote_readings`        | `(run, row_id)`               | **built.** append-only; a later run supersedes rather than deletes. `run_id` is null for a reading taken at assembly, `started_sha` / `ended_sha` carry the commits the run that took it straddled, and `executed`, `retries`, `duration_ms` and `artefacts` carry what the report said about a browser row |
 | `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is                                                                                                                                                                                                      |
 | `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                                                                                                                                                                                                                               |
-| `remote_tenants`         | `(environment, tenant)`       | **built.** `OR REPLACE` — when it was last provisioned and last reseeded                                                                                                                                                                                                                                    |
+| `remote_tenants`         | `(environment, tenant)`       | **built.** `OR REPLACE` — when it was last provisioned, last reseeded, and last had a reseed launched                                                                                                                                                                                                                                    |
 | `remote_run_intents`     | `(goal_ref, environment)`     | **built.** `OR REPLACE` on each OK and on _not validating here_ (`not_here`); `withdrawn` and `consumed` are conditional flips from `given`; a ship-day `consumed` row per existing sheet                                                                                                                   |
 
 `remote_runs` keeps its rows after they end, `local_validations`' rule: a run abandoned because the

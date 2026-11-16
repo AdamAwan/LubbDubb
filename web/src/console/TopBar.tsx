@@ -224,7 +224,7 @@ function Tenants({ view, actions }: { view: CockpitView; actions: CockpitActions
   if (commands.length === 0) return null;
   const running = commands.filter((c) => c.preparation !== null && c.preparation.finishedAt === null);
   const one = running.length === 1 ? running[0]!.preparation! : null;
-  const failed = running.length === 0 && commands.some((c) => c.preparation?.ok === false);
+  const failed = running.length === 0 && commands.some((c) => c.preparation !== null && c.preparation.ok !== true);
   const mins = one === null ? 0 : Math.floor(Math.max(0, view.now - new Date(one.startedAt).getTime()) / 60_000);
   const label = one === null ? 'Tenants' : one.call === 'ensure' ? 'Provision' : 'Reseed';
   const value =
@@ -236,7 +236,7 @@ function Tenants({ view, actions }: { view: CockpitView; actions: CockpitActions
   const title =
     running.length > 0
       ? `${running.map((c) => c.environment).join(', ')}: a tenant command is running — open to watch its output`
-      : `Tenant commands on ${commands.map((c) => c.environment).join(', ')}${failed ? ' · the last run on one failed' : ''} — open to see what is configured and how the last run ended`;
+      : `Tenant commands on ${commands.map((c) => c.environment).join(', ')}${failed ? ' · the last run on one failed or ended unknown' : ''} — open to see what is configured and how the last run ended`;
   return (
     <>
       <i className="cn-pill-sep" />

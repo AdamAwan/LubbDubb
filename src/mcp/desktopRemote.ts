@@ -50,6 +50,7 @@ function describeSheet(sheet: RemoteSheetView): Record<string, unknown> {
       name: sheet.tenant.tenant,
       reseededAt: sheet.tenant.reseededAt,
       stale: sheet.tenant.stale,
+      halfSeeded: sheet.tenant.halfSeeded,
       blocked: sheet.tenant.blockedReason,
       preparable: sheet.tenant.reseedable,
       destructive: sheet.tenant.destructive,

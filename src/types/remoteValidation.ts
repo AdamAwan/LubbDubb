@@ -282,6 +282,8 @@ export interface RemoteTenant {
   tenant: string;
   ensuredAt: string | null;
   reseededAt: string | null;
+  /** When a reseed last launched. Later than `reseededAt` is one that did not finish. */
+  reseedLaunchedAt: string | null;
 }
 
 /**
@@ -296,6 +298,11 @@ export interface TenantStanding {
   ageMs: number | null;
   freshnessMs: number | null;
   stale: boolean;
+  /**
+   * A reseed launched against this tenant since its last successful one — running, failed, timed out or
+   * gone with no outcome — so its data may be part-way to the seed. A qualifier, like `stale`.
+   */
+  halfSeeded: boolean;
   /** Why there is no tenant, naming the command or the variable that would provide one. */
   blockedReason: string | null;
 }
