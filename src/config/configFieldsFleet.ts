@@ -140,6 +140,12 @@ export const FLEET_FIELDS: readonly ConfigField[] = [
     access: 'plain',
     why: 'How long an operator’s Up next override outranks the dispatcher’s own order.',
   },
+  {
+    path: 'fleetStallCycles',
+    type: 'number',
+    access: 'plain',
+    why: 'How many cycles running the fleet may have work above the Up next cut-line, room under the cap and start nothing before it is raised as stalled. Whatever the cause, the symptom is a full queue, an idle fleet and nothing red. 0 turns the alarm off.',
+  },
 
   {
     path: 'agentMode',

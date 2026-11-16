@@ -2620,7 +2620,7 @@ Three rules hold them honest:
   `stateReader`, `tenants` — beside `backend`, `streamSpawner`, `sink`, `gitObserver`,
   `worktrees` and `errorMirror`. Both are built, each defaulting to its command implementation. **A
   test that configures a `validate` block and injects no `tenants` is the same hazard `stateReader`'s
-  absence is**, and both are in `CLAUDE.md` for that reason. There was a third, `remoteRunner`, and the
+  absence is**, and both are in `test/CLAUDE.md` for that reason. There was a third, `remoteRunner`, and the
   `CLAUDE.md` entry that named it is **withdrawn in the same change** the seam is: a sharp edge that is
   no longer real is the stale-documentation failure that file opens by warning about.
   **`CommandStateReader` parses through the same `src/environments/watchResult.ts` the watch's observer uses**
@@ -2628,14 +2628,14 @@ Three rules hold them honest:
   are one implementation. A second parser would pass `knip` (it is used) and pass its own tests, and
   then drift about all three, silently.
 - **A test that configures an environment with a `validate` block and injects none of them is the
-  hazard**, and it is in `CLAUDE.md` for that reason. The default
+  hazard**, and it is in `test/CLAUDE.md` for that reason. The default
   implementations are the command ones; what saves an ordinary test is that a config with no
   `validate` block declares no command to run, which is a property to rely on deliberately rather than
   to discover.
 - **A test that dispatches the run agent must inject `worktrees`.** `config.repoRoot` defaults to
   `process.cwd()`, so without `FakeWorktreeManager` the test leases a slot in your own checkout
   ([19](19-development.md#why-a-test-must-not-dispatch-through-the-real-worktree-manager)) — which is
-  `CLAUDE.md`'s standing rule for **any** test that dispatches a code agent, and this is one.
+  `test/CLAUDE.md`'s standing rule for **any** test that dispatches a code agent, and this is one.
 
 **Extending a seam means adding to the interface _and_ its scripted fake in the same change.** All
 provider and command I/O is behind these; the tests touch no network and spawn no process.

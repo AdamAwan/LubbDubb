@@ -2,8 +2,9 @@ import type { CockpitState } from '../wire.js';
 import type { SetupReading } from '../setup/reading.js';
 import type { AskGroup, AskKind, AskRow, AskUrgency } from './askRow.js';
 import { updateAskRows } from './updateAsks.js';
-import { findingsRows, intakeRows, placementRows, profileRows } from './issueAsks.js';
+import { findingsRows, intakeRows, placementRows, profileRows, questionRows } from './issueAsks.js';
 import { refusedDispatchRows } from './refusedDispatches.js';
+import { fleetStallRows } from './stallAsks.js';
 import { assignAskRows, assignedPrRows, botPrRows, descriptionFeedbackRows, undescribedPartRows } from './prAsks.js';
 import { configRows, escalationRows, humanTaskRows, limitRows, recoveryRows } from './inboxAsks.js';
 
@@ -13,6 +14,7 @@ import { configRows, escalationRows, humanTaskRows, limitRows, recoveryRows } fr
 export type AskInputs = Pick<
   CockpitState,
   | 'build'
+  | 'fleetStall'
   | 'recovery'
   | 'escalations'
   | 'proposals'
@@ -29,6 +31,7 @@ export type AskInputs = Pick<
   | 'descriptionFeedback'
   | 'archivedPullRequests'
   | 'retainedRuns'
+  | 'upcoming'
 > & {
   world: Pick<CockpitState['world'], 'takenAt' | 'pullRequests' | 'closedPullRequests' | 'issues'>;
   config: Pick<CockpitState['config'], 'watchLabel' | 'desktopFolder'>;
@@ -60,6 +63,8 @@ const KIND_URGENCY: Record<AskKind, AskUrgency> = {
   description_note: 'later',
   shortfall: 'next',
   intake: 'next',
+  // → docs/spec/40-discussions.md#where-else-it-is-reached-from
+  questions: 'next',
   findings: 'now',
   profile: 'next',
   close_out: 'next',
@@ -81,6 +86,7 @@ const KIND_URGENCY: Record<AskKind, AskUrgency> = {
   bot_pr: 'next',
   upgrade: 'later',
   project_pull: 'later',
+  fleet_stall: 'now',
 };
 
 /** Parts held downstream promote any ask to `now`, whatever its kind. */
@@ -115,6 +121,7 @@ const STAGE_RANK: Record<AskKind, number> = {
   limit: 3,
   burn: 3,
   intake: 4,
+  questions: 4,
   findings: 3,
   profile: 4,
   placement: 4,
@@ -126,6 +133,7 @@ const STAGE_RANK: Record<AskKind, number> = {
   config_gap: 5,
   upgrade: 5,
   project_pull: 5,
+  fleet_stall: 3,
 };
 
 const GROUP_RANK: Record<AskGroup, number> = { blocking: 0, yours: 1 };
@@ -162,6 +170,7 @@ export function buildAskQueue(
 ): AskRow[] {
   const drafts: AskDraft[] = [
     ...configRows(setup),
+    ...fleetStallRows(state),
     ...updateAskRows(state, nowIso),
     ...refusedDispatchRows(state),
     ...assignedPrRows(state),
@@ -173,6 +182,7 @@ export function buildAskQueue(
     ...escalationRows(state),
     ...limitRows(state),
     ...intakeRows(state),
+    ...questionRows(state),
     ...findingsRows(state),
     ...profileRows(state),
     ...placementRows(state),

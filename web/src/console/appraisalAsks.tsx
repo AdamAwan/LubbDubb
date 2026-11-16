@@ -7,7 +7,7 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { ButtonRow } from '../components/button.js';
 import { goalIssue } from '../view/goalRefs.js';
-import { discussPrompt } from '../cockpit/desktopLink.js';
+import { discussionPrompt, discussPrompt } from '../cockpit/desktopLink.js';
 import { awaitedFindings, awaitedProfile, FINDINGS_ANSWERS } from '../view/issueAsks.js';
 
 // → docs/spec/17-cockpit.md
@@ -46,6 +46,33 @@ export function intakeBody(row: NeedRow, view: CockpitView, actions: CockpitActi
           folder={view.state.config.desktopFolder}
           prompt={discussPrompt(issue.number)}
           explain="so the gaps are talked through with a session that can rewrite the ticket — the hold stands until the goal's text changes or you override it here."
+        />
+      </ButtonRow>
+    </>
+  );
+}
+
+/** → docs/spec/40-discussions.md#where-else-it-is-reached-from */
+export function questionsBody(row: NeedRow, view: CockpitView): ReactNode {
+  const issue = rowIssue(row, view);
+  if (!issue) return null;
+  return (
+    <>
+      <p>
+        <strong>New work on this story waits on open questions in its discussion</strong> — nothing is planned or
+        dispatched for it until they are answered.
+      </p>
+      {row.note !== undefined && <p className="cn-tick">{row.note}</p>}
+      <p className="cn-tick">
+        Answering the last one lets it start on the next cycle. Expediting the goal or giving it a priority lifts the
+        hold without them.
+      </p>
+      <ButtonRow bar>
+        <DesktopLink
+          usage="discussion.open"
+          folder={view.state.config.desktopFolder}
+          prompt={discussionPrompt(issue.number)}
+          explain="so the questions are talked through and the answers written into the file — the hold lifts on the next cycle once none is open."
         />
       </ButtonRow>
     </>

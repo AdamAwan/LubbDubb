@@ -71,7 +71,10 @@ tidiness one: a stale line there is a false instruction handed to every agent be
 code. So it holds one genre only — the things that, not knowing them, get something broken
 **silently**: a failure `npm run check` does not catch, that is not obvious at the call site, and
 that no test surfaces. `PtySession.kill()` setting status before signalling qualifies; the argument
-for why proposals are a table rather than columns on `escalations` does not.
+for why proposals are a table rather than columns on `escalations` does not. An edge that belongs to
+one directory lives in a `CLAUDE.md` beside that code (`src/pty/CLAUDE.md` holds that one), which
+Claude Code loads only when an agent works there; the root keeps the edges that can be tripped from
+anywhere and lists every directory note.
 
 `spec/` is read **on demand**, by whoever is changing that subsystem. It carries the full
 description _and_ the reasoning behind it — which is what stops a later change re-litigating a

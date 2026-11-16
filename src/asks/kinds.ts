@@ -17,6 +17,7 @@ export const KIND_LABEL: Record<AskKind, string> = {
   description_note: 'Description note',
   shortfall: 'Shortfall',
   intake: 'Intake',
+  questions: 'Open questions',
   findings: 'Findings',
   profile: 'Profile',
   placement: 'Backlog',
@@ -36,6 +37,7 @@ export const KIND_LABEL: Record<AskKind, string> = {
   bot_pr: 'Bot PR',
   upgrade: 'Upgrade',
   project_pull: 'Auto-pull off',
+  fleet_stall: 'Stalled',
 };
 
 /**
@@ -74,6 +76,7 @@ export const KIND_TONE: Record<AskKind, 'red' | 'amber' | 'blue' | 'green'> = {
   description_note: 'blue',
   shortfall: 'blue',
   intake: 'blue',
+  questions: 'amber',
   findings: 'blue',
   profile: 'blue',
   placement: 'amber',
@@ -93,6 +96,7 @@ export const KIND_TONE: Record<AskKind, 'red' | 'amber' | 'blue' | 'green'> = {
   bot_pr: 'amber',
   upgrade: 'amber',
   project_pull: 'amber',
+  fleet_stall: 'red',
 };
 
 /**
@@ -121,6 +125,7 @@ export const KIND_SYMBOL: Record<AskKind, string> = {
   description_note: '\u00b6',
   shortfall: '\u2717',
   intake: '\u25cc',
+  questions: '\u2047',
   findings: '\u2315',
   profile: '\u2299',
   placement: '\u25a3',
@@ -140,4 +145,5 @@ export const KIND_SYMBOL: Record<AskKind, string> = {
   bot_pr: '⇡',
   upgrade: '\u2191',
   project_pull: '\u21a5',
+  fleet_stall: '\u25a0',
 };

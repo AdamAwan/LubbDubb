@@ -58,104 +58,9 @@ A fresh clone needs `npm ci` first — `node-pty` is a native build.
 The ones a selector or a grep can see are lint rules and structural tests, whose failures say the fix
 ([19](docs/spec/19-development.md#guards)); what follows is what no tool catches.
 
-### Identity
-
-- **`userId` gates pickup, so a provider that cannot report label authorship stops the fleet silently.** With it set,
-  `issuePickup.ts` reads `labelsAddedByViewer` instead of `labels`; a provider that never populates that field resolves
-  every issue's labels to `[]` and **nothing is ever picked up**, with nothing red. `FakeIssuesIntegration` mirrors
-  `labels` into it for that reason. → [02](docs/spec/02-configuration.md#userid), [06](docs/spec/06-issue-pickup.md)
-
-### Review threads
-
-- **Whether a review reply is the fleet's is a _record_, never the reply's author.** `ours` and `answered` read
-  `pr_replies_sent` (`src/store/prReplies.ts`) — one row per reply that actually left through `sink.postPrReply` — and
-  `config.userId` is the credential the harness posts under, which on a single-operator deployment is the operator's own
-  account. Compare against it and the operator's follow-up on their own thread reads as the harness's: `answered` folds
-  to `PrComment.handled`, the only bit rule `pr-review-comment` reads, so their comment is marked as work already done
-  and never dispatched for. Both providers must read the same record through `src/pr/prThreads.ts`, and every
-  uncertainty — no comment ref, a reply from before the table — leaves the thread **unanswered**. →
-  [07](docs/spec/07-pull-requests.md#attribution-is-a-record-never-an-identity)
-
-### Persistence
-
-- **A column added to an _existing_ table needs an additive `ALTER TABLE`**, guarded by
-  `PRAGMA table_info` and declared in the owning module's `ColumnMigrations`. `CREATE TABLE IF NOT
-EXISTS` never alters an existing table, so a column without an `ensureColumns` entry is invisible on
-  every database from before it existed. A table being new **once** does not keep it exempt. A
-  _renamed_ table needs a `TableRename` entry applied **before** the schema pass.
-  → [14](docs/spec/14-persistence.md#migrations), [rename](docs/spec/14-persistence.md#renaming-a-table)
-- **A partial unique index whose predicate changes must be dropped by name first.** `CREATE UNIQUE
-INDEX IF NOT EXISTS` never re-predicates an index that already exists, so widening the statuses a
-  lock covers — `remote_runs_open`'s `WHERE status IN ('pending', 'dispatched')` — leaves every
-  database from before the change still enforcing the old predicate, and lets through exactly the
-  clash the index exists to refuse. A status is a **column value** and needs no `ALTER TABLE`; the
-  index over it is schema. → [14](docs/spec/14-persistence.md#a-partial-index-predicate-is-not-idempotent),
-  [36](docs/spec/36-remote-validation.md#a-runs-status-vocabulary)
-- **A column whose _null means something_ needs a backfill as well**, gated on `ensureColumns`' report of what it added.
-  `pets.opened_at` null spells "still an egg", so the column alone turns every existing vivarium back into shells; a
-  backfill on _every_ boot opens the eggs operators were saving. →
-  [14](docs/spec/14-persistence.md#when-a-null-means-something)
-- **A one-shot id is never edited in place** — `VIVARIUM_RESET` in `src/pets/keeper.ts`, and every id a re-introduced
-  `runOnce` is given. Changing one declares a _second_ pass, which every database that ran the first runs again on the
-  next boot. A further pass is a further id, added deliberately. There is no `runOnce` right now: all three of its
-  callers folded rows into the claim store and went with it, so the mechanism comes back with the next migration that
-  needs it. → [22](docs/spec/22-pets.md#clearing-the-vivarium),
-  [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
-- **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the aggregate as
-  another fleet's, and looks exactly like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
-- **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.** Which
-  verdict tables may coexist is declared once in `src/store/verdicts.ts`; a writer that clears its siblings itself
-  silently reintroduces the pairwise drift the matrix replaced. →
-  [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
-- **A validation check's `area` comes from a `suite` step and from nothing else, and a second home for it is a silent
-  undo.** It was inherited from the `coverage` of a covered part, repaired from SQL at boot and held in a column; all
-  three are gone, because a boot pass that recomputes it overwrites what the step named on _every_ boot — the join quietly unpicking
-  the author, with nothing red. → [36](docs/spec/36-remote-validation.md#how-a-check-comes-to-have-an-area)
-- **`fleetCanStart` is three-valued and `null` must never fold into `false`.** Null is _this check has no steps_ —
-  `fleetCandidate` and the operator's press still decide, which is every check written before test plans. False is a
-  plan whose first step is a person's, which can never execute. Fold them and every prose check on the deployment stops
-  being dispatchable, with a full "Up next" queue and nothing red. → [20](docs/spec/20-validation.md#who-carries-a-step)
-- **A failed validation check must never be recorded as a shortfall.** A shortfall clears the goal's **delivery** row,
-  and the delivery is what parks the goal: writing one un-parks it, settles the close-out obligation and declines the
-  validation bench row — the reading deleting the rows it was reported into, with delivered work handed back to the
-  fleet. Rule `validation-failed` is the consumer, on its own origin. →
-  [20](docs/spec/20-validation.md#when-a-check-fails)
-
-### Tests
-
-- **A test that dispatches a code agent must inject `worktrees`.** `config.repoRoot` defaults to
-  `process.cwd()`, so without `FakeWorktreeManager` the test cuts a **real branch in your checkout**
-  and nothing deletes it. Use the real manager only when git behaviour _is_ the subject, pointed at a
-  throwaway repo from `test/support/gitRepo.ts`, and with `FakeSlotProcesses` — its default **kills** live processes.
-  → [19](docs/spec/19-development.md#why-a-test-must-not-dispatch-through-the-real-worktree-manager)
-- **A test that touches `GET /api/issues/filing-target` or `POST /api/issues` must inject
-  `upstream`.** The default is the real `gh` CLI against **AdamAwan/LubbDubb** — a test without
-  `FakeUpstreamIssues` files a live issue on the project's tracker and passes while doing it.
-  → [15](docs/spec/15-integrations.md)
-- **A test that configures an environment with a `validate` block must inject `stateReader` _and_
-  `tenants`.** The defaults are the real `CommandStateReader`, which spawns the project's own
-  `validate.state.run` against a **deployed store**, and the real `CommandTenantKeeper`, which spawns
-  its `ensureTenant` and `reseed` — a test that queries somebody's environment, or **provisions a
-  tenant in it**, and passes while doing it. What saves an ordinary test is only that a config with no
-  `validate` block declares no command to run; rely on that deliberately. Use `FakeStateReader` and
-  `FakeTenantKeeper`, each of which records what it was asked for.
-  → [36](docs/spec/36-remote-validation.md#seams-and-why-the-fake-comes-first)
-- **The harness never generates or infers a tenant identifier, anywhere.** Environments reap tenants
-  matching a name pattern past a short age, so an invented name survives about an hour and its
-  disappearance presents as mysterious mass failure. No tenant configured is a `blocked` row **naming
-  the command or variable that would provide one** — and a `tenantEnv`'s _value_ goes into the spawn
-  env and nowhere else: the lock, the cockpit and every prompt carry the **variable's own name**.
-  → [36](docs/spec/36-remote-validation.md#tenants)
-- **A test that reads the project config layer injects `projectConfigFile`, or points `repoRoot` at
-  a temp directory.** `lubbdubb.project.json` is read from `repoRoot`, and this repo is itself a
-  LubbDubb target — the day one is committed here every test on the default starts merging it.
-  → [02](docs/spec/02-configuration.md#the-project-layer)
-- **A test touching `/api/plugin` injects `pluginCli` and a temp `desktopCredentialPath`**, or it installs into your own Claude Code. → [11](docs/spec/11-mcp-tools.md#the-plugin)
-- **Tests build a whole `System`** via `buildSystem(config, opts)` with fakes injected (`backend`,
-  `streamSpawner`, `sink`, `gitObserver`, `worktrees`, `errorMirror`) and `dbPath: ':memory:'`.
-  Prefer that seam. New tests go in `test/*.test.ts`; do not edit unrelated test files.
-- **Extending a provider means adding to the `*Api` interface _and_ its scripted fake in the same
-  change.** All provider HTTP is behind that seam; the tests touch no network.
+Most sharp edges belong to one directory and live in a `CLAUDE.md` beside its code, which Claude Code
+loads when you read or edit a file there ([Directory notes](#directory-notes)). The ones below can be
+tripped from anywhere.
 
 ### Prompts and templates
 
@@ -178,174 +83,15 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
   silent: a ticket without the watch label is created, linked, shown complete, and **never dispatched
   for**. → [13](docs/spec/13-jobs-and-tickets.md#filing-a-ticket), [15](docs/spec/15-integrations.md)
 
-### Story sequencing
-
-- **A sequence hold must fail open, on every arm.** `sequenceReadiness` is the one mechanism in the
-  book that _withholds_ work, and its failure is the quietest there is: a story held behind one that
-  never lands simply never starts, with nothing red. No order, an unaccepted one, a declined one, an
-  edge naming an issue the world does not hold, a cycle, `issueSequencing` off — every one leaves
-  every story eligible in exactly the order it has today. → [33](docs/spec/33-story-sequencing.md#fail-open)
-- **The sequence key digests membership, never movement.** Filtering the settled children out of it
-  re-proposes an order on every merge and asks an operator to re-accept the same sequence eight
-  times. → [33](docs/spec/33-story-sequencing.md#the-record)
-
 ### Dispatch
 
 - **A new `issue:<n>:…` origin is a family in `src/issueOrigins.ts`**; lint catches a template literal, not a
   concatenation. → [05](docs/spec/05-dispatcher.md#the-issue-origin-vocabulary)
-- **A new agent-dispatch rule must route through the candidate list.** An inline `raw.push` of a
-  `dispatch_*` action bypasses both the headroom cut and the Up next queue. Adding a rule is a
-  `DISPATCH_PIPELINE` entry in the position it should run, and a module under
-  `src/dispatcher/rules/` registered in `STAGES` under that id. → [05](docs/spec/05-dispatcher.md#the-rule-book)
-- **Pipeline order is load-bearing state.** `issue-appraisal` and `issue-investigate` write
-  `appraising` / `investigating` on the `StageContext` for later stages to read. Moving one below its readers silently puts two agents on one issue.
-- **The investigate label is applied once, when the appraisal asks, and never reconciled.** The appraiser's flag rides only on the `appraisal` event; storing it for a sweep to re-apply silently overrules the operator who took the label off — removing it is their _no_. → [38](docs/spec/38-bug-investigation.md#the-label)
-- **Lenses stay out of `src/dispatcher/`** (asserted structurally) — fix the file a failure names, not the assertion.
 
-### Agent runtimes
+### Agent launch
 
-- **A new agent-termination path must reap the process _subtree_, before it signals the child.**
-  `session.kill()` does this via the injected `ProcessReaper`; a direct `kill` leaves the agent's
-  shells holding the worktree as cwd, and every later dispatch onto that branch fails `EBUSY`,
-  forever. Reaping _after_ the child dies finds nothing.
-  → [10](docs/spec/10-agent-runtimes.md#reaping-the-process-subtree)
-- **A launch carries `--session-id` _or_ `--resume`, never both** — lint keeps them inside `appendSessionFlags`.
-  → [10](docs/spec/10-agent-runtimes.md#launch-arguments)
-- **A mid-run crash re-attaches through `AgentManager.resume`, which must be handed a torn-down
-  agent.** `resume` was written for boot: for an agent still in `sessions` it returns a silent
-  success and overwrites the spool key and MCP token, leaking a spool dir and leaving a **bearer
-  credential live** with nothing to revoke it. Drop the session, `disposeFileEvents` and
-  `releaseMcp` first. → [10](docs/spec/10-agent-runtimes.md#auto-resume-on-a-mid-run-crash)
-- **A _re-dispatch_ re-attaches through `spawn`'s `resumeSessionId`, never `resume`.** It writes a
-  new agent row, so there is nothing to tear down; two agent rows sharing one `sessionId` is the
-  _correct_ shape here. → [10](docs/spec/10-agent-runtimes.md#inheriting-a-conversation-on-re-dispatch)
-- **Anything in `main.ts` that can start an agent goes _below_ the signal handlers.** A Ctrl-C
-  above them takes Node's default path, which runs no handler: agents launched, not reaped, not
-  recorded. → [21](docs/spec/21-self-update.md#where-the-shutdown-handlers-are-registered)
-- **`agentMode` is `stream` or `raw`, and only `stream` runs a model.** `raw` is the mock agent and
-  what nearly every test drives, so a change asserted only there has not been asserted against a
-  model. → [10](docs/spec/10-agent-runtimes.md#the-session-contract)
-- **`PtySession.kill()` sets status `killed` _before_ signalling the process.** A synchronously
-  delivered exit would otherwise be reclassified as `failed`, firing a terminal event.
-- **`PtySession.send()` writes the text and its submitting carriage return as two separate writes**,
-  `agentSubmitDelayMs` apart. A line editor folds one burst into a paste and treats a trailing CR as a
-  literal newline. Test assertions look for the payload as its own write — do not re-glue them.
-- **Sentinel matching goes through `src/pty/sentinelScanner.ts`, never `indexOf`.** A program that
-  styles the line puts SGR escapes _inside_ the token; one matcher serves detection and stripping.
-- **The account's 5h/weekly windows are read off `rate_limit_event` beside the park, by a second
-  function that must stay one.** It fires on **every ordinary turn**, so folded into `rateLimitPark`
-  it is one edit from parking the fleet on a reading that says there is room. Freshest wins by
-  `capturedAt`, not arrival. → [10](docs/spec/10-agent-runtimes.md#the-account-usage-windows)
-
-### Agent launch and the tool channel
-
-- **Do not allow-list Bash via `claudeArgs: ["--allowedTools", …]`.** Operator args are appended
-  last, so it wins over the harness's and silently drops the `mcp__lubbdubb__*` grants. Use
-  `agentAllowedTools`, which rides in `--settings`.
-- **A tool added to `buildTools` must also be named in `MCP_TOOL_NAMES` _and_ placed in `UNIVERSAL_TOOLS` or a `RULE_TOOLS` row (`src/mcp/names.ts`).** The server id, the tool
-  names and the `mcp__<key>__<tool>` grants must agree; and an unplaced tool is granted, built and callable but in no agent's `tools/list` — named by a prompt, advertised to nobody, with `toolsForRule` failing open so nothing catches it. → [11](docs/spec/11-mcp-tools.md#launch-flags), [advertised to whom](docs/spec/11-mcp-tools.md#which-tools-an-agent-is-advertised)
-- **There are two channels, and `validation_report` is a tool on both.** The fleet's is
-  `src/mcp/tools/validationReport.ts`; the operator's own Claude Code gets `src/mcp/desktopTools.ts`
-  (`DESKTOP_TOOL_NAMES`, never `buildTools`). Editing one leaves the other on the old behaviour.
-  → [11](docs/spec/11-mcp-tools.md#the-desktop-channel)
 - **Never add `ANTHROPIC_API_KEY` to an operator's env or config to "fix" auth** (lint catches it in `src/`): the
   whole fleet moves onto API billing. Fix the login. → [02](docs/spec/02-configuration.md#secrets)
-- `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root.
-  `agentAllowedTools` plus the permission backstop complete a task unattended under `acceptEdits`.
-
-### Cockpit
-
-- **A new colour is a `:root` token registered in `web/src/cockpit/tokens.ts`** (a derived tint in `tokenTints.ts`);
-  `test/cockpitTheme.test.ts` refuses a literal anywhere else. → [17](docs/spec/17-cockpit.md#tokens)
-- **A reference is drawn with `<Ref to={ref}/>` (`web/src/components/refs.tsx`), never as text.** A
-  surface that names a goal or PR with no way there is a dead end that renders correctly. A
-  reference **never goes inside a button**: draw the name as the control and the refs beside it in a
-  `cn-refs` group. → [17](docs/spec/17-cockpit.md#links)
-- **A dispatch origin is read through `standsFor` before it is drawn or routed on.** A crash
-  recovery's requeue is dispatched at `job:<id>` and keeps the work it redoes on `Job.originRef`, so a
-  surface reading `task.originRef` literally draws an opaque job id — and, silently, `goalOfOrigin`
-  answers null, which leaves the goal whose work is out on the fleet reading as unstaffed.
-  → [17](docs/spec/17-cockpit.md#a-job-origin-stands-in-for-other-work), [13](docs/spec/13-jobs-and-tickets.md#standing-in-for-another-origin)
-- **A new piece of "where am I" state goes on `Place` (`web/src/cockpit/place.ts`), never a
-  `useState` in `useCockpit`.** The cockpit's place is the query string; state held outside it
-  breaks on the back button and on reload. → [17](docs/spec/17-cockpit.md#the-address-bar)
-
-### Git and worktrees
-
-- **`WorktreeManager.ensure(branch, base)` is reuse-first**: an existing worktree or local branch is
-  handed back and `base` is ignored. An unresolvable `base` throws rather than falling back to HEAD.
-  → [09](docs/spec/09-execution.md#worktrees)
-- **A slot handed to a _different_ branch is swept of live processes, then wiped `git clean -ffdx`.**
-  A weaker wipe hands another branch's `dist/` on as the agent's own output; an unswept one leaves a mapped
-  image Windows cannot unlink, and a refused wipe condemns it. → [09](docs/spec/09-execution.md#handing-a-slot-over)
-- **`ensure` grows the pool before it evicts a free slot still on a branch.** Evicting early burns
-  the tree a CI fix on that branch would have come back to; every re-dispatch then pays a cold
-  install, which nothing measures. → [09](docs/spec/09-execution.md#worktrees)
-- **The lease is the only thing keeping two agents out of one directory.** Anything that hands out
-  a slot goes through `WorktreeManager.ensure`; anything that frees one goes through `remove` /
-  `deleteBranch`. → [09](docs/spec/09-execution.md#the-lease)
-- **The pool bound is `RuntimeControl.cap` plus slack, read by reference on every `ensure`.**
-  Snapshot it at boot and every dispatch above the lower number is refused for want of a directory
-  and retried forever — a full "Up next" queue, an idle fleet, nothing red. A stranded slot with
-  uncommitted changes is reclaimed only at `acquire`'s dead end, only when nothing holds it, and only
-  after stashing the work to `refs/lubbdubb/salvage/…`. → [09](docs/spec/09-execution.md#exhaustion)
-- **The local run's checkout must stay outside `worktreeRoot`.** `slots()` counts every registered
-  worktree under that root, so a preview checkout in there is a pool slot: handed to an agent and
-  wiped. `localRunRoot` is separate, and only `ensurePreview` touches it.
-  → [23](docs/spec/23-local-runs.md#the-checkout)
-- **`resolveCommit` prefers `origin/<ref>` over the local ref** and returns a SHA, because the
-  harness's clone never checks the integration branch out. `GitObserver` methods stay read-only and
-  fetch-free.
-
-### Environments
-
-- **A reach verdict is three-valued, and a new reader must not fold `unknown` into `absent`.** An expired credential, a
-  missing binary and a commit that genuinely has not shipped all fail the same way, and only the last is about
-  deployment. `GitObserver.contains` answers `boolean | null`, and a probe that could not say makes **every** landing of
-  that environment `unknown`. → [24](docs/spec/24-environments.md#the-three-verdicts)
-- **A stacked pull request's squash commit is not a landing, and recording it as one holds the goal's gates for ever.**
-  Part 2's PR based on part 1's branch squashes onto that _topic_ branch — a branch that is then deleted and is an
-  ancestor of nothing — so no environment can ever hold it. Counted in `total`, the goal reads `partial` in every
-  environment for good; `newArrivals` only ever reads `reached`, so no arrival is written and every gate the arrival
-  opens stays shut, with nothing red. `unrecordedLandings` cuts on `baseBranch`, `unattributedMerges` on the node's
-  `baseRef`, and `EnvironmentDesk` reconciles what neither can see against the clone into
-  `goal_landings.on_integration`. The stacked pull request is instead recorded on its _carrier's_ commit
-  (`carriedLandings`). → [24](docs/spec/24-environments.md#what-counts-as-a-landing)
-- **A `RemoteValidationDesk` pass that stamps an arrival it did not assemble burns the guard that makes turning remote
-  validation on next month safe.** `goal_arrivals.sheeted_at` null means _not considered yet_, and the freshness guard
-  does a backfill's job — so the early return where no environment declares a `validate` block stamps **nothing**, and
-  an arrival on an environment with no `validate` block is left unstamped. Stamp on the way past and the operator who
-  turns it on gets a sheet, a spawned query and a bench row for every goal that ever arrived. →
-  [36](docs/spec/36-remote-validation.md#the-desk)
-- **Anything a sheet run owes its agent is counted at the press, or the run settles with it still owed.**
-  `runnableSelectors`, `runnableScripts`, `runnableScreens` and `runnableDrives` are four halves of one question, and a
-  check that carries only the newest of them names nothing the older ones count: the press ends the run on the spot, the
-  check stays `unrun` for ever, and the sheet reads as a run that answered. A fifth thing a run can carry is a fifth
-  entry there. → [36](docs/spec/36-remote-validation.md#a-screen-from-the-sheets-own-run)
-- **Two dispatches must never share one browser profile directory.** A persistent profile is held by one browser at a
-  time, so a remote validation run pointed at `localValidationProfileDir` refuses to start whenever a local validation
-  is up — every row it was pressed for comes back `blocked`, which is a right answer to the wrong question, with nothing
-  red. `remoteValidationProfileDir` is per environment. →
-  [36](docs/spec/36-remote-validation.md#the-browser-the-run-drives)
-- **A sheet reading is never a `WorldEvent` and never a `watch_readings` row.** Same trap as an arrival's, one subsystem
-  over: `deliveryHold` expires a standing delivery verdict on any world event matching the goal's issue ref, so a
-  reading written as one un-parks the goal it just reported on. →
-  [36](docs/spec/36-remote-validation.md#what-a-finding-does-and-what-it-must-never-do)
-- **An arrival must never be written as a `WorldEvent`.** `deliveryHold` expires a standing delivery
-  verdict on **any** world event matching the goal's issue ref, so an arrival written as one un-parks
-  the goal it just announced and hands delivered work back to the fleet. Arrivals have their own
-  table and wire list; the cockpit merges them at the feed's door.
-  → [24](docs/spec/24-environments.md#in-the-cockpit)
-- **An arrival is announced only if its reading is fresh, and stamped either way.** Drop either and
-  the deployment that takes the build comments on every ticket that ever shipped.
-  → [24](docs/spec/24-environments.md#announcing-an-arrival)
-- **`DeliveryCloseOutDesk` runs below `ValidationReadyDesk` in the pulse**, because it holds the
-  close while the goal's `validate` row is open. Above it, both arrive together.
-  → [24](docs/spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time)
-- **A landing is recorded by sweeping for unattributed merges, never on the merge itself.** The
-  merge SHA has a `closedPrWindowMs` shelf life, so a hook on the transition loses the landing to any
-  restart that straddles it. The desk runs **immediately below `graph.record`**, because attribution
-  walks the graph's `parentRef` chain. → [24](docs/spec/24-environments.md#recording-a-landing)
 
 ### Errors and config
 
@@ -355,15 +101,29 @@ INDEX IF NOT EXISTS` never re-predicates an index that already exists, so wideni
 - **No secret is ever a config key.** `GITHUB_TOKEN`, `AZURE_DEVOPS_PAT` and `LUBBDUBB_TOKEN` come
   from the environment. Precedence is explicit overrides → env → `lubbdubb.config.json` →
   `lubbdubb.project.json` → defaults. → [02](docs/spec/02-configuration.md)
-- **A config layer carries only what its file said.** `mergeLayers` never folds `DEFAULTS` in; that
-  happens once, in `mergeConfig`. A layer that arrives dense does not merge, it replaces — and
-  shadows the project file with a policy no file on the machine states.
-  → [02](docs/spec/02-configuration.md#precedence)
-- **A route refusal is a returned value and a 400, not a throw** — `setErrorHandler` means _unanticipated_. Handlers
-  take `checked` input (asserted). → [16](docs/spec/16-http-api.md#request-validation)
-- **A new route goes in the `src/server/routes/` module that owns its group**; a new group is a new
-  module plus an entry in `app.ts`'s `ROUTE_MODULES`. A schema encoding a domain rule lives with the
-  rule — `ShortfallBody` is in `src/delivery/shortfall.ts`. → [16](docs/spec/16-http-api.md#shape)
+
+## Directory notes
+
+Each holds the sharp edges for the code beside it. Read the one for a directory before changing it.
+
+- [`src/agents/CLAUDE.md`](src/agents/CLAUDE.md) — agent runtimes: reaping, session flags, resume, `agentMode`, usage windows, launch args
+- [`src/config/CLAUDE.md`](src/config/CLAUDE.md) — config layers and `mergeLayers`
+- [`src/dispatcher/CLAUDE.md`](src/dispatcher/CLAUDE.md) — the rule book, pipeline order, the investigate label, lenses
+- [`src/environments/CLAUDE.md`](src/environments/CLAUDE.md) — reach verdicts, landings, arrivals
+- [`src/git/CLAUDE.md`](src/git/CLAUDE.md) — `resolveCommit` and `GitObserver`
+- [`src/integrations/CLAUDE.md`](src/integrations/CLAUDE.md) — providers: label authorship, review-reply attribution, `*Api` fakes
+- [`src/mcp/CLAUDE.md`](src/mcp/CLAUDE.md) — the tool channel: `buildTools` names, the desktop channel
+- [`src/pets/CLAUDE.md`](src/pets/CLAUDE.md) — one-shot ids
+- [`src/pool/CLAUDE.md`](src/pool/CLAUDE.md) — `PoolDesk`
+- [`src/pty/CLAUDE.md`](src/pty/CLAUDE.md) — `PtySession` and sentinel matching
+- [`src/sequence/CLAUDE.md`](src/sequence/CLAUDE.md) — story sequencing
+- [`src/server/CLAUDE.md`](src/server/CLAUDE.md) — `main.ts` signal handlers, routes
+- [`src/store/CLAUDE.md`](src/store/CLAUDE.md) — migrations, partial indexes, backfills, issue verdicts
+- [`src/system/CLAUDE.md`](src/system/CLAUDE.md) — pulse desk order
+- [`src/validation/CLAUDE.md`](src/validation/CLAUDE.md) — check `area`, `fleetCanStart`, failed checks, tenants, the remote desk and sheets
+- [`src/worktree/CLAUDE.md`](src/worktree/CLAUDE.md) — the slot pool, the lease, the local-run checkout
+- [`test/CLAUDE.md`](test/CLAUDE.md) — fakes every test must inject, and the `buildSystem` seam
+- [`web/CLAUDE.md`](web/CLAUDE.md) — the cockpit: tokens, refs, `standsFor`, `Place`
 
 ## Where to read further
 

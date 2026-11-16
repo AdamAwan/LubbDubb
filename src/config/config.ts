@@ -26,6 +26,7 @@ import { dropRetiredKeys, refuseRemovedKeys } from './retiredKeys.js';
 import {
   validateAgentMode,
   validateAppErrors,
+  validateFleetStall,
   validatePool,
   validateReview,
   validateWorkItemStates,
@@ -98,6 +99,8 @@ export interface Config {
   remoteValidation: RemoteValidationPolicy;
   ci: CiPolicy;
   upNextOverrideTtlMs: number;
+  /** Consecutive cycles with work above the cut-line, room under the cap and nothing started before the fleet reads as stalled; 0 turns it off. */
+  fleetStallCycles: number;
   agentMode: 'stream' | 'raw';
   agentPermissionMode: string;
   agentModels?: AgentModels;
@@ -269,6 +272,7 @@ const DEFAULTS: Config = {
   remoteValidation: DEFAULT_REMOTE_VALIDATION,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
+  fleetStallCycles: 10,
   agentMode: 'stream',
   agentPermissionMode: 'auto',
   agentAllowedTools: [
@@ -486,6 +490,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   validateEnvironments(merged.environments);
 
   validateAppErrors(merged);
+  validateFleetStall(merged);
 
   validateOperatorTenants(merged.remoteValidation.tenants, merged.environments);
 

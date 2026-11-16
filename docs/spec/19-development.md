@@ -5,7 +5,7 @@
 - **knip runs with every rule at `error`, and the fix for an unused type or helper is to drop the `export`**, never an ignore list. → [§](#why-the-tests-run-from-a-build-directory) · _no test_
 - **The check lock never shows a lockfile that names nobody, and a lockfile naming nobody is never grounds on its own to remove it** — that window let two runs each budget every core. → [§](#the-lock) · `test/checkLock.test.ts`
 - **A test never resolves a repo file relative to its own module; it goes through `test/support/paths.ts`** because tests run from `.testbuild/`, where such a path reads nothing. → [§](#why-the-tests-run-from-a-build-directory) · _no test_
-- **Every backticked repo path in the docs exists, `CLAUDE.md` stays under 400 lines, and the index and `spec/` agree** — confident wrongness in a doc is acted on by the next reader. → [§](#what-holds-the-documentation-honest) · `test/docsReferences.test.ts`
+- **Every backticked repo path in the docs exists, `CLAUDE.md` stays under 400 lines, every link in a `CLAUDE.md` resolves and the root lists each directory note, and the index and `spec/` agree** — confident wrongness in a doc is acted on by the next reader. → [§](#what-holds-the-documentation-honest) · `test/docsReferences.test.ts`
 - **A guard is added only when it has no false positive on the tree as it stands**, and its message says what to do instead. → [§](#guards) · _no test_
 - **With `backend` injected and no `streamSpawner`, a stream launch is refused** — otherwise a test that believes its agents are fakes launches a real `claude` on the developer's login. → [§](#why-a-faked-backend-refuses-a-stream-launch) · `test/streamSpawnRefusal.test.ts`
 - **A test that dispatches a code agent injects `worktrees`** or it cuts a real branch in the developer's checkout that nothing deletes. → [§](#why-a-test-must-not-dispatch-through-the-real-worktree-manager) · _no test_
@@ -272,7 +272,7 @@ stated in the present tense, acted on by the next reader. That reader is usually
 `CLAUDE.md` reaches every one of them before they read a line of code.
 
 The position taken is that a claim is worth asserting mechanically when checking it is **cheap,
-decidable, and cannot itself go stale**. Four are, and `test/docsReferences.test.ts` holds them:
+decidable, and cannot itself go stale**. Five are, and `test/docsReferences.test.ts` holds them:
 
 - **Every backticked repo-relative path exists.** A moved or deleted module leaves every document
   that pointed at it saying something false, with nothing going red. This is the largest class of
@@ -280,7 +280,13 @@ decidable, and cannot itself go stale**. Four are, and `test/docsReferences.test
   references the day it was written.
 - **`CLAUDE.md` stays under 400 lines.** Not a style rule — the file is loaded into every agent's
   context on every dispatch, so its length is a recurring cost, and it reached 2,222 lines by nobody
-  noticing. Growth past the ceiling means a passage belongs in a spec.
+  noticing. Growth past the ceiling means a passage belongs in a spec, or in a directory note.
+- **Every relative link in a `CLAUDE.md` resolves, and the root lists every directory note.** A
+  sharp edge that belongs to one directory lives in a `CLAUDE.md` beside that code — `src/store/`,
+  `test/`, `web/` and the rest — which Claude Code loads only when an agent reads or edits a file
+  there, so the always-loaded root pays for the edges that can be tripped from anywhere and nothing
+  else. A note's links are written from its own directory, and a note the root does not list is one
+  nobody is sent to.
 - **The index and `spec/` agree.** A document neither listed nor existing is the navigation failing
   silently.
 - **Every spec opens with `## Invariants`.** Three to ten one-line rules, each the thing a change could

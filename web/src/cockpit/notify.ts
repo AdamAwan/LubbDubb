@@ -123,6 +123,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   description_note: 'The diff raises something your description does not',
   shortfall: 'Delivered work did not reach its goal',
   intake: 'The appraisal could not say a goal is workable',
+  questions: 'A story is waiting on open questions',
   findings: 'An investigation’s findings are waiting on your call',
   permission: 'An agent wants a command',
   profile: 'A goal is waiting on which profile to run on',
@@ -143,6 +144,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   bot_pr: 'A bot pull request on you is failing',
   upgrade: 'An update to the harness is waiting',
   project_pull: 'The project checkout cannot be pulled',
+  fleet_stall: 'The fleet has work and room, and is starting nothing',
 };
 
 export function notifySnapshot(state: AppState): NotifySnapshot {

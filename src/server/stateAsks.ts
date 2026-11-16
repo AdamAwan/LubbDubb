@@ -32,6 +32,7 @@ const ASK_READS: Record<Exclude<StateSection, 'control' | 'asks'>, (r: Reads) =>
   harness: (r) => ({
     config: { watchLabel: r.watchLabel, desktopFolder: r.config.repoRoot },
     build: r.system.updates.reading(),
+    fleetStall: r.system.fleetStall.reading(),
     recovery: r.system.recovery.pending(),
   }),
   goals: (r) => ({
@@ -55,7 +56,7 @@ const ASK_READS: Record<Exclude<StateSection, 'control' | 'asks'>, (r: Reads) =>
     agents: r.history().agents,
     parkedOnLimit: r.system.agents.limitedAgentIds(),
   }),
-  queue: (r) => ({ jobs: r.store.jobs.listJobs() }),
+  queue: (r) => ({ jobs: r.store.jobs.listJobs(), upcoming: r.system.harness.upcoming }),
   inbox: (r) => ({ humanTasks: r.humanTasks, ...inbox(r) }),
   activity: (r) => ({ decisions: r.shiftLog }),
 };

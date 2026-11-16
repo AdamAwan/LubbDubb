@@ -65,9 +65,7 @@ export function buildStateSections(
   opts?: SnapshotOpts,
 ): Partial<CockpitState> {
   const r = snapshotReads(system, opts);
-  const out: Partial<CockpitState> = {
-    refUrls: r.refUrls,
-  };
+  const out: Partial<CockpitState> = { refUrls: r.refUrls };
   if (want.has('harness')) Object.assign(out, harnessSection(r));
   if (want.has('control')) Object.assign(out, controlSection(r));
   if (want.has('goals')) Object.assign(out, goalsSection(r));
@@ -178,6 +176,7 @@ function harnessSection(
   | 'config'
   | 'recovery'
   | 'build'
+  | 'fleetStall'
   | 'pets'
   | 'localRun'
   | 'localRunTargets'
@@ -229,6 +228,7 @@ function harnessSection(
     },
     recovery: system.recovery.pending(),
     build: system.updates.reading(),
+    fleetStall: system.fleetStall.reading(),
     pets: system.pets.state(),
     localRun: localRunView(system.localRun.current(), system.localRun, system.localRunWatch.reading(), (ref, origin) =>
       localRunRefFacts(ref, planPartsOf(origin), {
