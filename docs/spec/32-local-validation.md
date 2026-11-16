@@ -197,7 +197,8 @@ burned into the video itself, so the cockpit needs no chapter list of its own.
 directory the desk lists and the file route serves. **A missing video tool is not a finding and not
 `blocked`**: an operator whose own `localValidation.browser` does not enable the capability gets an
 unrecorded run, which is what they had before. The remote run drives the same server, so the tools are
-on offer there too; its briefing does not yet ask for a recording.
+on offer there too, and its briefing asks for one in the same words — `recordingInstructions`
+(`src/validation/recording.ts`) is the one copy ([36](36-remote-validation.md#the-runs-recording)).
 
 The servers are recorded on the **task row** (`tasks.mcp_servers`) rather than re-derived at spawn,
 `model`'s reason: `AgentManager.resume` rebuilds a launch from the row, and an agent re-attached
@@ -353,7 +354,7 @@ before it is joined and the join is re-confined afterwards.
 
 What is listed is every image (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`) and video (`.webm`, `.mp4`)
 in the output directory, read by the desk into the row's `screenshots` column at report time. The
-one table of which extension is which is `mediaKind` (`src/validation/local/media.ts`): the desk
+one table of which extension is which is `mediaKind` (`src/validation/media.ts`): the desk
 lists by it, and the view tags each file with its `kind`, so the cockpit draws a `<video>` or an
 `<img>` without an extension list of its own. The route streams the file rather than reading it into
 memory, but answers it whole, with no range requests, so a long recording may not seek until it has

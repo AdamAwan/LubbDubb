@@ -70,13 +70,10 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
     artefacts: 'TEXT',
     capture: 'TEXT',
   },
-  // A run row a dispatched agent reports against: which task claimed it, and where the report and
-  // the artefacts landed. Columns on a table that was new one release ago, which is what this entry
-  // exists for — without them they are invisible on every database from before they existed.
-  // Where the run agent said the runner's own selector listing landed. No backfill: null means *no
-  // listing was reported on this run*, which is true of every run written before the column and
-  // stays true — there is nothing to compute it from and nothing that would be right to invent.
-  remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT', listing_path: 'TEXT' },
+  // Which task claimed a run, where its report, artefacts and listing landed, and its video by name —
+  // invisible on older databases without this entry. No backfill: null is *none reported*, true of
+  // every run written before the column, and it stays true.
+  remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT', listing_path: 'TEXT', recording: 'TEXT' },
   remote_tenants: {},
   // Which command a preparation is running and the runner holding it, so a restart can find the
   // command again rather than close a row whose process is still going. Null on a row from before the
@@ -438,6 +435,7 @@ export class RemoteValidationStore {
         reportPath: null,
         listingPath: null,
         artefacts: null,
+        recording: null,
       };
       this.ctx
         .prep(
@@ -472,24 +470,18 @@ export class RemoteValidationStore {
       note?: string | null;
       reportPath?: string | null;
       artefacts?: string | null;
+      recording?: string | null;
     },
   ): RemoteRun | null {
+    const { endedSha = null, note = null, reportPath = null, artefacts = null, recording = null } = result;
     const info = this.ctx
       .prep(
         `UPDATE remote_runs SET status=@status, ended_sha=COALESCE(@endedSha, ended_sha),
             note=COALESCE(@note, note), report_path=COALESCE(@reportPath, report_path),
-            artefacts=COALESCE(@artefacts, artefacts), ended_at=@now
+            artefacts=COALESCE(@artefacts, artefacts), recording=COALESCE(@recording, recording), ended_at=@now
           WHERE id=@id AND status IN ${LIVE_RUN_SQL}`,
       )
-      .run({
-        id,
-        status: result.status,
-        endedSha: result.endedSha ?? null,
-        note: result.note ?? null,
-        reportPath: result.reportPath ?? null,
-        artefacts: result.artefacts ?? null,
-        now: this.ctx.now(),
-      });
+      .run({ id, status: result.status, now: this.ctx.now(), endedSha, note, reportPath, artefacts, recording });
     return info.changes === 0 ? null : this.getRemoteRun(id);
   }
 

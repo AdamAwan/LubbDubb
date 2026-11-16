@@ -55,8 +55,7 @@ proposal that is declined is deleted too; the rest is in the git history. Two of
 follow-ups to the validation page an operator answers once ([36](spec/36-remote-validation.md#the-ok)):
 [`proposals/watch-length.md`](proposals/watch-length.md) and
 [`proposals/owed-telemetry.md`](proposals/owed-telemetry.md). A third,
-[`proposals/video-proof.md`](proposals/video-proof.md), carries recorded validation runs onto hosted
-environments.
+[`proposals/video-proof.md`](proposals/video-proof.md), records several goals in one hosted run.
 
 A **build plan** — the staged order a spec still marked unbuilt gets built in — lives under `plans/`
 while it is being worked and is **deleted by the change that finishes the last stage**, for the same

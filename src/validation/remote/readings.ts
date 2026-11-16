@@ -1,4 +1,4 @@
-import { copyFile, mkdir } from 'node:fs/promises';
+import { copyFile, mkdir, readdir } from 'node:fs/promises';
 import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import type { ErrorRecorder } from '../../errorLog.js';
@@ -6,6 +6,7 @@ import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { EnvironmentProber } from '../../environments/prober.js';
 import type { Store } from '../../store/store.js';
 import type { RemoteRun, RemoteSheetRow, ValidationCheck } from '../../types.js';
+import { mediaKind } from '../media.js';
 import { demandsProof } from '../report.js';
 import { validationGoalDir } from '../resources.js';
 import { handsBackAScreen, stepArea, stepDriven, stepScript } from '../steps.js';
@@ -25,6 +26,8 @@ interface ReadingDeps {
   read?: (path: string) => Promise<string>;
   /** How a capture is moved out of the run's artefacts. Injected so a test lays no image on disk. */
   keep?: (from: string, to: string) => Promise<void>;
+  /** How the run's artefacts directory is listed for its recording. Injected for the same reason. */
+  list?: (dir: string) => Promise<string[]>;
 }
 
 interface Settled {
@@ -58,9 +61,11 @@ interface Refused {
 export class RemoteReadingDesk {
   private readonly read: (path: string) => Promise<string>;
   private readonly keep: (from: string, to: string) => Promise<void>;
+  private readonly list: (dir: string) => Promise<string[]>;
 
   constructor(private readonly deps: ReadingDeps) {
     this.read = deps.read ?? ((path) => readFile(path, 'utf8'));
+    this.list = deps.list ?? ((dir) => readdir(dir));
     this.keep =
       deps.keep ??
       (async (from, to) => {
@@ -139,11 +144,13 @@ export class RemoteReadingDesk {
     // commits it straddled: a reading with no commit beside it is a reading of a product nobody can
     // name, and only the end of the run knows what the second one was.
     store.remoteValidation.attributeRemoteReadings(run.id, endedSha);
+    const recording = await this.keepRecording(run);
     const ended = store.remoteValidation.endRemoteRun(run.id, {
       status: 'ended',
       endedSha,
       reportPath: input.reportPath,
       artefacts: input.artefacts,
+      recording,
     });
     return { ok: true, run: ended ?? run, read, blocked, wrote, captured, kept, moved };
   }
@@ -299,7 +306,7 @@ export class RemoteReadingDesk {
     checkId: string,
     name: string,
   ): Promise<{ ok: true; capture: string } | { ok: false; detail: string }> {
-    const from = join(remoteValidationRunDir(this.deps.validationRoot, run.goalRef, run.id), 'artefacts', name);
+    const from = join(this.artefactsDir(run), name);
     const capture = `capture-${slug(checkId)}-${slug(run.id)}${slug(extname(name))}`;
     try {
       await this.keep(from, join(validationGoalDir(this.deps.validationRoot, run.goalRef), capture));
@@ -311,6 +318,48 @@ export class RemoteReadingDesk {
           `the report names \`${name}\` as the screen for \`${checkId}\`, and it could not be taken out of the ` +
           `run's artefacts — ${(err as Error).message}. There is nothing to look at, so this row is not a reading.`,
       };
+    }
+  }
+
+  /**
+   * The run's video, kept the way a capture is: moved out of the artefacts, which are swept, into the
+   * goal's validation directory under a name the harness composes. The report never names it — the
+   * browser saved it into the artefacts directory, and the last video there by name is the run's —
+   * the browser names them by time. A run with
+   * none recorded nothing, and a copy that fails costs the recording and no reading.
+   */
+  private artefactsDir(run: RemoteRun): string {
+    return join(remoteValidationRunDir(this.deps.validationRoot, run.goalRef, run.id), 'artefacts');
+  }
+
+  private async keepRecording(run: RemoteRun): Promise<string | null> {
+    const dir = this.artefactsDir(run);
+    let names: string[];
+    try {
+      names = await this.list(dir);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT')
+        this.deps.errors?.record({
+          source: 'cycle',
+          message: `listing the artefacts of run ${run.id} on ${run.environment} failed: ${(err as Error).message}`,
+        });
+      return null;
+    }
+    const name = names
+      .filter((n) => mediaKind(n) === 'video')
+      .sort()
+      .at(-1);
+    if (name === undefined) return null;
+    const recording = `recording-${slug(run.id)}${slug(extname(name))}`;
+    try {
+      await this.keep(join(dir, name), join(validationGoalDir(this.deps.validationRoot, run.goalRef), recording));
+      return recording;
+    } catch (err) {
+      this.deps.errors?.record({
+        source: 'cycle',
+        message: `keeping the recording of run ${run.id} on ${run.environment} failed: ${(err as Error).message}`,
+      });
+      return null;
     }
   }
 

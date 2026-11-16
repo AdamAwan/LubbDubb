@@ -538,6 +538,21 @@ test('a browser that will not start is `blocked` and never `failed`', async () =
   }
 });
 
+test('a run with a browser is asked to record itself, chaptered by check', async () => {
+  const b = bench();
+  try {
+    seed(b);
+    press(b.store);
+    const { prompt } = dispatchOf((await dispatcher().decide(ctx({ remoteRuns: briefs(b.store) }))).actions);
+    assert.match(prompt, /browser_start_video/);
+    assert.match(prompt, /browser_video_chapter/);
+    assert.match(prompt, /the id of the check it serves/);
+    assert.match(prompt, /not a reason to report `blocked`/, 'a run that cannot record is still a run');
+  } finally {
+    b.close();
+  }
+});
+
 test('with no browser configured the prompt says so and the dispatch carries none', async () => {
   const b = bench();
   try {

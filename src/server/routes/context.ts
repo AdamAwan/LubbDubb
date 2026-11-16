@@ -13,6 +13,7 @@ export interface RouteContext {
   localValidationFileSigner?: (id: string, name: string) => string;
   validationCaptureSigner?: (originRef: string, checkId: string) => string;
   remoteCaptureSigner?: (runId: string, rowId: string) => string;
+  remoteRecordingSigner?: (runId: string) => string;
   artifactKey: Buffer | null;
   /** The last reading `/api/setup` took, which the ask queue's config rows are read off. */
   setup: { latest: SetupReading | null };

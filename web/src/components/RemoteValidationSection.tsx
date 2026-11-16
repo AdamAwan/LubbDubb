@@ -173,6 +173,9 @@ function Gate({
         )}
         {!tenantAbove && <ReseedControl tenant={sheet.tenant} onReseed={() => controls.onReseed(sheet.environment)} />}
       </div>
+      {sheet.run?.recordingUrl != null && (
+        <video className="cn-recording" src={sheet.run.recordingUrl} controls preload="metadata" />
+      )}
       {!tenantAbove && <PrepareLine tenant={sheet.tenant} />}
       {!tenantAbove && sheet.tenant.reseedable && sheet.tenant.destructive && preparing(sheet.tenant) === null && (
         <span className="cn-sub cn-sheet-warn">{reseedWarning(sheet.tenant)}</span>
