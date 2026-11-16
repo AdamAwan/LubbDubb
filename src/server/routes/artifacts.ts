@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { readFileSync, realpathSync, statSync } from 'node:fs';
+import { createReadStream, readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import { mintArtifactCapability, verifyArtifactCapability } from '../artifactCapability.js';
 import { z } from 'zod';
@@ -95,8 +95,9 @@ function registerLocalValidationFiles(app: FastifyInstance, { system, artifactKe
         .header('content-type', artifactMime(file))
         .header('content-security-policy', 'sandbox')
         .header('x-content-type-options', 'nosniff')
-        .header('cache-control', 'private, max-age=300, immutable');
-      return reply.send(readFileSync(file));
+        .header('cache-control', 'private, max-age=300, immutable')
+        .header('content-length', statSync(file).size);
+      return reply.send(createReadStream(file));
     }),
   );
 }
@@ -317,7 +318,11 @@ const ARTIFACT_MIME: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
   '.pdf': 'application/pdf',
+  '.webm': 'video/webm',
+  '.mp4': 'video/mp4',
 };
 
 function artifactMime(file: string): string {

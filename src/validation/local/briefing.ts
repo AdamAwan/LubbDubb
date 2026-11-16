@@ -102,7 +102,24 @@ function browserSection(browserKey: string | null, outputDir: string): string {
     `say the browser was unavailable and name it. Do not report \`failed\` — a failure dispatches an agent to ` +
     `fix a defect, and there is no defect here.\n\n` +
     `Save a screenshot of anything you report, into \`${outputDir}\`. They are drawn beside your findings on ` +
-    `the goal's page, and a finding with a picture is one nobody has to reproduce to believe.\n`
+    `the goal's page, and a finding with a picture is one nobody has to reproduce to believe.\n\n` +
+    recordingSection(browserKey)
+  );
+}
+
+function recordingSection(browserKey: string): string {
+  return (
+    `### Record the run\n\n` +
+    `The operator judges this run by watching it, so record it as a video. Once the application is open:\n\n` +
+    `1. \`browser_start_video\`, with **no** \`filename\` — the video is then saved into the directory above, ` +
+    `which is where the goal's page looks for it. Pass \`cursor: true\`.\n` +
+    `2. \`browser_video_show_actions\`, so every click and keystroke is labelled on screen.\n` +
+    `3. Before each step of your plan, \`browser_video_chapter\` with a short title naming it — the check's ` +
+    `letter where it serves one. The chapters are how somebody skips to the step they care about.\n` +
+    `4. \`browser_stop_video\` once the last step is done, **before** \`local_validation_report\`. A video that ` +
+    `is never stopped is never written.\n\n` +
+    `These tools are on the \`${browserKey}\` server only where this deployment enabled them. If they are not ` +
+    `there, carry on without a recording: it is not a finding and it is not a reason to report \`blocked\`.\n`
   );
 }
 

@@ -323,6 +323,18 @@ test('a configured browser is offered as a claim to check, not as a fact', async
   assert.match(prompt, /Do not report `failed`/);
 });
 
+test('a configured browser is asked to record the run, and a missing recorder is not a block', async () => {
+  const plan = await rules().decide(ctx());
+  const action = plan.actions.find((a) => 'originRef' in a && a.originRef === 'issue:12:validate-local:lv1');
+  const prompt = (action as unknown as { prompt: string }).prompt;
+
+  assert.ok(DEFAULT_LOCAL_VALIDATION.browser?.args.includes('devtools'), 'the default browser can record');
+  assert.match(prompt, /browser_start_video/);
+  assert.match(prompt, /browser_video_chapter/);
+  assert.match(prompt, /browser_stop_video/);
+  assert.match(prompt, /not a reason to report `blocked`/);
+});
+
 test('with no browser configured the prompt says so rather than leaving the agent to find out', async () => {
   const plan = await rules({ instruction: '', browser: null }).decide(ctx());
   const action = plan.actions.find((a) => 'originRef' in a && a.originRef === 'issue:12:validate-local:lv1');
@@ -558,6 +570,33 @@ test('a screenshot is served from the row’s own directory and nowhere else', a
     url: `/local-validations/${validation.id}/files/${encodeURIComponent('../../secret')}`,
   });
   assert.equal(escaped.statusCode, 400);
+
+  await app.close();
+  system.store.close();
+});
+
+test('a recording is listed beside the screenshots and served as video', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  liveRun(system);
+  const validation = request(system);
+  system.store.localValidations.markLocalValidationDispatched(validation.id, 'task-x');
+  const agent = spawnAgent(system, `issue:12:validate-local:${validation.id}`);
+  const dir = system.localValidations.outputDir(validation);
+  writeFileSync(join(dir, 'shot.png'), 'not really a png');
+  writeFileSync(join(dir, 'video-1.webm'), 'not really a video');
+  writeFileSync(join(dir, 'notes.txt'), 'not media');
+
+  const reported = await callTool(system, agent, 'local_validation_report', { result: 'passed', summary: 'it worked' });
+  assert.ok(!reported.isError, reported.text);
+  assert.deepEqual(system.store.localValidations.getLocalValidation(validation.id)?.screenshots, [
+    'shot.png',
+    'video-1.webm',
+  ]);
+
+  const served = await app.inject({ method: 'GET', url: `/local-validations/${validation.id}/files/video-1.webm` });
+  assert.equal(served.statusCode, 200);
+  assert.equal(served.headers['content-type'], 'video/webm');
 
   await app.close();
   system.store.close();

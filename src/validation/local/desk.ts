@@ -4,6 +4,7 @@ import type { ErrorRecorder } from '../../errorLog.js';
 import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
 import type { LocalRun, LocalValidation, LocalValidationFinding, Task } from '../../types.js';
+import { mediaKind } from './media.js';
 import { localValidationOriginParts, localValidationOutputDir } from './origin.js';
 import { localValidationIsOpen, validationRunStale } from './stale.js';
 
@@ -18,8 +19,6 @@ interface LocalValidationDeskDeps {
   validationRoot: string;
   errors: ErrorRecorder;
 }
-
-const IMAGE = /\.(png|jpe?g|gif|webp|avif)$/i;
 
 export class LocalValidationDesk extends EventEmitter {
   constructor(private readonly deps: LocalValidationDeskDeps) {
@@ -110,7 +109,7 @@ export class LocalValidationDesk extends EventEmitter {
       summary: result.summary,
       findings: result.findings,
       visited: result.visited,
-      screenshots: this.screenshots(row),
+      screenshots: this.media(row),
       note: result.status === 'blocked' ? result.summary : null,
     });
     if (written === null)
@@ -150,18 +149,18 @@ export class LocalValidationDesk extends EventEmitter {
     }
   }
 
-  private screenshots(row: LocalValidation): string[] {
+  private media(row: LocalValidation): string[] {
     const dir = this.outputDir(row);
     try {
       if (!existsSync(dir)) return [];
       return readdirSync(dir, { withFileTypes: true })
-        .filter((entry) => entry.isFile() && IMAGE.test(entry.name))
+        .filter((entry) => entry.isFile() && mediaKind(entry.name) !== null)
         .map((entry) => entry.name)
         .sort();
     } catch (err) {
       this.deps.errors.record({
         source: 'cycle',
-        message: `Could not read the screenshots of a local validation of ${row.originRef}: ${(err as Error).message}`,
+        message: `Could not read the screenshots and recordings of a local validation of ${row.originRef}: ${(err as Error).message}`,
       });
       return [];
     }

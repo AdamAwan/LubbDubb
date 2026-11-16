@@ -182,6 +182,23 @@ in the goal.
 perfectly well; the prompt says there is no browser and the agent reports `blocked` for any step that
 needs a screen rather than describing one it did not see.
 
+### The recording
+
+The run is **recorded as a video**, because the operator judges it by watching it: a video of the
+steps is evidence nobody has to reproduce to believe, where a summary is the agent's own account. The
+default browser is launched with `--caps devtools`, which gives it `browser_start_video`,
+`browser_video_show_actions`, `browser_video_chapter` and `browser_stop_video`. The briefing asks the
+agent to start recording once the application is open, label every action on screen, open a chapter
+before each step of its plan — named by the check's letter where it serves one — and stop the
+recording before it reports, since a video that is never stopped is never written. Chapter cards are
+burned into the video itself, so the cockpit needs no chapter list of its own.
+
+**No `filename` is passed**, so the video lands in `{outputDir}` under the browser's own name — the one
+directory the desk lists and the file route serves. **A missing video tool is not a finding and not
+`blocked`**: an operator whose own `localValidation.browser` does not enable the capability gets an
+unrecorded run, which is what they had before. The remote run drives the same server, so the tools are
+on offer there too; its briefing does not yet ask for a recording.
+
 The servers are recorded on the **task row** (`tasks.mcp_servers`) rather than re-derived at spawn,
 `model`'s reason: `AgentManager.resume` rebuilds a launch from the row, and an agent re-attached
 without the server it was launched with comes back holding a conversation full of tool calls it can
@@ -268,10 +285,10 @@ agent that crashed, was killed or spent its stall park leaves a row nobody will 
 
 Two live keys, deep-merged, project-layerable ([02](02-configuration.md)):
 
-| Key                           | Default                                                          | What it is                                                                                                                    |
-| ----------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `localValidation.instruction` | `''`                                                             | What a validating agent is told about reaching **this** environment: which URL is which, how to sign in, what to leave alone. |
-| `localValidation.browser`     | `npx -y @playwright/mcp@latest --output-dir … --user-data-dir …` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                            |
+| Key                           | Default                                                                          | What it is                                                                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `localValidation.instruction` | `''`                                                                             | What a validating agent is told about reaching **this** environment: which URL is which, how to sign in, what to leave alone. |
+| `localValidation.browser`     | `npx -y @playwright/mcp@latest --output-dir … --user-data-dir … --caps devtools` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                            |
 
 **The split with the prompt is the whole design.** The `local-validation` template says how to build
 a test plan and how to run one, which is the same job on every deployment; the instruction says how
@@ -324,15 +341,23 @@ there is not.
 
 It draws the status and its lamp, the ref and short commit, doors to the validator and the fix agent,
 Call it off while one is in flight, the summary, the findings with their severities and pages, the
-screenshots, the pages visited, and the plan under a fold. A `passed` run reads a step back, the way
+recording as a player above the screenshots, the pages visited, and the plan under a fold. A `passed` run reads a step back, the way
 a settled check does one card over.
 
-**The screenshots are served like attachments** — `GET /local-validations/:id/files/:name`, outside
+**The screenshots and the recording are served like attachments** — `GET /local-validations/:id/files/:name`, outside
 `/api`, on a per-file capability minted into the snapshot
-([16](16-http-api.md)). An `<img src>` carries no `Authorization` header, so a path the browser
+([16](16-http-api.md)). An `<img src>` or `<video src>` carries no `Authorization` header, so a path the browser
 assembled would 401 on every authenticated deployment while working perfectly on an open one. The
 directory comes from the stored row and the name from the request, so the name is refused as a path
 before it is joined and the join is re-confined afterwards.
+
+What is listed is every image (`.png`, `.jpg`, `.gif`, `.webp`, `.avif`) and video (`.webm`, `.mp4`)
+in the output directory, read by the desk into the row's `screenshots` column at report time. The
+one table of which extension is which is `mediaKind` (`src/validation/local/media.ts`): the desk
+lists by it, and the view tags each file with its `kind`, so the cockpit draws a `<video>` or an
+`<img>` without an extension list of its own. The route streams the file rather than reading it into
+memory, but answers it whole, with no range requests, so a long recording may not seek until it has
+loaded.
 
 The **local run panel** carries the same control as `Validate #N`, while the environment is running
 and idle. The swap question cannot arise there — the run in front of it is the goal — so the only

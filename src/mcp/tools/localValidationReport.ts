@@ -76,7 +76,7 @@ export const localValidationReport: ToolFactory = ({ deps, task, ok }) => ({
     return ok({
       reported: row.status,
       findings: row.findings.length,
-      screenshots: row.screenshots.length,
+      media: row.screenshots.length,
       means:
         row.status === 'failed'
           ? `it is on the goal's page now, and an agent is dispatched to ${row.ref} to fix what you listed. Your run is over.`

@@ -12,7 +12,16 @@ export const DEFAULT_LOCAL_VALIDATION: LocalValidationPolicy = {
   browser: {
     key: 'browser',
     command: 'npx',
-    args: ['-y', '@playwright/mcp@latest', '--output-dir', '{outputDir}', '--user-data-dir', '{profileDir}'],
+    args: [
+      '-y',
+      '@playwright/mcp@latest',
+      '--output-dir',
+      '{outputDir}',
+      '--user-data-dir',
+      '{profileDir}',
+      '--caps',
+      'devtools',
+    ],
   },
 };
 
