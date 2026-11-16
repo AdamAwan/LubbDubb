@@ -1452,19 +1452,20 @@ The line [above](#what-it-may-do-and-what-it-may-not) is that this channel settl
 "Needs you". Held to that, each kind of ask the rail draws either has its answer here or
 a stated reason it does not:
 
-| Ask                                                              | Answered here by                                                                                                                                                           |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `escalation`, `permission`                                       | `escalation_answer` — `response` / `answers`, `permission`, or `dismiss`                                                                                                   |
-| `plan`, `merge`, `reply`, `shortfall`, `validation_plan`         | `proposal_decide` (read with `proposal_read`); a shortfall that is a plain escalation, `goal_gate` `overrule`                                                              |
-| `recovery`                                                       | `recovery_decide`                                                                                                                                                          |
-| `bench`, `close_out`, `validate`, `watch`, `unwatched`, `supply` | `human_task_settle`; the checks a `validate` row asks for, `validation_claim` / `validation_report`; watching what `unwatched` or `supply` names, `goal_control` `watched` |
-| `watch_reading`                                                  | `watch_reading`, with what the query returned when the session ran it under the operator's own credential                                                                  |
-| `intake`                                                         | `goal_gate` `appraisal`                                                                                                                                                    |
-| `profile`                                                        | `goal_control` `profile`                                                                                                                                                   |
-| `placement`                                                      | `goal_placement`                                                                                                                                                           |
-| `assign`                                                         | `pr_assign`                                                                                                                                                                |
-| `description_wrong`, `description_note`                          | `description_dismiss` to leave them; agreeing is the operator rewriting it, saved verbatim with `description_write`                                                        |
-| `describe`                                                       | `description_write`, with the operator's own words, verbatim — never a draft of the session's ([07](07-pull-requests.md#relayed-through-claude-code))                      |
+| Ask                                                              | Answered here by                                                                                                                                                                            |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `escalation`, `permission`                                       | `escalation_answer` — `response` / `answers`, `permission`, or `dismiss`                                                                                                                    |
+| `plan`, `merge`, `reply`, `shortfall`, `validation_plan`         | `proposal_decide` (read with `proposal_read`); a shortfall that is a plain escalation, `goal_gate` `overrule`                                                                               |
+| `recovery`                                                       | `recovery_decide`                                                                                                                                                                           |
+| `bench`, `close_out`, `validate`, `watch`, `unwatched`, `supply` | `human_task_settle`; the checks a `validate` row asks for, `validation_claim` / `validation_report`; watching what `unwatched` or `supply` names, `goal_control` `watched`                  |
+| `watch_reading`                                                  | `watch_reading`, with what the query returned when the session ran it under the operator's own credential                                                                                   |
+| `intake`                                                         | `goal_gate` `appraisal`                                                                                                                                                                     |
+| `questions`                                                      | `discussion_settle` `answer`, one call per open question (read with `discussion_read`); talked through with `/lubbdubb:discuss <n>` ([40](40-discussions.md#where-else-it-is-reached-from)) |
+| `profile`                                                        | `goal_control` `profile`                                                                                                                                                                    |
+| `placement`                                                      | `goal_placement`                                                                                                                                                                            |
+| `assign`                                                         | `pr_assign`                                                                                                                                                                                 |
+| `description_wrong`, `description_note`                          | `description_dismiss` to leave them; agreeing is the operator rewriting it, saved verbatim with `description_write`                                                                         |
+| `describe`                                                       | `description_write`, with the operator's own words, verbatim — never a draft of the session's ([07](07-pull-requests.md#relayed-through-claude-code))                                       |
 
 **Cockpit-only, deliberately:**
 
@@ -1538,7 +1539,7 @@ made executable, and has three shapes:
   two ticket verdicts `proposal_decide` refuses on it (the proposal's kind is looked up by id) — then `readFirst` where the decision needs a read
   (`proposal_read` before every proposal, and `plan_read` after it for a new plan — never an amendment,
   whose content is in `proposal_read` while `plan_read` shows the running plan; `pr_assign` with only `pr` for the shortlist, `goal_read`
-  before an intake verdict, `validation_read` before a `validate` row), and `instead` where a second
+  before an intake verdict, `validation_read` before a `validate` row, `discussion_read` before a `questions` row), and `instead` where a second
   tool also settles it (`goal_gate` `overrule` for a shortfall asked as a plain question,
   `goal_control` `watched` for `unwatched` and `supply`).
 - **`in: "cockpit"`** — the kinds the [table above](#every-ask-in-needs-you-and-what-answers-it-here)

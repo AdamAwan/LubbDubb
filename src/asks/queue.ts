@@ -2,7 +2,7 @@ import type { CockpitState } from '../wire.js';
 import type { SetupReading } from '../setup/reading.js';
 import type { AskGroup, AskKind, AskRow, AskUrgency } from './askRow.js';
 import { updateAskRows } from './updateAsks.js';
-import { findingsRows, intakeRows, placementRows, profileRows } from './issueAsks.js';
+import { findingsRows, intakeRows, placementRows, profileRows, questionRows } from './issueAsks.js';
 import { refusedDispatchRows } from './refusedDispatches.js';
 import { assignAskRows, assignedPrRows, botPrRows, descriptionFeedbackRows, undescribedPartRows } from './prAsks.js';
 import { configRows, escalationRows, humanTaskRows, limitRows, recoveryRows } from './inboxAsks.js';
@@ -32,6 +32,8 @@ export type AskInputs = Pick<
 > & {
   world: Pick<CockpitState['world'], 'takenAt' | 'pullRequests' | 'closedPullRequests' | 'issues'>;
   config: Pick<CockpitState['config'], 'watchLabel' | 'desktopFolder'>;
+  /** Up next, which carries a story held on open discussion questions. */
+  upcoming?: CockpitState['upcoming'];
 };
 
 /** The standing asks in the one-at-a-time order, beside the inputs they were derived from. */
@@ -60,6 +62,8 @@ const KIND_URGENCY: Record<AskKind, AskUrgency> = {
   description_note: 'later',
   shortfall: 'next',
   intake: 'next',
+  // → docs/spec/40-discussions.md#where-else-it-is-reached-from
+  questions: 'next',
   findings: 'now',
   profile: 'next',
   close_out: 'next',
@@ -115,6 +119,7 @@ const STAGE_RANK: Record<AskKind, number> = {
   limit: 3,
   burn: 3,
   intake: 4,
+  questions: 4,
   findings: 3,
   profile: 4,
   placement: 4,
@@ -173,6 +178,7 @@ export function buildAskQueue(
     ...escalationRows(state),
     ...limitRows(state),
     ...intakeRows(state),
+    ...questionRows(state),
     ...findingsRows(state),
     ...profileRows(state),
     ...placementRows(state),

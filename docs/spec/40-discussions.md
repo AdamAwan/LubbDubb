@@ -1,13 +1,5 @@
 # 40 — Discussions
 
-> **Partly built.** Built: `discussionsDir`, [the file](#the-file) — its format, the parser in
-> `src/discussions/parse.ts` and the one object every read and write goes through,
-> `src/discussions/discussionFile.ts`, reached as `System.discussions`; [what agents read](#what-agents-read),
-> [the fleet agent's tool](#what-fleet-agents-write) and [the hold](#an-open-question-holds-the-story);
-> [pulling tracker comments](#pulling-tracker-comments-in); [the desktop tools and the skill](#talking-it-through-in-claude)
-> and [publishing](#publishing); [the cockpit tab](#in-the-cockpit). **Not yet built:** `/lubbdubb:next` carrying a
-> held story's open questions as an ask ([below](#where-else-it-is-reached-from)). Remove this marker when it lands.
-
 A running record of the talk around a story or a feature — notes, ideas, decisions and open
 questions — kept as **Markdown files in a folder the operator chooses**. The operator works on it mainly by
 **talking it through in Claude** with the LubbDubb plugin ([below](#talking-it-through-in-claude)).
@@ -26,6 +18,7 @@ tools and an agent is handed on every dispatch.
 - **The question hold fails open on every arm — off, an unreadable folder, an unparseable file, no file.** It withholds work, and its quietest failure is a story that never starts. → [§](#an-open-question-holds-the-story) · `test/discussionsHold.test.ts`
 - **A story's own open question holds every new dispatch for it; its feature's holds the story only while it has no plan, and never holds a part.** A story already under way carries on. → [§](#an-open-question-holds-the-story) · `test/discussionsHold.test.ts`
 - **A held story is a queued row (`held: 'questions'`), never an `issueGates` filter, and an expedite or priority override lifts it.** A filter drops the issue silently; the operator saying go outranks the question. → [§](#an-open-question-holds-the-story) · `test/discussionsHold.test.ts`
+- **A held story is one `questions` ask in "Needs you", read off Up next and nothing else, standing exactly while the dispatcher holds it.** A second reading of the files would ask about a story the dispatcher is not holding — an expedited one, a capped one. → [§](#where-else-it-is-reached-from) · `test/discussionsAsk.test.ts`
 - **Every harness write re-reads the file and appends through a temp file and a rename, keeping every line the operator wrote.** The operator may have the file open in Obsidian while an agent adds to it. → [§](#writing-without-clobbering) · `test/discussionsFile.test.ts`
 - **A heading the parser cannot read is kept as a note, never dropped or rewritten.** The operator's file is never lost to a parser. → [§](#entries) · `test/discussionsParse.test.ts`
 - **The harness's own tracker comments are skipped on pull by record (`issue_comments_sent`, `published`), never by author.** On a single-operator deployment the operator's login is the harness's too. → [§](#pulling-tracker-comments-in) · `test/discussionsPull.test.ts`
@@ -374,10 +367,23 @@ Named in `DESKTOP_TOOL_NAMES`, built in `src/mcp/desktopDiscussion.ts`, never in
 
 ### Where else it is reached from
 
-- `/lubbdubb:next` offers a held story's open questions as one ask, and hands off to
-  `/lubbdubb:discuss <n>` to answer them. **Not yet built:** a held story is not a row in "Needs you", so
-  `ask_next` cannot hand it out; for now the skill says a story waiting on questions is not an ask there,
-  and hands off to `/lubbdubb:discuss <n>` when the operator raises one.
+- **"Needs you" carries a held story as one ask**, kind `questions`, so the hold is in front of the
+  operator rather than only in Up next, and `/lubbdubb:next` hands it out like any other ask.
+  `questionRows` (`src/asks/issueAsks.ts`) reads it off **Up next** — `CockpitState.upcoming`, carried into
+  `AskInputs` from the `queue` section — never off the files: a row for every Up next item with status
+  `questions`, **one per story** (`questions:issue:<n>`) however many of its dispatches wait, with the
+  item's reason as its `note`. So it stands exactly while the dispatcher holds the story, and goes on the
+  cycle after the last question is answered, or the goal is expedited or given a priority, or `capped`
+  takes the row over — whatever lifts the hold lifts the ask. It is `yours` and `next`, beside `intake`:
+  a whole story's new work is held and no agent is sitting in it. Its subject is the issue, and it raises
+  no record of its own; it has no moment it was raised, so `raisedAt` is empty.
+  - **In Claude Code** `answerWith` is `discussion_settle` with `action: 'answer'`, read first with
+    `discussion_read` — one call per question, a feature's question with the feature's number — and its
+    note offers `/lubbdubb:discuss <n>` for questions that want talking through rather than a line's
+    answer. → [11](11-mcp-tools.md#every-ask-in-needs-you-and-what-answers-it-here)
+  - **In the cockpit** its band says what is held, quotes the hold's reason and carries the same
+    `DesktopLink` the Discussion tab does (`discussionPrompt`); on the goal page it belongs to the
+    `discussion` pane. → [17](17-cockpit.md#the-queue-rail--needs-you)
 - `/lubbdubb:feature` and `/lubbdubb:plan` read the discussion and hand off to `/lubbdubb:discuss`
   when the talk turns to something worth writing down; they write nothing themselves.
 - The cockpit's Discussion tab carries a deep link that opens `/lubbdubb:discuss <n>`.

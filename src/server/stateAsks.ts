@@ -55,7 +55,7 @@ const ASK_READS: Record<Exclude<StateSection, 'control' | 'asks'>, (r: Reads) =>
     agents: r.history().agents,
     parkedOnLimit: r.system.agents.limitedAgentIds(),
   }),
-  queue: (r) => ({ jobs: r.store.jobs.listJobs() }),
+  queue: (r) => ({ jobs: r.store.jobs.listJobs(), upcoming: r.system.harness.upcoming }),
   inbox: (r) => ({ humanTasks: r.humanTasks, ...inbox(r) }),
   activity: (r) => ({ decisions: r.shiftLog }),
 };

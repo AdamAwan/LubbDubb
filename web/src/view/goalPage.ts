@@ -641,6 +641,7 @@ export const GOAL_ASK_TAB: Record<NeedKind, GoalTab | null> = {
   config_gap: null,
   dispatch: null,
   intake: null,
+  questions: 'discussion',
   findings: 'plan',
   limit: null,
   placement: null,
