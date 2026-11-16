@@ -5327,6 +5327,15 @@ button.cn-grow {
   display: block;
 }
 
+.cn-lv-video {
+  display: block;
+  width: 100%;
+  max-width: 960px;
+  margin-top: 6px;
+  border: 1px solid var(--cn-line);
+  border-radius: 3px;
+}
+
 /* A passed run reads a step back, the settled check's treatment one card over: it
    is the work that is done rather than the work that is left. */
 .cn-lv-passed .cn-name,

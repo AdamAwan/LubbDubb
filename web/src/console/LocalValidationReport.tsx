@@ -58,6 +58,8 @@ export function LocalValidationReport({
     );
 
   const running = inFlight(validation);
+  const videos = validation.files.filter((file) => file.kind === 'video');
+  const shots = validation.files.filter((file) => file.kind === 'image');
   return (
     <div className={`cn-lv${validation.status === 'passed' ? ' cn-lv-passed' : ''}`}>
       <ReportHeader
@@ -90,9 +92,13 @@ export function LocalValidationReport({
       {/* Everything it saved, including the shots no finding pointed at: a picture
           of the page that worked is how somebody tells "it passed" from "it was
           never opened". */}
-      {validation.files.length > 0 && (
+      {videos.map((file) => (
+        <video key={file.name} className="cn-lv-video" src={file.url} controls preload="metadata" title={file.name} />
+      ))}
+
+      {shots.length > 0 && (
         <div className="cn-lv-shots">
-          {validation.files.map((file) => (
+          {shots.map((file) => (
             <a key={file.name} href={file.url} target="_blank" rel="noreferrer" title={file.name}>
               <img className="cn-lv-shot" src={file.url} alt={file.name} />
             </a>

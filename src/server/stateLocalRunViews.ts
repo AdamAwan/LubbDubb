@@ -23,6 +23,7 @@ import { issueConclusionOrigin } from '../issueConclusion.js';
 import { localRunIsLive } from '../store/localRuns.js';
 import { localRunChoices } from '../localRun/ref.js';
 import { isActiveTask } from '../tasks.js';
+import { mediaKind } from '../validation/local/media.js';
 
 // → docs/spec/16-http-api.md
 
@@ -123,7 +124,11 @@ export function localValidationView(
     phase: localValidationPhase(row, live),
     files: row.screenshots.map((name: string) => {
       const base = `/local-validations/${encodeURIComponent(row.id)}/files/${encodeURIComponent(name)}`;
-      return { name, url: signer ? `${base}?tk=${encodeURIComponent(signer(row.id, name))}` : base };
+      return {
+        name,
+        url: signer ? `${base}?tk=${encodeURIComponent(signer(row.id, name))}` : base,
+        kind: mediaKind(name) ?? 'image',
+      };
     }),
     agent: agentOf(row.taskId),
     fixAgent: agentOf(row.fixTaskId),
