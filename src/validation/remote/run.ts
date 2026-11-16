@@ -12,7 +12,8 @@ import { noSheetAssembled, rowRun } from './sheet.js';
 import { checkSetStanding } from '../planApproval.js';
 import {
   resolveTenant,
-  stalenessNote,
+  noStanding,
+  tenantNote,
   type OperatorTenants,
   type TenantEnvironment,
   type TenantKeeper,
@@ -258,7 +259,7 @@ export class RemoteRunDesk extends EventEmitter {
 
   private standing(environmentName: string): TenantStanding {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
-    return environment === undefined ? absent() : this.resolve(environment).standing;
+    return environment === undefined ? noStanding() : this.resolve(environment).standing;
   }
 
   private settle(
@@ -314,7 +315,7 @@ export class RemoteRunDesk extends EventEmitter {
       return {
         ok: false,
         detail: `"${environmentName}" declares no "validate" block, so it has no tenant to prepare.`,
-        standing: absent(),
+        standing: noStanding(),
       };
 
     const said: string[] = [];
@@ -356,11 +357,7 @@ export class RemoteRunDesk extends EventEmitter {
         detail: `the "ensureTenant" command did not provide a tenant — ${provisioned.detail ?? 'it named none'}`,
         standing: this.standing(environmentName),
       };
-    this.deps.store.remoteValidation.stampRemoteTenant({
-      environment: environmentName,
-      tenant: provisioned.tenant,
-      ensured: true,
-    });
+    this.deps.store.remoteValidation.stampRemoteTenant(environmentName, provisioned.tenant, 'ensured_at');
     said.push(`\`${provisioned.tenant}\` is provisioned`);
     return null;
   }
@@ -380,20 +377,20 @@ export class RemoteRunDesk extends EventEmitter {
           `"${environmentName}" declares a reseed and nothing has supplied a tenant to reseed.`,
         standing: resolved.standing,
       };
+    const { tenant } = resolved.standing;
     const request = { environment: environmentName, command, tenant: resolved.value };
     const reseeded =
       resumed?.call === 'reseed'
         ? await this.deps.tenants.follow('reseed', request, resumed.launch)
-        : await this.deps.tenants.reseed(request, this.launched(environmentName, 'reseed'));
+        : await this.deps.tenants.reseed(request, (launch) => {
+            this.launched(environmentName, 'reseed')(launch);
+            this.deps.store.remoteValidation.stampRemoteTenant(environmentName, tenant, 'reseed_launched_at');
+          });
     if (reseeded === null) return this.gone(environmentName);
     if (reseeded.detail !== null)
       return { ok: false, detail: `the reseed did not run — ${reseeded.detail}`, standing: resolved.standing };
-    this.deps.store.remoteValidation.stampRemoteTenant({
-      environment: environmentName,
-      tenant: resolved.standing.tenant,
-      reseeded: true,
-    });
-    said.push(`\`${resolved.standing.tenant}\` is reseeded`);
+    this.deps.store.remoteValidation.stampRemoteTenant(environmentName, tenant, 'reseeded_at');
+    said.push(`\`${tenant}\` is reseeded`);
     return null;
   }
 
@@ -476,7 +473,7 @@ export class RemoteRunDesk extends EventEmitter {
     rows: readonly RemoteSheetRow[],
     tenant: TenantStanding,
   ): Promise<number> {
-    const stale = stalenessNote(tenant);
+    const note = tenantNote(tenant);
     let read = 0;
     for (const row of rows) {
       if (rowRun(row.rowId) === null || row.blockedReason !== null) continue;
@@ -488,7 +485,7 @@ export class RemoteRunDesk extends EventEmitter {
             goalRef,
             environment.name,
             row.rowId,
-            qualified(reading.detail, stale) ?? 'no reading was taken',
+            qualified(reading.detail, note) ?? 'no reading was taken',
           );
           continue;
         }
@@ -500,7 +497,7 @@ export class RemoteRunDesk extends EventEmitter {
           outcome: reading.outcome,
           rows: reading.rows,
           value: reading.value,
-          detail: qualified(reading.detail, stale),
+          detail: qualified(reading.detail, note),
           startedSha: run.startedSha,
           endedSha: null,
           // A deterministic row is a query, not a suite: nothing here matched, ran or published.
@@ -559,12 +556,12 @@ function owedToAgent(
 }
 
 /**
- * Staleness is a qualifier on the reading and never a fourth outcome — the vocabulary stays
- * `passed | failed | blocked`.
+ * A stale or half-seeded tenant is a qualifier on the reading and never a fourth outcome — the
+ * vocabulary stays `passed | failed | blocked`.
  */
-function qualified(detail: string | null, stale: string | null): string | null {
-  if (stale === null) return detail;
-  return detail === null ? `Read ${stale}.` : `${detail} Read ${stale}.`;
+function qualified(detail: string | null, note: string | null): string | null {
+  if (note === null) return detail;
+  return detail === null ? `Read ${note}.` : `${detail} Read ${note}.`;
 }
 
 function named(tenant: string | null): string {
@@ -577,8 +574,4 @@ function short(sha: string): string {
 
 function shas(list: readonly string[]): string {
   return list.map(short).join(', ');
-}
-
-function absent(): TenantStanding {
-  return { tenant: null, reseededAt: null, ageMs: null, freshnessMs: null, stale: false, blockedReason: null };
 }

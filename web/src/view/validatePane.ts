@@ -231,7 +231,7 @@ export function panelRows(sheet: RemoteSheetView): RemoteSheetRowView[] {
 export interface TenantAlert {
   environment: string;
   tenant: string | null;
-  why: 'blocked' | 'failed' | 'stale';
+  why: 'blocked' | 'half-seeded' | 'failed' | 'stale';
   /** The record's own words: the tenant's block, or what the failed preparation said. */
   detail: string | null;
 }
@@ -252,6 +252,8 @@ export function tenantAlerts(sheets: readonly RemoteSheetView[], showing: string
       if (tenant.blockedReason !== null) return [{ ...base, why: 'blocked', detail: tenant.blockedReason }];
       const prep = tenant.preparation;
       if (prep !== null && prep.finishedAt === null) return [];
+      if (tenant.halfSeeded)
+        return [{ ...base, why: 'half-seeded', detail: prep?.call === 'reseed' ? prep.detail : null }];
       if (prep?.ok === false) return [{ ...base, why: 'failed', detail: prep.detail }];
       if (tenant.stale) return [{ ...base, why: 'stale', detail: null }];
       return [];

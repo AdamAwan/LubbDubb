@@ -161,6 +161,7 @@ export interface TenantRow {
   tenant: string;
   ensured_at: string | null;
   reseeded_at: string | null;
+  reseed_launched_at: string | null;
 }
 
 const RUN_STATUSES: RemoteRunStatus[] = ['pending', 'dispatched', 'ended', 'abandoned'];

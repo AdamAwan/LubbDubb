@@ -85,7 +85,10 @@ interface Bench {
   close(): void;
 }
 
-function bench(env: EnvironmentConfig, opts: { env?: Record<string, string | undefined> } = {}): Bench {
+function bench(
+  env: EnvironmentConfig,
+  opts: { env?: Record<string, string | undefined>; scripted?: ConstructorParameters<typeof FakeTenantKeeper>[0] } = {},
+): Bench {
   const environments = [env];
   const store = new Store(':memory:');
   const reader = new FakeStateReader({
@@ -94,6 +97,7 @@ function bench(env: EnvironmentConfig, opts: { env?: Record<string, string | und
   });
   const tenants = new FakeTenantKeeper({
     'ensure:acceptance': { tenant: 'reaper-safe-customer-9', detail: null },
+    ...opts.scripted,
   });
   const git = new FakeGitObserver().setContains(DEPLOYED, LANDED, true);
   const runs = new RemoteRunDesk({
@@ -256,6 +260,80 @@ test('a reseed stamps the tenant and clears its age; no process is spawned, on t
   } finally {
     b.close();
   }
+});
+
+/*
+ * A reseed that dies part-way leaves the tenant somewhere between what it held and the seed, while
+ * its last good stamp still reads as fresh. It is a qualifier everywhere the tenant is read, like
+ * staleness — never a fourth outcome, and never a block.
+ * → docs/spec/36-remote-validation.md#a-reseed-that-did-not-finish
+ */
+test('a reseed that did not finish marks the tenant half-seeded until one does, and every reading says so', async () => {
+  const settle = async (b: Bench): Promise<void> => {
+    b.runs.beginPrepareTenant('acceptance');
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+  };
+  const standing = (b: Bench, environment: EnvironmentConfig) =>
+    resolveTenant({ environment, stamped: b.store.remoteValidation.listRemoteTenants(), now: NOW }).standing;
+
+  const b = bench(LITERAL, { scripted: { 'reseed:acceptance': { tenant: null, detail: 'exited 1' } } });
+  try {
+    seed(b.store);
+    assert.equal(standing(b, LITERAL).halfSeeded, false, 'never reseeded is stale, not half-seeded');
+    await settle(b);
+    assert.equal(b.store.remoteValidation.listTenantPrepares()[0]?.ok, false);
+    assert.equal(standing(b, LITERAL).halfSeeded, true);
+
+    await b.runs.press('issue:12', 'acceptance');
+    assert.match(
+      b.store.remoteValidation.listRemoteReadings()[0]?.detail ?? '',
+      /`validation-customer-1`, whose last reseed did not finish/,
+      'the reading carries it, beside the outcome rather than in place of one',
+    );
+  } finally {
+    b.close();
+  }
+
+  const healed = bench(LITERAL);
+  try {
+    seed(healed.store);
+    await settle(healed);
+    assert.equal(standing(healed, LITERAL).halfSeeded, false, 'a reseed that finishes clears it');
+  } finally {
+    healed.close();
+  }
+
+  /* The mark is the tenant's, not the preparation's: a later press that never reaches the reseed repairs nothing. */
+  const twice = bench(PROVISIONED, { scripted: { 'reseed:acceptance': { tenant: null, detail: 'exited 1' } } });
+  try {
+    seed(twice.store);
+    await settle(twice);
+    assert.equal(standing(twice, PROVISIONED).halfSeeded, true);
+    twice.tenants.script('ensure:acceptance', { tenant: null, detail: 'provisioning is down' });
+    await settle(twice);
+    assert.equal(twice.store.remoteValidation.listTenantPrepares()[0]?.call, 'ensure');
+    assert.equal(standing(twice, PROVISIONED).halfSeeded, true, 'a failed ensure after it leaves it half-seeded');
+  } finally {
+    twice.close();
+  }
+});
+
+test('half-seeded is a reseed launched since the last one that finished', () => {
+  const at = (minutes: number): string => new Date(NOW + minutes * 60_000).toISOString();
+  const half = (reseededAt: string | null, reseedLaunchedAt: string | null): boolean =>
+    resolveTenant({
+      environment: LITERAL,
+      stamped: [
+        { environment: 'acceptance', tenant: 'validation-customer-1', ensuredAt: null, reseededAt, reseedLaunchedAt },
+      ],
+      now: NOW,
+    }).standing.halfSeeded;
+
+  assert.equal(half(null, at(0)), true, 'launched and never finished');
+  assert.equal(half(at(0), at(5)), true, 'launched again after the last good one');
+  assert.equal(half(at(5), at(0)), false, 'the launch that finished');
+  assert.equal(half(at(0), null), false, 'nothing launched since the column existed');
 });
 
 test('an environment declaring no tenant of any shape presses anyway, on no tenant at all', async () => {

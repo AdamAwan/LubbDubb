@@ -74,7 +74,10 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   // invisible on older databases without this entry. No backfill: null is *none reported*, true of
   // every run written before the column, and it stays true.
   remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT', listing_path: 'TEXT', recording: 'TEXT' },
-  remote_tenants: {},
+  // When a reseed last launched against the tenant. Later than `reseeded_at` is a reseed that did not
+  // finish. No backfill: null is *none launched since the column*, which reads as not half-seeded.
+  // → docs/spec/36-remote-validation.md#a-reseed-that-did-not-finish
+  remote_tenants: { reseed_launched_at: 'TEXT' },
   // Which command a preparation is running and the runner holding it, so a restart can find the
   // command again rather than close a row whose process is still going. Null on a row from before the
   // columns, and on one whose command never launched: no process to find, so boot closes it as it
@@ -83,6 +86,7 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   remote_capture_posts: {},
 };
 
+type TenantStamp = 'ensured_at' | 'reseeded_at' | 'reseed_launched_at';
 /**
  * The offering cache. Nothing pre-resolves an area at plan time any more — a `suite` step's area is
  * resolved against the deployed commit's own listing when the run happens — so the table it was kept
@@ -539,22 +543,13 @@ export class RemoteValidationStore {
   }
 
   /** The name is always the project's own — nothing here generates or infers a tenant identifier. */
-  stampRemoteTenant(input: { environment: string; tenant: string; ensured?: boolean; reseeded?: boolean }): void {
-    const now = this.ctx.now();
-    const existing = this.ctx
-      .prep(`SELECT * FROM remote_tenants WHERE environment=? AND tenant=?`)
-      .get(input.environment, input.tenant) as TenantRow | undefined;
+  stampRemoteTenant(environment: string, tenant: string, stamp: TenantStamp): void {
     this.ctx
       .prep(
-        `INSERT OR REPLACE INTO remote_tenants (environment, tenant, ensured_at, reseeded_at)
-         VALUES (@environment, @tenant, @ensuredAt, @reseededAt)`,
+        `INSERT INTO remote_tenants (environment, tenant, ${stamp}) VALUES (?, ?, ?)
+         ON CONFLICT (environment, tenant) DO UPDATE SET ${stamp}=excluded.${stamp}`,
       )
-      .run({
-        environment: input.environment,
-        tenant: input.tenant,
-        ensuredAt: input.ensured === true ? now : (existing?.ensured_at ?? null),
-        reseededAt: input.reseeded === true ? now : (existing?.reseeded_at ?? null),
-      });
+      .run(environment, tenant, this.ctx.now());
   }
 
   /**
@@ -654,6 +649,7 @@ export class RemoteValidationStore {
       tenant: r.tenant,
       ensuredAt: r.ensured_at,
       reseededAt: r.reseeded_at,
+      reseedLaunchedAt: r.reseed_launched_at,
     }));
   }
 

@@ -201,24 +201,20 @@ export function resolveTenant(input: {
     if (provisioned === undefined)
       return {
         value: null,
-        standing: {
-          tenant: null,
-          reseededAt: null,
-          ageMs: null,
+        standing: noStanding({
           freshnessMs,
-          stale: false,
           blockedReason:
             `"${input.environment.name}" provisions its tenant on demand and nothing has provisioned one yet. ` +
             `Run its "validate.ensureTenant" command — \`${validate.ensureTenant}\` — from this goal's sheet, ` +
             'and it will name the tenant every row here is put to.',
-        },
+        }),
       };
     return dated({ tenant: provisioned.tenant, value: provisioned.tenant, stamps, freshnessMs, now: input.now });
   }
 
   return {
     value: null,
-    standing: { tenant: null, reseededAt: null, ageMs: null, freshnessMs, stale: false, blockedReason: null },
+    standing: noStanding({ freshnessMs }),
   };
 }
 
@@ -242,18 +238,15 @@ function fromTenantEnv(input: {
   if (named !== undefined) return dated({ tenant: named, value: named, stamps, freshnessMs, now });
   return {
     value: null,
-    standing: {
+    standing: noStanding({
       tenant: `$${variable}`,
-      reseededAt: null,
-      ageMs: null,
       freshnessMs,
-      stale: false,
       blockedReason:
         `"${input.environment.name}" takes a tenant each operator names for themselves, and nothing names one ` +
         `here. Set "remoteValidation.tenants": { "${input.environment.name}": "<your tenant's name>" } in ` +
         `lubbdubb.config.json, or export ${variable} — the harness never invents a tenant name, because an ` +
         'invented one is reaped within the hour and its disappearance reads as mass failure.',
-    },
+    }),
   };
 }
 
@@ -264,7 +257,9 @@ function dated(input: {
   freshnessMs: number | null;
   now: number;
 }): ResolvedTenant {
-  const reseededAt = input.stamps.find((t) => t.tenant === input.tenant)?.reseededAt ?? null;
+  const stamp = input.stamps.find((t) => t.tenant === input.tenant);
+  const reseededAt = stamp?.reseededAt ?? null;
+  const launchedAt = stamp?.reseedLaunchedAt ?? null;
   const ageMs = reseededAt === null ? null : Math.max(0, input.now - Date.parse(reseededAt));
   return {
     value: input.value,
@@ -274,22 +269,41 @@ function dated(input: {
       ageMs,
       freshnessMs: input.freshnessMs,
       stale: input.freshnessMs !== null && (ageMs === null || ageMs > input.freshnessMs),
+      halfSeeded: launchedAt !== null && (reseededAt === null || launchedAt > reseededAt),
       blockedReason: null,
     },
   };
 }
 
+/** A standing with no tenant behind it, or none usable — every qualifier off. */
+export function noStanding(over: Partial<TenantStanding> = {}): TenantStanding {
+  return {
+    tenant: null,
+    reseededAt: null,
+    ageMs: null,
+    freshnessMs: null,
+    stale: false,
+    halfSeeded: false,
+    blockedReason: null,
+    ...over,
+  };
+}
+
 /**
- * What a stale tenant adds to a reading, and all it adds. Staleness is a **qualifier**, never a
+ * What a stale or half-seeded tenant adds to a reading, and all it adds. Staleness is a **qualifier**, never a
  * fourth outcome: a fourth state multiplies against every row kind and every environment and needs
  * teaching to every consumer, where "failed, against a tenant 19 days old, beyond the declared 7-day
  * window" tells the reader everything without touching the state machine.
  */
-export function stalenessNote(standing: TenantStanding): string | null {
-  if (!standing.stale || standing.tenant === null) return null;
-  const window = standing.freshnessMs === null ? null : days(standing.freshnessMs);
-  const age = standing.ageMs === null ? 'never reseeded' : `${days(standing.ageMs)} old`;
-  return `against \`${standing.tenant}\`, ${age}${window === null ? '' : `, beyond the declared ${window} window`}`;
+export function tenantNote(standing: TenantStanding): string | null {
+  const said: string[] = [];
+  if (standing.halfSeeded) said.push('whose last reseed did not finish, so its data may be half-seeded');
+  if (standing.stale) {
+    const window = standing.freshnessMs === null ? null : days(standing.freshnessMs);
+    const age = standing.ageMs === null ? 'never reseeded' : `${days(standing.ageMs)} old`;
+    said.push(`${age}${window === null ? '' : `, beyond the declared ${window} window`}`);
+  }
+  return standing.tenant === null || said.length === 0 ? null : `against \`${standing.tenant}\`, ${said.join('; ')}`;
 }
 
 function days(ms: number): string {

@@ -3,7 +3,7 @@ import { groupBy } from '../primitives.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
 import { goneCheckRows, okScope, okStanding, pageRows } from '../validation/remote/intent.js';
-import { resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
+import { noStanding, resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
   GoalArrival,
@@ -296,7 +296,7 @@ export function buildRemoteSheets(
     // value it holds reaches the spawn env and nowhere else. → 36-remote-validation.md#tenants
     const standing =
       environment === undefined
-        ? { tenant: null, reseededAt: null, ageMs: null, freshnessMs: null, stale: false, blockedReason: null }
+        ? noStanding()
         : resolveTenant({ environment, stamped: tenants, now, operatorTenants }).standing;
     const rows = pageRows(rowsByGoalEnvironment.get(key) ?? [], gone);
     const intent = intents.get(key) ?? null;

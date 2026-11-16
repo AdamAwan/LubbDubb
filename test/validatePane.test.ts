@@ -78,6 +78,7 @@ function sheet(over: Partial<RemoteSheetView> = {}): RemoteSheetView {
       ageMs: null,
       freshnessMs: null,
       stale: false,
+      halfSeeded: false,
       blockedReason: null,
       reseedable: false,
       destructive: false,
@@ -218,7 +219,7 @@ test('the environment panel lists only the rows that are not a check’s own, ba
   );
 });
 
-test('an unhealthy tenant is an alert: blocked, then a failed preparation, then stale', () => {
+test('an unhealthy tenant is an alert: blocked, then half-seeded, then a failed preparation, then stale', () => {
   const tenant = sheet().tenant;
   const prep = (over: Partial<NonNullable<typeof tenant.preparation>>): NonNullable<typeof tenant.preparation> => ({
     environment: 'staging',
@@ -242,6 +243,10 @@ test('an unhealthy tenant is an alert: blocked, then a failed preparation, then 
   /* A preparation still running is the gate's to follow, and an unknown outcome is not a failure. */
   assert.deepEqual(alerted({ stale: true, preparation: prep({ finishedAt: null, ok: null }) }), []);
   assert.equal(alerted({ preparation: prep({ ok: null }) }).length, 0);
+  assert.deepEqual(
+    alerted({ stale: true, halfSeeded: true, preparation: prep({ ok: null, detail: 'gone', call: 'reseed' }) }),
+    [{ environment: 'staging', tenant: 'validation-1', why: 'half-seeded', detail: 'gone' }],
+  );
 
   const prod = sheet({ environment: 'prod', tenant: { ...tenant, stale: true } });
   assert.equal(tenantAlerts([prod], 'staging').length, 0, 'narrowed to the environment the pane shows');

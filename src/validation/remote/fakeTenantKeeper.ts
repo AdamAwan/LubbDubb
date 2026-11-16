@@ -40,6 +40,12 @@ export class FakeTenantKeeper implements TenantKeeper {
     return { lines: [...(this.output.get(launch.id) ?? [])], lastOutputAt: null };
   }
 
+  /** What the next launch of this `call:environment` answers. */
+  script(key: string, outcome: TenantOutcome): this {
+    this.scripted[key] = outcome;
+    return this;
+  }
+
   /** A launch still running on the machine — one an earlier process started and this one follows. */
   hold(launchId: string, lines: readonly string[] = []): this {
     this.held.add(launchId);

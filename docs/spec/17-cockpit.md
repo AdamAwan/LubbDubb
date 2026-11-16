@@ -2923,9 +2923,11 @@ number nothing on the page explains.
 that used it, so past the window the environment declares, a red row may be that residue rather than
 the code ([36](36-remote-validation.md#tenants)) — which is why the answer is reseed first, press after.
 `tenantAlerts` (`web/src/view/validatePane.ts`) names each sheet whose tenant would make a reading on it
-untrustworthy — blocked, then a preparation that finished and failed, then stale — narrowed to the
-environment the pane shows. A preparation still running is not an alert (the gate follows it), and
-neither is one whose outcome is unknown. The banner sits above the run strip and carries the reseed
+untrustworthy — blocked, then **half-seeded** (a reseed launched since the last one that finished:
+[36](36-remote-validation.md#a-reseed-that-did-not-finish)), then a preparation that finished and
+failed, then stale — narrowed to the environment the pane shows. A preparation still running is not an
+alert (the gate follows it). An unknown outcome is not a failure, but after a reseed launched the tenant
+is half-seeded: a command that may have wiped half of it is exactly what the banner exists for. The banner sits above the run strip and carries the reseed
 control; while it is up, the environment panel's gate draws neither that control nor the preparation
 line, so the one control is in one place. It used to be a line in the strip and a red outcome at the
 foot of the page — read last, beneath the checks it was quietly undermining.

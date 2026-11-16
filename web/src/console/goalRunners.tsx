@@ -288,14 +288,19 @@ export function TenantBanner({
 function alertHeadline(alert: TenantAlert): string {
   const who = alert.tenant === null ? `${alert.environment}'s tenant` : `${alert.environment} · ${alert.tenant}`;
   if (alert.why === 'blocked') return `${who} can't be used`;
-  if (alert.why === 'failed') return `${who} — its last reseed failed`;
+  if (alert.why === 'half-seeded') return `${who} — its last reseed did not finish, so its data may be half-seeded`;
+  if (alert.why === 'failed') return `${who} — its last tenant command failed`;
   return `${who} — its test data is past ${alert.environment}'s freshness window`;
 }
 
 function alertConsequence(alert: TenantAlert): string {
   if (alert.why === 'blocked') return alert.detail ?? 'Nothing on this environment can be put to it.';
-  const tail = `A failure on ${alert.environment} may be leftovers from earlier runs rather than this goal's work — reseed first, then run.`;
-  return alert.why === 'failed' && alert.detail !== null ? `${alert.detail} ${tail}` : tail;
+  const [cause, step] =
+    alert.why === 'half-seeded'
+      ? ['missing or partial seed data', 'reseed again']
+      : ['leftovers from earlier runs', 'reseed first'];
+  const tail = `A failure on ${alert.environment} may be ${cause} rather than this goal's work — ${step}, then run.`;
+  return alert.why !== 'stale' && alert.detail !== null ? `${alert.detail} ${tail}` : tail;
 }
 
 export function Signals({
