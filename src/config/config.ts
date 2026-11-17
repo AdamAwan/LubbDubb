@@ -12,6 +12,7 @@ import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from '../review/policy.js';
 import { DEFAULT_BOT_PRS, type BotPrPolicy } from '../botPrs/policy.js';
 import { DEFAULT_LOCAL_RUN, type LocalRunPolicy } from '../localRun/policy.js';
 import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from '../validation/local/policy.js';
+import { DEFAULT_LESSONS, type LessonPolicy } from '../lessons/policy.js';
 import { validateCiPolicy, type CiPolicy } from '../ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from '../integrations/azure/policyKinds.js';
 import { validateAgentModels, type AgentModels } from '../agents/modelPolicy.js';
@@ -27,6 +28,7 @@ import {
   validateAgentMode,
   validateAppErrors,
   validateFleetStall,
+  validateLessons,
   validatePool,
   validateReview,
   validateWorkItemStates,
@@ -85,6 +87,7 @@ export interface Config {
   botPrs: BotPrPolicy;
   localRun: LocalRunPolicy;
   localValidation: LocalValidationPolicy;
+  lessons: LessonPolicy;
   closedPrWindowMs: number;
   closedPrCatchUpMs: number;
   environments: EnvironmentConfig[];
@@ -260,6 +263,7 @@ const DEFAULTS: Config = {
   botPrs: DEFAULT_BOT_PRS,
   localRun: DEFAULT_LOCAL_RUN,
   localValidation: DEFAULT_LOCAL_VALIDATION,
+  lessons: DEFAULT_LESSONS,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   closedPrCatchUpMs: 7 * 24 * 60 * 60 * 1000,
   environments: [],
@@ -349,6 +353,7 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   merged.botPrs = { ...DEFAULTS.botPrs, ...overrides.botPrs };
   merged.localRun = { ...DEFAULTS.localRun, ...overrides.localRun };
   merged.localValidation = { ...DEFAULTS.localValidation, ...overrides.localValidation };
+  merged.lessons = { ...DEFAULTS.lessons, ...overrides.lessons };
   merged.remoteValidation = { ...DEFAULTS.remoteValidation, ...overrides.remoteValidation };
   merged.auth = { ...DEFAULTS.auth, ...overrides.auth };
   merged.ci = { checks: overrides.ci?.checks ?? DEFAULTS.ci.checks };
@@ -377,6 +382,7 @@ export const DEEP_MERGED_BLOCKS = [
   'botPrs',
   'localRun',
   'localValidation',
+  'lessons',
   'remoteValidation',
   'auth',
   'ci',
@@ -493,6 +499,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
 
   validateAppErrors(merged);
   validateFleetStall(merged);
+  validateLessons(merged);
 
   validateOperatorTenants(merged.remoteValidation.tenants, merged.environments);
 

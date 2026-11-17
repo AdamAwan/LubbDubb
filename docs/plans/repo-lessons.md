@@ -1,6 +1,6 @@
 # Build plan — repo lessons
 
-Staged build of the repo-lessons spec (_docs/spec/41-repo-lessons.md_, written in stage A). Each
+Staged build of the repo-lessons spec (`docs/spec/41-repo-lessons.md`, written in stage A). Each
 stage leaves `npm run check` green and updates its owning spec in the same commit. Paths that do not
 exist yet are in italics. Deleted by the change that finishes the last stage.
 
@@ -9,7 +9,7 @@ exist yet are in italics. Deleted by the change that finishes the last stage.
 1. **Off by default.** `lessons.minGoals` defaults to `0` (off); an operator sets `2` or more to turn
    it on. It opens pull requests on the operator's repository, so it is opt-in.
 2. **Remedy → goal.** The work graph parents a `pr:<n>` node up to an `issue:<n>` root; `goalOfPr`
-   in `src/environments/landings.ts` already walks it, privately. Extract to _src/graph/prGoals.ts_
+   in `src/environments/landings.ts` already walks it, privately. Extract to `src/graph/prGoals.ts`
    as `prGoalIndex(nodes)`; landings imports it. Note in spec 41 how it relates to the different
    `goalOfPr` in `src/asks/lines.ts`. A PR with no goal counts as its own unit `pr:<n>`.
    **Excluded:** remedies on bot-authored PRs, and remedies on lesson PRs.
@@ -54,7 +54,7 @@ lesson:<groupKey>`; settles `filed`.
    merge/close. Settles a dispatched row whose task ended unconcluded as `unanswered`; `pr-open` →
    `adopted` on merge, `declined` on close; opens a draft when none is out, fewer than 2 are
    `pr-open`, and no open own-world PR carries the group's marker. Pure fold
-   _src/lessons/groups.ts_ `lessonCandidates`.
+   `src/lessons/groups.ts` `lessonCandidates`.
 10. **Redraft.** `declined`, `nothing` or `unanswered` is eligible again once misses after
     `settled_at` span ≥ `max(miss_count, minGoals)` goals. `adopted` and `filed` are never redrafted.
 11. **Store** `lesson_drafts` (_src/store/schema/lessons.ts_, _src/store/lessons.ts_, `store.lessons`).
@@ -76,10 +76,10 @@ lesson:<groupKey>`; settles `filed`.
 
 ## Stages
 
-A. **Spec + pure fold + config.** `docs/spec/41-repo-lessons.md` (opens with `## Invariants`, every
+A. **Spec + pure fold + config.** _Done._ `docs/spec/41-repo-lessons.md` (opens with `## Invariants`, every
 line `_no test_` or linking a test that exists; unbuilt sections marked; future paths italic),
-delete `docs/proposals/repo-lessons.md`, update `docs/README.md`. _src/graph/prGoals.ts_,
-_src/lessons/groups.ts_, config key; `test/lessonGroups.test.ts`, config test. Specs 02, 41.
+delete `docs/proposals/repo-lessons.md`, update `docs/README.md`. `src/graph/prGoals.ts`,
+`src/lessons/groups.ts`, config key; `test/lessonGroups.test.ts`, config test. Specs 02, 41.
 B. **Store, rule, tool, desk, settlement — one stage** (a rule that cannot conclude must not land
 alone). Everything in decisions 4–11 and 13; `buildSystem`-seam tests with `FakeWorktreeManager`.
 Specs 04, 05, 07, 11, 13, 14, 18, 41.

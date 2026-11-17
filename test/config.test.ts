@@ -636,3 +636,12 @@ test('a closed state the fleet also picks up from is refused at load', () => {
     'closing is not gated on the pickup list the way the transitions are',
   );
 });
+
+test('repo lessons are off by default, and lessons.minGoals is 0 or at least 2', () => {
+  assert.equal(loadConfig().lessons.minGoals, 0);
+  assert.equal(loadConfig({ lessons: { minGoals: 2 } }).lessons.minGoals, 2);
+  assert.equal(loadConfig({ lessons: { minGoals: 5 } }).lessons.minGoals, 5);
+  for (const minGoals of [1, -1, 2.5, Number.NaN]) {
+    assert.throws(() => loadConfig({ lessons: { minGoals } }), /lessons\.minGoals: must be 0/, String(minGoals));
+  }
+});
