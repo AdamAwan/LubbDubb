@@ -170,10 +170,10 @@ function cancel(deps: DesktopToolDeps, environment: string) {
 }
 
 function prepareTenant(deps: DesktopToolDeps, goalRef: string, environment: string, confirm: string | undefined) {
-  const env = deps.environments.find((e) => e.name === environment);
-  if (env?.validate?.ensureTenant === undefined && env?.validate?.reseed === undefined)
+  const steps = deps.remoteValidation().tenantSteps(environment);
+  if (steps === null || (steps.ensure === null && steps.reseed === null))
     return toolError(`"${environment}" declares neither an "ensureTenant" nor a "reseed" command.`);
-  if (env.validate.reseed !== undefined) {
+  if (steps.reseed !== null) {
     const sheet = deps
       .remoteValidation()
       .sheets(goalRef)

@@ -15,6 +15,8 @@ import { FakeStateReader } from '../src/validation/remote/fakeStateReader.js';
 import { FakeTenantKeeper } from '../src/validation/remote/fakeTenantKeeper.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { gitRepo } from './support/gitRepo.js';
+import { desktopDeps } from './support/desktop.js';
+import { buildDesktopTools } from '../src/mcp/desktopTools.js';
 
 // → docs/spec/36-remote-validation.md#a-tenant-from-the-projects-extension
 
@@ -235,4 +237,32 @@ test('the gate’s reseed control follows what the extension fills: provisioning
   const both = await sheetTenant(RECORDING);
   assert.equal(both.reseedable, true);
   assert.equal(both.destructive, true, 'a reseedTenant slot wipes the tenant, and the gate must say so');
+});
+
+test('the desktop channel prepares an extension tenant, confirming first only where it reseeds', async () => {
+  const prepareThrough = async (source: string, confirmTenant?: string) => {
+    const { system } = await bench(source);
+    system.store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
+    const tools = buildDesktopTools(
+      { ...desktopDeps(system), runCycle: async () => {}, now: () => new Date().toISOString() },
+      { label: 'adam', held: null },
+    );
+    const tool = tools.find((t) => t.name === 'remote_validation_run')!;
+    const result = await tool.handler({
+      issue: 12,
+      environment: 'acceptance',
+      action: 'prepare_tenant',
+      confirmTenant,
+    });
+    return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
+  };
+
+  const provisioned = await prepareThrough(`export default { apiVersion: 1, name: 'acme', slots: {
+    ensureTenant: () => ({ tenant: 'acme-validation-7' }),
+  } };`);
+  assert.equal(provisioned.isError, false, provisioned.text);
+
+  const unconfirmed = await prepareThrough(RECORDING);
+  assert.equal(unconfirmed.isError, true);
+  assert.match(unconfirmed.text, /confirmTenant/);
 });

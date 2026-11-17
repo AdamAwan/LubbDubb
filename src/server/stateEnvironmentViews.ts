@@ -3,13 +3,7 @@ import { groupBy } from '../primitives.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
 import { goneCheckRows, okScope, okStanding, pageRows } from '../validation/remote/intent.js';
-import {
-  commandSteps,
-  noStanding,
-  resolveTenant,
-  type OperatorTenants,
-  type TenantSteps,
-} from '../validation/remote/tenants.js';
+import { noStanding, resolveTenant, type OperatorTenants, type TenantSteps } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
   GoalArrival,
@@ -249,14 +243,14 @@ interface RemoteSheetSigners {
  * beside the reading it describes. Absent entirely where no environment declares a `validate` block:
  * a card of question marks on a deployment that configured nothing reads as broken.
  */
-export function buildRemoteSheets(
+function buildRemoteSheets(
   store: System['store'],
   environments: EnvironmentConfig[],
   tasks: readonly TaskSummary[],
   signers: RemoteSheetSigners,
-  operatorTenants?: OperatorTenants,
-  checks: readonly ValidationCheck[] = [],
-  steps: (environment: EnvironmentConfig) => TenantSteps = (environment) => commandSteps(environment.validate),
+  operatorTenants: OperatorTenants | undefined,
+  checks: readonly ValidationCheck[],
+  steps: (environment: EnvironmentConfig) => TenantSteps,
 ): RemoteSheetView[] {
   if (!environments.some((e) => e.validate !== undefined)) return [];
   const sheets = store.remoteValidation.listRemoteSheets();
@@ -326,7 +320,7 @@ export function snapshotRemoteSheets(
   system: Pick<System, 'store' | 'config' | 'remoteRuns'>,
   tasks: readonly TaskSummary[],
   checks: readonly ValidationCheck[],
-  signers: RemoteSheetSigners,
+  signers: RemoteSheetSigners = {},
 ): RemoteSheetView[] {
   return buildRemoteSheets(
     system.store,
