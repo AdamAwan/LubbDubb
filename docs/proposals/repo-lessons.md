@@ -40,7 +40,9 @@ Graduation into a pull request was the right ending. It sat at the end of a pipe
 ## The idea
 
 **Skip the store. The repository is the store.** A lesson exists only as a merged edit to the
-repository's own documentation — the nearest `CLAUDE.md`, or the spec that owns the behaviour.
+documentation of the repository **the fleet works on** — the nearest `CLAUDE.md`, or the doc that
+owns the behaviour. Never LubbDubb's own repository: the lessons are about the code the agents
+were fixing, so that is where they belong and where its own engineers will read them.
 The harness's job is to notice a repeat miss and draft that edit. **The pull request review is the
 ruling**, and it is a review the operator already knows how to do.
 
@@ -61,8 +63,9 @@ Each failure above is answered by construction:
    noise; two on different goals is a pattern.
 2. **Draft.** Rule _repo-lesson_ dispatches one code agent on its own branch, handed the group's
    remedy summaries, their pull request links and the retrospectives of those goals. It edits the
-   **nearest** document that would have been read — a directory `CLAUDE.md` before the root one,
-   following this repo's own rule that the root file is a fleet-wide cost.
+   **nearest** document in the worked-on repository that would have been read — a directory
+   `CLAUDE.md` before the root one, because the root file is loaded for every agent and every
+   engineer, so each line there costs everyone.
    - For `undocumented`: write the rule down.
    - For `documented` (the rule exists and was missed): don't add more prose. Move it closer to the
      code, or propose a lint rule or test that enforces it.
