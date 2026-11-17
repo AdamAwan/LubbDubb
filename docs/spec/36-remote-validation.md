@@ -1481,7 +1481,7 @@ name the project's own command provisioned, which is the one place that name is 
 _Provision the tenant_ rather than _Reseed_. Provisioning is idempotent and destroys nothing; warning
 about a wipe that will not happen teaches an operator that this card's warnings are noise, which is
 how the one that matters stops being read. That distinction is `RemoteTenantView.destructive`
-(`validate.reseed !== undefined`), folded on the **server** beside `reseedable` — a cockpit that
+(a reseed step in the desk's `tenantSteps` — a `reseed` command, or an extension's `reseedTenant` slot), folded on the **server** beside `reseedable` — a cockpit that
 worked out for itself whether a command destroys anything would be a second opinion about the blast
 radius of somebody else's script.
 

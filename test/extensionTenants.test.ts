@@ -265,4 +265,11 @@ test('the desktop channel prepares an extension tenant, confirming first only wh
   const unconfirmed = await prepareThrough(RECORDING);
   assert.equal(unconfirmed.isError, true);
   assert.match(unconfirmed.text, /confirmTenant/);
+
+  const confirmed = await prepareThrough(RECORDING, 'acceptance');
+  assert.equal(
+    confirmed.isError,
+    false,
+    'with no tenant yet, the environment name is the confirmation, as for commands',
+  );
 });

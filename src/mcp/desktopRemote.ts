@@ -172,7 +172,7 @@ function cancel(deps: DesktopToolDeps, environment: string) {
 function prepareTenant(deps: DesktopToolDeps, goalRef: string, environment: string, confirm: string | undefined) {
   const steps = deps.remoteValidation().tenantSteps(environment);
   if (steps === null || (steps.ensure === null && steps.reseed === null))
-    return toolError(`"${environment}" declares neither an "ensureTenant" nor a "reseed" command.`);
+    return toolError(`"${environment}" has nothing that provisions or reseeds its tenant.`);
   if (steps.reseed !== null) {
     const sheet = deps
       .remoteValidation()
@@ -181,7 +181,7 @@ function prepareTenant(deps: DesktopToolDeps, goalRef: string, environment: stri
     const tenant = sheet?.tenant.tenant ?? environment;
     if (confirm !== tenant)
       return toolError(
-        `"${environment}" reseeds: its own command wipes tenant "${tenant}" back to seeded fixture data, taking ` +
+        `"${environment}" reseeds: the project's own reseed wipes tenant "${tenant}" back to seeded fixture data, taking ` +
           'whatever anybody arranged there, and nothing undoes it. Ask the operator, then call again with ' +
           `confirmTenant "${tenant}".`,
       );

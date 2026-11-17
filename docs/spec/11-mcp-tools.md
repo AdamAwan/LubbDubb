@@ -1179,10 +1179,12 @@ reading no sheet ever saw ([36](36-remote-validation.md#uniqueness-is-environmen
 
 `remote_validation_read` and `remote_validation_run` (`src/mcp/desktopRemote.ts`) are the sheet's
 controls on this channel. They reach the harness through one adapter, `DesktopRemoteValidation`,
-built by `desktopRemoteValidation` in `src/system/systemDesktop.ts`: the read is `buildRemoteSheets`
+built by `desktopRemoteValidation` in `src/system/systemDesktop.ts`: the read is `snapshotRemoteSheets`
 — the cockpit's fold, so the session and the cockpit draw one standing — and the four actions are
 `RemoteIntentDesk.give`, `RemoteRunDesk.press`, `cancel` and `beginPrepareTenant`, the routes' own
-desks. `ok` and `press` run a cycle afterwards, for the press route's reason; every write broadcasts
+desks. Whether `prepare_tenant` has anything to run, and whether it must be confirmed, is the desk's
+`tenantSteps` — the same answer the press runs on, so an extension tenant
+([36](36-remote-validation.md#a-tenant-from-the-projects-extension)) is prepared here like a command one. `ok` and `press` run a cycle afterwards, for the press route's reason; every write broadcasts
 the section its route does.
 
 - **The tenant is drawn by name, never by value.** The read carries `TenantStanding.tenant` — a

@@ -227,7 +227,7 @@ export class RemoteRunDesk extends EventEmitter {
     }
   }
 
-  /** @public the seam the cockpit reads tenant steps through */
+  /** @public the seam the cockpit and the desktop channel read tenant steps through */
   tenantSteps(environment: EnvironmentConfig): TenantSteps {
     return this.deps.tenants.steps(environment);
   }
