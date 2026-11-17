@@ -18,6 +18,7 @@ import {
   type TenantEnvironment,
   type TenantKeeper,
 } from './tenants.js';
+import { tenantSteps, type ExtensionTenantKeeper } from './extensionTenants.js';
 
 // → docs/spec/36-remote-validation.md#the-press
 
@@ -28,6 +29,8 @@ interface RemoteRunDeps {
   prober: EnvironmentProber;
   git: GitObserver;
   tenants: TenantKeeper;
+  /** Answers for an environment that sets `validate.tenantExtension`; every other one keeps `tenants`. */
+  extensionTenants?: ExtensionTenantKeeper;
   errors?: ErrorRecorder;
   now?: () => number;
   /** Where a `tenantEnv`'s value is read from. Injected so a test never reads the machine's own. */
@@ -230,7 +233,9 @@ export class RemoteRunDesk extends EventEmitter {
   tenantOutput(environmentName: string): { lines: string[]; lastOutputAt: string | null } {
     const launched = this.deps.store.remoteValidation.tenantLaunch(environmentName);
     if (launched === null) return { lines: [], lastOutputAt: null };
-    return this.deps.tenants.tail(environmentName, launched.launch);
+    const environment = this.deps.environments.find((e) => e.name === environmentName);
+    const keeper = environment === undefined ? this.deps.tenants : this.keeper(environment);
+    return keeper.tail(environmentName, launched.launch);
   }
 
   private resolve(environment: EnvironmentConfig): ReturnType<typeof resolveTenant> {
@@ -319,14 +324,16 @@ export class RemoteRunDesk extends EventEmitter {
       };
 
     const said: string[] = [];
-    if (validate.ensureTenant !== undefined && resumed?.call !== 'reseed') {
-      const refused = await this.ensureStep(environmentName, validate.ensureTenant, resumed, said);
+    const steps = tenantSteps(validate, this.deps.extensionTenants ?? { provider: () => null });
+    const keeper = this.keeper(environment);
+    if (steps.ensure !== null && resumed?.call !== 'reseed') {
+      const refused = await this.ensureStep(environmentName, keeper, steps.ensure, resumed, said);
       if (refused !== null) return refused;
     }
 
     const resolved = this.resolve(environment);
-    if (validate.reseed !== undefined) {
-      const refused = await this.reseedStep(environmentName, validate.reseed, resolved, resumed, said);
+    if (steps.reseed !== null) {
+      const refused = await this.reseedStep(environmentName, keeper, steps.reseed, resolved, resumed, said);
       if (refused !== null) return refused;
     }
 
@@ -339,8 +346,15 @@ export class RemoteRunDesk extends EventEmitter {
     return { ok: true, detail: `${said.join(' and ')}.`, standing: this.standing(environmentName) };
   }
 
+  private keeper(environment: EnvironmentConfig): TenantKeeper {
+    return environment.validate?.tenantExtension === true && this.deps.extensionTenants !== undefined
+      ? this.deps.extensionTenants
+      : this.deps.tenants;
+  }
+
   private async ensureStep(
     environmentName: string,
+    keeper: TenantKeeper,
     command: string,
     resumed: { call: TenantCall; launch: TenantLaunch } | null,
     said: string[],
@@ -348,13 +362,13 @@ export class RemoteRunDesk extends EventEmitter {
     const request = { environment: environmentName, command, tenant: this.standing(environmentName).tenant };
     const provisioned =
       resumed === null
-        ? await this.deps.tenants.ensure(request, this.launched(environmentName, 'ensure'))
-        : await this.deps.tenants.follow('ensure', request, resumed.launch);
+        ? await keeper.ensure(request, this.launched(environmentName, 'ensure'))
+        : await keeper.follow('ensure', request, resumed.launch);
     if (provisioned === null) return this.gone(environmentName);
     if (provisioned.detail !== null || provisioned.tenant === null)
       return {
         ok: false,
-        detail: `the "ensureTenant" command did not provide a tenant — ${provisioned.detail ?? 'it named none'}`,
+        detail: `${keeper === this.deps.tenants ? 'the "ensureTenant" command' : command} did not provide a tenant — ${provisioned.detail ?? 'it named none'}`,
         standing: this.standing(environmentName),
       };
     this.deps.store.remoteValidation.stampRemoteTenant(environmentName, provisioned.tenant, 'ensured_at');
@@ -364,6 +378,7 @@ export class RemoteRunDesk extends EventEmitter {
 
   private async reseedStep(
     environmentName: string,
+    keeper: TenantKeeper,
     command: string,
     resolved: ReturnType<typeof resolveTenant>,
     resumed: { call: TenantCall; launch: TenantLaunch } | null,
@@ -381,8 +396,8 @@ export class RemoteRunDesk extends EventEmitter {
     const request = { environment: environmentName, command, tenant: resolved.value };
     const reseeded =
       resumed?.call === 'reseed'
-        ? await this.deps.tenants.follow('reseed', request, resumed.launch)
-        : await this.deps.tenants.reseed(request, (launch) => {
+        ? await keeper.follow('reseed', request, resumed.launch)
+        : await keeper.reseed(request, (launch) => {
             this.launched(environmentName, 'reseed')(launch);
             this.deps.store.remoteValidation.stampRemoteTenant(environmentName, tenant, 'reseed_launched_at');
           });

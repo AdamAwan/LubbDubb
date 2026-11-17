@@ -4,6 +4,7 @@ import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
 import { goneCheckRows, okScope, okStanding, pageRows } from '../validation/remote/intent.js';
 import { noStanding, resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
+import { tenantSteps } from '../validation/remote/extensionTenants.js';
 import type {
   EnvironmentHealthReading,
   GoalArrival,
@@ -21,14 +22,7 @@ import type {
   WatchOutcome,
   WorkNode,
 } from '../types.js';
-import type {
-  GoalReachView,
-  GoalWatchView,
-  RemoteReadingView,
-  RemoteSheetView,
-  TenantCommandView,
-  TenantPreparation,
-} from '../wire.js';
+import type { GoalReachView, GoalWatchView, RemoteReadingView, RemoteSheetView, TenantCommandView } from '../wire.js';
 import { allGoalReach } from '../environments/reach.js';
 import { arrivalSheetStep } from '../environments/watchWindow.js';
 import { environmentGateHold } from '../environments/arrival.js';
@@ -314,26 +308,31 @@ export function buildRemoteSheets(
       ok: okStanding({ rows, intent, run, validates: validate !== undefined }),
       tenant: {
         ...standing,
-        reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,
-        destructive: validate?.reseed !== undefined,
+        ...tenantControls(validate),
         preparation: prepares.get(sheet.environment) ?? null,
       },
     };
   });
 }
 
-export function tenantCommandViews(
-  environments: readonly EnvironmentConfig[],
-  prepares: readonly TenantPreparation[],
-): TenantCommandView[] {
-  return environments.flatMap((env) => {
-    const validate = env.validate;
-    if (validate?.ensureTenant === undefined && validate?.reseed === undefined) return [];
+function tenantControls(validate: EnvironmentConfig['validate']): { reseedable: boolean; destructive: boolean } {
+  const extension = validate?.tenantExtension === true;
+  return {
+    reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined || extension,
+    destructive: validate?.reseed !== undefined || extension,
+  };
+}
+
+export function tenantCommandViews(system: Pick<System, 'config' | 'store' | 'extensions'>): TenantCommandView[] {
+  const prepares = system.store.remoteValidation.listTenantPrepares();
+  return system.config.environments.flatMap((env) => {
+    const steps = tenantSteps(env.validate, system.extensions);
+    if (steps.ensure === null && steps.reseed === null) return [];
     return [
       {
         environment: env.name,
-        ensureTenant: validate.ensureTenant ?? null,
-        reseed: validate.reseed ?? null,
+        ensureTenant: steps.ensure,
+        reseed: steps.reseed,
         preparation: prepares.find((p) => p.environment === env.name) ?? null,
       },
     ];

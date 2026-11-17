@@ -44,6 +44,7 @@ import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
 import { CommandTenantKeeper, tenantLogRoot } from '../validation/remote/tenants.js';
+import { checkTenantExtension, ExtensionTenantKeeper } from '../validation/remote/extensionTenants.js';
 import { WatchDesk } from '../environments/watchDesk.js';
 import { WatchAsks } from '../environments/watchAsks.js';
 import { PrWatchDesk } from '../pr/prWatchDesk.js';
@@ -241,7 +242,8 @@ function buildRemoteValidationDesks(
   environmentObserver: EnvironmentObserver,
   proposals: Pick<ProposalDesk, 'accept'>,
 ) {
-  const { store, sink, errors, gitObserver } = base;
+  const { store, sink, errors, gitObserver, extensions } = base;
+  checkTenantExtension(config.environments, extensions);
   const stateQueries = new StateQueryDesk({
     store,
     environments: config.environments,
@@ -273,6 +275,7 @@ function buildRemoteValidationDesks(
         logRoot: tenantLogRoot(config.validationRoot),
         timeoutMs: config.remoteValidation.tenantTimeoutMs,
       }),
+    extensionTenants: new ExtensionTenantKeeper(extensions),
     errors,
     operatorTenants: config.remoteValidation.tenants,
   });

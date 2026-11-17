@@ -7,10 +7,9 @@ An **extension** is a project's own code that LubbDubb loads at boot and calls a
 **slots**. It is how a behaviour that only one project needs lives _in that project_, while LubbDubb
 keeps the orchestration around it: when to ask, the locks, the record, the cockpit.
 
-**Built**: the loader, the host and the `extensions` key. **Not yet built**: any slot. The book in
-`src/extensions/slots.ts` is empty, so today an extension can load but has nothing to fill. Each slot
-is added by the change that needs it, following [Adding a slot](#adding-a-slot); the first planned is
-remote-validation tenants ([36](36-remote-validation.md#tenants)).
+**Built**: the loader, the host, the `extensions` key, and the two tenant slots
+([36](36-remote-validation.md#a-tenant-from-the-projects-extension)). Each further slot is added by
+the change that needs it, following [Adding a slot](#adding-a-slot).
 
 ## Invariants
 
@@ -45,6 +44,7 @@ export default {
   name: 'acme',
   slots: {
     // one function per slot this project fills: (input, { repoRoot, signal }) => answer
+    ensureTenant: async ({ environment }) => ({ tenant: await provisionFor(environment) }),
   },
 };
 ```
@@ -126,10 +126,12 @@ is what lets the harness change underneath without breaking projects.
 
 ## The slots
 
-None yet. Each slot added is a row here, and links the spec of the feature that asks it.
+Each slot is a row here, and links the spec of the feature that asks it.
 
-| Slot | Asked by | Input | Answer | Timeout |
-| ---- | -------- | ----- | ------ | ------- |
+| Slot           | Asked by                                                                                                                                  | Input                                     | Answer                                      | Timeout |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------- | ------- |
+| `ensureTenant` | The tenant press, for an environment with `validate.tenantExtension` ([36](36-remote-validation.md#a-tenant-from-the-projects-extension)) | `{ environment, tenant: string \| null }` | `{ tenant }`, a non-blank one-line name     | 1 hour  |
+| `reseedTenant` | The same press, after `ensureTenant`; optional                                                                                            | `{ environment, tenant }`                 | nothing (`undefined`); a throw is a failure | 1 hour  |
 
 ## Adding a slot
 

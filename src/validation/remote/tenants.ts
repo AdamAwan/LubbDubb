@@ -196,8 +196,12 @@ export function resolveTenant(input: {
   if (validate?.tenantEnv !== undefined)
     return fromTenantEnv({ ...input, variable: validate.tenantEnv, stamps, freshnessMs });
 
-  if (validate?.ensureTenant !== undefined) {
+  if (validate?.ensureTenant !== undefined || validate?.tenantExtension === true) {
     const provisioned = stamps.find((t) => t.ensuredAt !== null) ?? stamps[0];
+    const by =
+      validate.ensureTenant === undefined
+        ? 'the project\'s extension, through its "ensureTenant" slot,'
+        : `its "validate.ensureTenant" command — \`${validate.ensureTenant}\` —`;
     if (provisioned === undefined)
       return {
         value: null,
@@ -205,8 +209,7 @@ export function resolveTenant(input: {
           freshnessMs,
           blockedReason:
             `"${input.environment.name}" provisions its tenant on demand and nothing has provisioned one yet. ` +
-            `Run its "validate.ensureTenant" command — \`${validate.ensureTenant}\` — from this goal's sheet, ` +
-            'and it will name the tenant every row here is put to.',
+            `Run ${by} from this goal's sheet, and it will name the tenant every row here is put to.`,
         }),
       };
     return dated({ tenant: provisioned.tenant, value: provisioned.tenant, stamps, freshnessMs, now: input.now });

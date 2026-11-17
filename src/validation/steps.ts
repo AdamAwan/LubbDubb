@@ -26,7 +26,7 @@ export interface StepCapabilities {
   state: boolean;
   /** Some environment declares a watch source the harness runs. */
   observe: boolean;
-  /** Some environment names a tenant — a literal, a variable, or an `ensureTenant` command. */
+  /** Some environment names a tenant — a literal, a variable, an `ensureTenant` command or the project's extension. */
   tenant: boolean;
 }
 
@@ -45,6 +45,7 @@ interface CapabilityEnvironment {
     tenant?: string;
     tenantEnv?: string;
     ensureTenant?: string;
+    tenantExtension?: true;
     browser?: unknown;
     state?: { run?: string };
   };
@@ -57,7 +58,12 @@ export function stepCapabilities(environments: readonly CapabilityEnvironment[])
     if (validate === undefined) continue;
     if (validate.browser !== undefined) caps.browser = true;
     if (typeof validate.state?.run === 'string' && validate.state.run.trim() !== '') caps.state = true;
-    if (validate.tenant !== undefined || validate.tenantEnv !== undefined || validate.ensureTenant !== undefined)
+    if (
+      validate.tenant !== undefined ||
+      validate.tenantEnv !== undefined ||
+      validate.ensureTenant !== undefined ||
+      validate.tenantExtension === true
+    )
       caps.tenant = true;
     if (harnessReadable(env.watch)) caps.observe = true;
   }

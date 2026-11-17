@@ -338,6 +338,7 @@ export function validationPlanNote(
       tenant?: string;
       tenantEnv?: string;
       ensureTenant?: string;
+      tenantExtension?: true;
       browser?: { runner: string; listSelectors?: string };
       state?: { run: string };
     };
@@ -359,7 +360,10 @@ export function validationPlanNote(
     lines.push(
       `- **${env.name}** — permits ${validate.permits.map((kind) => `\`${kind}\``).join(', ')}` +
         (can.length === 0 ? '.' : `; ${can.join(', and ')}.`) +
-        (validate.tenant === undefined && validate.tenantEnv === undefined && validate.ensureTenant === undefined
+        (validate.tenant === undefined &&
+        validate.tenantEnv === undefined &&
+        validate.ensureTenant === undefined &&
+        validate.tenantExtension === undefined
           ? ' No tenant is configured, so a run that writes has nowhere to write and a `browser` step is a person’s.'
           : ''),
     );

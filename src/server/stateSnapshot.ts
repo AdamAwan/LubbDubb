@@ -184,7 +184,7 @@ function harnessSection(
   | 'planning'
   | 'dispatchRules'
 > {
-  const { system, store, connector, config, watchLabel, world, tasks, placementCtx, planPartsOf, prByBranch } = r;
+  const { system, connector, config, watchLabel, world, tasks, placementCtx, planPartsOf, prByBranch } = r;
   return {
     config: {
       /* The declaration, in promotion order, and never a goal's reading of it: the goal page's
@@ -245,7 +245,7 @@ function harnessSection(
       tasks,
       defaultBranch: config.defaultBranch,
     }),
-    tenantCommands: tenantCommandViews(config.environments, store.remoteValidation.listTenantPrepares()),
+    tenantCommands: tenantCommandViews(system),
     planning: config.planning,
     dispatchRules: DISPATCH_RULES,
   };
