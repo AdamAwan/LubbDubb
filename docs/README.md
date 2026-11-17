@@ -56,6 +56,8 @@ follow-ups to the validation page an operator answers once ([36](spec/36-remote-
 [`proposals/watch-length.md`](proposals/watch-length.md) and
 [`proposals/owed-telemetry.md`](proposals/owed-telemetry.md). A third,
 [`proposals/video-proof.md`](proposals/video-proof.md), records several goals in one hosted run.
+[`proposals/repo-lessons.md`](proposals/repo-lessons.md) turns a miss the fleet keeps repeating
+into a documentation pull request, and shares what landed across fleets.
 
 A **build plan** — the staged order a spec still marked unbuilt gets built in — lives under `plans/`
 while it is being worked and is **deleted by the change that finishes the last stage**, for the same
