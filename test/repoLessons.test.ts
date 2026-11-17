@@ -109,7 +109,8 @@ function lessonTasks(system: System): Task[] {
 async function dispatched(system: System): Promise<{ task: Task; draft: LessonDraft }> {
   miss(system, 11);
   miss(system, 12);
-  await system.lessons.run(world());
+  await system.lessonPrs.read();
+  system.lessons.run(world());
   await system.harness.runCycle('manual');
   const tasks = lessonTasks(system);
   assert.equal(tasks.length, 1);
@@ -144,7 +145,7 @@ test('remedies on two goals put one repo-lesson agent on lesson/<tag>/<id>, with
     assert.ok(toolsForRule('repo-lesson').has('lesson_conclude'));
     assert.ok(!toolsForRule('pr-ci-failing').has('lesson_conclude'), 'advertised to the lesson agent alone');
 
-    await system.lessons.run(world());
+    system.lessons.run(world());
     await system.harness.runCycle('manual');
     assert.equal(lessonTasks(system).length, 1, 'no second draft while one is out');
     assert.equal(system.store.lessons.listDrafts().length, 1);
@@ -158,7 +159,7 @@ test('minGoals 0 drafts nothing, the rule is inert even over a draft row, and th
   try {
     miss(system, 11);
     miss(system, 12);
-    await system.lessons.run(world());
+    system.lessons.run(world());
     assert.equal(system.store.lessons.listDrafts().length, 0);
     system.store.lessons.openDraft({
       groupKey: 'ci/missed_gate/lint',
@@ -171,7 +172,7 @@ test('minGoals 0 drafts nothing, the rule is inert even over a draft row, and th
     });
     await system.harness.runCycle('manual');
     assert.equal(lessonTasks(system).length, 0);
-    await system.lessons.run(world());
+    system.lessons.run(world());
     assert.deepEqual(
       system.store.lessons.listDrafts().map((d) => d.status),
       ['unanswered'],
@@ -302,7 +303,7 @@ test('nothing settles the draft with its reason; a task that ends unconcluded se
     const { draft } = await dispatched(second.system);
     backend.last().emitExit(0);
     await delay(5);
-    await second.system.lessons.run(world());
+    second.system.lessons.run(world());
     assert.equal(second.system.store.lessons.getDraft(draft.id)!.status, 'unanswered');
   } finally {
     second.system.store.close();
@@ -324,7 +325,7 @@ function prOpen(system: System, key: string, where: string, prNumber: number): L
   return draft;
 }
 
-test('a merged lesson pull request is adopted, a closed one declined', async () => {
+test('a merged lesson pull request is adopted, a closed one declined', () => {
   const { system } = build(2);
   try {
     const merged = prOpen(system, 'ci/missed_gate/a', 'a', 77);
@@ -336,7 +337,7 @@ test('a merged lesson pull request is adopted, a closed one declined', async () 
       ],
     });
     system.graph.record(settled);
-    await system.lessons.run(settled);
+    system.lessons.run(settled);
     assert.equal(system.store.lessons.getDraft(merged.id)!.status, 'adopted');
     assert.equal(system.store.lessons.getDraft(closed.id)!.status, 'declined');
   } finally {
@@ -346,26 +347,28 @@ test('a merged lesson pull request is adopted, a closed one declined', async () 
 
 test('at most two lesson pull requests are open, and an open PR carrying the marker holds its group', async () => {
   const { system } = build(2);
+  await system.lessonPrs.read();
   try {
     prOpen(system, 'ci/missed_gate/a', 'a', 77);
     prOpen(system, 'ci/missed_gate/b', 'b', 78);
     miss(system, 11);
     miss(system, 12);
-    await system.lessons.run(world());
+    system.lessons.run(world());
     assert.equal(system.store.lessons.pendingDraft(), null, 'the cap of two holds');
   } finally {
     system.store.close();
   }
 
   const other = build(2).system;
+  await other.lessonPrs.read();
   try {
     miss(other, 11);
     miss(other, 12);
-    await other.lessons.run(world({ pullRequests: [pr(40, { body: `x\n\n${lessonMarker('ci/missed_gate/lint')}` })] }));
+    other.lessons.run(world({ pullRequests: [pr(40, { body: `x\n\n${lessonMarker('ci/missed_gate/lint')}` })] }));
     assert.equal(other.store.lessons.pendingDraft(), null, 'another fleet’s open lesson for the group');
-    await other.lessons.run(world({ pullRequests: [pr(11, { botAuthored: true })] }));
+    other.lessons.run(world({ pullRequests: [pr(11, { botAuthored: true })] }));
     assert.equal(other.store.lessons.pendingDraft(), null, 'a bot’s pull request is not the fleet’s miss');
-    await other.lessons.run(world());
+    other.lessons.run(world());
     assert.equal(other.store.lessons.pendingDraft()?.groupKey, 'ci/missed_gate/lint');
   } finally {
     other.store.close();
@@ -374,20 +377,21 @@ test('at most two lesson pull requests are open, and an open PR carrying the mar
 
 test('a declined group is redrafted only after as many new goals again; an adopted one never', async () => {
   const { system } = build(2);
+  await system.lessonPrs.read();
   try {
     miss(system, 11);
     miss(system, 12);
-    await system.lessons.run(world());
+    system.lessons.run(world());
     const first = system.store.lessons.pendingDraft()!;
     system.store.lessons.settle(first.id, 'declined', ['pending']);
     await delay(5);
-    await system.lessons.run(world());
+    system.lessons.run(world());
     assert.equal(system.store.lessons.pendingDraft(), null, 'the misses it was declined on do not bring it back');
     miss(system, 13);
-    await system.lessons.run(world());
+    system.lessons.run(world());
     assert.equal(system.store.lessons.pendingDraft(), null, 'one new goal is not as many again');
     miss(system, 14);
-    await system.lessons.run(world());
+    system.lessons.run(world());
     const again = system.store.lessons.pendingDraft();
     assert.ok(again, 'two new goals redraft it');
     assert.equal(again.groupKey, first.groupKey);
@@ -396,7 +400,7 @@ test('a declined group is redrafted only after as many new goals again; an adopt
     await delay(5);
     miss(system, 15);
     miss(system, 16);
-    await system.lessons.run(world());
+    system.lessons.run(world());
     assert.equal(system.store.lessons.pendingDraft(), null, 'an adopted lesson is never redrafted');
   } finally {
     system.store.close();

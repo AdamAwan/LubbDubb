@@ -128,6 +128,8 @@ export interface System {
   lessonOutcomes: LessonDesks['lessonOutcomes'];
   /** The review areas and lesson label every did-it-work reading is made with. → docs/spec/41-repo-lessons.md#did-it-work */
   lessonReading: LessonDesks['lessonReading'];
+  /** Every fleet's lesson pull requests, read in the background. → docs/spec/41-repo-lessons.md#across-fleets */
+  lessonPrs: LessonDesks['lessonPrs'];
   validationReady: ValidationReadyDesk;
   remoteRuns: RemoteRunDesk;
   remoteIntents: EnvironmentDesks['remoteIntents'];

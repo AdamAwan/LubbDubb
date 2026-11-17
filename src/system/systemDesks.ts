@@ -214,7 +214,7 @@ export function buildLessonDesks(config: Config, base: Foundation) {
     lessonPrs,
     errors,
   });
-  return { lessons, lessonOutcomes, lessonReading };
+  return { lessons, lessonOutcomes, lessonReading, lessonPrs };
 }
 
 /** The environment desks the composed system exposes. */

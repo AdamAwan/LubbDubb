@@ -36,24 +36,36 @@ const LESSON_PR_READ_MS = 30 * 60 * 1000;
 
 /** Every lesson pull request on the repository, open or closed inside the lesson window, whoever opened it. */
 export class LessonPrReading {
-  private held: { at: number; prs: LessonPullRequest[] | null } | null = null;
+  private last: { at: number; prs: LessonPullRequest[] | null } | null = null;
+  private inFlight: Promise<LessonPullRequest[] | null> | null = null;
   private readonly now: () => number;
 
   constructor(private readonly deps: { source: LessonPrReadable; errors?: ErrorRecorder; now?: () => number }) {
     this.now = deps.now ?? (() => Date.now());
   }
 
-  /** The held read while it is fresh, else a new one; null when the read failed, held as long so a failing provider is not hammered. */
-  async read(fresh = false): Promise<LessonPullRequest[] | null> {
+  /** The last good read, never waited on: a stale or missing one starts a read in the background. */
+  held(): LessonPullRequest[] | null {
+    if (this.last === null || this.now() - this.last.at >= LESSON_PR_READ_MS) void this.read();
+    return this.last?.prs ?? null;
+  }
+
+  /** A fresh read, shared with one already running; null when it failed, which keeps the last good one. */
+  read(): Promise<LessonPullRequest[] | null> {
+    this.inFlight ??= this.fetch().finally(() => {
+      this.inFlight = null;
+    });
+    return this.inFlight;
+  }
+
+  private async fetch(): Promise<LessonPullRequest[] | null> {
     const at = this.now();
-    if (!fresh && this.held !== null && at - this.held.at < LESSON_PR_READ_MS) return this.held.prs;
     try {
-      const since = new Date(at - LESSON_WINDOW_MS).toISOString();
-      const prs = await this.deps.source.listLessonPullRequests(since);
-      this.held = { at, prs };
+      const prs = await this.deps.source.listLessonPullRequests(new Date(at - LESSON_WINDOW_MS).toISOString());
+      this.last = { at, prs };
       return prs;
     } catch (err) {
-      this.held = { at, prs: null };
+      this.last = { at, prs: this.last?.prs ?? null };
       this.deps.errors?.record({
         source: 'provider',
         message: `reading lesson pull requests failed: ${(err as Error).message}`,

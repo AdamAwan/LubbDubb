@@ -25,7 +25,7 @@ interface LessonDeskDeps {
   now?: () => number;
 }
 
-/** Settles drafts and opens the next one; reads no world of its own beyond the lesson pull requests. */
+/** Settles drafts and opens the next one; reads no world of its own and never waits on anything. */
 export class LessonDesk {
   private readonly now: () => number;
 
@@ -34,14 +34,14 @@ export class LessonDesk {
   }
 
   /** @public called by the pulse, beside `appErrorTriage`. */
-  async run(world: WorldSnapshot): Promise<void> {
+  run(world: WorldSnapshot): void {
     this.settle();
     if (this.deps.minGoals < 2) {
       const pending = this.deps.store.lessons.pendingDraft();
       if (pending) this.deps.store.lessons.settle(pending.id, 'unanswered', ['pending']);
       return;
     }
-    await this.open(world);
+    this.open(world);
   }
 
   private settle(): void {
@@ -56,7 +56,7 @@ export class LessonDesk {
     }
   }
 
-  private async open(world: WorldSnapshot): Promise<void> {
+  private open(world: WorldSnapshot): void {
     const { store } = this.deps;
     const drafts = store.lessons.listDrafts();
     if (drafts.some((d) => d.status === 'pending' || d.status === 'dispatched')) return;
@@ -73,7 +73,7 @@ export class LessonDesk {
       since,
     };
     if (lessonCandidates(input, drafts, this.deps.minGoals).length === 0) return;
-    const read = await this.deps.lessonPrs.read();
+    const read = this.deps.lessonPrs.held();
     if (read === null) return;
     const open = world.pullRequests.filter((pr) => prState(pr) === 'open');
     const candidate = lessonCandidates(input, drafts, this.deps.minGoals, othersLessonPrs(read, drafts)).find(

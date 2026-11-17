@@ -63,8 +63,16 @@ export class LessonOutcomeDesk {
         error: 'name no pull request or work item in the title: the harness cites every one in the body as a link.',
       };
     if (input.outcome === 'pull_request') {
-      const covered = await this.coveredBy(draft);
+      const branch = task.branch ?? lessonBranch(draft.id, draft.groupKey);
+      const covered = await this.coveredBy(draft, branch);
+      if (covered === undefined)
+        return {
+          ok: false,
+          error:
+            'Could not read the other lesson pull requests on the repository to check for one already open. Call lesson_conclude again.',
+        };
       if (covered !== null) {
+        await this.dropBranch(branch);
         this.deps.store.lessons.settle(draft.id, 'nothing', ['dispatched'], {
           fix: input.fix,
           title,
@@ -75,14 +83,27 @@ export class LessonOutcomeDesk {
       }
     }
     return input.outcome === 'pull_request'
-      ? this.openPr(draft, { ...input, fix: input.fix, title })
+      ? this.openPr(draft, task.branch ?? lessonBranch(draft.id, draft.groupKey), { ...input, fix: input.fix, title })
       : this.fileTicket(draft, { ...input, fix: input.fix, title });
   }
 
-  /** Another fleet's open or merged lesson pull request for the draft's group, by URL. */
-  private async coveredBy(draft: LessonDraft): Promise<string | null> {
-    const prs = othersLessonPrs((await this.deps.lessonPrs.read(true)) ?? [], [draft]);
+  /** Another fleet's open or merged lesson pull request for the draft's group, by URL; undefined when unread. */
+  private async coveredBy(draft: LessonDraft, branch: string): Promise<string | null | undefined> {
+    const read = await this.deps.lessonPrs.read();
+    if (read === null) return undefined;
+    const prs = othersLessonPrs(read, [draft]).filter((pr) => pr.branch !== branch);
     return lessonPrsForGroup(prs, draft.groupKey).find((pr) => pr.state !== 'closed')?.url ?? null;
+  }
+
+  private async dropBranch(branch: string): Promise<void> {
+    try {
+      await this.deps.sink.deleteBranch({ branch });
+    } catch (err) {
+      this.deps.errors?.record({
+        source: 'cycle',
+        message: `deleting covered lesson branch ${branch} failed: ${(err as Error).message}`,
+      });
+    }
   }
 
   private ownDraft(task: Task): LessonDraft | { error: string } {
@@ -99,9 +120,12 @@ export class LessonOutcomeDesk {
     return draft;
   }
 
-  private async openPr(draft: LessonDraft, input: LessonConcludeInput & { fix: LessonFix }): Promise<Concluded> {
+  private async openPr(
+    draft: LessonDraft,
+    branch: string,
+    input: LessonConcludeInput & { fix: LessonFix },
+  ): Promise<Concluded> {
     const { store, sink, errors } = this.deps;
-    const branch = lessonBranch(draft.id, draft.groupKey);
     let ref: string | undefined;
     try {
       ref = (

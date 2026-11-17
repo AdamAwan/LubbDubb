@@ -39,7 +39,7 @@ adopted or published.
 - **A lesson pull request cites the pull requests behind it as full URLs, never `#n` and never with a closing keyword.** On Azure DevOps `#n` links a work item, which would adopt the lesson into another goal. → [§](#the-outcome) · `test/repoLessons.test.ts`
 - **One draft is out at a time, at most two lesson pull requests are open, and a group with an open pull request carrying its marker is not drafted.** Each open lesson is watched, so its CI and review are fleet work nobody has asked for yet. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
 - **Another fleet's lesson pull request for a group counts as a draft of this fleet's — open holds the group, merged ends it, closed waits for `minGoals` new goals — and is found by the group tag in its branch, never by author or label.** Fleets on one repository run under different authors and label prefixes, and the world each reads is filtered to its own author, so a check that reads the world sees none of the others and every fleet drafts the same lesson. → [§](#across-fleets) · `test/lessonCrossFleet.test.ts`
-- **A draft is not opened while the lesson pull requests cannot be read, and `lesson_conclude` re-reads them, fresh, before it opens one.** An unread repository is not an empty one; and two fleets that drafted the same group in the same hour would otherwise both open. → [§](#across-fleets) · `test/lessonCrossFleet.test.ts`
+- **A draft is not opened before the lesson pull requests have been read once, the desk never waits on that read, and `lesson_conclude` re-reads them before it opens one — refusing, and asking to be called again, when that read fails.** An unread repository is not an empty one; a pulse that waited on a 30-day listing would hold up every desk after it; and two fleets that drafted the same group in the same hour would otherwise both open. → [§](#across-fleets) · `test/lessonCrossFleet.test.ts`
 - **A lesson is concluded only by `lesson_conclude`, from the draft's own task: `open_pr` on a lesson origin refuses and says so, and there is no `body` argument.** A pull request opened by hand carries no marker, label or evidence, and nothing would ever settle its draft. → [§](#the-prompt) · `test/repoLessons.test.ts`
 - **A lesson ticket carries the lesson label and never the watch label.** Filing it must not also dispatch for it: the operator decides whether the fleet takes a refactor on. → [§](#a-pull-request-or-a-ticket) · `test/repoLessons.test.ts`
 - **A draft whose agent's task ended without concluding settles `unanswered`; a lesson pull request merged is `adopted`, closed is `declined`.** A draft nothing settles holds its group for ever. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
@@ -286,9 +286,11 @@ fenced to the draft's own task — the origin must parse and the draft's `task_i
 request or work item (`#n`, `!n`) is refused, for the citation rule below.
 
 - **`pull_request`** — first a fresh read of every fleet's lesson pull requests
-  ([across fleets](#across-fleets)): if another one for the same group is open or merged, nothing is
-  opened, the draft settles `nothing` with that pull request's URL as its reason, and the tool answers
-  with the URL. Otherwise `sink.createPullRequest` on `lesson/<tag>/<id>` against the default branch, the
+  ([across fleets](#across-fleets)). A failed read refuses and asks to be called again. If another
+  lesson for the same group is open or merged, nothing is opened: the agent's pushed branch is deleted,
+  the draft settles `nothing` with that pull request's URL as its reason, and the tool answers with the
+  URL. Otherwise `sink.createPullRequest` on the branch the task was dispatched on (`task.branch`, never
+  re-derived, so a draft dispatched on an older branch shape still opens) against the default branch, the
   lesson label (`${labelPrefix}-lesson`, or `lesson` with no prefix, from `lessonLabelFor` in
   `src/watchLabels.ts`, computed once on the foundation), then `seedPrWatch`, so CI and review on it are answered like any of the
   fleet's own pull requests; the draft goes `pr-open` with the pull request's number. A refused open
@@ -333,7 +335,8 @@ desk, so below `graph` and `environments`. Each pulse it:
 - opens a draft for the top candidate when none is `pending` or `dispatched`, **fewer than 2 are
   `pr-open`**, no open pull request of its own world carries the group's marker, and no other fleet's
   lesson pull request holds the group ([across fleets](#across-fleets)). The lesson pull requests are
-  read only once some group is a candidate, and a failed read opens nothing that pulse. The pull requests
+  asked for only once some group is a candidate, and never waited on: before the first read lands
+  nothing opens. The pull requests
   left out of the fold are read off the same world: every bot-authored one, every one on a `lesson/`
   branch or carrying the lesson label, and every one a draft recorded. The draft keeps the misses it
   was made on — remedy, pull request, goal, guard, summary — and the briefing, assembled once: the
@@ -414,8 +417,11 @@ What every fleet can see is a **branch**. A lesson branch is `lesson/<tag>/<id>`
 `lessonGroupTag(groupKey)` — the same ten hex digits on every fleet. `LessonPrReading`
 (`src/lessons/lessonPrs.ts`) asks the connector for every pull request on a `lesson/` branch, open or
 closed inside the 30-day lesson window, whoever opened it (`listLessonPullRequests`,
-[15](15-integrations.md); each provider hands its listings to one shared reduction, `lessonPullsOf`), and
-holds the answer 30 minutes — a failed read too, so a failing provider is not re-listed every pulse. `othersLessonPrs` drops this fleet's own
+[15](15-integrations.md); each provider hands its listings to one shared reduction, `lessonPullsOf`). The
+desk reads `held()`, which never waits: it returns the last good read and, when that is missing or over
+30 minutes old, starts one in the background (one at a time). A failed read keeps the last good one and
+still counts as a read for the 30 minutes, so a failing provider is not re-listed every pulse.
+`lesson_conclude` calls `read()`, which waits and answers null on failure. `othersLessonPrs` drops this fleet's own
 drafts' branches, and `lessonCandidates` reads each remaining one whose tag matches a group as a draft of
 that group: **open** is `pr-open` and holds it, **merged** is `adopted` and ends it, **closed** is
 `declined` at its close time with no goals, so the group comes back only on `minGoals` new goals after
@@ -424,7 +430,7 @@ names no group and is only excluded from the fold, as before; the body-marker ch
 world stays for those.
 
 The desk's check runs when a draft opens; the agent then works for a while, and another fleet may open
-its own lesson for the group meanwhile. So `lesson_conclude` re-reads, bypassing the held read, before
+its own lesson for the group meanwhile. So `lesson_conclude` re-reads, past the held read, before
 it opens a pull request ([the outcome](#the-outcome)). Two fleets concluding in the same minute can
 still both open; the operator closes one.
 
