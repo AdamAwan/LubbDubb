@@ -113,10 +113,13 @@ export class LocalValidationDesk extends EventEmitter {
       visited: result.visited,
       screenshots: media,
       note: result.status === 'blocked' ? result.summary : null,
-      recordingStatus: recordingStatus(
-        row.taskId === null ? null : this.deps.store.tasks.getTask(row.taskId),
-        media.some((name) => mediaKind(name) === 'video'),
-      ),
+      recordingStatus:
+        result.status === 'blocked'
+          ? null
+          : recordingStatus(
+              task,
+              media.some((name) => mediaKind(name) === 'video'),
+            ),
     });
     if (written === null)
       return {

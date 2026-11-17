@@ -1642,7 +1642,9 @@ it, so nothing is backfilled.
 that left no video, which on a machine without the pinned Playwright's ffmpeg is every run. It is the
 harness's reading, not the agent's — `remote_validation_report` has no summary field by design, and an
 agent told to explain a missing video would put the sentence into `artefacts` or `blocked`. A run
-abandoned through `blocked` writes none. The sheet card draws "not recorded" under the run line where it
+abandoned through `blocked` writes none, and nor does one whose artefacts could not be listed or whose
+video could not be copied: a video the browser _did_ write is not `missing`, and the copy's failure is
+already in the error log. The sheet card draws "not recorded" under the run line where it
 is `missing`. Null on every run before the column; nothing is backfilled.
 
 **A recording is evidence, never a reading.** It is not on any row, colours nothing and is not counted:

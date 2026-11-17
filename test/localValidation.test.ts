@@ -625,6 +625,24 @@ test('a run launched with the recorder that wrote no video says so, and is still
   system.store.close();
 });
 
+test('a blocked run is never judged on its recording, since it may never have started one', async () => {
+  const system = build();
+  liveRun(system);
+  const validation = request(system);
+  const agent = spawnAgent(system, `issue:12:validate-local:${validation.id}`, 'issue/12', [
+    DEFAULT_LOCAL_VALIDATION.browser as ExtraMcpServer,
+  ]);
+  system.store.localValidations.markLocalValidationDispatched(validation.id, agent.taskId);
+
+  const reported = await callTool(system, agent, 'local_validation_report', {
+    result: 'blocked',
+    summary: 'the app never came up',
+  });
+  assert.ok(!reported.isError, reported.text);
+  assert.equal(system.store.localValidations.getLocalValidation(validation.id)?.recordingStatus, null);
+  system.store.close();
+});
+
 test('the launch document carries both servers, and never lets an extra take the harness’s key', async () => {
   const system = build();
   const listening = await system.mcp.listen();

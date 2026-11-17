@@ -14,15 +14,16 @@ interface Host {
 
 function playwrightCacheDir(host: Host): string {
   const set = host.env.PLAYWRIGHT_BROWSERS_PATH;
-  if (set !== undefined && set !== '' && set !== '0') return set;
+  if (set !== undefined && set !== '') return set;
   if (host.platform === 'win32')
-    return join(host.env.LOCALAPPDATA ?? join(host.home, 'AppData', 'Local'), 'ms-playwright');
+    return join(host.env.LOCALAPPDATA || join(host.home, 'AppData', 'Local'), 'ms-playwright');
   if (host.platform === 'darwin') return join(host.home, 'Library', 'Caches', 'ms-playwright');
-  return join(host.env.XDG_CACHE_HOME ?? join(host.home, '.cache'), 'ms-playwright');
+  return join(host.env.XDG_CACHE_HOME || join(host.home, '.cache'), 'ms-playwright');
 }
 
 export function ffmpegPreflight(browser: ExtraMcpServer | null, host: Host): string | null {
   if (browser === null || !recorderOffered(browser)) return null;
+  if (host.env.PLAYWRIGHT_BROWSERS_PATH === '0') return null;
   if (!browser.args.includes(`@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}`)) return null;
   const dir = join(playwrightCacheDir(host), `ffmpeg-${FFMPEG_REVISION}`);
   if (host.exists(dir)) return null;

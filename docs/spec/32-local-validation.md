@@ -228,7 +228,8 @@ explain a missing video, because the harness reads that for itself:
   live `localValidation.browser`: an operator who edits the browser block mid-run must not change what
   that run is judged to have been offered. Here it is `local_validations.recording_status`;
   the remote run's is its own ([36](36-remote-validation.md#the-runs-recording)). Null is _not known_ —
-  every row before the column, and every row not yet reported — so nothing is backfilled.
+  every row before the column, every row not yet reported, and every run reported `blocked`, which may
+  never have got as far as recording — so nothing is backfilled. The offer is the reporting task's own.
   **`missing` never changes an outcome**: a run with no video is still the pass, failure or block it
   reported. The cockpit draws "not recorded" under the report where it is `missing`.
 
@@ -402,10 +403,11 @@ run's own turns use.
 
 `local_validations`: `id`, `origin_ref`, `run_id`, `ref`, `commit_sha` (named for `local_runs`'
 reason — `COMMIT` is a keyword), `status`, `requested_at`, `dispatched_at`, `ended_at`, `task_id`,
-`fix_task_id`, `plan`, `summary`, `findings`, `visited`, `screenshots`, `note`. The last three are
-JSON. A brand-new table still declares an empty `ColumnMigrations`, because a table being new **once**
-does not keep it exempt ([14](14-persistence.md#migrations)) — which is exactly what `local_runs`'
-usage columns cost.
+`fix_task_id`, `plan`, `summary`, `findings`, `visited`, `screenshots`, `note`, `recording_status`.
+`findings`, `visited` and `screenshots` are JSON. `recording_status` came after the table, so it has its
+`ALTER TABLE` in `LOCAL_VALIDATION_COLUMNS` — a table being new **once** does not keep it exempt
+([14](14-persistence.md#migrations)); null is _not known_ and nothing is backfilled
+([the recording](#the-recording)).
 
 `tasks.mcp_servers` is a column on an **existing** table and therefore has a real `TASK_COLUMNS`
 entry. Without it every database from before this change would read it as absent and every resumed

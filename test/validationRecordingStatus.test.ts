@@ -61,6 +61,8 @@ test('the preflight is quiet where ffmpeg is there, or where it cannot know the 
   );
   assert.equal(ffmpegPreflight(browser(['@playwright/mcp@0.0.1', '--caps', 'devtools']), host([])), null);
   assert.equal(ffmpegPreflight(null, host([])), null);
+  const inNodeModules = { ...host([]), env: { PLAYWRIGHT_BROWSERS_PATH: '0' } };
+  assert.equal(ffmpegPreflight(DEFAULT_LOCAL_VALIDATION.browser, inNodeModules), null);
 });
 
 test('the cache is found where Playwright puts it on each platform', () => {
@@ -77,6 +79,10 @@ test('the cache is found where Playwright puts it on each platform', () => {
     });
     return asked;
   };
+  assert.equal(
+    look('linux', { XDG_CACHE_HOME: '' }),
+    join('/h', '.cache', 'ms-playwright', `ffmpeg-${FFMPEG_REVISION}`),
+  );
   assert.equal(look('linux', {}), join('/h', '.cache', 'ms-playwright', `ffmpeg-${FFMPEG_REVISION}`));
   assert.equal(look('darwin', {}), join('/h', 'Library', 'Caches', 'ms-playwright', `ffmpeg-${FFMPEG_REVISION}`));
   assert.equal(look('win32', { LOCALAPPDATA: 'C:/L' }), join('C:/L', 'ms-playwright', `ffmpeg-${FFMPEG_REVISION}`));

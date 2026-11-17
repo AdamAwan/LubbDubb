@@ -132,7 +132,7 @@ export class LocalValidationStore {
       visited: string[];
       screenshots: string[];
       note: string | null;
-      recordingStatus: RecordingStatus;
+      recordingStatus: RecordingStatus | null;
     },
   ): LocalValidation | null {
     const info = this.ctx
