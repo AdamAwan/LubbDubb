@@ -5,33 +5,22 @@ import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { TenantCall, TenantLaunch } from '../../types.js';
 import type { TenantTail } from './tenantLog.js';
 import { sentence } from '../../primitives.js';
-import type { TenantKeeper, TenantOutcome, TenantRequest } from './tenants.js';
+import {
+  commandSteps,
+  type TenantKeeper,
+  type TenantOutcome,
+  type TenantRequest,
+  type TenantSteps,
+} from './tenants.js';
 
 // → docs/spec/36-remote-validation.md#a-tenant-from-the-projects-extension
 
 type TenantHost = Pick<ExtensionHost<ExtensionSlots>, 'provider' | 'call'>;
 
-/**
- * What runs each tenant step for an environment, in the words the gate shows, and how a failed
- * provisioning names what failed. Null is a step it does not have.
- */
-export interface TenantSteps {
-  ensure: string | null;
-  reseed: string | null;
-  ensureName: string;
-}
-
 type SlotProvider = Pick<TenantHost, 'provider'>;
 
-export const NO_EXTENSIONS: SlotProvider = { provider: () => null };
-
 export function tenantSteps(validate: EnvironmentConfig['validate'], host: SlotProvider): TenantSteps {
-  if (validate?.tenantExtension !== true)
-    return {
-      ensure: validate?.ensureTenant ?? null,
-      reseed: validate?.reseed ?? null,
-      ensureName: 'the "ensureTenant" command',
-    };
+  if (validate?.tenantExtension !== true) return commandSteps(validate);
   const ensure = slotStep(host, 'ensureTenant');
   return { ensure, reseed: slotStep(host, 'reseedTenant'), ensureName: ensure ?? 'the "ensureTenant" slot' };
 }

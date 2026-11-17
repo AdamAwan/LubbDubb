@@ -148,8 +148,11 @@ A slot is a promise to every project that fills it. Make it in one change, with 
 4. **Keep the generic part in LubbDubb.** Locks, records, retries, the cockpit and the error log stay
    in the calling desk; the slot answers only the project-specific question.
 5. **Decide what not-ok means**, and write it in the calling feature's spec.
-6. **Keep the old path.** A feature that had a built-in or config-driven version keeps it for every
-   deployment whose extension does not fill the slot, until a later change retires it.
+6. **Keep the old path, behind an explicit opt-in.** A feature that had a built-in or config-driven
+   version keeps it for every deployment that has not opted in, until a later change retires it. One
+   object routes each deployment to the old or the extension implementation and answers anything the
+   desk labels with it, so what runs and what is shown cannot disagree. Opting in with no extension
+   filling the slot refuses to build.
 7. **Test both paths** at the `buildSystem` seam: with an extension filling the slot (a temp `.mjs`
    file, as `test/extensions.test.ts` does) and without.
 8. **Add a row to [The slots](#the-slots)** and update the calling feature's spec.

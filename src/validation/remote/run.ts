@@ -11,6 +11,7 @@ import type { RemoteValidationDesk } from './desk.js';
 import { noSheetAssembled, rowRun } from './sheet.js';
 import { checkSetStanding } from '../planApproval.js';
 import {
+  commandSteps,
   resolveTenant,
   noStanding,
   tenantNote,
@@ -18,7 +19,6 @@ import {
   type TenantEnvironment,
   type TenantKeeper,
 } from './tenants.js';
-import { NO_EXTENSIONS, tenantSteps } from './extensionTenants.js';
 
 // → docs/spec/36-remote-validation.md#the-press
 
@@ -320,7 +320,7 @@ export class RemoteRunDesk extends EventEmitter {
       };
 
     const said: string[] = [];
-    const steps = this.deps.tenants.steps?.(validate) ?? tenantSteps(validate, NO_EXTENSIONS);
+    const steps = this.deps.tenants.steps?.(validate) ?? commandSteps(validate);
     if (steps.ensure !== null && resumed?.call !== 'reseed') {
       const refused = await this.ensureStep(environmentName, steps.ensure, steps.ensureName, resumed, said);
       if (refused !== null) return refused;

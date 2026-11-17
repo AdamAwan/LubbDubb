@@ -3,7 +3,6 @@ import type { Config } from '../../config/config.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { RemoteTenant, TenantCall, TenantLaunch, TenantStanding } from '../../types.js';
 import { firstLine } from '../../primitives.js';
-import type { TenantSteps } from './extensionTenants.js';
 import {
   launchDir,
   readExit,
@@ -39,6 +38,25 @@ export interface TenantOutcome {
  * caller records, and a later process `follow`s it by that record.
  * → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
  */
+/**
+ * What runs each tenant step for an environment, in the words the gate shows, and how a failed
+ * provisioning names what failed. Null is a step it does not have.
+ */
+export interface TenantSteps {
+  ensure: string | null;
+  reseed: string | null;
+  ensureName: string;
+}
+
+/** The steps an environment's own commands answer. */
+export function commandSteps(validate: EnvironmentConfig['validate']): TenantSteps {
+  return {
+    ensure: validate?.ensureTenant ?? null,
+    reseed: validate?.reseed ?? null,
+    ensureName: 'the "ensureTenant" command',
+  };
+}
+
 export interface TenantKeeper {
   ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome>;
   reseed(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome>;
