@@ -31,3 +31,21 @@ export interface LoadedExtension {
 }
 
 export type SlotResult<O> = { ok: true; value: O } | { ok: false; detail: string };
+
+export function extensionClash(extensions: readonly LoadedExtension[]): string | null {
+  const names = new Map<string, string>();
+  const owners = new Map<string, string>();
+  for (const extension of extensions) {
+    const named = names.get(extension.name);
+    if (named !== undefined)
+      return `the extensions at ${named} and ${extension.path} are both named "${extension.name}"`;
+    names.set(extension.name, extension.path);
+    for (const slot of extension.slots.keys()) {
+      const owner = owners.get(slot);
+      if (owner !== undefined)
+        return `extensions "${owner}" and "${extension.name}" both fill the "${slot}" slot — a slot has one owner`;
+      owners.set(slot, extension.name);
+    }
+  }
+  return null;
+}

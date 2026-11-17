@@ -168,7 +168,7 @@ test('the extensions config names, loaded and passed in, build a system that hol
   assert.deepEqual(system.extensions.names(), ['acme']);
   assert.throws(
     () => buildSystem(config, { errorMirror: () => {}, extensions: [...extensions, ...extensions] }),
-    /two extensions are named "acme"/,
+    /are both named "acme"/,
   );
 });
 
@@ -200,8 +200,11 @@ test('two extensions may not share a name or a slot', async () => {
   const a = extensionFile(`export default { apiVersion: 1, name: 'a', slots: { greet: () => '' } };`);
   const sameName = extensionFile(`export default { apiVersion: 1, name: 'a', slots: {} };`);
   const sameSlot = extensionFile(`export default { apiVersion: 1, name: 'b', slots: { greet: () => '' } };`);
-  await assert.rejects(loadExtensions({ paths: [a, sameName], book: BOOK }), /name "a" is already taken/);
-  await assert.rejects(loadExtensions({ paths: [a, sameSlot], book: BOOK }), /extension "a" already fills/);
+  await assert.rejects(loadExtensions({ paths: [a, sameName], book: BOOK }), /are both named "a"/);
+  await assert.rejects(
+    loadExtensions({ paths: [a, sameSlot], book: BOOK }),
+    /extensions "a" and "b" both fill the "greet" slot/,
+  );
 });
 
 test('a slot that throws, rejects, times out or answers the wrong shape is not-ok and recorded — never thrown', async () => {

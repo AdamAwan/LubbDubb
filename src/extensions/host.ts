@@ -2,7 +2,14 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { Config } from '../config/config.js';
 import { withDeadline } from '../primitives.js';
 import { thrownStack, thrownText } from './thrown.js';
-import type { LoadedExtension, SlotBook, SlotImplementation, SlotMap, SlotResult } from './contract.js';
+import {
+  extensionClash,
+  type LoadedExtension,
+  type SlotBook,
+  type SlotImplementation,
+  type SlotMap,
+  type SlotResult,
+} from './contract.js';
 import { EXTENSION_SLOTS, type ExtensionSlots } from './slots.js';
 
 // → docs/spec/42-extensions.md#calling-a-slot
@@ -23,6 +30,8 @@ export class ExtensionHost<S extends SlotMap> {
       errors: ErrorRecorder;
     },
   ) {
+    const clash = extensionClash(opts.extensions);
+    if (clash !== null) throw new Error(`Refusing to start: ${clash}.`);
     for (const extension of opts.extensions)
       for (const [slot, run] of extension.slots) this.bound.set(slot, { extension: extension.name, run });
   }
@@ -79,22 +88,8 @@ export function checkLoadedExtensions(config: Config, loaded: readonly LoadedExt
         (extra.length > 0 ? ` — not in config: ${extra.join(', ')}` : '') +
         '. Pass what loadExtensions returned for config.extensions as opts.extensions.',
     );
-  const names = new Map<string, string>();
-  const owners = new Map<string, string>();
-  for (const extension of loaded) {
-    const named = names.get(extension.name);
-    if (named !== undefined)
-      throw new Error(`Refusing to start: two extensions are named "${extension.name}" (${named}, ${extension.path}).`);
-    names.set(extension.name, extension.path);
-    for (const slot of extension.slots.keys()) {
-      const owner = owners.get(slot);
-      if (owner !== undefined)
-        throw new Error(
-          `Refusing to start: extensions "${owner}" and "${extension.name}" both fill the "${slot}" slot — a slot has one owner.`,
-        );
-      owners.set(slot, extension.name);
-    }
-  }
+  const clash = extensionClash(loaded);
+  if (clash !== null) throw new Error(`Refusing to start: ${clash}.`);
 }
 
 export function buildExtensionHost(

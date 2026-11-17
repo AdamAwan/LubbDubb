@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import {
   EXTENSION_API_VERSION,
+  extensionClash,
   type LoadedExtension,
   type SlotBook,
   type SlotImplementation,
@@ -27,16 +28,8 @@ export async function loadExtensions(opts: {
       throw refusal(path, `it could not be loaded: ${thrownText(err)}`, err);
     }
     const extension = readExtension(path, module, opts.book);
-    const clash = loaded.find((other) => other.name === extension.name);
-    if (clash) throw refusal(path, `its name "${extension.name}" is already taken by ${clash.path}`);
-    for (const slot of extension.slots.keys()) {
-      const owner = loaded.find((other) => other.slots.has(slot));
-      if (owner)
-        throw refusal(
-          path,
-          `it fills the "${slot}" slot, which extension "${owner.name}" already fills — a slot has one owner`,
-        );
-    }
+    const clash = extensionClash([...loaded, extension]);
+    if (clash !== null) throw refusal(path, clash);
     loaded.push(extension);
   }
   return loaded;
