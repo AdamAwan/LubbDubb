@@ -28,15 +28,15 @@ Today's slots, `apiVersion` **1**:
 | Slot           | Asked when                                                                                                                 | Input                                     | Answer                                                        |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
 | `ensureTenant` | The operator presses prepare on a goal's remote-validation sheet, for an environment with `validate.tenantExtension: true` | `{ environment, tenant: string \| null }` | `{ tenant: "<name>" }` — the tenant you provisioned, one line |
-| `reseedTenant` | Straight after `ensureTenant`, same press. Optional: leave it out and the press only provisions                            | `{ environment, tenant }`                 | nothing (`return;`). Throw to fail                            |
+| `reseedTenant` | Straight after `ensureTenant`, same press                                                                                  | `{ environment, tenant }`                 | nothing (`return;`). Throw to fail                            |
 
 - `ensureTenant` must be **idempotent**. `tenant` is the one already stamped, or null the
   first time, so hand it back when it still exists. **Never make up a name LubbDubb
   could not have chosen itself**: environments that reap tenants by name pattern
   delete invented ones within the hour.
-- `reseedTenant` **destroys** what is in the tenant. Filling it makes the cockpit's
+- `reseedTenant` is **optional**, and it **destroys** what is in the tenant. Filling it makes the cockpit's
   control a confirm-twice "Reseed". Leaving it out gives a harmless "Provision".
-- Both time out after **one hour**. The context's `signal` fires at the timeout.
+- Both time out after **one hour**. The context's `signal` fires when the call times out or fails.
   Pass it to `fetch` and child processes so the work actually stops.
 - If the slot you need is not here, **do not bend another slot to do it.** Write
   down the question LubbDubb would need to ask, with its input and answer, and

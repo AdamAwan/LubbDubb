@@ -8,13 +8,14 @@ import { pluginSkills } from '../src/plugin/bundle.js';
 
 // → docs/spec/42-extensions.md#writing-an-extension
 
-const skill = pluginSkills().find((s) => s.name === 'extension')?.text ?? '';
 const STARTER = join(import.meta.dirname, '..', 'plugin', 'skills', 'extension', 'starter.ts');
 
-test('the extension skill documents every slot the harness asks, at its API version', () => {
-  assert.notEqual(skill, '', 'the plugin ships an extension skill');
-  for (const slot of Object.keys(EXTENSION_SLOTS))
-    assert.match(skill, new RegExp(`\\| \`${slot}\` +\\|`), `the slots table has a row for ${slot}`);
+test('the extension skill’s slots table is exactly the harness’s slots, at its API version', () => {
+  const skill = pluginSkills().find((s) => s.name === 'extension')?.text;
+  assert.ok(skill, 'the plugin ships an extension skill');
+  const table = skill.slice(skill.indexOf('### The slots'), skill.indexOf('### The file'));
+  const rows = [...table.matchAll(/^\| `(\w+)` +\|/gm)].map((m) => m[1]).sort();
+  assert.deepEqual(rows, Object.keys(EXTENSION_SLOTS).sort());
   assert.match(skill, new RegExp(`\`apiVersion\` \\*\\*${EXTENSION_API_VERSION}\\*\\*`));
 });
 

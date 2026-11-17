@@ -105,11 +105,8 @@ operator's Claude Code already has: `/lubbdubb:extension` (`plugin/skills/extens
 `starter.ts` beside it that fills every slot. It holds the slots table in an author's terms, the
 config to turn one on, how to test it, and each boot refusal with its fix.
 
-Because the skill is a copy of the contract in another form, it is held to it:
-`test/extensionSkill.test.ts` refuses a skill whose slots table misses a slot in the book or names
-another `apiVersion`, and loads `starter.ts` through `loadExtensions` against the book, so a starter
-that no longer loads, or no longer fills every slot, fails the build. A slot the skill does not
-describe is one no project can find.
+Because the skill is a copy of the contract in another form, `test/extensionSkill.test.ts` holds it
+and the starter to the book. A slot the skill does not describe is one no project can find.
 
 ## Calling a slot
 
