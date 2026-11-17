@@ -254,22 +254,23 @@ test('the desktop channel prepares an extension tenant, confirming first only wh
       action: 'prepare_tenant',
       confirmTenant,
     });
-    return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
+    const settled = () => system.store.remoteValidation.listTenantPrepares().every((p) => p.finishedAt !== null);
+    while (!settled()) await new Promise((r) => setImmediate(r));
+    const prepared = system.store.remoteValidation.listTenantPrepares()[0];
+    return { isError: result.isError === true, text: result.content[0]?.text ?? '', ok: prepared?.ok ?? null };
   };
 
   const provisioned = await prepareThrough(`export default { apiVersion: 1, name: 'acme', slots: {
     ensureTenant: () => ({ tenant: 'acme-validation-7' }),
   } };`);
   assert.equal(provisioned.isError, false, provisioned.text);
+  assert.equal(provisioned.ok, true);
 
   const unconfirmed = await prepareThrough(RECORDING);
   assert.equal(unconfirmed.isError, true);
   assert.match(unconfirmed.text, /confirmTenant/);
 
   const confirmed = await prepareThrough(RECORDING, 'acceptance');
-  assert.equal(
-    confirmed.isError,
-    false,
-    'with no tenant yet, the environment name is the confirmation, as for commands',
-  );
+  assert.equal(confirmed.isError, false, confirmed.text);
+  assert.equal(confirmed.ok, true, 'with no tenant yet, the environment name is the confirmation, as for commands');
 });
