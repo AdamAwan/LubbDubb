@@ -168,7 +168,22 @@ test('the extensions config names, loaded and passed in, build a system that hol
   assert.deepEqual(system.extensions.names(), ['acme']);
   assert.throws(
     () => buildSystem(config, { errorMirror: () => {}, extensions: [...extensions, ...extensions] }),
-    /passed twice: .*ext\.mjs/,
+    /two extensions are named "acme"/,
+  );
+});
+
+test('separately loaded extensions that share a slot refuse to build', async () => {
+  const repoRoot = gitRepo();
+  writeFileSync(join(repoRoot, 'a.mjs'), `export default { apiVersion: 1, name: 'a', slots: { greet: () => '' } };`);
+  writeFileSync(join(repoRoot, 'b.mjs'), `export default { apiVersion: 1, name: 'b', slots: { greet: () => '' } };`);
+  const config = loadConfig({ dbPath: ':memory:', repoRoot, extensions: ['a.mjs', 'b.mjs'] });
+  const extensions = [
+    ...(await loadExtensions({ paths: [config.extensions[0]!], book: BOOK })),
+    ...(await loadExtensions({ paths: [config.extensions[1]!], book: BOOK })),
+  ];
+  assert.throws(
+    () => buildSystem(config, { errorMirror: () => {}, extensions }),
+    /extensions "a" and "b" both fill the "greet" slot/,
   );
 });
 

@@ -68,22 +68,39 @@ export class ExtensionHost<S extends SlotMap> {
   }
 }
 
+export function checkLoadedExtensions(config: Config, loaded: readonly LoadedExtension[] = []): void {
+  const loadedPaths = loaded.map((extension) => extension.path);
+  const missing = config.extensions.filter((path) => !loadedPaths.includes(path));
+  const extra = loadedPaths.filter((path) => !config.extensions.includes(path));
+  if (missing.length > 0 || extra.length > 0)
+    throw new Error(
+      `Refusing to start: the extensions passed to buildSystem are not the ones config names` +
+        (missing.length > 0 ? ` — not loaded: ${missing.join(', ')}` : '') +
+        (extra.length > 0 ? ` — not in config: ${extra.join(', ')}` : '') +
+        '. Pass what loadExtensions returned for config.extensions as opts.extensions.',
+    );
+  const names = new Map<string, string>();
+  const owners = new Map<string, string>();
+  for (const extension of loaded) {
+    const named = names.get(extension.name);
+    if (named !== undefined)
+      throw new Error(`Refusing to start: two extensions are named "${extension.name}" (${named}, ${extension.path}).`);
+    names.set(extension.name, extension.path);
+    for (const slot of extension.slots.keys()) {
+      const owner = owners.get(slot);
+      if (owner !== undefined)
+        throw new Error(
+          `Refusing to start: extensions "${owner}" and "${extension.name}" both fill the "${slot}" slot — a slot has one owner.`,
+        );
+      owners.set(slot, extension.name);
+    }
+  }
+}
+
 export function buildExtensionHost(
   config: Config,
   loaded: readonly LoadedExtension[] | undefined,
   errors: ErrorRecorder,
 ): ExtensionHost<ExtensionSlots> {
-  const loadedPaths = (loaded ?? []).map((extension) => extension.path);
-  const missing = config.extensions.filter((path) => !loadedPaths.includes(path));
-  const extra = loadedPaths.filter((path) => !config.extensions.includes(path));
-  const repeated = loadedPaths.filter((path, index) => loadedPaths.indexOf(path) !== index);
-  if (missing.length > 0 || extra.length > 0 || repeated.length > 0)
-    throw new Error(
-      `Refusing to start: the extensions passed to buildSystem are not the ones config names` +
-        (missing.length > 0 ? ` — not loaded: ${missing.join(', ')}` : '') +
-        (extra.length > 0 ? ` — not in config: ${extra.join(', ')}` : '') +
-        (repeated.length > 0 ? ` — passed twice: ${repeated.join(', ')}` : '') +
-        '. Pass what loadExtensions returned for config.extensions as opts.extensions.',
-    );
   return new ExtensionHost({ book: EXTENSION_SLOTS, extensions: loaded ?? [], repoRoot: config.repoRoot, errors });
 }
