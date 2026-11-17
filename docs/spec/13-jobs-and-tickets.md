@@ -338,8 +338,9 @@ Tests: `test/jobSchedules.test.ts`.
 
 ## Filing a ticket
 
-Four things file a tracker item: unrecorded **work**, a **brief**, a **bug** an operator raised, and
-an **app error** pressed on the Errors tab ([39](39-app-errors.md#the-presses)). All four go through `ActionSink.createIssue`
+Five things file a tracker item: unrecorded **work**, a **brief**, a **bug** an operator raised, an
+**app error** pressed on the Errors tab ([39](39-app-errors.md#the-presses)), and a **repo lesson**
+too large to make as a pull request ([41](41-repo-lessons.md#a-pull-request-or-a-ticket)). All five go through `ActionSink.createIssue`
 ([15](15-integrations.md)), and none of them asks a model to run a `gh` / `az` command any more
 (issue #394).
 
@@ -359,12 +360,18 @@ an **app error** pressed on the Errors tab ([39](39-app-errors.md#the-presses)).
   (`src/tickets/filing.ts`) resolves all four per call, so every arm files identically.
 - **An app error's key is a field too.** `searchKey` on the filing reaches `IssueCreateInput` and the
   provider carries it where its search finds it — an Azure DevOps tag, lines in a GitHub body
-  ([39](39-app-errors.md#the-key-on-the-ticket)). The field is optional and provider-neutral: every
-  other arm leaves it out, and nothing in a provider knows it is an app error's. It is the cross-fleet lock: a bug filed without it is
+  ([39](39-app-errors.md#the-key-on-the-ticket)). The field is optional and provider-neutral: a repo
+  lesson's ticket carries `lesson:<groupKey>`, every other arm leaves it out, and nothing in a provider
+  knows whose key it is. It is the cross-fleet lock: a bug filed without it is
   invisible to every other fleet's search, so it is never left to a template or a prompt.
 - **The wording stays operator-overridable**, because how a ticket reads _is_ house style. Three arms
   render a ticket **body** from the template book — `work-item-ticket-body`, `brief-ticket-body` and
   `app-error-ticket-body` — and two keep an agent to write one. Nothing about the change moves that judgement into the harness.
+- **A repo lesson's ticket carries the lesson label and never the watch label.** Both are arguments to
+  `ticketFiler`, from `lesson_conclude` (`LessonOutcomeDesk`, `src/lessons/outcomeDesk.ts`): the
+  operator decides whether the fleet takes a lesson's refactor on, so filing it must not also dispatch
+  for it. Its body is the agent's account of the change and the harness's evidence.
+  → [41](41-repo-lessons.md#the-outcome)
 - **One arm keeps a desk agent, and three do not.** Where the whole body is already harness- or
   operator-composed text (unrecorded work, a brief, an error group's telemetry), a desk agent was
   spending a slot on one API call. Where the body is a judgement — writing up a symptom an operator

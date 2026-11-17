@@ -63,6 +63,7 @@ type PromptId =
   | 'brief-ticket-body'
   | 'app-error-ticket-body'
   | 'app-error-triage'
+  | 'repo-lesson'
   | 'bot-pr-risk'
   | 'pr-title';
 

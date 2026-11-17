@@ -12,6 +12,8 @@ export interface RuleConditions {
   remoteValidation: boolean;
   /** Some environment declares a `watch`. */
   watch: boolean;
+  /** `lessons.minGoals` is above 0. */
+  lessons: boolean;
 }
 
 export interface DispatchRule {
@@ -297,7 +299,7 @@ const RULES = [
     kind: 'rule',
     name: 'Handed-over validation check',
     description:
-      'A validation check on a delivered goal that the **operator** handed to the fleet, and which nobody has recorded a reading against, gets a code agent to run it on a throwaway branch cut from the default branch and report what it saw. The hand-over is the entire gate: a planner’s `fleetCandidate` nomination dispatches nothing, because whether an agent can run a check depends on what logins and browsers this deployment has, which a planner reading the repository cannot know. It ranks last of every rule that produces work, below even one-shot pickup — only `validation-failed`, which is a second opinion on work somebody has already done, and the two Feature desks, which produce no work at all, sit below it — because validation’s standing promise is that it blocks nothing — a check that could take the final slot from a blocked part or a red build would make the one feature that gates nothing the reason something else did not run. An agent that finds it cannot do the work hands the check back with its reason instead of recording a failure, which returns it to the operator; one that crashes or spends its attempt cap leaves the check exactly as it was, `unrun` and still flagged, with no escalation — the flag is already the ask.',
+      'A validation check on a delivered goal that the **operator** handed to the fleet, and which nobody has recorded a reading against, gets a code agent to run it on a throwaway branch cut from the default branch and report what it saw. The hand-over is the entire gate: a planner’s `fleetCandidate` nomination dispatches nothing, because whether an agent can run a check depends on what logins and browsers this deployment has, which a planner reading the repository cannot know. It ranks below every rule that produces work for a goal, below even one-shot pickup — only `remote-validation` and `validation-failed`, which read and diagnose work somebody has already done, `repo-lesson`, which drafts a fix nobody has asked for yet, and the three advice desks and two Feature desks, which produce no work at all, sit below it — because validation’s standing promise is that it blocks nothing — a check that could take the final slot from a blocked part or a red build would make the one feature that gates nothing the reason something else did not run. An agent that finds it cannot do the work hands the check back with its reason instead of recording a failure, which returns it to the operator; one that crashes or spends its attempt cap leaves the check exactly as it was, `unrun` and still flagged, with no escalation — the flag is already the ask.',
   },
 
   {
@@ -315,6 +317,15 @@ const RULES = [
     name: 'A validation check came back failed',
     description:
       'A validation check that somebody ran against the delivered goal and recorded as **failed** gets one code agent, in a read-only checkout of the default branch, to reproduce it and say what is behind it. It is the one negative verdict in the harness that used to schedule nothing: an assessment that says the goal was not reached reaches `issue-shortfall`, a red build reaches `pr-ci-failing`, and a person who watched the delivered thing not work wrote a note that waited for them to come back to it. It is deliberately **not** wired through a shortfall, which would clear the goal’s delivery row and so un-park the goal, settle its close-out obligation and decline the very bench row the reading was taken for — a shortfall says the work is not finished, and a failed check says the finished work does not do what somebody checked it for. The agent fixes nothing and files nothing on its own authority: it diagnoses, and the doors it already has carry the two honest endings — `escalate` for a real defect somebody has to decide about, and `validation_amend` for a check describing something that no longer exists. It cannot record a reading at all, structurally: `validation_report` resolves its check from the dispatch origin and this rule’s origin is not one it parses, so an agent that decides the check actually passes is refused by the tool rather than by a sentence in a prompt. Each reading gets its own attempt budget — a check that failed, was fixed and failed again is looked at again — and a spent cap escalates nothing, because the flag and the note are already in front of the operator.',
+  },
+
+  {
+    id: 'repo-lesson',
+    kind: 'rule',
+    name: 'The fleet keeps coming back for the same reason',
+    description:
+      "LessonDesk opened a draft for a group of remedies — one kind of return, one cause, one check or review area, each a `documented` or `undocumented` miss — that spans at least `lessons.minGoals` distinct goals in thirty days; this puts **one** code agent on it, on its own branch `lesson/<id>` cut from the default branch, to pick the fix that stops the miss for good: remove the cause in the code, make it enforced with a lint rule, type or test, correct a contradiction between the code and the repository's docs, or write it down in the nearest `CLAUDE.md` — or nothing, when it is a matter of taste. A small fix is a pull request, a large one a ticket the operator decides on, and the agent says which with `lesson_conclude`, never by opening a pull request itself: the harness renders the pull request's body from the evidence, cites every pull request behind it as a full link, labels it, and watches it like the fleet's own. The group's remedy summaries, their pull requests and their goals' retrospectives are appended to the prompt. It ranks below `validation-failed` and above the advice desks: it produces work, but work nobody asked for, so a red build or a waiting goal is always worth the slot first. A draft is one assembly rather than a standing signal, so there is no cooldown budget and no escalation: it is re-proposed each pulse until it dispatches, and a task that ends without concluding settles the draft unanswered. Inert where `lessons.minGoals` is 0, the default.",
+    enabled: (c) => c.lessons,
   },
 
   {

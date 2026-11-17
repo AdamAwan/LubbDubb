@@ -1,5 +1,5 @@
 import type { ReviewAreaRule } from '../config/config.js';
-import type { PrThreadLabel, Remedy, RemedyCause, RemedyGuard, RemedyKind } from '../types.js';
+import type { LessonDraftStatus, PrThreadLabel, Remedy, RemedyCause, RemedyGuard, RemedyKind } from '../types.js';
 import { areasForPath } from '../review/areas.js';
 
 // → docs/spec/41-repo-lessons.md#noticing-a-repeat-miss
@@ -9,9 +9,6 @@ export const LESSON_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const EXCLUDED_CAUSES: ReadonlySet<RemedyCause> = new Set(['other', 'defect', 'flake', 'environment', 'inherited']);
 
 const LESSON_GUARDS: ReadonlySet<RemedyGuard> = new Set(['documented', 'undocumented']);
-
-type LessonDraftStatus =
-  'pending' | 'dispatched' | 'pr-open' | 'adopted' | 'declined' | 'filed' | 'nothing' | 'unanswered';
 
 const LIVE: ReadonlySet<LessonDraftStatus> = new Set(['pending', 'dispatched', 'pr-open']);
 const FINAL: ReadonlySet<LessonDraftStatus> = new Set(['adopted', 'filed']);

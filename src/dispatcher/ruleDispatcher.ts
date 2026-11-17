@@ -66,6 +66,7 @@ import { validationPlanApproval } from './rules/validationPlanApproval.js';
 import { remoteValidation } from './rules/remoteValidation.js';
 import { botPrRisk } from './rules/botPrRisk.js';
 import { appErrorTriage } from './rules/appErrorTriage.js';
+import { repoLesson } from './rules/repoLesson.js';
 
 // → docs/spec/05-dispatcher.md
 
@@ -97,6 +98,7 @@ export const STAGES: Record<OwnStageRuleId, (s: StageContext) => void> = {
   'validate-check': validateCheck,
   'remote-validation': remoteValidation,
   'validation-failed': validationFailed,
+  'repo-lesson': repoLesson,
   'bot-pr-risk': botPrRisk,
   'app-error-triage': appErrorTriage,
   'feature-summary': featureSummary,
@@ -125,6 +127,8 @@ interface RuleDispatcherOptions {
   remoteValidationOn?: boolean;
   checkSets?: boolean;
   validationPlanNote?: string;
+  /** `lessons.minGoals` is on: rule `repo-lesson` is inert where it is not. */
+  lessonsOn?: boolean;
 }
 
 export class RuleDispatcher implements Dispatcher {
@@ -140,6 +144,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly localValidation: () => LocalValidationPolicy;
   private readonly remoteValidationOn: boolean;
   private readonly checkSets: boolean;
+  private readonly lessonsOn: boolean;
   private readonly review: PrReviewPolicy;
   private readonly reviewCharters: PrReviewCharters;
   private ci: CiPolicy;
@@ -156,7 +161,9 @@ export class RuleDispatcher implements Dispatcher {
       localValidation = () => DEFAULT_LOCAL_VALIDATION,
       remoteValidationOn = false,
       checkSets = false,
+      lessonsOn = false,
     } = opts;
+    this.lessonsOn = lessonsOn;
     this.remoteValidationOn = remoteValidationOn;
     this.checkSets = checkSets;
     this.notes = promptNotes(opts);
@@ -197,6 +204,7 @@ export class RuleDispatcher implements Dispatcher {
       remoteValidation: this.remoteValidationOn,
       checkSets: this.checkSets,
       watch: this.notes.watchPlanNote !== '',
+      lessons: this.lessonsOn,
     };
     for (const rule of DISPATCH_PIPELINE) {
       if (rule.emittedBy !== undefined) continue;
@@ -286,6 +294,7 @@ export class RuleDispatcher implements Dispatcher {
 
     return {
       ...cycleLookups(ctx),
+      lessonDraft: ctx.lessonDraft ?? null,
       ...watchLookups(ctx),
       ...gates,
       ...sequencing,

@@ -1,0 +1,47 @@
+import type { RemedyCause, RemedyGuard, RemedyKind } from './remedies.js';
+
+// → docs/spec/41-repo-lessons.md#the-record-and-the-desk
+
+export type LessonDraftStatus =
+  'pending' | 'dispatched' | 'pr-open' | 'adopted' | 'declined' | 'filed' | 'nothing' | 'unanswered';
+
+export type LessonOutcome = 'pull_request' | 'ticket' | 'nothing';
+
+export type LessonFix = 'code' | 'guard' | 'contradiction' | 'note';
+
+/** One remedy a draft was made on, as the evidence cites it. */
+export interface LessonMiss {
+  remedyId: string;
+  prNumber: number;
+  goal: string;
+  guard: RemedyGuard;
+  summary: string;
+}
+
+/** The life of one draft: never what the lesson says, which lives in the repository. */
+export interface LessonDraft {
+  id: string;
+  groupKey: string;
+  kind: RemedyKind;
+  cause: RemedyCause;
+  where: string;
+  goals: string[];
+  misses: LessonMiss[];
+  /** Distinct goals the draft was made on: the bar a redraft must clear again. */
+  missCount: number;
+  status: LessonDraftStatus;
+  taskId: string | null;
+  fix: LessonFix | null;
+  title: string | null;
+  summary: string | null;
+  reason: string | null;
+  prNumber: number | null;
+  ticketRef: string | null;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+/** The one draft waiting for its agent, with the briefing it is dispatched with. */
+export interface PendingLessonDraft extends LessonDraft {
+  briefing: string;
+}

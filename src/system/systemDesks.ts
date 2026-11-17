@@ -28,6 +28,9 @@ import { AppErrorLinker } from '../appErrors/linker.js';
 import { AppErrorTrackerDesk } from '../appErrors/tracker.js';
 import { appErrorView, CurrentAppErrors } from '../appErrors/current.js';
 import { AppErrorTriageDesk } from '../appErrors/triageDesk.js';
+import { LessonDesk } from '../lessons/lessonDesk.js';
+import { LessonOutcomeDesk } from '../lessons/outcomeDesk.js';
+import { lessonLabelFor } from '../watchLabels.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber } from '../environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from '../environments/observer.js';
@@ -189,7 +192,50 @@ export function buildEnvironmentDesks(
     watchAsks,
     appErrorPayloads,
     appErrorTriage,
+    ...buildLessonDesks(config, base),
     ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
+  };
+}
+
+/** → docs/spec/41-repo-lessons.md#the-record-and-the-desk */
+function buildLessonDesks(config: Config, base: Foundation) {
+  const { store, sink, errors, connector, watchLabel } = base;
+  const lessonLabel = lessonLabelFor(config.labelPrefix);
+  const lessons = new LessonDesk({
+    store,
+    minGoals: config.lessons.minGoals,
+    reviewAreas: config.reviewAreas,
+    lessonLabel,
+  });
+  const lessonOutcomes = new LessonOutcomeDesk({
+    store,
+    sink,
+    filing: ticketFiler(config, sink),
+    refUrl: (ref) => connector.resolveRefUrl(ref),
+    defaultBranch: config.defaultBranch,
+    watchLabel,
+    lessonLabel,
+    errors,
+  });
+  return { lessons, lessonOutcomes };
+}
+
+/** The environment desks the composed system exposes. */
+export function environmentParts(envs: EnvironmentDesks) {
+  return {
+    watch: envs.watchDryRun,
+    watchAsks: envs.watchAsks,
+    stateQueries: envs.stateQueries,
+    remoteValidation: envs.remoteValidation,
+    appErrorTracker: envs.appErrorTracker,
+    appErrorTriage: envs.appErrorTriage,
+    lessons: envs.lessons,
+    lessonOutcomes: envs.lessonOutcomes,
+    remoteRuns: envs.remoteRuns,
+    remoteIntents: envs.remoteIntents,
+    remoteReadings: envs.remoteReadings,
+    remoteListings: envs.remoteListings,
+    appErrorPayloads: envs.appErrorPayloads,
   };
 }
 

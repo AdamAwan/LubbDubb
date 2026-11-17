@@ -82,6 +82,7 @@ import {
   buildIntakeDesks,
   type EnvironmentDesks,
   buildEnvironmentDesks,
+  environmentParts,
   type BenchDesks,
   buildBenchDesks,
 } from './systemDesks.js';
@@ -119,6 +120,10 @@ export interface System {
   remoteValidation: RemoteValidationDesk;
   appErrorTracker: AppErrorTrackerDesk;
   appErrorTriage: EnvironmentDesks['appErrorTriage'];
+  /** Settles repo-lesson drafts and opens the next. → docs/spec/41-repo-lessons.md#the-record-and-the-desk */
+  lessons: EnvironmentDesks['lessons'];
+  /** What `lesson_conclude` does. → docs/spec/41-repo-lessons.md#the-outcome */
+  lessonOutcomes: EnvironmentDesks['lessonOutcomes'];
   validationReady: ValidationReadyDesk;
   remoteRuns: RemoteRunDesk;
   remoteIntents: EnvironmentDesks['remoteIntents'];
@@ -202,18 +207,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     pool: bench.pool,
     filing: bench.filing,
     upstream: bench.upstream,
-    watch: envs.watchDryRun,
-    watchAsks: envs.watchAsks,
-    stateQueries: envs.stateQueries,
-    remoteValidation: envs.remoteValidation,
-    appErrorTracker: envs.appErrorTracker,
-    appErrorTriage: envs.appErrorTriage,
+    ...environmentParts(envs),
     validationReady: bench.validationReady,
-    remoteRuns: envs.remoteRuns,
-    remoteIntents: envs.remoteIntents,
-    remoteReadings: envs.remoteReadings,
-    remoteListings: envs.remoteListings,
-    appErrorPayloads: envs.appErrorPayloads,
     prAssign: intake.prAssign,
     botPrs: bench.botPrs,
     botPrRisks: bench.botPrRisks,
@@ -315,6 +310,7 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
       ),
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
     discussions: fleetDiscussions(base.discussions, store, config.issueContainerTypes),
+    lessons: () => late.get().lessonOutcomes,
     errors,
   });
 
@@ -367,6 +363,7 @@ function buildHarness(
     appErrors: envs.appErrors,
     appErrorTracker: envs.appErrorTracker,
     appErrorTriage: envs.appErrorTriage,
+    lessons: envs.lessons,
     remoteValidation: envs.remoteValidation,
     remoteIntents: envs.remoteIntents,
     prWatch: intake.prWatch,

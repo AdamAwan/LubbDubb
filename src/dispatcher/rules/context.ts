@@ -31,6 +31,7 @@ import type {
   PullRequest,
   RemoteRunBrief,
   PendingAppErrorTriageRun,
+  PendingLessonDraft,
   PendingBotPrRiskRun,
   TaskSummary,
   ValidationCheck,
@@ -139,6 +140,7 @@ export interface StageContext {
   remoteRuns: readonly RemoteRunBrief[];
   botPrRiskRun: PendingBotPrRiskRun | null;
   appErrorTriageRun: PendingAppErrorTriageRun | null;
+  lessonDraft: PendingLessonDraft | null;
   localValidations: LocalValidation[];
   localValidation: LocalValidationPolicy;
   validationClaimMinutes: number;

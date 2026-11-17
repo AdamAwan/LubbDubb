@@ -121,6 +121,7 @@ interface Late {
   remoteListings: RemoteListingDesk;
   remoteRuns: EnvironmentDesks['remoteRuns'];
   remoteIntents: EnvironmentDesks['remoteIntents'];
+  lessonOutcomes: EnvironmentDesks['lessonOutcomes'];
   harness: Harness;
   localRun: LocalRunner;
   localRunWatch: LocalRunWatch;
@@ -164,6 +165,7 @@ export function lateParts({ fleet, envs, bench, harness, local, prAssign, asks }
     remoteListings: envs.remoteListings,
     remoteRuns: envs.remoteRuns,
     remoteIntents: envs.remoteIntents,
+    lessonOutcomes: envs.lessonOutcomes,
     harness,
     localRun: local.localRun,
     localRunWatch: local.localRunWatch,

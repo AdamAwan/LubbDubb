@@ -3,10 +3,13 @@ export const REMEDIES_SCHEMA = `
 -- per CI failure or review round an agent answered, written by that agent through
 -- the report_remedy tool.
 --
--- A record, not a verdict. Nothing gates on a row here, no dispatch rule reads the
--- table, and a pull request goes green whether or not one was filed — the two
--- readers are the Causes reading on the Yield panel and the prior-remedy note a
--- later dispatch on the same check carries.
+-- A record, not a verdict. Nothing gates on a row here, and a pull request goes
+-- green whether or not one was filed. Its readers are the Causes reading on the
+-- Yield panel, the prior-remedy note a later dispatch on the same check carries,
+-- and — where lessons.minGoals is on — LessonDesk, whose grouping can put an agent
+-- on drafting a repo lesson (docs/spec/41-repo-lessons.md). cause and guard are the
+-- agent's word, so what keeps acting on them safe is the threshold of distinct
+-- goals, the opt-in, and that the only outcome is a pull request a person reviews.
 --
 -- kind, pr_number and checks are all resolved from the caller's credential (its
 -- task's origin and ci_checks) rather than from arguments, which is what makes the

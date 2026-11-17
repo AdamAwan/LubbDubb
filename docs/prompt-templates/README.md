@@ -59,3 +59,4 @@ placeholder is fine.
 | `review-pack-check`       | retired — review packs were removed; never rendered                      |
 | `bot-pr-risk`             | dependency-bot pull requests nobody has read for risk                    |
 | `app-error-triage`        | moved app errors the deterministic link named no goal for                |
+| `repo-lesson`             | the same documented or undocumented miss repeated across goals           |

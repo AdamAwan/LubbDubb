@@ -21,11 +21,12 @@ repository. There is no store of lessons.
 
 **Partly built.** What is described here as running is the [configuration key](#configuration),
 [the grouping](#noticing-a-repeat-miss) — `lessonGroups` and `lessonCandidates` in
-`src/lessons/groups.ts`, a pure fold with no reader yet — and the pull-request-to-goal index it reads
-(`prGoalIndex`, `src/graph/prGoals.ts`). **Not yet built**, and each section that describes it says so:
-the [draft](#drafting-a-lesson) (rule, prompt, outcome tool), [the record and the desk that settles
-it](#the-record-and-the-desk), [the Causes tab reading](#did-it-work), and
-[the pool section](#across-fleets). With `lessons.minGoals` at its default nothing differs either way.
+`src/lessons/groups.ts` — and the pull-request-to-goal index it reads (`prGoalIndex`,
+`src/graph/prGoals.ts`), [the draft](#drafting-a-lesson) (rule, prompt, outcome tool),
+[the ruling](#the-ruling-adopted-or-declined) and [the record and the desk that settles
+it](#the-record-and-the-desk). **Not yet built**, and each section that describes it says so:
+[the Causes tab reading](#did-it-work) and [the pool section](#across-fleets). With `lessons.minGoals`
+at its default nothing differs either way.
 
 ## Invariants
 
@@ -37,7 +38,11 @@ it](#the-record-and-the-desk), [the Causes tab reading](#did-it-work), and
 - **An `adopted` or `filed` group is never redrafted; a `declined`, `nothing` or `unanswered` one only once misses since it settled span `max(missCount, minGoals)` goals.** Without the bar a declined lesson comes back on the next miss, and the operator's no is overruled by the pulse. → [§](#the-redraft-rule) · `test/lessonGroups.test.ts`
 - **A lesson edits the repository the fleet works on, never LubbDubb's own.** The lessons are about the code the agents were fixing, and that is where its engineers read. → [§](#where-a-lesson-lands) · _no test_
 - **Nothing about a lesson is injected into any agent's prompt, and nothing from the pool is dispatched on.** Blanket context is skimmed rather than read, and other fleets' prose is not knowledge about this repository. → [§](#why-the-claim-store-failed) · _no test_
-- **A lesson pull request cites the pull requests behind it as full URLs, never `#n` and never with a closing keyword.** On Azure DevOps `#n` links a work item, which would adopt the lesson into another goal. → [§](#the-outcome) · _no test_
+- **A lesson pull request cites the pull requests behind it as full URLs, never `#n` and never with a closing keyword.** On Azure DevOps `#n` links a work item, which would adopt the lesson into another goal. → [§](#the-outcome) · `test/repoLessons.test.ts`
+- **One draft is out at a time, at most two lesson pull requests are open, and a group with an open pull request carrying its marker is not drafted.** Each open lesson is watched, so its CI and review are fleet work nobody has asked for yet. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
+- **A lesson is concluded only by `lesson_conclude`, from the draft's own task: `open_pr` on a lesson origin refuses and says so, and there is no `body` argument.** A pull request opened by hand carries no marker, label or evidence, and nothing would ever settle its draft. → [§](#the-prompt) · `test/repoLessons.test.ts`
+- **A lesson ticket carries the lesson label and never the watch label.** Filing it must not also dispatch for it: the operator decides whether the fleet takes a refactor on. → [§](#a-pull-request-or-a-ticket) · `test/repoLessons.test.ts`
+- **A draft whose agent's task ended without concluding settles `unanswered`; a lesson pull request merged is `adopted`, closed is `declined`.** A draft nothing settles holds its group for ever. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
 
 ## What it is not
 
@@ -180,8 +185,8 @@ stopped stops being a candidate as they age out.
 ## The redraft rule
 
 `lessonCandidates` reads a group's past drafts — each with its status, the number of goals it was
-drafted on (`missCount`) and when it settled — and decides whether to draft again. The fold is built;
-the drafts it reads are not yet recorded by anything ([the record](#the-record-and-the-desk)).
+drafted on (`missCount`) and when it settled — and decides whether to draft again. The drafts are the
+rows of `lesson_drafts` ([the record](#the-record-and-the-desk)).
 
 - **A live draft** — `pending`, `dispatched` or `pr-open` — holds the group: one draft at a time.
 - **`adopted` and `filed` are final.** The lesson is merged, or a ticket for it exists and the
@@ -196,16 +201,18 @@ Candidates are ranked by the goals they span, most first, then by key.
 
 ## Drafting a lesson
 
-**Not yet built.**
-
-Rule _repo-lesson_ (`kind: 'rule'`, in the rule book right after `validation-failed` and before
+Rule `repo-lesson` (`kind: 'rule'`, in the rule book right after `validation-failed` and before
 `bot-pr-risk`, [05](05-dispatcher.md#the-rules-in-evaluation-order)) dispatches **one code agent** per
 draft, on its own branch `lesson/<id>`, for origin `lessons:draft:<id>` — the shape of
 `app-errors:triage:<id>` ([39](39-app-errors.md#agent-triage)), not an `issue:<n>:…` family, because a
 lesson is not a goal. `isHarnessBranch` (`src/pr/prOwnership.ts`) treats `lesson/` branches as the
 harness's own, so they are reaped. The origin and branch spelling live in
-_src/lessons/lessonOrigin.ts_. `RuleConditions` carries whether lessons are on, so `minGoals: 0` reads
-as an inert rule rather than an empty one.
+`src/lessons/lessonOrigin.ts`. `RuleConditions` carries whether lessons are on (`lessons`), so
+`minGoals: 0` reads as an inert rule rather than an empty one — even over a draft row left from when
+it was on. The rule pushes one candidate for the one `pending` draft and nothing else, so it takes a
+fleet slot like any rule and queues below the cut when there is none; the dispatch claims the draft
+(`pending` → `dispatched`) the way a triage run is claimed. A draft is one assembly rather than a
+standing signal, so there is no cooldown budget and no escalation.
 
 ### The fix, in order of preference
 
@@ -242,7 +249,7 @@ if a note is the right fix, at the nearest directory that would have been read.
 ### The prompt
 
 `PromptId` `'repo-lesson'`, its body in `src/dispatcher/ticketPrompts.ts` and a copy at
-_docs/prompt-templates/repo-lesson.md_. The template carries `{cause}`, `{where}` and `{goals}`, the
+`docs/prompt-templates/repo-lesson.md`. The template carries `{cause}`, `{where}` and `{goals}`, the
 preference order, the pull-request-or-ticket rule, the repository it may edit, `escalate` for an
 undecidable contradiction, and that it finishes with `lesson_conclude` — **never by opening a pull
 request by hand**. The evidence — the group's remedy summaries, their pull requests and the
@@ -258,11 +265,18 @@ marker, no label and no evidence, and nothing would ever settle it.
 `lesson_conclude` takes `outcome` (`pull_request`, `ticket` or `nothing`), `fix` (`code`, `guard`,
 `contradiction` or `note`), `title`, `summary` and `reason`. There is **no `body` argument**: the pull
 request's body is the harness-rendered evidence, so the description rule
-([07](07-pull-requests.md)) holds unchanged. The side effects sit behind a `LessonOutcomeDesk` seam.
+([07](07-pull-requests.md)) holds unchanged — the agent's `summary` and `reason` are kept on the draft
+and are not in it. The side effects sit behind the `LessonOutcomeDesk` seam
+(`src/lessons/outcomeDesk.ts`), and the bodies are rendered by `src/lessons/evidence.ts`. The tool is
+fenced to the draft's own task — the origin must parse and the draft's `task_id` must be the caller's
+— and answers once: a draft no longer `dispatched` refuses a second call. A title naming a pull
+request or work item (`#n`, `!n`) is refused, for the citation rule below.
 
-- **`pull_request`** — `sink.createPullRequest` on `lesson/<id>`, the lesson label
-  (`${labelPrefix}-lesson`, from `lessonLabelFor` in `src/watchLabels.ts`), then `seedPrWatch`, so CI
-  and review on it are answered like any of the fleet's own pull requests.
+- **`pull_request`** — `sink.createPullRequest` on `lesson/<id>` against the default branch, the
+  lesson label (`${labelPrefix}-lesson`, or `lesson` with no prefix, from `lessonLabelFor` in
+  `src/watchLabels.ts`), then `seedPrWatch`, so CI and review on it are answered like any of the
+  fleet's own pull requests; the draft goes `pr-open` with the pull request's number. A refused open
+  says to push the branch and call again, never to open it by hand.
 - **`ticket`** — `ticketFiler` (`src/tickets/filing.ts`) with the lesson label, no watch label and
   `searchKey: lesson:<groupKey>`, carried on `IssueCreateInput` rather than in a prompt; settles the
   draft `filed`.
@@ -276,8 +290,6 @@ in the world.
 
 ## The ruling: adopted or declined
 
-**Not yet built.**
-
 The pull request (or ticket) carries the lesson label and cites every remedy behind it. **Merged means
 adopted. Closed unmerged means declined**, and the group is not redrafted until the same number of new
 misses arrives ([the redraft rule](#the-redraft-rule)). Review is the ruling: the operator reads a
@@ -286,35 +298,40 @@ request.
 
 ## The record and the desk
 
-**Not yet built.**
-
-`lesson_drafts` (_src/store/schema/lessons.ts_, _src/store/lessons.ts_, reached as `store.lessons`)
+`lesson_drafts` (`src/store/schema/lessons.ts`, `src/store/lessons.ts`, reached as `store.lessons`)
 holds one row per draft: the group key, the goals and remedies it was drafted on, its status —
 `pending`, `dispatched`, `pr-open`, `adopted`, `declined`, `filed`, `nothing` or `unanswered` — and
 when it settled. Partial unique indexes hold **one draft `pending` or `dispatched` at a time** and
 **one live draft per group**. It records the life of a draft, never a lesson: what the lesson says is
 in the repository.
 
-The desk, _src/lessons/lessonDesk.ts_, reads no world (`readWorld: false`) and sits beside the
-app-error triage desk, below `environments`. Each pulse it:
+The desk, `src/lessons/lessonDesk.ts`, reads no world of its own (`readWorld: false`, so it runs on a
+local cycle too, against the cached snapshot it is handed) and sits directly below the app-error triage
+desk, so below `graph` and `environments`. Each pulse it:
 
 - settles a `dispatched` draft whose task ended without `lesson_conclude` as `unanswered`;
 - settles a `pr-open` draft `adopted` when its pull request merged and `declined` when it closed,
   from `store.graph.settledPrs()`;
 - opens a draft for the top candidate when none is `pending` or `dispatched`, **fewer than 2 are
-  `pr-open`**, and no open pull request of its own world carries the group's marker.
+  `pr-open`**, and no open pull request of its own world carries the group's marker. The pull requests
+  left out of the fold are read off the same world: every bot-authored one, every one on a `lesson/`
+  branch or carrying the lesson label, and every one a draft recorded. The draft keeps the misses it
+  was made on — remedy, pull request, goal, guard, summary — and the briefing, assembled once: the
+  misses grouped by goal under each goal's retrospective summary.
+
+The settling runs whatever `minGoals` says; opening runs only when it is on.
 
 **At most two lesson pull requests are open at once**, because each one is watched: its CI and its
 review rounds are answered by the fleet ([07](07-pull-requests.md)), which is fleet work spent on a
 pull request nobody has asked for yet. What it costs otherwise is one agent per recurring group,
 capped like any other rule, and nothing at all on a fleet whose remedies do not repeat.
 
-**What changes in [18](18-observability.md#causes-why-the-fleet-came-back).** That spec says nothing
-gates on a remedy and no dispatch rule reads the table. With lessons on, a rule does read it: `cause`
-and `guard` are asserted by an agent and now trigger a dispatch. They still gate no work, and what
-keeps an agent's word safe to act on is the threshold of distinct goals, the opt-in, and that the
-only thing it can cause is a pull request a person reviews. That spec, the remedies schema comment,
-the remedy ask and the `report_remedy` description change with the rule.
+**What this changes in [18](18-observability.md#causes-why-the-fleet-came-back).** Nothing gates on a
+remedy, but with lessons on a desk does read the table and can put an agent to work: `cause` and
+`guard` are asserted by an agent and now trigger a dispatch. They still gate no work, and what keeps an
+agent's word safe to act on is the threshold of distinct goals, the opt-in, and that the only thing it
+can cause is a pull request (or a ticket) a person reviews. Spec 18, the remedies schema comment, the
+remedy ask and the `report_remedy` description say so.
 
 ## Did it work
 

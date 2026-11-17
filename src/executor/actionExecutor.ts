@@ -266,6 +266,7 @@ export class ActionExecutor {
     // the store's own and never a check made here first.
     if (action.remoteRun) store.remoteValidation.claimRemoteRun(action.remoteRun.id, taskId);
     if (action.appErrorTriageRun) store.appErrorTriage.claimRun(action.appErrorTriageRun.id, taskId);
+    if (action.lessonDraft) store.lessons.claimDraft(action.lessonDraft.id, taskId);
   }
 
   private escalate(action: ValidatedAction & { type: 'escalate_to_human' }, run: ActionRun): void {

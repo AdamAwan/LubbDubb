@@ -24,7 +24,7 @@ exist yet are in italics. Deleted by the change that finishes the last stage.
    - Spec 41 states the limits: a round across several areas or checks counts once in each; a
      thread re-answered in a later round moves to the later task (`pr_thread_labels` upserts).
 4. **Origin** `lessons:draft:<id>` (shape of `app-errors:triage:<id>`), branch `lesson/<id>`, in
-   _src/lessons/lessonOrigin.ts_. Not an `issue:<n>:…` family. Add `^lesson/` to `isHarnessBranch`
+   `src/lessons/lessonOrigin.ts`. Not an `issue:<n>:…` family. Add `^lesson/` to `isHarnessBranch`
    (`src/pr/prOwnership.ts`) so lesson branches are the harness's own and are reaped.
 5. **`open_pr` on a lesson origin refuses with "call `lesson_conclude`"** (`resolveOpenPr` in
    `src/mcp/openPr.ts`), never "open it yourself". The prompt says not to open a PR by hand.
@@ -32,7 +32,7 @@ exist yet are in italics. Deleted by the change that finishes the last stage.
    `bot-pr-risk`. Fix `validate-check`'s stale description of what ranks below it. App-error triage
    run-row pattern. `RuleConditions` gains a lessons flag so `minGoals: 0` reads as inert.
 7. **Prompt** `PromptId` `'repo-lesson'`, body in `src/dispatcher/ticketPrompts.ts`, copy at
-   _docs/prompt-templates/repo-lesson.md_. Placeholders `{cause} {where} {goals}`. Fix preference
+   `docs/prompt-templates/repo-lesson.md`. Placeholders `{cause} {where} {goals}`. Fix preference
    order (code → guard → contradiction → nearest note → nothing); small → PR, big → ticket; edit the
    worked-on repository only; `escalate` when code vs spec cannot be decided; finish with
    `lesson_conclude`; never open a PR by hand. Evidence (remedy summaries, PR refs, retrospectives)
@@ -49,7 +49,7 @@ exist yet are in italics. Deleted by the change that finishes the last stage.
    - Ticket: `ticketFiler` with the lesson label and **no** watch label, `searchKey:
 lesson:<groupKey>`; settles `filed`.
    - Nothing: settles `nothing` with the reason.
-9. **Desk** _src/lessons/lessonDesk.ts_, `readWorld: false`, placed beside `appErrorTriage` (below
+9. **Desk** `src/lessons/lessonDesk.ts`, `readWorld: false`, placed beside `appErrorTriage` (below
    `environments`; do not break `test/pulsePipeline.test.ts`), using `store.graph.settledPrs()` for
    merge/close. Settles a dispatched row whose task ended unconcluded as `unanswered`; `pr-open` →
    `adopted` on merge, `declined` on close; opens a draft when none is out, fewer than 2 are
@@ -57,7 +57,7 @@ lesson:<groupKey>`; settles `filed`.
    `src/lessons/groups.ts` `lessonCandidates`.
 10. **Redraft.** `declined`, `nothing` or `unanswered` is eligible again once misses after
     `settled_at` span ≥ `max(miss_count, minGoals)` goals. `adopted` and `filed` are never redrafted.
-11. **Store** `lesson_drafts` (_src/store/schema/lessons.ts_, _src/store/lessons.ts_, `store.lessons`).
+11. **Store** `lesson_drafts` (`src/store/schema/lessons.ts`, `src/store/lessons.ts`, `store.lessons`).
     Status `pending | dispatched | pr-open | adopted | declined | filed | nothing | unanswered`.
     Partial unique indexes: one draft `pending`/`dispatched` at a time; one live draft per group.
 12. **Config** `lessons: { minGoals: 0 }` only. Window and effect periods are named constants (30
@@ -80,8 +80,8 @@ A. **Spec + pure fold + config.** _Done._ `docs/spec/41-repo-lessons.md` (opens 
 line `_no test_` or linking a test that exists; unbuilt sections marked; future paths italic),
 delete `docs/proposals/repo-lessons.md`, update `docs/README.md`. `src/graph/prGoals.ts`,
 `src/lessons/groups.ts`, config key; `test/lessonGroups.test.ts`, config test. Specs 02, 41.
-B. **Store, rule, tool, desk, settlement — one stage** (a rule that cannot conclude must not land
-alone). Everything in decisions 4–11 and 13; `buildSystem`-seam tests with `FakeWorktreeManager`.
+B. **Store, rule, tool, desk, settlement — one stage.** _Done._ (A rule that cannot conclude must not land
+alone.) Everything in decisions 4–11 and 13; `buildSystem`-seam tests with `FakeWorktreeManager`.
 Specs 04, 05, 07, 11, 13, 14, 18, 41.
 C. **Causes tab.** _src/insights/lessonInsights.ts_, reliability payload, `CausesTab.tsx`. Specs 16,
 17, 18, 41.

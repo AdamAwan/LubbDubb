@@ -47,6 +47,7 @@ export const MCP_TOOL_NAMES = [
   'pr_describe',
   'description_review',
   'report_remedy',
+  'lesson_conclude',
 ] as const;
 
 export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
@@ -93,6 +94,7 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   watch_plan: 'point-of-use',
   state_declare: 'point-of-use',
   report_remedy: 'point-of-use',
+  lesson_conclude: 'point-of-use',
   request_permission: 'point-of-use',
 };
 
@@ -149,6 +151,7 @@ export const RULE_TOOLS: Record<DispatchRuleId, readonly McpToolName[]> = {
   'validate-check': ['validation_report'],
   'remote-validation': ['remote_validation_listing', 'remote_validation_report'],
   'validation-failed': [],
+  'repo-lesson': ['lesson_conclude'],
   'bot-pr-risk': ['bot_pr_risk'],
   'app-error-triage': ['app_error_triage', 'app_error_detail'],
   'feature-summary': ['feature_summary'],

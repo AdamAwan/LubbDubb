@@ -1107,9 +1107,15 @@ split evenly across the accounts it filed. One agent answering three unrelated r
 its money on all three and no reading says which third went where — dividing is the only claim the
 data supports.
 
-**Nothing gates on a remedy.** No dispatch rule, desk or gate reads the table; a pull request goes
-green whether or not one was ever filed, and an agent that files none costs the account and nothing
-else. There are exactly two readers: this panel, and the prior-remedy note below.
+**Nothing gates on a remedy.** No gate reads the table and no work waits on a row; a pull request
+goes green whether or not one was ever filed, and an agent that files none costs the account and
+nothing else. There are three readers: this panel, the prior-remedy note below, and — **only where an
+operator has set `lessons.minGoals`** — the repo-lesson desk ([41](41-repo-lessons.md)), whose
+grouping is what puts an agent on drafting a fix to the repository. That last reader acts on `cause`
+and `guard`, which are an agent's word rather than the harness's reading, and it is kept safe by three
+things rather than by the word being right: a group must span at least two distinct goals before
+anything is drafted, the feature is off until an operator turns it on, and the only thing it can
+produce is a pull request (or a ticket) a person reviews.
 
 **Derived, never stored,** like every other fold here. A pre-summed table of causes would go stale the
 moment one more account landed.

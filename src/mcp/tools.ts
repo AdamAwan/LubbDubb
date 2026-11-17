@@ -14,6 +14,7 @@ import { appErrorTriage } from './tools/appErrorTriage.js';
 import { appErrorDetail } from './tools/appErrorDetail.js';
 import { dependencyOutcome } from './tools/dependencyOutcome.js';
 import { sequenceSubmit } from './tools/sequenceSubmit.js';
+import { lessonConclude } from './tools/lessonConclude.js';
 import { linkTicket } from './tools/linkTicket.js';
 import { noteProgress } from './tools/noteProgress.js';
 import { openPr } from './tools/openPr.js';
@@ -90,6 +91,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   pr_describe: prDescribe,
   description_review: descriptionReview,
   report_remedy: reportRemedy,
+  lesson_conclude: lessonConclude,
 };
 
 export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] {

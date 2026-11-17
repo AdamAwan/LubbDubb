@@ -15,5 +15,5 @@ export function sameIdentity(a: string, b: string): boolean {
 }
 
 export function isHarnessBranch(branch: string): boolean {
-  return /^issue\/\d+(\/.+)?$/.test(branch) || /^job\/.+$/.test(branch);
+  return /^issue\/\d+(\/.+)?$/.test(branch) || /^job\/.+$/.test(branch) || /^lesson\/.+$/.test(branch);
 }

@@ -229,6 +229,7 @@ unconditional.
 | `validate-check`           | Handed-over validation check             | —                    | A validation check on a delivered goal that the operator handed to the fleet has no reading against it. One code agent on a throwaway branch cut from the default branch. Ranked below every rule that produces work, because validation blocks nothing. → [20](20-validation.md)                                                                                                                                               |
 | `remote-validation`        | Validation sheet pressed                 | `remoteValidation`   | An operator pressed go on a goal's validation sheet against a deployed environment, which opened a run row. One code agent, read-only and pinned to the **deployed commit**, invokes the project's own runner command and says where the report landed — it states no outcome. Below `validate-check`, above `validation-failed`, whose input it produces. → [36](36-remote-validation.md#the-dispatch--rule-remote-validation) |
 | `validation-failed`        | A validation check came back failed      | —                    | A check somebody ran against the delivered goal was recorded **failed**. One code agent, read-only on the default branch, reproduces it and says what is behind it. Never wired through a shortfall. → [20](20-validation.md#when-a-check-fails)                                                                                                                                                                                |
+| `repo-lesson`              | The fleet keeps coming back              | `lessons`            | A repo-lesson draft is open and waiting: a group of `documented` or `undocumented` remedies spanned `lessons.minGoals` goals in thirty days. One code agent on `lesson/<id>` picks the fix that stops the miss and concludes with `lesson_conclude`. Inert where `minGoals` is 0. → [41](41-repo-lessons.md#drafting-a-lesson)                                                                                                  |
 | `bot-pr-risk`              | Bot pull requests unread for risk        | —                    | A risk run over up to twenty dependency-bot pull requests is open and waiting ([37](37-bot-prs.md#the-risk-summary)). One desk agent for the whole batch; advice only.                                                                                                                                                                                                                                                          |
 | `app-error-triage`         | App errors nothing linked                | —                    | A triage run over up to ten moved app error groups the deterministic link named no goal for is open and waiting ([39](39-app-errors.md#agent-triage)). One read-only code agent for the whole batch; advice drawn beside the link.                                                                                                                                                                                              |
 | `feature-summary`          | Feature has moved                        | —                    | A Feature's children stand somewhere other than where its summary was written, or it has none. One desk agent says where the Feature is. Produces no work at all, so nothing may wait behind it.                                                                                                                                                                                                                                |
@@ -242,7 +243,9 @@ rule that reads the other. `remoteValidation` is a feature flag and reads whethe
 declares a `validate` block: a rule with no run rows to read would already produce nothing, so the
 condition buys one thing and it is worth having — the book draws it as **inert** on a deployment that
 has not turned the feature on, rather than as a rule that looks live and never fires.
-→ [36](36-remote-validation.md#the-dispatch--rule-remote-validation)
+→ [36](36-remote-validation.md#the-dispatch--rule-remote-validation) `lessons` is the same kind of flag
+over `lessons.minGoals`: above 0, `repo-lesson` is in the pipeline; at the default 0 it is drawn inert,
+even over a draft row left from when it was on. → [41](41-repo-lessons.md#drafting-a-lesson)
 
 The seven PR-concern rules and `pr-merge-ready` run as **one pass** over the open PRs rather than eight,
 because at most one agent works a branch and the fold that picks the top concern has to see them
@@ -630,21 +633,25 @@ is no second list to keep in step with it. What each stage contributes:
     check waiting to be run is work nobody has done; this is a second opinion on work somebody has,
     so it goes below — and below every rule that produces work for `validate-check`'s reason, which is
     the same promise.
-11. **Bot PR risk** (`bot-pr-risk`), one desk agent over a batch of dependency-bot pull requests —
+11. **Repo lessons** (`repo-lesson`), one code agent drafting the fix for a miss the fleet keeps
+    repeating — below every rule that produces work for a goal, because a lesson is work nobody has
+    asked for yet, and above the advice desks because, unlike them, it produces a change somebody
+    can merge. → [41](41-repo-lessons.md#drafting-a-lesson)
+12. **Bot PR risk** (`bot-pr-risk`), one desk agent over a batch of dependency-bot pull requests —
     below every rule that produces work, because what it writes is advice beside a pull request
     nobody is obliged to act on, and above the Feature desks only because somebody may have pressed
     for it and be watching the tab. → [37](37-bot-prs.md#the-risk-summary)
-12. **App error triage** (`app-error-triage`), one read-only code agent over a batch of moved app
+13. **App error triage** (`app-error-triage`), one read-only code agent over a batch of moved app
     errors the deterministic link named no goal for — directly below the bot PR risk run and for its
     reason: what it writes is advice beside an error row, it produces no work, and somebody may have
     pressed Triage and be watching. It is a code agent, unlike its neighbour, because the agent follows
     method-name frames into the code; that costs a slot's checkout, which is one more reason it ranks
     where nothing that produces work waits behind it. → [39](39-app-errors.md#agent-triage)
-13. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
+14. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
     below even a handed-over validation check, because it is the only kind of rule in the book that
     produces no work at all: a check is a reading somebody asked for, and this is a paragraph about
     readings already taken. Nothing may wait behind it.
-14. **Feature sequences** (`feature-sequence`), a desk agent per Feature whose stories nobody has put
+15. **Feature sequences** (`feature-sequence`), a desk agent per Feature whose stories nobody has put
     in an order — **last**, beside `feature-summary` and for its reason: it proposes an ordering and
     holds nothing, so it produces no work either. → [33](33-story-sequencing.md)
 

@@ -244,6 +244,7 @@ function buildDispatch(
     stateDeclareNote: stateDeclareNote(config.environments),
     remoteValidationOn: config.environments.some((env) => env.validate !== undefined),
     checkSets: config.validation.checkSets,
+    lessonsOn: config.lessons.minGoals > 0,
     validationPlanNote: validationPlanNote(config.environments),
   });
   const dispatcher: Dispatcher = rules;

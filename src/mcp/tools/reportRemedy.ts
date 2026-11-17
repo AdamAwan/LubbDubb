@@ -34,8 +34,10 @@ export const reportRemedy: ToolFactory = ({ deps, agent, task, ok }) => {
       'When the guard is "undocumented" — the thing that would have caught it is written down ' +
       'nowhere — say so in the guard itself, plainly: that answer is what an operator reads to ' +
       'decide what to write down.\n\n' +
-      'This schedules nothing, closes nothing and is posted nowhere. It does not say your work is ' +
-      'finished — nothing here replaces pushing the fix.',
+      'It closes nothing and is posted nowhere, and it does not say your work is finished — nothing ' +
+      'here replaces pushing the fix. It gates nothing either. Where the operator has turned repo lessons ' +
+      'on, the same cause and guard on several goals is what a later agent drafts a fix to the repository ' +
+      'from, as a pull request a person reviews: one more reason to answer the guard honestly.',
     inputSchema: toolSchema(
       z.object({
         cause: z.enum(causes).describe(causes.map((c) => `${c}: ${CAUSE_COPY[c].blurb}`).join('. ')),
@@ -63,7 +65,7 @@ export const reportRemedy: ToolFactory = ({ deps, agent, task, ok }) => {
         guard: result.remedy.guard,
         note:
           'Recorded. It is read on the Yield panel, and the next agent dispatched for this check is ' +
-          'handed it. Nothing is scheduled from it and your pull request is unchanged.',
+          'handed it. Your pull request is unchanged.',
       });
     },
   };

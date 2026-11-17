@@ -1,6 +1,7 @@
 import { issueOriginId, issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { bySlug, liveParts, partBase, partBranch, partOpensPr } from '../plans/parts.js';
 import type { Issue, Plan, PlanPart } from '../types.js';
+import { lessonDraftId } from '../lessons/lessonOrigin.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -35,6 +36,14 @@ export function resolveOpenPr(originRef: string | null, ctx: OpenPrContext): Ope
 
   const pickup = issueOriginNumber('root', originRef);
   if (pickup !== null) return pickupTarget(pickup, ctx);
+
+  if (lessonDraftId(originRef) !== null)
+    return {
+      error:
+        'open_pr does not open a repo lesson. Commit and push your branch, then call `lesson_conclude` with ' +
+        'outcome pull_request: it opens the pull request with the evidence, the label and the watch a lesson needs. ' +
+        'Do not open it by hand.',
+    };
 
   return {
     error:

@@ -106,6 +106,7 @@ test('the validation chain runs in the order the bench is read in', () => {
   below('appErrors', 'environments', 'an error read is held against the head the environment desk just recorded');
   below('appErrorTracker', 'appErrors', 'the tracker is searched for the groups the read just moved');
   below('appErrorTriage', 'appErrorTracker', 'a triage run is assembled after the search for its groups starts');
+  below('lessons', 'graph', 'a lesson pull request settles off the graph, and each remedy’s goal is walked up it');
   below('validationReady', 'remoteValidation', "the validate row's detail carries this pulse's sheet");
   below('closeOuts', 'validationReady', 'the bench asks for one thing at a time');
   below('validationReady', 'validationAsks', 'the resources are asked for before the obligation they are for');
