@@ -1355,8 +1355,9 @@ half-seeded reading. Only what answers changes.
   outlive the process: a preparation it was answering is closed at boot as not knowable (`ok: null`),
   exactly as a command whose runner is gone. Its output is the asking and the answer, kept in memory
   for the latest preparation per environment.
-- **The reseed control is drawn destructive** for every such environment, since the gate cannot tell
-  from config alone whether the extension reseeds.
+- **The reseed control is drawn destructive** only where an extension fills `reseedTenant`; provisioning
+  alone is not. Both the gate and the cockpit's tenant panel read this from the desk's
+  `tenantSteps`, the same answer the press runs on, never from config.
 - Its timeout is the slot's, one hour, and not `remoteValidation.tenantTimeoutMs`, which is the
   commands' kill.
 

@@ -227,7 +227,7 @@ export class RemoteRunDesk extends EventEmitter {
     }
   }
 
-  /** @public what answers each tenant step for an environment, as the cockpit draws it */
+  /** @public the seam the cockpit reads tenant steps through */
   tenantSteps(environment: EnvironmentConfig): TenantSteps {
     return this.deps.tenants.steps(environment);
   }
@@ -316,8 +316,7 @@ export class RemoteRunDesk extends EventEmitter {
     resumed: { call: TenantCall; launch: TenantLaunch } | null = null,
   ): Promise<Prepared> {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
-    const validate = environment?.validate;
-    if (environment === undefined || validate === undefined)
+    if (environment?.validate === undefined)
       return {
         ok: false,
         detail: `"${environmentName}" declares no "validate" block, so it has no tenant to prepare.`,

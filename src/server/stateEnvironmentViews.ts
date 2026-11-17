@@ -3,7 +3,13 @@ import { groupBy } from '../primitives.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
 import { goneCheckRows, okScope, okStanding, pageRows } from '../validation/remote/intent.js';
-import { noStanding, resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
+import {
+  commandSteps,
+  noStanding,
+  resolveTenant,
+  type OperatorTenants,
+  type TenantSteps,
+} from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
   GoalArrival,
@@ -250,6 +256,7 @@ export function buildRemoteSheets(
   signers: RemoteSheetSigners,
   operatorTenants?: OperatorTenants,
   checks: readonly ValidationCheck[] = [],
+  steps: (environment: EnvironmentConfig) => TenantSteps = (environment) => commandSteps(environment.validate),
 ): RemoteSheetView[] {
   if (!environments.some((e) => e.validate !== undefined)) return [];
   const sheets = store.remoteValidation.listRemoteSheets();
@@ -307,18 +314,35 @@ export function buildRemoteSheets(
       ok: okStanding({ rows, intent, run, validates: validate !== undefined }),
       tenant: {
         ...standing,
-        ...tenantControls(validate),
+        ...tenantControls(environment === undefined ? null : steps(environment)),
         preparation: prepares.get(sheet.environment) ?? null,
       },
     };
   });
 }
 
-function tenantControls(validate: EnvironmentConfig['validate']): { reseedable: boolean; destructive: boolean } {
-  const extension = validate?.tenantExtension === true;
+/** The sheets a snapshot draws, with the tenant controls read off the desk. */
+export function snapshotRemoteSheets(
+  system: Pick<System, 'store' | 'config' | 'remoteRuns'>,
+  tasks: readonly TaskSummary[],
+  checks: readonly ValidationCheck[],
+  signers: RemoteSheetSigners,
+): RemoteSheetView[] {
+  return buildRemoteSheets(
+    system.store,
+    system.config.environments,
+    tasks,
+    signers,
+    system.config.remoteValidation.tenants,
+    checks,
+    (environment) => system.remoteRuns.tenantSteps(environment),
+  );
+}
+
+function tenantControls(steps: TenantSteps | null): { reseedable: boolean; destructive: boolean } {
   return {
-    reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined || extension,
-    destructive: validate?.reseed !== undefined || extension,
+    reseedable: (steps?.ensure ?? steps?.reseed ?? null) !== null,
+    destructive: (steps?.reseed ?? null) !== null,
   };
 }
 

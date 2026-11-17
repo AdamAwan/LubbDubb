@@ -219,3 +219,20 @@ test('with no extension configured, every tenant command path is unchanged', asy
   assert.equal(prepared.ok, true, prepared.detail);
   assert.equal(commands.asked.length, 1);
 });
+
+test('the gate’s reseed control follows what the extension fills: provisioning alone is not destructive', async () => {
+  const sheetTenant = async (source: string) => {
+    const { system } = await bench(source);
+    system.store.remoteValidation.openRemoteSheet({ goalRef: 'issue:12', environment: 'acceptance' });
+    return buildStateSnapshot(system).remoteSheets[0]!.tenant;
+  };
+  const ensureOnly = await sheetTenant(`export default { apiVersion: 1, name: 'acme', slots: {
+    ensureTenant: () => ({ tenant: 'acme-validation-7' }),
+  } };`);
+  assert.equal(ensureOnly.reseedable, true);
+  assert.equal(ensureOnly.destructive, false);
+
+  const both = await sheetTenant(RECORDING);
+  assert.equal(both.reseedable, true);
+  assert.equal(both.destructive, true, 'a reseedTenant slot wipes the tenant, and the gate must say so');
+});

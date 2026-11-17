@@ -80,6 +80,7 @@ export function desktopRemoteValidation(
         {},
         config.remoteValidation.tenants,
         store.validation.listAllValidationChecks(),
+        (environment) => remoteRuns.tenantSteps(environment),
       ).filter((sheet) => sheet.goalRef === goalRef),
     give: (goalRef, environment) => remoteIntents.give(goalRef, environment),
     press: (goalRef, environment) => remoteRuns.press(goalRef, environment),
