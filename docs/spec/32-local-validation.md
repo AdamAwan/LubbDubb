@@ -217,8 +217,10 @@ start error means carry on, and that the stop answer's file name is no proof —
 explain a missing video, because the harness reads that for itself:
 
 - **At boot**, and only at boot, `ffmpegPreflight` (`src/validation/local/ffmpeg.ts`, called from `main.ts`) looks for
-  `ffmpeg-<FFMPEG_REVISION>` in the Playwright cache (`PLAYWRIGHT_BROWSERS_PATH`, else the platform's
-  default) and records **one** `boot` error naming the install command when it is missing. It checks
+  `ffmpeg-<FFMPEG_REVISION>` in the Playwright cache (a non-empty `PLAYWRIGHT_BROWSERS_PATH`, else the
+  platform's default, with an empty `XDG_CACHE_HOME` or `LOCALAPPDATA` read as unset). Under
+  `PLAYWRIGHT_BROWSERS_PATH=0` Playwright installs inside its own package, which this harness does not
+  locate, so it says nothing there rather than guess and records **one** `boot` error naming the install command when it is missing. It checks
   only a browser that offers the recorder _and_ launches the pinned package: an operator's own args
   name a revision this harness cannot know.
 - **On each settled run**, a `recordingStatus` is written beside the report — `kept` where a video is
@@ -228,8 +230,10 @@ explain a missing video, because the harness reads that for itself:
   live `localValidation.browser`: an operator who edits the browser block mid-run must not change what
   that run is judged to have been offered. Here it is `local_validations.recording_status`;
   the remote run's is its own ([36](36-remote-validation.md#the-runs-recording)). Null is _not known_ —
-  every row before the column, every row not yet reported, and every run reported `blocked`, which may
-  never have got as far as recording — so nothing is backfilled. The offer is the reporting task's own.
+  every row before the column, every row not yet reported, a run reported `blocked` with no video (it may
+  never have got as far as recording; one that did record is `kept`), a directory that could not be
+  read, and an agent whose task row is gone — so nothing is backfilled. The offer is the reporting
+  task's own.
   **`missing` never changes an outcome**: a run with no video is still the pass, failure or block it
   reported. The cockpit draws "not recorded" under the report where it is `missing`.
 

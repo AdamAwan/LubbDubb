@@ -33,11 +33,18 @@ test('the recorder is on offer only where devtools is among the caps', () => {
 test('a video is kept; none is missing only where the agent was launched with the recorder', () => {
   const launched = (servers: ExtraMcpServer[] | null) => ({ mcpServers: servers }) as Task;
   const recorder = DEFAULT_LOCAL_VALIDATION.browser as ExtraMcpServer;
-  assert.equal(recordingStatus(launched([recorder]), true), 'kept');
-  assert.equal(recordingStatus(launched([recorder]), false), 'missing');
-  assert.equal(recordingStatus(launched([browser(['--caps', 'vision'])]), false), 'not_offered');
-  assert.equal(recordingStatus(launched(null), false), 'not_offered');
-  assert.equal(recordingStatus(null, false), 'not_offered');
+  assert.equal(recordingStatus(launched([recorder]), true, false), 'kept');
+  assert.equal(recordingStatus(launched([recorder]), true, true), 'kept', 'a blocked run that recorded still kept it');
+  assert.equal(recordingStatus(launched([recorder]), false, false), 'missing');
+  assert.equal(recordingStatus(launched([browser(['--caps', 'vision'])]), false, false), 'not_offered');
+  assert.equal(recordingStatus(launched(null), false, false), 'not_offered');
+});
+
+test('what the harness cannot know is null, never missing', () => {
+  const recorder = { mcpServers: [DEFAULT_LOCAL_VALIDATION.browser] } as Task;
+  assert.equal(recordingStatus(recorder, null, false), null, 'the directory could not be read');
+  assert.equal(recordingStatus(recorder, false, true), null, 'a blocked run may never have started recording');
+  assert.equal(recordingStatus(null, false, false), null, 'no task to read the offer off');
 });
 
 const host = (present: string[]) => ({

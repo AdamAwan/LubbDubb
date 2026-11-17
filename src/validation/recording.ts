@@ -32,9 +32,14 @@ export function recorderOffered(server: ExtraMcpServer | null): boolean {
   });
 }
 
-/** Read off the servers the agent was launched with, never the live config, which can have moved since. */
-export function recordingStatus(task: Task | null, video: boolean): RecordingStatus {
-  const offered = task?.mcpServers?.some(recorderOffered) ?? false;
+/**
+ * Null is *not known*: the directory could not be read, the agent's task is gone, or a blocked run left
+ * no video and may never have got as far as recording. The offer is read off the servers the agent was
+ * launched with, never the live config, which can have moved since.
+ */
+export function recordingStatus(task: Task | null, video: boolean | null, blocked: boolean): RecordingStatus | null {
+  if (video === null) return null;
   if (video) return 'kept';
-  return offered ? 'missing' : 'not_offered';
+  if (blocked || task === null) return null;
+  return task.mcpServers?.some(recorderOffered) === true ? 'missing' : 'not_offered';
 }

@@ -153,7 +153,7 @@ export class RemoteReadingDesk {
       reportPath: input.reportPath,
       artefacts: input.artefacts,
       recording,
-      recordingStatus: video === null ? null : recordingStatus(task, video),
+      recordingStatus: recordingStatus(task, video, false),
     });
     return { ok: true, run: ended ?? run, read, blocked, wrote, captured, kept, moved };
   }

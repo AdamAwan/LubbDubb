@@ -244,6 +244,21 @@ test('a run that recorded nothing has no recording, and the route says so', asyn
   close(b);
 });
 
+test('a video the browser wrote but the harness could not keep is not known, never missing', async () => {
+  const b = bench();
+  launchedWith(b, DEFAULT_LOCAL_VALIDATION.browser);
+  writeFileSync(join(artefactsOf(b), 'video-1.webm'), VIDEO);
+  mkdirSync(join(validationGoalDir(b.system.config.validationRoot, GOAL), `recording-${b.runId}.webm`), {
+    recursive: true,
+  });
+  await settle(b);
+
+  const run = b.system.store.remoteValidation.getRemoteRun(b.runId);
+  assert.equal(run?.recording, null, 'the copy onto a directory failed');
+  assert.equal(run?.recordingStatus, null);
+  close(b);
+});
+
 test('a run launched with no recorder reads as not offered, never as missing', async () => {
   const b = bench();
   launchedWith(b, null);

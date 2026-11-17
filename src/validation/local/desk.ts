@@ -111,15 +111,13 @@ export class LocalValidationDesk extends EventEmitter {
       summary: result.summary,
       findings: result.findings,
       visited: result.visited,
-      screenshots: media,
+      screenshots: media ?? [],
       note: result.status === 'blocked' ? result.summary : null,
-      recordingStatus:
-        result.status === 'blocked'
-          ? null
-          : recordingStatus(
-              task,
-              media.some((name) => mediaKind(name) === 'video'),
-            ),
+      recordingStatus: recordingStatus(
+        task,
+        media === null ? null : media.some((name) => mediaKind(name) === 'video'),
+        result.status === 'blocked',
+      ),
     });
     if (written === null)
       return {
@@ -158,7 +156,7 @@ export class LocalValidationDesk extends EventEmitter {
     }
   }
 
-  private media(row: LocalValidation): string[] {
+  private media(row: LocalValidation): string[] | null {
     const dir = this.outputDir(row);
     try {
       if (!existsSync(dir)) return [];
@@ -171,7 +169,7 @@ export class LocalValidationDesk extends EventEmitter {
         source: 'cycle',
         message: `Could not read the screenshots and recordings of a local validation of ${row.originRef}: ${(err as Error).message}`,
       });
-      return [];
+      return null;
     }
   }
 
