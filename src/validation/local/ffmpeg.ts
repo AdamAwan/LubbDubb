@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { ExtraMcpServer } from '../../types.js';
-import { FFMPEG_REVISION, PLAYWRIGHT_MCP_VERSION, PLAYWRIGHT_VERSION, recorderOffered } from './policy.js';
+import { recorderOffered } from '../recording.js';
+import { FFMPEG_REVISION, PLAYWRIGHT_MCP_VERSION, PLAYWRIGHT_VERSION } from './policy.js';
 
 // → docs/spec/32-local-validation.md#the-recording
 
@@ -21,8 +22,8 @@ function playwrightCacheDir(host: Host): string {
 }
 
 export function ffmpegPreflight(browser: ExtraMcpServer | null, host: Host): string | null {
-  if (!recorderOffered(browser)) return null;
-  if (!(browser?.args ?? []).includes(`@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}`)) return null;
+  if (browser === null || !recorderOffered(browser)) return null;
+  if (!browser.args.includes(`@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}`)) return null;
   const dir = join(playwrightCacheDir(host), `ffmpeg-${FFMPEG_REVISION}`);
   if (host.exists(dir)) return null;
   return (

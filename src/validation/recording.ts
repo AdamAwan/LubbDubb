@@ -1,3 +1,5 @@
+import type { ExtraMcpServer, RecordingStatus, Task } from '../types.js';
+
 // → docs/spec/32-local-validation.md#the-recording, docs/spec/36-remote-validation.md#the-runs-recording
 
 export function recordingInstructions(browserKey: string, input: { where: string; chapter: string }): string {
@@ -16,4 +18,23 @@ export function recordingInstructions(browserKey: string, input: { where: string
     `and it is not a reason to report \`blocked\`. The harness sees for itself whether a video was written, so ` +
     `do not report on it — and a file name in \`browser_stop_video\`'s answer is no proof that one was.\n`
   );
+}
+
+export function recorderOffered(server: ExtraMcpServer | null): boolean {
+  if (server === null) return false;
+  return server.args.some((arg, i) => {
+    const caps = arg.startsWith('--caps=')
+      ? arg.slice('--caps='.length)
+      : arg === '--caps'
+        ? server.args[i + 1]
+        : undefined;
+    return caps !== undefined && caps.split(',').some((cap) => cap.trim() === 'devtools');
+  });
+}
+
+/** Read off the servers the agent was launched with, never the live config, which can have moved since. */
+export function recordingStatus(task: Task | null, video: boolean): RecordingStatus {
+  const offered = task?.mcpServers?.some(recorderOffered) ?? false;
+  if (video) return 'kept';
+  return offered ? 'missing' : 'not_offered';
 }

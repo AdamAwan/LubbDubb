@@ -5,7 +5,7 @@ import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
 import type { LocalRun, LocalValidation, LocalValidationFinding, Task } from '../../types.js';
 import { mediaKind } from '../media.js';
-import { recordingStatus } from './policy.js';
+import { recordingStatus } from '../recording.js';
 import { localValidationOriginParts, localValidationOutputDir } from './origin.js';
 import { localValidationIsOpen, validationRunStale } from './stale.js';
 
@@ -19,8 +19,6 @@ interface LocalValidationDeskDeps {
   store: Store;
   validationRoot: string;
   errors: ErrorRecorder;
-  /** Whether the live browser block offers the recorder — read when a report lands. */
-  recorderOffered: () => boolean;
 }
 
 export class LocalValidationDesk extends EventEmitter {
@@ -116,7 +114,7 @@ export class LocalValidationDesk extends EventEmitter {
       screenshots: media,
       note: result.status === 'blocked' ? result.summary : null,
       recordingStatus: recordingStatus(
-        this.deps.recorderOffered(),
+        row.taskId === null ? null : this.deps.store.tasks.getTask(row.taskId),
         media.some((name) => mediaKind(name) === 'video'),
       ),
     });

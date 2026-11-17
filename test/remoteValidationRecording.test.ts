@@ -21,7 +21,8 @@ import { validationGoalDir } from '../src/validation/resources.js';
 import { commentSink } from './support/commentSink.js';
 import type { EnvironmentConfig } from '../src/environments/policy.js';
 import type { IssueCommentInput, IssueImageInput, IssueImageResult } from '../src/sink/actionSink.js';
-import type { ValidationCheckInput, ValidationStep } from '../src/types.js';
+import type { ExtraMcpServer, ValidationCheckInput, ValidationStep } from '../src/types.js';
+import { DEFAULT_LOCAL_VALIDATION } from '../src/validation/local/policy.js';
 
 /*
  * A remote run's video: kept out of the swept artefacts, named on the run, served by run id alone.
@@ -184,6 +185,18 @@ async function settle(b: Bench): Promise<void> {
 
 const VIDEO = Buffer.from('not really a video');
 
+function launchedWith(b: Bench, browser: ExtraMcpServer | null): void {
+  const task = b.system.store.tasks.createTask({
+    kind: 'code',
+    title: 'Run the sheet',
+    prompt: 'run it',
+    branch: null,
+    originRef: GOAL,
+    mcpServers: browser === null ? [] : [browser],
+  });
+  assert.ok(b.system.store.remoteValidation.claimRemoteRun(b.runId, task.id) !== null);
+}
+
 function artefactsOf(b: Bench): string {
   return join(remoteValidationRunDir(b.system.config.validationRoot, GOAL, b.runId), 'artefacts');
 }
@@ -212,13 +225,14 @@ test('a settled run keeps the newest video it recorded, under a name the harness
 
 test('a run that recorded nothing has no recording, and the route says so', async () => {
   const b = bench();
+  launchedWith(b, DEFAULT_LOCAL_VALIDATION.browser);
   await settle(b);
 
   assert.equal(b.system.store.remoteValidation.getRemoteRun(b.runId)?.recording, null);
   assert.equal(
     b.system.store.remoteValidation.getRemoteRun(b.runId)?.recordingStatus,
     'missing',
-    'the default browser offers the recorder, so no video is a recording that went missing',
+    'the run was launched with the recorder, so no video is a recording that went missing',
   );
   const state = buildStateSnapshot(b.system, { remoteRecordingSigner: (runId) => `tok-${runId}` });
   assert.equal(state.remoteSheets[0]?.run?.recordingUrl, null);
@@ -230,9 +244,9 @@ test('a run that recorded nothing has no recording, and the route says so', asyn
   close(b);
 });
 
-test('a run whose browser offers no recorder reads as not offered, never as missing', async () => {
+test('a run launched with no recorder reads as not offered, never as missing', async () => {
   const b = bench();
-  b.system.config.localValidation = { ...b.system.config.localValidation, browser: null };
+  launchedWith(b, null);
   await settle(b);
 
   assert.equal(b.system.store.remoteValidation.getRemoteRun(b.runId)?.recordingStatus, 'not_offered');

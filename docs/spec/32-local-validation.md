@@ -216,15 +216,17 @@ fetch a different revision into a different folder, which does not count.
 start error means carry on, and that the stop answer's file name is no proof — and it is not asked to
 explain a missing video, because the harness reads that for itself:
 
-- **At boot**, `ffmpegPreflight` (`src/validation/local/ffmpeg.ts`, called from `main.ts`) looks for
+- **At boot**, and only at boot, `ffmpegPreflight` (`src/validation/local/ffmpeg.ts`, called from `main.ts`) looks for
   `ffmpeg-<FFMPEG_REVISION>` in the Playwright cache (`PLAYWRIGHT_BROWSERS_PATH`, else the platform's
   default) and records **one** `boot` error naming the install command when it is missing. It checks
   only a browser that offers the recorder _and_ launches the pinned package: an operator's own args
   name a revision this harness cannot know.
 - **On each settled run**, a `recordingStatus` is written beside the report — `kept` where a video is
-  there, `missing` where the browser offered the recorder (`--caps` including `devtools`, read off the
-  live `localValidation.browser`) and none was written, `not_offered` otherwise
-  (`recordingStatus`, `recorderOffered` in `policy.ts`). Here it is `local_validations.recording_status`;
+  there, `missing` where the agent was launched with the recorder (a server whose `--caps` include
+  `devtools`) and none was written, `not_offered` otherwise (`recordingStatus`, `recorderOffered` in
+  `src/validation/recording.ts`). The offer is read off the **task row's** `mcp_servers`, never the
+  live `localValidation.browser`: an operator who edits the browser block mid-run must not change what
+  that run is judged to have been offered. Here it is `local_validations.recording_status`;
   the remote run's is its own ([36](36-remote-validation.md#the-runs-recording)). Null is _not known_ —
   every row before the column, and every row not yet reported — so nothing is backfilled.
   **`missing` never changes an outcome**: a run with no video is still the pass, failure or block it

@@ -21,7 +21,7 @@ import { localValidationOriginParts, localValidationFixOriginParts } from '../sr
 import { issueOriginRole } from '../src/issueOrigins.js';
 import { buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { ALLOWED_MCP_TOOLS, extraMcpGrants, MCP_SERVER_ID } from '../src/mcp/names.js';
-import type { Agent, Issue, LocalRun, LocalValidation } from '../src/types.js';
+import type { Agent, ExtraMcpServer, Issue, LocalRun, LocalValidation } from '../src/types.js';
 import { repoText } from './support/paths.js';
 
 const NOW = '2025-01-01T00:00:00.000Z';
@@ -77,7 +77,7 @@ function request(system: System, originRef = 'issue:12'): LocalValidation {
   return system.localValidations.request({ originRef, run });
 }
 
-function spawnAgent(system: System, originRef: string, branch = 'issue/12'): Agent {
+function spawnAgent(system: System, originRef: string, branch = 'issue/12', mcpServers?: ExtraMcpServer[]): Agent {
   const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
@@ -85,6 +85,7 @@ function spawnAgent(system: System, originRef: string, branch = 'issue/12'): Age
     branch,
     originRef,
     originTitle: 'Ship it',
+    mcpServers,
   });
   return system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
 }
@@ -606,12 +607,14 @@ test('a recording is listed beside the screenshots and served as video', async (
   system.store.close();
 });
 
-test('a run whose recorder was on offer and wrote no video says so, and is still a pass', async () => {
+test('a run launched with the recorder that wrote no video says so, and is still a pass', async () => {
   const system = build();
   liveRun(system);
   const validation = request(system);
-  system.store.localValidations.markLocalValidationDispatched(validation.id, 'task-x');
-  const agent = spawnAgent(system, `issue:12:validate-local:${validation.id}`);
+  const agent = spawnAgent(system, `issue:12:validate-local:${validation.id}`, 'issue/12', [
+    DEFAULT_LOCAL_VALIDATION.browser as ExtraMcpServer,
+  ]);
+  system.store.localValidations.markLocalValidationDispatched(validation.id, agent.taskId);
   writeFileSync(join(system.localValidations.outputDir(validation), 'shot.png'), 'not really a png');
 
   const reported = await callTool(system, agent, 'local_validation_report', { result: 'passed', summary: 'it worked' });

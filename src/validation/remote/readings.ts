@@ -11,7 +11,7 @@ import { demandsProof } from '../report.js';
 import { validationGoalDir } from '../resources.js';
 import { handsBackAScreen, stepArea, stepDriven, stepScript } from '../steps.js';
 import { remoteValidationRunDir } from './origin.js';
-import { recordingStatus } from '../local/policy.js';
+import { recordingStatus } from '../recording.js';
 import { foldCapture, foldRowOutcome, parseRunReport, type RowOutcome, type RunReport } from './report.js';
 
 // → docs/spec/36-remote-validation.md#the-report-is-the-only-source-of-row-outcomes
@@ -23,8 +23,6 @@ interface ReadingDeps {
   /** Where a goal's validation directory is, which is where a capture outlives the run that took it. */
   validationRoot: string;
   errors?: ErrorRecorder;
-  /** Whether the live browser block offers the recorder. Absent reads as not offered. */
-  recorderOffered?: () => boolean;
   /** How the run's report file is read. Injected only so a test need not lay one on disk. */
   read?: (path: string) => Promise<string>;
   /** How a capture is moved out of the run's artefacts. Injected so a test lays no image on disk. */
@@ -154,7 +152,10 @@ export class RemoteReadingDesk {
       reportPath: input.reportPath,
       artefacts: input.artefacts,
       recording,
-      recordingStatus: recordingStatus(this.deps.recorderOffered?.() ?? false, recording !== null),
+      recordingStatus: recordingStatus(
+        run.taskId === null ? null : this.deps.store.tasks.getTask(run.taskId),
+        recording !== null,
+      ),
     });
     return { ok: true, run: ended ?? run, read, blocked, wrote, captured, kept, moved };
   }

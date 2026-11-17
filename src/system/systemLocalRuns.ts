@@ -2,7 +2,6 @@ import type { Config } from '../config/config.js';
 import { fetchRemote } from '../git/gitCli.js';
 import { openPrForIssue } from '../dispatcher/issuePickup.js';
 import { LocalRunner } from '../localRun/runner.js';
-import { recorderOffered } from '../validation/local/policy.js';
 import { LocalValidationDesk } from '../validation/local/desk.js';
 import { LocalRunWatch } from '../localRun/watch.js';
 import { CommandPortLister } from '../localRun/ports.js';
@@ -60,7 +59,6 @@ export function buildLocalRuns(config: Config, opts: BuildOptions, base: Foundat
     store,
     validationRoot: config.validationRoot,
     errors,
-    recorderOffered: () => recorderOffered(config.localValidation.browser),
   });
   localRun.on('changed', () => {
     localValidations.sweep();

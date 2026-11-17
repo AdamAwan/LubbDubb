@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
-import { toRecordingStatus } from './rows/remoteValidation.js';
+import { toRecordingStatus } from './rows/recording.js';
 import type { LocalValidation, LocalValidationFinding, LocalValidationStatus, RecordingStatus } from '../types.js';
 
 // → docs/spec/14-persistence.md

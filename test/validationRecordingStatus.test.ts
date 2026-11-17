@@ -7,10 +7,9 @@ import {
   FFMPEG_REVISION,
   PLAYWRIGHT_MCP_VERSION,
   PLAYWRIGHT_VERSION,
-  recorderOffered,
-  recordingStatus,
 } from '../src/validation/local/policy.js';
-import type { ExtraMcpServer } from '../src/types.js';
+import { recorderOffered, recordingStatus } from '../src/validation/recording.js';
+import type { ExtraMcpServer, Task } from '../src/types.js';
 
 // → docs/spec/32-local-validation.md#the-recording
 
@@ -31,10 +30,14 @@ test('the recorder is on offer only where devtools is among the caps', () => {
   assert.equal(recorderOffered(browser(['--caps=devtools'])), true);
 });
 
-test('a video is kept; none is missing only where the recorder was offered', () => {
-  assert.equal(recordingStatus(true, true), 'kept');
-  assert.equal(recordingStatus(true, false), 'missing');
-  assert.equal(recordingStatus(false, false), 'not_offered');
+test('a video is kept; none is missing only where the agent was launched with the recorder', () => {
+  const launched = (servers: ExtraMcpServer[] | null) => ({ mcpServers: servers }) as Task;
+  const recorder = DEFAULT_LOCAL_VALIDATION.browser as ExtraMcpServer;
+  assert.equal(recordingStatus(launched([recorder]), true), 'kept');
+  assert.equal(recordingStatus(launched([recorder]), false), 'missing');
+  assert.equal(recordingStatus(launched([browser(['--caps', 'vision'])]), false), 'not_offered');
+  assert.equal(recordingStatus(launched(null), false), 'not_offered');
+  assert.equal(recordingStatus(null, false), 'not_offered');
 });
 
 const host = (present: string[]) => ({

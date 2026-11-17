@@ -1,5 +1,5 @@
+import { toRecordingStatus } from './recording.js';
 import type {
-  RecordingStatus,
   RemoteReading,
   RemoteRowOutcome,
   RemoteRun,
@@ -164,12 +164,6 @@ export interface TenantRow {
   ensured_at: string | null;
   reseeded_at: string | null;
   reseed_launched_at: string | null;
-}
-
-const RECORDING_STATUSES: RecordingStatus[] = ['kept', 'not_offered', 'missing'];
-
-export function toRecordingStatus(raw: string | null | undefined): RecordingStatus | null {
-  return RECORDING_STATUSES.find((status) => status === raw) ?? null;
 }
 
 const RUN_STATUSES: RemoteRunStatus[] = ['pending', 'dispatched', 'ended', 'abandoned'];
