@@ -13,3 +13,6 @@ documentation rule, the conventions and the edges that can be tripped from anywh
 - **A slot's `check` is the only guard on what an extension returns.** It is untyped JavaScript at
   runtime; a `check` that accepts anything hands a wrong-shaped answer to the desk that asked.
   → [42](../../docs/spec/42-extensions.md#adding-a-slot)
+- **Adding a slot has a skill: `.claude/skills/add-extension-slot/SKILL.md`.** The step most often
+  missed is routing in one object: a desk that picks the keeper in one place and the step labels in
+  another can run a slot label as a shell command. → [42](../../docs/spec/42-extensions.md#adding-a-slot)
