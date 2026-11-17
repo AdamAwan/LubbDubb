@@ -16,7 +16,7 @@ remote-validation tenants ([36](36-remote-validation.md#tenants)).
 
 - **With `extensions` empty the harness builds and behaves exactly as it does without this feature.** An operator who never opts in is never affected. → [§](#loading) · `test/extensions.test.ts`
 - **Every problem with an extension's file or shape refuses boot, naming the file and what is wrong; none is skipped with a warning.** A project's behaviour quietly missing is worse than a harness that will not start. → [§](#loading) · `test/extensions.test.ts`
-- **The extensions passed to `buildSystem` must be exactly the ones `extensions` names, or it refuses to build, naming each path that is missing or extra.** `buildSystem` cannot load (it is synchronous), so a caller that forgot to would otherwise run without the project's code. → [§](#loading) · `test/extensions.test.ts`
+- **The extensions passed to `buildSystem` must be exactly the ones `extensions` names, or it refuses to build, naming each path that is missing, extra or passed twice.** `buildSystem` cannot load (it is synchronous), so a caller that forgot to would otherwise run without the project's code. → [§](#loading) · `test/extensions.test.ts`
 - **A slot has at most one owner, and an extension may fill only slots in the book.** Two answers to one question, or an answer nobody asks for, is a misconfiguration that looks like it works. → [§](#loading) · `test/extensions.test.ts`
 - **`ExtensionHost.call` never throws.** A throw of any value (even one that cannot be turned into text), a rejection, a timeout or a wrong-shaped answer comes back as `{ ok: false, detail }` and is recorded on the error log; the caller decides what not-ok means. → [§](#calling-a-slot) · `test/extensions.test.ts`
 - **A slot's contract changes only with `EXTENSION_API_VERSION`.** An extension written against the old shape is then refused at boot instead of reading the new input wrongly. → [§](#adding-a-slot) · _no test_
@@ -72,7 +72,7 @@ Like every list, the operator's file **replaces** the project's list rather than
 loads and **before** `buildSystem`, because `import()` is asynchronous and `buildSystem` is not. What
 it returns is passed in as `opts.extensions`, and `buildSystem` wraps it in an `ExtensionHost` at
 `system.extensions`. If `opts.extensions` is not exactly the paths the config names, it refuses to build,
-naming each path missing or extra —
+naming each path missing, extra or passed twice —
 the guard against a caller (a script, a new entry point) that builds a system and silently runs
 without the project's code, or with code the config no longer names.
 

@@ -76,11 +76,13 @@ export function buildExtensionHost(
   const loadedPaths = (loaded ?? []).map((extension) => extension.path);
   const missing = config.extensions.filter((path) => !loadedPaths.includes(path));
   const extra = loadedPaths.filter((path) => !config.extensions.includes(path));
-  if (missing.length > 0 || extra.length > 0)
+  const repeated = loadedPaths.filter((path, index) => loadedPaths.indexOf(path) !== index);
+  if (missing.length > 0 || extra.length > 0 || repeated.length > 0)
     throw new Error(
       `Refusing to start: the extensions passed to buildSystem are not the ones config names` +
         (missing.length > 0 ? ` — not loaded: ${missing.join(', ')}` : '') +
         (extra.length > 0 ? ` — not in config: ${extra.join(', ')}` : '') +
+        (repeated.length > 0 ? ` — passed twice: ${repeated.join(', ')}` : '') +
         '. Pass what loadExtensions returned for config.extensions as opts.extensions.',
     );
   return new ExtensionHost({ book: EXTENSION_SLOTS, extensions: loaded ?? [], repoRoot: config.repoRoot, errors });

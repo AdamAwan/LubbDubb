@@ -90,11 +90,14 @@ test('a wrong-shaped answer aborts the slot signal', async () => {
   const { host: h } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
     count: (_, { signal }) => { globalThis.__extShapeSignal = signal; return 'seven'; },
   } };`);
-  const result = await h.call('count', null);
-  assert.equal(result.ok, false);
   const holder = globalThis as { __extShapeSignal?: AbortSignal };
-  assert.equal(holder.__extShapeSignal?.aborted, true);
-  delete holder.__extShapeSignal;
+  try {
+    const result = await h.call('count', null);
+    assert.equal(result.ok, false);
+    assert.equal(holder.__extShapeSignal?.aborted, true);
+  } finally {
+    delete holder.__extShapeSignal;
+  }
 });
 
 test('a configured extension that was never loaded refuses to build the system', () => {
@@ -156,6 +159,19 @@ test('an unreadable throw while loading still refuses naming the file', async ()
   );
 });
 
+test('the extensions config names, loaded and passed in, build a system that holds them', async () => {
+  const repoRoot = gitRepo();
+  writeFileSync(join(repoRoot, 'ext.mjs'), `export default { apiVersion: 1, name: 'acme', slots: {} };`);
+  const config = loadConfig({ dbPath: ':memory:', repoRoot, extensions: ['ext.mjs'] });
+  const extensions = await loadExtensions({ paths: config.extensions, book: EXTENSION_SLOTS });
+  const system = buildSystem(config, { errorMirror: () => {}, extensions });
+  assert.deepEqual(system.extensions.names(), ['acme']);
+  assert.throws(
+    () => buildSystem(config, { errorMirror: () => {}, extensions: [...extensions, ...extensions] }),
+    /passed twice: .*ext\.mjs/,
+  );
+});
+
 test('extensions passed to buildSystem that config does not name refuse to build', () => {
   const config = loadConfig({ dbPath: ':memory:', repoRoot: gitRepo() });
   const stray = { name: 'stray', path: '/elsewhere/ext.mjs', slots: new Map() };
@@ -206,9 +222,12 @@ test('a timed-out slot sees its signal aborted', async () => {
   const { host: h } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
       count: (_, { signal }) => new Promise((resolve) => signal.addEventListener('abort', () => { globalThis.__extAborted = true; resolve(1); })),
     } };`);
-  const result = await h.call('count', null);
-  assert.equal(result.ok, false);
   const holder = globalThis as { __extAborted?: boolean };
-  assert.equal(holder.__extAborted, true);
-  delete holder.__extAborted;
+  try {
+    const result = await h.call('count', null);
+    assert.equal(result.ok, false);
+    assert.equal(holder.__extAborted, true);
+  } finally {
+    delete holder.__extAborted;
+  }
 });
