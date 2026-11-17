@@ -6,5 +6,5 @@ export interface LessonPolicy {
 }
 
 export const DEFAULT_LESSONS: LessonPolicy = {
-  minGoals: 0,
+  minGoals: 2,
 };

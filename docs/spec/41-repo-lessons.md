@@ -1,9 +1,8 @@
 # 41 — Repo lessons
 
-`src/lessons/`. **Off by default**: `lessons.minGoals` is `0`, and with it at `0` nothing is grouped
-for drafting, nothing is dispatched and nothing is opened. An operator turns it on by setting `2` or
-more ([Configuration](#configuration)), because what it does when on is open pull requests on their
-repository.
+`src/lessons/`. **On by default**: `lessons.minGoals` is `2`. An operator turns it off by setting `0`
+([Configuration](#configuration)); with it at `0` nothing is grouped for drafting, nothing is
+dispatched and nothing is opened.
 
 The fleet already knows _why_ it came back to a pull request: every CI fix and review round files a
 remedy with a `cause` and a `guard` ([18](18-observability.md#causes-why-the-fleet-came-back)), and
@@ -24,12 +23,12 @@ repository. There is no store of lessons.
 reads (`prGoalIndex`, `src/graph/prGoals.ts`), [the draft](#drafting-a-lesson) (rule, prompt, outcome
 tool), [the ruling](#the-ruling-adopted-or-declined), [the record and the desk that settles
 it](#the-record-and-the-desk), [the Causes tab reading](#did-it-work) and [the pool
-section](#across-fleets). With `lessons.minGoals` at its default nothing is drafted, and so nothing is
+section](#across-fleets). With `lessons.minGoals` at `0` nothing is drafted, and so nothing is
 adopted or published.
 
 ## Invariants
 
-- **`lessons.minGoals` is `0` by default, and `0` drafts nothing however often a miss repeats; `1` is refused at load.** It opens pull requests on the operator's repository, so it is opt-in, and one miss is noise. → [§](#configuration) · `test/config.test.ts`
+- **`lessons.minGoals` is `2` by default, `0` drafts nothing however often a miss repeats, and `1` is refused at load.** One miss is noise, and `0` is the one way to stop lessons opening pull requests on the operator's repository. → [§](#configuration) · `test/config.test.ts`
 - **A group is counted in distinct goals, never in remedies or pull requests; a pull request the work graph roots in no goal stands as its own `pr:<n>`.** Two rounds on one goal are one miss, and counting them twice drafts a lesson from a single bad afternoon. → [§](#counting-goals) · `test/lessonGroups.test.ts`
 - **Only `documented` and `undocumented` remedies are grouped, and the causes `other`, `defect`, `flake`, `environment` and `inherited` never are.** Those are misses no edit to the repository's guidance prevents, and a lesson drafted from one is noise the operator has to decline. → [§](#the-group) · `test/lessonGroups.test.ts`
 - **Remedies on a bot-authored pull request or on a lesson pull request are left out.** A dependency bot's churn is not the fleet's work, and a lesson learnt from a lesson's own review loops. → [§](#what-is-left-out) · `test/lessonGroups.test.ts`
@@ -79,10 +78,12 @@ One key ([02](02-configuration.md)), declared in `src/lessons/policy.ts` and che
 
 | Key                | Default | Meaning                                                                                                                      |
 | ------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `lessons.minGoals` | `0`     | Distinct goals a group must span inside the window before a lesson is drafted. `0` is off; anything else must be at least 2. |
+| `lessons.minGoals` | `2`     | Distinct goals a group must span inside the window before a lesson is drafted. `0` is off; anything else must be at least 2. |
 
-**Off by default** because turning it on opens pull requests on the operator's repository, under the
-harness's name, unasked — the class of act ([02](02-configuration.md)) that is never on by default.
+**On by default**, though it opens pull requests on the operator's repository under the harness's
+name unasked, because a lesson nobody switched on is a lesson nobody gets. What keeps that safe
+without an opt-in: the two-goal threshold, at most two lesson pull requests open at once, and that
+every one is a pull request a person reviews and may close.
 **`1` is refused at load**, as are negatives and fractions: one miss on one goal is noise, and a
 threshold of one would draft from every remedy filed.
 
@@ -345,7 +346,7 @@ capped like any other rule, and nothing at all on a fleet whose remedies do not 
 **What this changes in [18](18-observability.md#causes-why-the-fleet-came-back).** Nothing gates on a
 remedy, but with lessons on a desk does read the table and can put an agent to work: `cause` and
 `guard` are asserted by an agent and now trigger a dispatch. They still gate no work, and what keeps an
-agent's word safe to act on is the threshold of distinct goals, the opt-in, and that the only thing it
+agent's word safe to act on is the threshold of distinct goals, the cap on open lesson pull requests, and that the only thing it
 can cause is a pull request (or a ticket) a person reviews. Spec 18 and the remedies schema comment say
 so. The remedy ask a returning agent is handed (`remedyAskNote`) names the repo-lesson consequence
 **only where lessons are on** — on a fleet with them off it would be a promise about a feature that is

@@ -63,7 +63,7 @@ function reviewCommentPrompt(number: number, branch: string, comment: string, id
     reviewThreadsNote([{ id, author: 'reviewer', body: comment, handled: false }]) +
     reviewRecheckNote(number) +
     replyToolNote() +
-    remedyAskNote('review', false)
+    remedyAskNote('review', true)
   );
 }
 
