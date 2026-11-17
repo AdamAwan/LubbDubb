@@ -21,7 +21,7 @@ import { localValidationOriginParts, localValidationFixOriginParts } from '../sr
 import { issueOriginRole } from '../src/issueOrigins.js';
 import { buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { ALLOWED_MCP_TOOLS, extraMcpGrants, MCP_SERVER_ID } from '../src/mcp/names.js';
-import type { Agent, Issue, LocalRun, LocalValidation } from '../src/types.js';
+import type { Agent, ExtraMcpServer, Issue, LocalRun, LocalValidation } from '../src/types.js';
 import { repoText } from './support/paths.js';
 
 const NOW = '2025-01-01T00:00:00.000Z';
@@ -77,7 +77,7 @@ function request(system: System, originRef = 'issue:12'): LocalValidation {
   return system.localValidations.request({ originRef, run });
 }
 
-function spawnAgent(system: System, originRef: string, branch = 'issue/12'): Agent {
+function spawnAgent(system: System, originRef: string, branch = 'issue/12', mcpServers?: ExtraMcpServer[]): Agent {
   const task = system.store.tasks.createTask({
     kind: 'code',
     title: `Work ${originRef}`,
@@ -85,6 +85,7 @@ function spawnAgent(system: System, originRef: string, branch = 'issue/12'): Age
     branch,
     originRef,
     originTitle: 'Ship it',
+    mcpServers,
   });
   return system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
 }
@@ -116,6 +117,7 @@ function row(over: Partial<LocalValidation> = {}): LocalValidation {
     visited: [],
     screenshots: [],
     note: null,
+    recordingStatus: null,
     ...over,
   };
 }
@@ -333,6 +335,8 @@ test('a configured browser is asked to record the run, and a missing recorder is
   assert.match(prompt, /browser_video_chapter/);
   assert.match(prompt, /browser_stop_video/);
   assert.match(prompt, /not a reason to report `blocked`/);
+  assert.match(prompt, /`browser_start_video` answers with an error/);
+  assert.match(prompt, /no proof/);
 });
 
 test('with no browser configured the prompt says so rather than leaving the agent to find out', async () => {
@@ -593,12 +597,49 @@ test('a recording is listed beside the screenshots and served as video', async (
     'shot.png',
     'video-1.webm',
   ]);
+  assert.equal(system.store.localValidations.getLocalValidation(validation.id)?.recordingStatus, 'kept');
 
   const served = await app.inject({ method: 'GET', url: `/local-validations/${validation.id}/files/video-1.webm` });
   assert.equal(served.statusCode, 200);
   assert.equal(served.headers['content-type'], 'video/webm');
 
   await app.close();
+  system.store.close();
+});
+
+test('a run launched with the recorder that wrote no video says so, and is still a pass', async () => {
+  const system = build();
+  liveRun(system);
+  const validation = request(system);
+  const agent = spawnAgent(system, `issue:12:validate-local:${validation.id}`, 'issue/12', [
+    DEFAULT_LOCAL_VALIDATION.browser as ExtraMcpServer,
+  ]);
+  system.store.localValidations.markLocalValidationDispatched(validation.id, agent.taskId);
+  writeFileSync(join(system.localValidations.outputDir(validation), 'shot.png'), 'not really a png');
+
+  const reported = await callTool(system, agent, 'local_validation_report', { result: 'passed', summary: 'it worked' });
+  assert.ok(!reported.isError, reported.text);
+  const row = system.store.localValidations.getLocalValidation(validation.id);
+  assert.equal(row?.status, 'passed');
+  assert.equal(row?.recordingStatus, 'missing');
+  system.store.close();
+});
+
+test('a blocked run is never judged on its recording, since it may never have started one', async () => {
+  const system = build();
+  liveRun(system);
+  const validation = request(system);
+  const agent = spawnAgent(system, `issue:12:validate-local:${validation.id}`, 'issue/12', [
+    DEFAULT_LOCAL_VALIDATION.browser as ExtraMcpServer,
+  ]);
+  system.store.localValidations.markLocalValidationDispatched(validation.id, agent.taskId);
+
+  const reported = await callTool(system, agent, 'local_validation_report', {
+    result: 'blocked',
+    summary: 'the app never came up',
+  });
+  assert.ok(!reported.isError, reported.text);
+  assert.equal(system.store.localValidations.getLocalValidation(validation.id)?.recordingStatus, null);
   system.store.close();
 });
 

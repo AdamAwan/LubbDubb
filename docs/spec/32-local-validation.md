@@ -200,6 +200,44 @@ unrecorded run, which is what they had before. The remote run drives the same se
 on offer there too, and its briefing asks for one in the same words — `recordingInstructions`
 (`src/validation/recording.ts`) is the one copy ([36](36-remote-validation.md#the-runs-recording)).
 
+**The browser is pinned, and the pin carries an ffmpeg revision.** The default launches
+`@playwright/mcp@<PLAYWRIGHT_MCP_VERSION>`, never `@latest` (`src/validation/local/policy.ts`). Playwright
+writes video with its own ffmpeg build, installed per revision under the Playwright cache
+(`ffmpeg-<revision>`), and every `@playwright/mcp` release can bundle a Playwright that wants a new
+one — so under `@latest` an install done today stops counting the day upstream bumps, with nothing red.
+Moving the pin moves three constants together: `PLAYWRIGHT_MCP_VERSION`, the `PLAYWRIGHT_VERSION` it
+depends on (`npm view @playwright/mcp@<pin> dependencies.playwright`), and that Playwright's
+`FFMPEG_REVISION` (the `ffmpeg` entry of `playwright-core`'s `browsers.json`). The matching install is
+`npx -y playwright@<PLAYWRIGHT_VERSION> install ffmpeg`; a bare `npx playwright install ffmpeg` can
+fetch a different revision into a different folder, which does not count.
+
+**Without that ffmpeg the recorder fails quietly.** `browser_start_video` errors, but
+`browser_stop_video` still answers with a `.webm` name and no file is written. So the agent is told a
+start error means carry on, and that the stop answer's file name is no proof — and it is not asked to
+explain a missing video, because the harness reads that for itself:
+
+- **At boot**, and only at boot, `ffmpegPreflight` (`src/validation/local/ffmpeg.ts`, called from `main.ts`) looks for
+  `ffmpeg-<FFMPEG_REVISION>` in the Playwright cache (a non-empty `PLAYWRIGHT_BROWSERS_PATH`, else the
+  platform's default, with an empty `XDG_CACHE_HOME` or `LOCALAPPDATA` read as unset) and records **one**
+  `boot` error naming the install command when it is missing. Under `PLAYWRIGHT_BROWSERS_PATH=0`
+  Playwright installs inside its own package, which this harness does not locate, so it says nothing
+  there rather than guess. It checks
+  only a browser that offers the recorder _and_ launches the pinned package: an operator's own args
+  name a revision this harness cannot know.
+- **On each settled run**, a `recordingStatus` is written beside the report — `kept` where a video is
+  there, `missing` where the agent was launched with the recorder (a server whose `--caps` include
+  `devtools`) and none was written, `not_offered` otherwise (`recordingStatus`, `recorderOffered` in
+  `src/validation/recording.ts`). The offer is read off the **task row's** `mcp_servers`, never the
+  live `localValidation.browser`: an operator who edits the browser block mid-run must not change what
+  that run is judged to have been offered. Here it is `local_validations.recording_status`;
+  the remote run's is its own ([36](36-remote-validation.md#the-runs-recording)). Null is _not known_ —
+  every row before the column, every row not yet reported, a run reported `blocked` with no video (it may
+  never have got as far as recording; one that did record is `kept`), a directory that could not be
+  read, and an agent whose task row is gone — so nothing is backfilled. The offer is the reporting
+  task's own.
+  **`missing` never changes an outcome**: a run with no video is still the pass, failure or block it
+  reported. The cockpit draws "not recorded" under the report where it is `missing`.
+
 The servers are recorded on the **task row** (`tasks.mcp_servers`) rather than re-derived at spawn,
 `model`'s reason: `AgentManager.resume` rebuilds a launch from the row, and an agent re-attached
 without the server it was launched with comes back holding a conversation full of tool calls it can
@@ -289,7 +327,7 @@ Two live keys, deep-merged, project-layerable ([02](02-configuration.md)):
 | Key                           | Default                                                                          | What it is                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `localValidation.instruction` | `''`                                                                             | What a validating agent is told about reaching **this** environment: which URL is which, how to sign in, what to leave alone. |
-| `localValidation.browser`     | `npx -y @playwright/mcp@latest --output-dir … --user-data-dir … --caps devtools` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                            |
+| `localValidation.browser`     | `npx -y @playwright/mcp@0.0.85 --output-dir … --user-data-dir … --caps devtools` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                            |
 
 **The split with the prompt is the whole design.** The `local-validation` template says how to build
 a test plan and how to run one, which is the same job on every deployment; the instruction says how
@@ -370,10 +408,11 @@ run's own turns use.
 
 `local_validations`: `id`, `origin_ref`, `run_id`, `ref`, `commit_sha` (named for `local_runs`'
 reason — `COMMIT` is a keyword), `status`, `requested_at`, `dispatched_at`, `ended_at`, `task_id`,
-`fix_task_id`, `plan`, `summary`, `findings`, `visited`, `screenshots`, `note`. The last three are
-JSON. A brand-new table still declares an empty `ColumnMigrations`, because a table being new **once**
-does not keep it exempt ([14](14-persistence.md#migrations)) — which is exactly what `local_runs`'
-usage columns cost.
+`fix_task_id`, `plan`, `summary`, `findings`, `visited`, `screenshots`, `note`, `recording_status`.
+`findings`, `visited` and `screenshots` are JSON. `recording_status` came after the table, so it has its
+`ALTER TABLE` in `LOCAL_VALIDATION_COLUMNS` — a table being new **once** does not keep it exempt
+([14](14-persistence.md#migrations)); null is _not known_ and nothing is backfilled
+([the recording](#the-recording)).
 
 `tasks.mcp_servers` is a column on an **existing** table and therefore has a real `TASK_COLUMNS`
 entry. Without it every database from before this change would read it as absent and every resumed

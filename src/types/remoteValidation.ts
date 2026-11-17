@@ -1,3 +1,4 @@
+import type { RecordingStatus } from './localRuns.js';
 import type { ExtraMcpServer } from './tasks.js';
 import type { WatchReadingVerdict } from './watch.js';
 
@@ -207,6 +208,8 @@ export interface RemoteRun {
   artefacts: string | null;
   /** The video the run recorded: a file name in the goal's validation directory, never a path. */
   recording: string | null;
+  /** What became of the run's video, written when it ends with a report. Null before that. */
+  recordingStatus: RecordingStatus | null;
 }
 
 /**

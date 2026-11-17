@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
+import { RecordingMissing } from '../components/RecordingMissing.js';
 import { BareButton } from '../components/button.js';
 import { CONTROL_CLASS } from '../components/controls.js';
 import { renderMarkdown } from '../components/markdown.js';
@@ -95,6 +96,7 @@ export function LocalValidationReport({
       {videos.map((file) => (
         <video key={file.name} className="cn-recording" src={file.url} controls preload="metadata" title={file.name} />
       ))}
+      <RecordingMissing status={validation.recordingStatus} />
 
       {shots.length > 0 && (
         <div className="cn-lv-shots">

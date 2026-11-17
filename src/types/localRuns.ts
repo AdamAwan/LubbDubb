@@ -57,6 +57,13 @@ export interface LocalValidationFinding {
 
 export type ValidationMediaKind = 'image' | 'video';
 
+/**
+ * What became of a settled run's video. `missing` is a browser that offered the recorder and a run
+ * that wrote no video — on a machine without Playwright's ffmpeg, the usual cause.
+ * → docs/spec/32-local-validation.md#the-recording
+ */
+export type RecordingStatus = 'kept' | 'not_offered' | 'missing';
+
 export interface LocalValidation {
   id: string;
   originRef: string;
@@ -75,4 +82,6 @@ export interface LocalValidation {
   visited: string[];
   screenshots: string[];
   note: string | null;
+  /** Null until the agent reports, and on every row from before the column. */
+  recordingStatus: RecordingStatus | null;
 }

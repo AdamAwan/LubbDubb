@@ -945,6 +945,7 @@ export function buildFixtureState(): AppState {
             taskId: 'task-v1',
             fixTaskId: null,
             phase: null,
+            recordingStatus: null,
             plan: [
               '## What changed',
               '',
@@ -1032,6 +1033,7 @@ export function buildFixtureState(): AppState {
             taskId: 'task-395-lv',
             fixTaskId: null,
             phase: null,
+            recordingStatus: null,
             plan: [
               '## What changed',
               '',
@@ -1456,6 +1458,7 @@ export function buildFixtureState(): AppState {
           listingPath: '.lubbdubb/validation/issue-395/staging/listing.json',
           artefacts: 'https://ci.example.com/runs/395-staging-2',
           recording: null,
+          recordingStatus: null,
           recordingUrl: null,
         },
         tenant: {
@@ -1672,6 +1675,7 @@ export function buildFixtureState(): AppState {
           listingPath: null,
           artefacts: null,
           recording: null,
+          recordingStatus: null,
           recordingUrl: null,
         },
         tenant: {
@@ -1778,6 +1782,7 @@ export function buildFixtureState(): AppState {
           listingPath: '.lubbdubb/validation/issue-398/staging/listing.json',
           artefacts: 'https://ci.example.com/runs/398-staging-1',
           recording: null,
+          recordingStatus: null,
           recordingUrl: null,
         },
         tenant: {

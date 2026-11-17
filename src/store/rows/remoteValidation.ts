@@ -1,3 +1,4 @@
+import { toRecordingStatus } from './recording.js';
 import type {
   RemoteReading,
   RemoteRowOutcome,
@@ -118,6 +119,7 @@ export interface RunRow {
   listing_path: string | null | undefined;
   artefacts: string | null | undefined;
   recording: string | null | undefined;
+  recording_status: string | null | undefined;
 }
 
 export function toTenantPreparation(r: PrepareRow): TenantPreparation {
@@ -183,6 +185,7 @@ export function toRemoteRun(row: RunRow): RemoteRun {
     listingPath: row.listing_path ?? null,
     artefacts: row.artefacts ?? null,
     recording: row.recording ?? null,
+    recordingStatus: toRecordingStatus(row.recording_status),
   };
 }
 

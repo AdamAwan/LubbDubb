@@ -2,6 +2,10 @@ import type { ExtraMcpServer } from '../../types.js';
 
 // → docs/spec/32-local-validation.md
 
+export const PLAYWRIGHT_MCP_VERSION = '0.0.85';
+export const PLAYWRIGHT_VERSION = '1.66.0-alpha-2026-11-09';
+export const FFMPEG_REVISION = '1013';
+
 export interface LocalValidationPolicy {
   instruction: string;
   browser: ExtraMcpServer | null;
@@ -14,7 +18,7 @@ export const DEFAULT_LOCAL_VALIDATION: LocalValidationPolicy = {
     command: 'npx',
     args: [
       '-y',
-      '@playwright/mcp@latest',
+      `@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}`,
       '--output-dir',
       '{outputDir}',
       '--user-data-dir',

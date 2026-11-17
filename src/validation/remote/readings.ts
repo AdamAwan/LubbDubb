@@ -7,6 +7,7 @@ import type { EnvironmentProber } from '../../environments/prober.js';
 import type { Store } from '../../store/store.js';
 import type { RemoteRun, RemoteSheetRow, ValidationCheck } from '../../types.js';
 import { mediaKind } from '../media.js';
+import { recordingStatus } from '../recording.js';
 import { demandsProof } from '../report.js';
 import { validationGoalDir } from '../resources.js';
 import { handsBackAScreen, stepArea, stepDriven, stepScript } from '../steps.js';
@@ -144,13 +145,15 @@ export class RemoteReadingDesk {
     // commits it straddled: a reading with no commit beside it is a reading of a product nobody can
     // name, and only the end of the run knows what the second one was.
     store.remoteValidation.attributeRemoteReadings(run.id, endedSha);
-    const recording = await this.keepRecording(run);
+    const { recording, video } = await this.keepRecording(run);
+    const task = run.taskId === null ? null : store.tasks.getTask(run.taskId);
     const ended = store.remoteValidation.endRemoteRun(run.id, {
       status: 'ended',
       endedSha,
       reportPath: input.reportPath,
       artefacts: input.artefacts,
       recording,
+      recordingStatus: recordingStatus(task, video, false),
     });
     return { ok: true, run: ended ?? run, read, blocked, wrote, captured, kept, moved };
   }
@@ -332,34 +335,35 @@ export class RemoteReadingDesk {
     return join(remoteValidationRunDir(this.deps.validationRoot, run.goalRef, run.id), 'artefacts');
   }
 
-  private async keepRecording(run: RemoteRun): Promise<string | null> {
+  private async keepRecording(run: RemoteRun): Promise<{ recording: string | null; video: boolean | null }> {
     const dir = this.artefactsDir(run);
     let names: string[];
     try {
       names = await this.list(dir);
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT')
+      const missing = (err as NodeJS.ErrnoException).code === 'ENOENT';
+      if (!missing)
         this.deps.errors?.record({
           source: 'cycle',
           message: `listing the artefacts of run ${run.id} on ${run.environment} failed: ${(err as Error).message}`,
         });
-      return null;
+      return { recording: null, video: missing ? false : null };
     }
     const name = names
       .filter((n) => mediaKind(n) === 'video')
       .sort()
       .at(-1);
-    if (name === undefined) return null;
+    if (name === undefined) return { recording: null, video: false };
     const recording = `recording-${slug(run.id)}${slug(extname(name))}`;
     try {
       await this.keep(join(dir, name), join(validationGoalDir(this.deps.validationRoot, run.goalRef), recording));
-      return recording;
+      return { recording, video: true };
     } catch (err) {
       this.deps.errors?.record({
         source: 'cycle',
         message: `keeping the recording of run ${run.id} on ${run.environment} failed: ${(err as Error).message}`,
       });
-      return null;
+      return { recording: null, video: null };
     }
   }
 

@@ -39,6 +39,7 @@ function validation(over: Partial<LocalValidationView> = {}): LocalValidationVie
     visited: [],
     screenshots: [],
     note: null,
+    recordingStatus: null,
     phase: 'planning',
     files: [],
     agent: null,

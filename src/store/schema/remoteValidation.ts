@@ -135,7 +135,8 @@ CREATE TABLE IF NOT EXISTS remote_runs (
   task_id     TEXT,               -- the dispatched agent's task, written by the conditional flip that claimed it
   report_path TEXT,               -- where the agent said the runner's machine-readable report landed
   artefacts   TEXT,               -- the URL the publish command printed, where it ran
-  recording   TEXT                -- the run's video, a file name in the goal's validation directory
+  recording   TEXT,               -- the run's video, a file name in the goal's validation directory
+  recording_status TEXT           -- kept | not_offered | missing, written when the run ends with a report
 );
 
 -- The lock is over both live statuses. The old index named only 'running', which this

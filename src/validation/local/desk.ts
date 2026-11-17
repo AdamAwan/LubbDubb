@@ -5,6 +5,7 @@ import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
 import type { LocalRun, LocalValidation, LocalValidationFinding, Task } from '../../types.js';
 import { mediaKind } from '../media.js';
+import { recordingStatus } from '../recording.js';
 import { localValidationOriginParts, localValidationOutputDir } from './origin.js';
 import { localValidationIsOpen, validationRunStale } from './stale.js';
 
@@ -104,13 +105,19 @@ export class LocalValidationDesk extends EventEmitter {
             `against, and it is no longer what is running. Report "blocked" with what you did manage to see.`,
         };
     }
+    const media = this.media(row);
     const written = this.deps.store.localValidations.recordLocalValidationReport(row.id, {
       status: result.status,
       summary: result.summary,
       findings: result.findings,
       visited: result.visited,
-      screenshots: this.media(row),
+      screenshots: media ?? [],
       note: result.status === 'blocked' ? result.summary : null,
+      recordingStatus: recordingStatus(
+        task,
+        media === null ? null : media.some((name) => mediaKind(name) === 'video'),
+        result.status === 'blocked',
+      ),
     });
     if (written === null)
       return {
@@ -149,7 +156,7 @@ export class LocalValidationDesk extends EventEmitter {
     }
   }
 
-  private media(row: LocalValidation): string[] {
+  private media(row: LocalValidation): string[] | null {
     const dir = this.outputDir(row);
     try {
       if (!existsSync(dir)) return [];
@@ -162,7 +169,7 @@ export class LocalValidationDesk extends EventEmitter {
         source: 'cycle',
         message: `Could not read the screenshots and recordings of a local validation of ${row.originRef}: ${(err as Error).message}`,
       });
-      return [];
+      return null;
     }
   }
 

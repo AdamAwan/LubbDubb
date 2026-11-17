@@ -1636,6 +1636,17 @@ run that took it. The name lands on `remote_runs.recording`, a column on an exis
 `ALTER TABLE` in `REMOTE_VALIDATION_COLUMNS`; null means _no recording_, true of every run from before
 it, so nothing is backfilled.
 
+**Whether it recorded is written on the run.** `remote_runs.recording_status` is `kept`, `missing` or
+`not_offered`, settled by `settle` beside `recording` with the local validation's rule
+([32](32-local-validation.md#the-recording)): `missing` is a browser that offered the recorder and a run
+that left no video, which on a machine without the pinned Playwright's ffmpeg is every run. It is the
+harness's reading, not the agent's — `remote_validation_report` has no summary field by design, and an
+agent told to explain a missing video would put the sentence into `artefacts` or `blocked`. A run
+abandoned through `blocked` writes none, and nor does one whose artefacts could not be listed or whose
+video could not be copied: a video the browser _did_ write is not `missing`, and the copy's failure is
+already in the error log. The sheet card draws "not recorded" under the run line where it
+is `missing`. Null on every run before the column; nothing is backfilled.
+
 **A recording is evidence, never a reading.** It is not on any row, colours nothing and is not counted:
 every outcome still comes off the report. So a run that recorded nothing, or whose copy failed, settles
 exactly as it would have — the copy's failure goes to the error log rather than onto a row, because no
@@ -2544,7 +2555,7 @@ writes are synchronous, which is what keeps the harness logic race-free.
 | `remote_readings`        | `(run, row_id)`               | **built.** append-only; a later run supersedes rather than deletes. `run_id` is null for a reading taken at assembly, `started_sha` / `ended_sha` carry the commits the run that took it straddled, and `executed`, `retries`, `duration_ms` and `artefacts` carry what the report said about a browser row |
 | `remote_state_queries`   | `(goal_ref, query_id)`        | **built.** `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says whose it is                                                                                                                                                                                                      |
 | `remote_query_approvals` | `(query_digest, environment)` | **built.** `OR REPLACE`; the dry run's reading kept beside it                                                                                                                                                                                                                                               |
-| `remote_tenants`         | `(environment, tenant)`       | **built.** `OR REPLACE` — when it was last provisioned, last reseeded, and last had a reseed launched                                                                                                                                                                                                                                    |
+| `remote_tenants`         | `(environment, tenant)`       | **built.** `OR REPLACE` — when it was last provisioned, last reseeded, and last had a reseed launched                                                                                                                                                                                                       |
 | `remote_run_intents`     | `(goal_ref, environment)`     | **built.** `OR REPLACE` on each OK and on _not validating here_ (`not_here`); `withdrawn` and `consumed` are conditional flips from `given`; a ship-day `consumed` row per existing sheet                                                                                                                   |
 
 `remote_runs` keeps its rows after they end, `local_validations`' rule: a run abandoned because the

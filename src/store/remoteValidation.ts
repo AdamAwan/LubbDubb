@@ -73,7 +73,14 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   // Which task claimed a run, where its report, artefacts and listing landed, and its video by name —
   // invisible on older databases without this entry. No backfill: null is *none reported*, true of
   // every run written before the column, and it stays true.
-  remote_runs: { task_id: 'TEXT', report_path: 'TEXT', artefacts: 'TEXT', listing_path: 'TEXT', recording: 'TEXT' },
+  remote_runs: {
+    task_id: 'TEXT',
+    report_path: 'TEXT',
+    artefacts: 'TEXT',
+    listing_path: 'TEXT',
+    recording: 'TEXT',
+    recording_status: 'TEXT',
+  },
   // When a reseed last launched against the tenant. Later than `reseeded_at` is a reseed that did not
   // finish. No backfill: null is *none launched since the column*, which reads as not half-seeded.
   // → docs/spec/36-remote-validation.md#a-reseed-that-did-not-finish
@@ -85,6 +92,8 @@ export const REMOTE_VALIDATION_COLUMNS: ColumnMigrations = {
   remote_tenant_prepares: { call: 'TEXT', launch_id: 'TEXT', pid: 'INTEGER', launched_at: 'TEXT' },
   remote_capture_posts: {},
 };
+
+const END_FIELDS = ['endedSha', 'note', 'reportPath', 'artefacts', 'recording', 'recordingStatus'] as const;
 
 type TenantStamp = 'ensured_at' | 'reseeded_at' | 'reseed_launched_at';
 /**
@@ -444,6 +453,7 @@ export class RemoteValidationStore {
         listingPath: null,
         artefacts: null,
         recording: null,
+        recordingStatus: null,
       };
       this.ctx
         .prep(
@@ -472,24 +482,20 @@ export class RemoteValidationStore {
    */
   endRemoteRun(
     id: string,
-    result: {
-      status: Extract<RemoteRunStatus, 'ended' | 'abandoned'>;
-      endedSha?: string | null;
-      note?: string | null;
-      reportPath?: string | null;
-      artefacts?: string | null;
-      recording?: string | null;
-    },
+    result: { status: Extract<RemoteRunStatus, 'ended' | 'abandoned'> } & Partial<
+      Pick<RemoteRun, (typeof END_FIELDS)[number]>
+    >,
   ): RemoteRun | null {
-    const { endedSha = null, note = null, reportPath = null, artefacts = null, recording = null } = result;
+    const params = Object.fromEntries(END_FIELDS.map((field) => [field, result[field] ?? null]));
     const info = this.ctx
       .prep(
         `UPDATE remote_runs SET status=@status, ended_sha=COALESCE(@endedSha, ended_sha),
             note=COALESCE(@note, note), report_path=COALESCE(@reportPath, report_path),
-            artefacts=COALESCE(@artefacts, artefacts), recording=COALESCE(@recording, recording), ended_at=@now
+            artefacts=COALESCE(@artefacts, artefacts), recording=COALESCE(@recording, recording),
+            recording_status=COALESCE(@recordingStatus, recording_status), ended_at=@now
           WHERE id=@id AND status IN ${LIVE_RUN_SQL}`,
       )
-      .run({ id, status: result.status, now: this.ctx.now(), endedSha, note, reportPath, artefacts, recording });
+      .run({ ...params, id, status: result.status, now: this.ctx.now() });
     return info.changes === 0 ? null : this.getRemoteRun(id);
   }
 
