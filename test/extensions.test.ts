@@ -81,9 +81,24 @@ test('main checks extensions against the harness book, and a slot outside it ref
   );
 });
 
+test('a harness with no slots says so when an extension fills one', async () => {
+  const path = extensionFile(`export default { apiVersion: 1, name: 'a', slots: { greet: () => '' } };`);
+  await assert.rejects(loadExtensions({ paths: [path], book: {} }), /this harness has no slots yet/);
+});
+
+test('a wrong-shaped answer aborts the slot signal', async () => {
+  const { host: h } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
+    count: (_, { signal }) => { globalThis.__extShapeSignal = signal; return 'seven'; },
+  } };`);
+  const result = await h.call('count', null);
+  assert.equal(result.ok, false);
+  assert.equal((globalThis as { __extShapeSignal?: AbortSignal }).__extShapeSignal?.aborted, true);
+});
+
 test('a configured extension that was never loaded refuses to build the system', () => {
   const config = loadConfig({ dbPath: ':memory:', repoRoot: gitRepo(), extensions: ['ext.mjs'] });
-  assert.throws(() => buildSystem(config, { errorMirror: () => {} }), /none were loaded/);
+  assert.throws(() => buildSystem(config, { errorMirror: () => {} }), /were not loaded: .*ext\.mjs/);
+  assert.throws(() => buildSystem(config, { errorMirror: () => {}, extensions: [] }), /were not loaded: .*ext\.mjs/);
 });
 
 test('extension paths resolve against repoRoot', () => {
@@ -142,7 +157,7 @@ test('two extensions may not share a name or a slot', async () => {
 
 test('a slot that throws, rejects, times out or answers the wrong shape is not-ok and recorded — never thrown', async () => {
   const { host: h, recorded } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
-    greet: ({ who }) => { if (who === 'sync') throw new Error('boom'); if (who === 'async') return Promise.reject(new Error('later')); if (who === 'null') throw null; if (who === 'plain') throw { message: 'plain object', stack: 'at plain' }; return new Promise(() => {}); },
+    greet: ({ who }) => { if (who === 'sync') throw new Error('boom'); if (who === 'async') return Promise.reject(new Error('later')); if (who === 'null') throw null; if (who === 'bare') throw Object.create(null); if (who === 'plain') throw { message: 'plain object', stack: 'at plain' }; return new Promise(() => {}); },
     count: () => 'seven',
   } };`);
 
@@ -162,7 +177,10 @@ test('a slot that throws, rejects, times out or answers the wrong shape is not-o
   assert.match(plain.ok ? '' : plain.detail, /: plain object$/);
   assert.equal(recorded.at(-1)?.detail, 'at plain');
 
-  assert.equal(recorded.length, 6);
+  const bare = await h.call('greet', { who: 'bare' });
+  assert.match(bare.ok ? '' : bare.detail, /a value that cannot be read$/);
+
+  assert.equal(recorded.length, 7);
   assert.ok(recorded.every((entry) => entry.source === 'runtime' && entry.message.startsWith('extension "acme"')));
 });
 
