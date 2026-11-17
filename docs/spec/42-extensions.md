@@ -86,6 +86,11 @@ Each of these refuses boot with `Refusing to start: the extension at <path> — 
   is not a function;
 - a slot another extension already fills.
 
+`buildSystem` checks again what it is handed, before it builds anything: that the extensions are
+exactly the paths the config names, that no file is loaded twice, and that no two share a name or a
+slot. These refusals name every file involved. One rule (`extensionClash`, `src/extensions/contract.ts`)
+decides a clash for the loader, this check and the host alike.
+
 There is no warning-and-skip path. Every case above is a project behaviour that would be missing
 while the harness looked healthy. Each loaded extension is announced on the console at boot.
 

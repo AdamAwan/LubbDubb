@@ -168,7 +168,7 @@ test('the extensions config names, loaded and passed in, build a system that hol
   assert.deepEqual(system.extensions.names(), ['acme']);
   assert.throws(
     () => buildSystem(config, { errorMirror: () => {}, extensions: [...extensions, ...extensions] }),
-    /are both named "acme"/,
+    /ext\.mjs is loaded twice/,
   );
 });
 
@@ -183,7 +183,7 @@ test('separately loaded extensions that share a slot refuse to build', async () 
   ];
   assert.throws(
     () => buildSystem(config, { errorMirror: () => {}, extensions }),
-    /extensions "a" and "b" both fill the "greet" slot/,
+    /extensions "a" \(.*a\.mjs\) and "b" \(.*b\.mjs\) both fill the "greet" slot/,
   );
 });
 
@@ -203,7 +203,7 @@ test('two extensions may not share a name or a slot', async () => {
   await assert.rejects(loadExtensions({ paths: [a, sameName], book: BOOK }), /are both named "a"/);
   await assert.rejects(
     loadExtensions({ paths: [a, sameSlot], book: BOOK }),
-    /extensions "a" and "b" both fill the "greet" slot/,
+    /extensions "a" \(.*ext\.mjs\) and "b" \(.*ext\.mjs\) both fill the "greet" slot/,
   );
 });
 
