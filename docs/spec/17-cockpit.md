@@ -7227,8 +7227,9 @@ tones; nothing here is a new colour.
 repositories kept** (`PoolCauses`, `web/src/components/PoolTab.tsx`): every other fleet's adopted lesson,
 ranked by effect, with its cause, fix, project, the before and after counts, the effect as a percent —
 a dash where it cannot be read, _too early_ where the 30 days have not passed — and a plain link out to
-its pull request. A plain `<a>`, not a `<Ref>`: the pull request is in another fleet's repository and
-the URL is all that crossed. Causes adopted in three or more projects are named above the table as
+its pull request. An `<ExtLink>`, not a `<Ref>`: the pull request is in another fleet's repository and
+the URL is all that crossed. The kind-and-cause label is the payload's `kindCauseLabel`, never rebuilt
+here. Causes adopted in three or more projects are named above the table as
 **company-wide candidates**, and each of their rows carries the mark in the existing amber. There is
 **no prefilled brief and no button** that sends a pooled row anywhere: an operator who wants the lesson
 opens the link and writes their own ([28](28-cross-fleet-pool.md#the-lessons-section)). The list is not

@@ -78,9 +78,9 @@ CREATE TABLE IF NOT EXISTS pool_lessons (
   pr_url              TEXT NOT NULL,
   merged_at           TEXT NOT NULL,
   before_misses       INTEGER NOT NULL,
-  before_dispatches   INTEGER NOT NULL,
+  before_returns      INTEGER NOT NULL,
   after_misses        INTEGER,         -- null until 30 days after the merge
-  after_dispatches    INTEGER,
+  after_returns       INTEGER,
   PRIMARY KEY (fleet_id, pr_url)
 );
 

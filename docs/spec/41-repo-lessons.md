@@ -34,7 +34,7 @@ adopted or published.
 - **Only `documented` and `undocumented` remedies are grouped, and the causes `other`, `defect`, `flake`, `environment` and `inherited` never are.** Those are misses no edit to the repository's guidance prevents, and a lesson drafted from one is noise the operator has to decline. → [§](#the-group) · `test/lessonGroups.test.ts`
 - **Remedies on a bot-authored pull request or on a lesson pull request are left out.** A dependency bot's churn is not the fleet's work, and a lesson learnt from a lesson's own review loops. → [§](#what-is-left-out) · `test/lessonGroups.test.ts`
 - **A review remedy is placed only by threads its own task changed code for and that are anchored to a file; with none it joins no group.** A defended thread is not a miss, and an unanchored one has no place to be about. → [§](#where-a-check-or-a-review-area) · `test/lessonGroups.test.ts`
-- **An `adopted` or `filed` group is never redrafted; a `declined`, `nothing` or `unanswered` one only once misses since it settled span `max(missCount, minGoals)` goals.** Without the bar a declined lesson comes back on the next miss, and the operator's no is overruled by the pulse. → [§](#the-redraft-rule) · `test/lessonGroups.test.ts`
+- **An `adopted` or `filed` group is never redrafted; a `declined`, `nothing` or `unanswered` one only once misses since it settled span `max(goals.length, minGoals)` goals.** Without the bar a declined lesson comes back on the next miss, and the operator's no is overruled by the pulse. → [§](#the-redraft-rule) · `test/lessonGroups.test.ts`
 - **A lesson edits the repository the fleet works on, never LubbDubb's own.** The lessons are about the code the agents were fixing, and that is where its engineers read. → [§](#where-a-lesson-lands) · _no test_
 - **Nothing about a lesson is injected into any agent's prompt, and nothing from the pool is dispatched on.** Blanket context is skimmed rather than read, and other fleets' prose is not knowledge about this repository. → [§](#why-the-claim-store-failed) · _no test_
 - **A lesson pull request cites the pull requests behind it as full URLs, never `#n` and never with a closing keyword.** On Azure DevOps `#n` links a work item, which would adopt the lesson into another goal. → [§](#the-outcome) · `test/repoLessons.test.ts`
@@ -107,8 +107,9 @@ miss — `ci/missed_gate/lint` is one lesson; `ci/missed_gate` across every chec
 
 Only remedies whose guard is **`documented`** or **`undocumented`** are grouped. `local_check` means a
 check the agent could have run caught it, which is a gate the fleet already has; `unpreventable` says
-nothing could. Both guards ride on the group as **per-guard counts**, because they point at different
-fixes: an `undocumented` miss may want writing down, while a `documented` one was written down and
+nothing could. Both guards are kept per miss and tallied as **per-guard counts** wherever a lesson is
+shown — one tally, `lessonGuardCounts` (`src/lessons/evidence.ts`), for the evidence and the pool —
+because they point at different fixes: an `undocumented` miss may want writing down, while a `documented` one was written down and
 missed anyway, so more words will not help ([the fix](#the-fix-in-order-of-preference)).
 
 Five causes never group, whatever the guard: **`other`**, which names nothing a fix could be about;
@@ -186,8 +187,10 @@ stopped stops being a candidate as they age out.
 
 ## The redraft rule
 
-`lessonCandidates` reads a group's past drafts — each with its status, the number of goals it was
-drafted on (`missCount`) and when it settled — and decides whether to draft again. The drafts are the
+`lessonCandidates` reads a group's past drafts — each with its status, the goals it was drafted on
+(their count is the bar; no separate count is stored) and when it settled — and decides whether to
+draft again. The `minGoals < 2` off switch is not its business: `LessonDesk.run` checks it once and
+never calls the fold when lessons are off. The drafts are the
 rows of `lesson_drafts` ([the record](#the-record-and-the-desk)).
 
 - **A live draft** — `pending`, `dispatched` or `pr-open` — holds the group: one draft at a time.
@@ -195,7 +198,7 @@ rows of `lesson_drafts` ([the record](#the-record-and-the-desk)).
   operator decides whether the fleet takes it on. A group that keeps missing after an adopted lesson is
   a lesson that is [not working](#did-it-work), which is a reading for the operator, not a redraft.
 - **`declined`, `nothing` and `unanswered` are eligible again** once the misses **after the latest
-  settled draft** span at least **`max(missCount, minGoals)`** goals. The same number of _new_ misses
+  settled draft** span at least **`max(goals.length, minGoals)`** goals. The same number of _new_ misses
   as the first draft rested on: a declined lesson does not come back on the next single miss, and the
   operator's no is overruled only by as much evidence again as it was drafted on.
 
@@ -209,7 +212,9 @@ draft, on its own branch `lesson/<id>`, for origin `lessons:draft:<id>` — the 
 `app-errors:triage:<id>` ([39](39-app-errors.md#agent-triage)), not an `issue:<n>:…` family, because a
 lesson is not a goal. `isHarnessBranch` (`src/pr/prOwnership.ts`) treats `lesson/` branches as the
 harness's own, so they are reaped. The origin and branch spelling live in
-`src/lessons/lessonOrigin.ts`. `RuleConditions` carries whether lessons are on (`lessons`), so
+`src/lessons/lessonOrigin.ts`, and `isLessonBranch` there is the one test of a `lesson/` branch —
+`isHarnessBranch` and the desk's exclusion both call it. The pending draft reaches the rule through
+`cycleLookups` (`src/dispatcher/ruleDispatcherStage.ts`), beside the other one-at-a-time runs. `RuleConditions` carries whether lessons are on (`lessons`), so
 `minGoals: 0` reads as an inert rule rather than an empty one — even over a draft row left from when
 it was on. The rule pushes one candidate for the one `pending` draft and nothing else, so it takes a
 fleet slot like any rule and queues below the cut when there is none; the dispatch claims the draft
@@ -265,7 +270,8 @@ marker, no label and no evidence, and nothing would ever settle it.
 ### The outcome
 
 `lesson_conclude` takes `outcome` (`pull_request`, `ticket` or `nothing`), `fix` (`code`, `guard`,
-`contradiction` or `note`), `title`, `summary` and `reason`. There is **no `body` argument**: the pull
+`contradiction` or `note` — `LESSON_FIXES` in `src/lessons/fixes.ts`, the one list the tool's enum,
+the `LessonFix` type and the pool reader derive from), `title`, `summary` and `reason`. There is **no `body` argument**: the pull
 request's body is the harness-rendered evidence, so the description rule
 ([07](07-pull-requests.md)) holds unchanged — the agent's `summary` and `reason` are kept on the draft
 and are not in it. The side effects sit behind the `LessonOutcomeDesk` seam
@@ -276,7 +282,7 @@ request or work item (`#n`, `!n`) is refused, for the citation rule below.
 
 - **`pull_request`** — `sink.createPullRequest` on `lesson/<id>` against the default branch, the
   lesson label (`${labelPrefix}-lesson`, or `lesson` with no prefix, from `lessonLabelFor` in
-  `src/watchLabels.ts`), then `seedPrWatch`, so CI and review on it are answered like any of the
+  `src/watchLabels.ts`, computed once on the foundation), then `seedPrWatch`, so CI and review on it are answered like any of the
   fleet's own pull requests; the draft goes `pr-open` with the pull request's number. A refused open
   says to push the branch and call again, never to open it by hand.
 - **`ticket`** — `ticketFiler` (`src/tickets/filing.ts`) with the lesson label, no watch label and
@@ -313,7 +319,9 @@ desk, so below `graph` and `environments`. Each pulse it:
 
 - settles a `dispatched` draft whose task ended without `lesson_conclude` as `unanswered`;
 - settles a `pr-open` draft `adopted` when its pull request merged and `declined` when it closed,
-  from `store.graph.settledPrs()`;
+  from that pull request's own work-graph node (`store.graph.getWorkNode('pr:<n>')`). Settling reads
+  only the unsettled rows (`store.lessons.unsettledDrafts()`, `status IN ('dispatched', 'pr-open')`),
+  and the graph only for a `pr-open` one;
 - opens a draft for the top candidate when none is `pending` or `dispatched`, **fewer than 2 are
   `pr-open`**, and no open pull request of its own world carries the group's marker. The pull requests
   left out of the fold are read off the same world: every bot-authored one, every one on a `lesson/`
@@ -322,6 +330,11 @@ desk, so below `graph` and `environments`. Each pulse it:
   misses grouped by goal under each goal's retrospective summary.
 
 The settling runs whatever `minGoals` says; opening runs only when it is on.
+
+`LessonDesk` and `LessonOutcomeDesk` are their own builder group, `buildLessonDesks`
+(`src/system/systemDesks.ts`, typed `LessonDesks`), threaded at `buildSystem` beside the environment
+desks rather than inside them; `System.lessons`, `System.lessonOutcomes` and `System.lessonReading` are
+typed from it.
 
 **At most two lesson pull requests are open at once**, because each one is watched: its CI and its
 review rounds are answered by the fleet ([07](07-pull-requests.md)), which is fleet work spent on a
@@ -332,8 +345,11 @@ capped like any other rule, and nothing at all on a fleet whose remedies do not 
 remedy, but with lessons on a desk does read the table and can put an agent to work: `cause` and
 `guard` are asserted by an agent and now trigger a dispatch. They still gate no work, and what keeps an
 agent's word safe to act on is the threshold of distinct goals, the opt-in, and that the only thing it
-can cause is a pull request (or a ticket) a person reviews. Spec 18, the remedies schema comment, the
-remedy ask and the `report_remedy` description say so.
+can cause is a pull request (or a ticket) a person reviews. Spec 18 and the remedies schema comment say
+so. The remedy ask a returning agent is handed (`remedyAskNote`) names the repo-lesson consequence
+**only where lessons are on** — on a fleet with them off it would be a promise about a feature that is
+not running. The `report_remedy` tool description is fleet-wide and stays neutral: it says other
+features may act on these accounts, without naming one.
 
 ## Did it work
 
@@ -349,19 +365,28 @@ merge**: `buildLessonInsights` (`src/insights/lessonInsights.ts`), served on the
   grouping, exclusions and fallbacks that drafted it, never a second one — over the remedies filed in
   `[merge − 30 days, merge)` and `[merge, merge + 30 days)`. The 30 days is `LESSON_WINDOW_MS`.
 - **The rate** is misses per **return dispatch of the same kind** in the same period — tasks with
-  origin `pr:<n>:ci` for a CI lesson, `pr:<n>:comments` for a review one — leaving out the same bot and
-  lesson pull requests the grouping does. A raw count would read a quiet month as a lesson that
-  worked; dividing by how often the fleet came back at all is what makes the two sides comparable. With
-  no return dispatch in a period the rate is null.
+  origin `pr:<n>:ci` for a CI lesson, `pr:<n>:comments` for a review one, parsed once per task by
+  `remedyOrigin` (`src/lessons/lessonReading.ts`) — leaving out the same bot and lesson pull requests
+  the grouping does. A raw count would read a quiet month as a lesson that worked; dividing by how
+  often the fleet came back at all is what makes the two sides comparable. A period is carried as its
+  two counts, `{ misses, returns }` (`LessonPeriod`, the same shape the pool publishes), and the rate
+  is derived by one helper, `missRate` (`src/insights/lessonInsights.ts`): with **no return dispatch
+  in a period the rate is null**, and every reader — the verdict here and the pool's effect
+  ([28](28-cross-fleet-pool.md#the-lessons-section)) — reads a null rate as **zero**: nothing came
+  back, so nothing came back for this. Each period folds only the remedies of the draft's own kind and
+  cause inside its 30 days; no other remedy can reach its group.
 - **The after side is null until 30 days have passed** since the merge, and the verdict is then
   **too early**. A partial month compared with a whole one reads every young lesson as working.
 - **Working** is no miss in the after period, or a lower rate after than before (a null rate counting
-  as zero). Anything else is **not working**: the miss kept coming back at the same rate or worse with
+  as zero, as above). Anything else is **not working**: the miss kept coming back at the same rate or worse with
   the lesson merged — the input a later step that corrects its own lessons would read.
 
 **Not windowed by the page's window bar.** Every draft is listed whatever window is chosen, and each
 lesson's periods are fixed to its merge; the tab's method note says so. The reading is pure and
-derived at request time, like every fold on the page.
+derived at request time, like every fold on the page. With nothing adopted it reads nothing beyond the
+drafts — no remedies, labels, tasks or world baseline. The review areas and lesson label it reads with
+are computed once, on the foundation (`lessonReading`), and handed to the desks, the pool and the
+route alike.
 
 ## Across fleets
 
@@ -380,7 +405,11 @@ a title is prose crossing the pool, and check names do not cross projects
 replaced and expired with the digest they came in, and deduplicated by URL. The counts are the [did it
 work](#did-it-work) reading's own — `readLessonInsights` (`src/lessons/lessonReading.ts`) serves the
 Causes tab and the digest alike — and a lesson whose pull request the connector cannot resolve to a URL
-is not published. What the section carries and how it is folded is
+is not published. **Which lessons are this fleet's** is one store query, `store.lessons.adoptedSince(since)`
+— `adopted`, merged (`settled_at`) inside the pool's ninety-day retention, with a pull request and a
+fix — read by the digest for what it publishes and by the Pool tab for this fleet's own causes in the
+company-wide count, so the two cannot disagree on the set. The one difference left is the URL: a
+lesson the connector cannot link is counted toward its cause but not published. What the section carries and how it is folded is
 [28](28-cross-fleet-pool.md#the-lessons-section); `test/poolLessonsSection.test.ts` holds it.
 
 The Pool tab lists other fleets' lessons ranked by effect, each with its link. When the same `cause`

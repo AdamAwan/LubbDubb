@@ -1,10 +1,20 @@
 import type { ReviewAreaRule } from '../config/config.js';
-import type { LessonDraftStatus, PrThreadLabel, Remedy, RemedyCause, RemedyGuard, RemedyKind } from '../types.js';
+import { goalOf } from '../graph/prGoals.js';
+import { DAY_MS } from '../primitives.js';
+import type {
+  LessonDraft,
+  LessonDraftStatus,
+  PrThreadLabel,
+  Remedy,
+  RemedyCause,
+  RemedyGuard,
+  RemedyKind,
+} from '../types.js';
 import { areasForPath } from '../review/areas.js';
 
 // → docs/spec/41-repo-lessons.md#noticing-a-repeat-miss
 
-export const LESSON_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+export const LESSON_WINDOW_MS = 30 * DAY_MS;
 
 const EXCLUDED_CAUSES: ReadonlySet<RemedyCause> = new Set(['other', 'defect', 'flake', 'environment', 'inherited']);
 
@@ -13,13 +23,8 @@ const LESSON_GUARDS: ReadonlySet<RemedyGuard> = new Set(['documented', 'undocume
 const LIVE: ReadonlySet<LessonDraftStatus> = new Set(['pending', 'dispatched', 'pr-open']);
 const FINAL: ReadonlySet<LessonDraftStatus> = new Set(['adopted', 'filed']);
 
-/** The part of a past draft the fold reads: what it was about, where it ended, and how many goals it spanned. */
-export interface PriorDraft {
-  groupKey: string;
-  status: LessonDraftStatus;
-  missCount: number;
-  settledAt: string | null;
-}
+/** The part of a past draft the fold reads: what it was about, where it ended, and the goals it spanned. */
+export type PriorDraft = Pick<LessonDraft, 'groupKey' | 'status' | 'goals' | 'settledAt'>;
 
 export interface LessonGroupInputs {
   remedies: readonly Remedy[];
@@ -39,14 +44,7 @@ interface LessonGroup {
   cause: RemedyCause;
   where: string;
   goals: string[];
-  prNumbers: number[];
   remedyIds: string[];
-  guards: Record<'documented' | 'undocumented', number>;
-}
-
-interface LessonCandidate extends LessonGroup {
-  /** The settled draft this one redrafts, or null for a group drafted for the first time. */
-  redrafts: PriorDraft | null;
 }
 
 interface Miss {
@@ -64,7 +62,7 @@ export function lessonGroups(input: LessonGroupInputs): LessonGroup[] {
   const threadsByTask = changedThreadsByTask(input.threadLabels);
   for (const remedy of input.remedies) {
     if (!counts(remedy, input)) continue;
-    const goal = input.goalOfPr.get(remedy.prNumber) ?? `pr:${remedy.prNumber}`;
+    const goal = goalOf(input.goalOfPr, remedy.prNumber);
     for (const where of wheresOf(remedy, threadsByTask, input.reviewAreas)) {
       const key = lessonGroupKey(remedy.kind, remedy.cause, where);
       let held = groups.get(key);
@@ -76,9 +74,7 @@ export function lessonGroups(input: LessonGroupInputs): LessonGroup[] {
             cause: remedy.cause,
             where,
             goals: [],
-            prNumbers: [],
             remedyIds: [],
-            guards: { documented: 0, undocumented: 0 },
           },
           misses: [],
         };
@@ -92,22 +88,22 @@ export function lessonGroups(input: LessonGroupInputs): LessonGroup[] {
 
 /**
  * The groups a lesson may be drafted for now: at least `minGoals` distinct goals, no draft live or
- * final for the group, and — after a settled draft — enough new goals since it settled.
+ * final for the group, and — after a settled draft — enough new goals since it settled. The caller
+ * has already turned lessons off below 2.
  */
 export function lessonCandidates(
   input: LessonGroupInputs,
   drafts: readonly PriorDraft[],
   minGoals: number,
-): LessonCandidate[] {
-  if (minGoals < 2) return [];
-  const out: LessonCandidate[] = [];
+): LessonGroup[] {
+  const out: LessonGroup[] = [];
   for (const group of lessonGroups(input)) {
     if (group.goals.length < minGoals) continue;
     const own = drafts.filter((d) => d.groupKey === group.key);
     if (own.some((d) => LIVE.has(d.status) || FINAL.has(d.status))) continue;
     const last = latestSettled(own);
-    if (last !== null && goalsSince(group, input, last.settledAt) < Math.max(last.missCount, minGoals)) continue;
-    out.push({ ...group, redrafts: last });
+    if (last !== null && goalsSince(group, input, last.settledAt) < Math.max(last.goals.length, minGoals)) continue;
+    out.push(group);
   }
   return out.sort((a, b) => b.goals.length - a.goals.length || a.key.localeCompare(b.key));
 }
@@ -162,15 +158,11 @@ function leadingDirectories(path: string): string {
 
 function fill(group: LessonGroup, misses: Miss[]): LessonGroup {
   const goals = new Set<string>();
-  const prs = new Set<number>();
   for (const { remedy, goal } of misses) {
     goals.add(goal);
-    prs.add(remedy.prNumber);
     group.remedyIds.push(remedy.id);
-    if (remedy.guard === 'documented' || remedy.guard === 'undocumented') group.guards[remedy.guard] += 1;
   }
   group.goals = [...goals].sort();
-  group.prNumbers = [...prs].sort((a, b) => a - b);
   return group;
 }
 
@@ -188,7 +180,7 @@ function goalsSince(group: LessonGroup, input: LessonGroupInputs, settledAt: str
   const ids = new Set(group.remedyIds);
   for (const remedy of input.remedies) {
     if (!ids.has(remedy.id) || remedy.createdAt <= settledAt) continue;
-    after.add(input.goalOfPr.get(remedy.prNumber) ?? `pr:${remedy.prNumber}`);
+    after.add(goalOf(input.goalOfPr, remedy.prNumber));
   }
   return after.size;
 }

@@ -1144,7 +1144,11 @@ whole one concludes something from the absence of an entry that was merely trimm
 The note and the **ask** are separate, and both are appended rather than interpolated
 ([05](05-dispatcher.md#prompt-templates)). The ask — "call `report_remedy` before you finish" —
 renders unconditionally, because the account is the thing being asked for and a fleet with nothing
-recorded yet is the fleet that most needs it. The note renders only when the record says something,
+recorded yet is the fleet that most needs it. One sentence of it is conditional: where `lessons.minGoals`
+is on, it says the same miss on several goals is what a later agent drafts a fix to the repository
+from ([41](41-repo-lessons.md#the-record-and-the-desk)); with lessons off it says nothing of a feature
+that is not running. The `report_remedy` description itself names no feature — it says other features
+may act on these accounts. The note renders only when the record says something,
 so a deployment with an empty table produces byte-identical prompts to a build without the feature.
 
 ### Did a repo lesson work
@@ -1157,7 +1161,8 @@ the same `lessonGroups` fold that drafted it, never a second grouping — over t
 merge and the 30 days after, each divided by the **return dispatches of the same kind** in that period
 (`pr:<n>:ci` for a CI lesson, `pr:<n>:comments` for a review one), so a busier month does not read as
 a worse lesson. Bot-authored and lesson pull requests are left out of both numbers, as they are out of
-the grouping.
+the grouping. Each period is the two counts, `{ misses, returns }`; the rate is `missRate`'s, null
+with no return dispatch and read as zero by the verdict.
 
 **It is not windowed by the page's window bar.** The periods are fixed to the merge, and a window
 that cut one in half would compare a fortnight with a month. The full rules are

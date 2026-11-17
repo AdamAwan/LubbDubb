@@ -30,8 +30,8 @@ function lesson(over: Partial<PoolLessonRow> = {}): PoolLessonRow {
     fix: 'guard',
     prUrl: 'https://git.example/acme/api/pull/90',
     mergedAt: '2026-07-01T00:00:00.000Z',
-    before: { misses: 4, dispatches: 10 },
-    after: { misses: 1, dispatches: 10 },
+    before: { misses: 4, returns: 10 },
+    after: { misses: 1, returns: 10 },
     ...over,
   };
 }
@@ -118,7 +118,7 @@ test('an adopted lesson is published as counts and a link, and never a title, a 
   ]);
   assert.equal(row!.prUrl, 'https://git.example/acme/api/pull/90');
   assert.deepEqual(row!.guards, { documented: 1, undocumented: 1 });
-  assert.deepEqual(row!.before, { misses: 0, dispatches: 0 });
+  assert.deepEqual(row!.before, { misses: 0, returns: 0 });
   assert.notEqual(row!.after, null, 'merged more than 30 days before the publish');
 
   const text = serialisePoolDocument(document);
@@ -213,7 +213,7 @@ test('two fleets publishing one lesson are one row, read from the newer digest',
     s.pool.replaceFleetDigest(
       fleetId,
       'acme-api',
-      digest(fleetId, 'acme-api', [lesson({ before: { misses, dispatches: 10 } })], publishedAt),
+      digest(fleetId, 'acme-api', [lesson({ before: { misses, returns: 10 } })], publishedAt),
     );
     s.pool.recordFleetReading({ fleetId, project: 'acme-api', digestAt: publishedAt, ahead: false });
   }
@@ -246,19 +246,19 @@ test('lessons are ranked by the relative drop in rate, with too-early last', () 
       mirrored({ prUrl: 'https://x/early', after: null }),
       mirrored({
         prUrl: 'https://x/half',
-        before: { misses: 4, dispatches: 10 },
-        after: { misses: 2, dispatches: 10 },
+        before: { misses: 4, returns: 10 },
+        after: { misses: 2, returns: 10 },
       }),
       mirrored({
         prUrl: 'https://x/worse',
-        before: { misses: 2, dispatches: 10 },
-        after: { misses: 4, dispatches: 10 },
+        before: { misses: 2, returns: 10 },
+        after: { misses: 4, returns: 10 },
       }),
-      mirrored({ prUrl: 'https://x/gone', before: { misses: 3, dispatches: 10 }, after: { misses: 0, dispatches: 4 } }),
+      mirrored({ prUrl: 'https://x/gone', before: { misses: 3, returns: 10 }, after: { misses: 0, returns: 4 } }),
       mirrored({
         prUrl: 'https://x/unread',
-        before: { misses: 0, dispatches: 0 },
-        after: { misses: 1, dispatches: 3 },
+        before: { misses: 0, returns: 0 },
+        after: { misses: 1, returns: 3 },
       }),
     ],
     { project: null, causes: [] },

@@ -294,7 +294,6 @@ export class RuleDispatcher implements Dispatcher {
 
     return {
       ...cycleLookups(ctx),
-      lessonDraft: ctx.lessonDraft ?? null,
       ...watchLookups(ctx),
       ...gates,
       ...sequencing,
@@ -340,6 +339,7 @@ export class RuleDispatcher implements Dispatcher {
     | 'prRefStyle'
     | keyof PromptNotes
     | 'checkSets'
+    | 'lessonsOn'
     | 'validationRoot'
     | 'localValidation'
     | 'validationClaimMinutes'
@@ -355,6 +355,7 @@ export class RuleDispatcher implements Dispatcher {
       prRefStyle: this.prRefStyle,
       ...this.notes,
       checkSets: this.checkSets,
+      lessonsOn: this.lessonsOn,
       validationRoot: this.validationRoot,
       localValidation: this.localValidation(),
       validationClaimMinutes: this.validation.desktopClaimMinutes,

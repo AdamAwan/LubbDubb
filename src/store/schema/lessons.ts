@@ -11,9 +11,8 @@ CREATE TABLE IF NOT EXISTS lesson_drafts (
   kind        TEXT NOT NULL,        -- ci | review
   cause       TEXT NOT NULL,
   place       TEXT NOT NULL,        -- the group's where: a check, or a review area
-  goals       TEXT NOT NULL,        -- JSON array of goal refs (issue:<n>, or pr:<n> for a goal-less pull request)
+  goals       TEXT NOT NULL,        -- JSON array of goal refs (issue:<n>, or pr:<n> for a goal-less pull request); its length is what a redraft must span again
   misses      TEXT NOT NULL,        -- JSON [{remedyId, prNumber, goal, guard, summary}]
-  miss_count  INTEGER NOT NULL,     -- distinct goals: what a redraft must span again
   briefing    TEXT NOT NULL,
   status      TEXT NOT NULL,        -- pending | dispatched | pr-open | adopted | declined | filed | nothing | unanswered
   task_id     TEXT,

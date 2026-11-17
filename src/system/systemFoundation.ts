@@ -53,7 +53,7 @@ import { PrAssignDesk } from '../pr/prAssignAsk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
 import { EjectionDesk } from '../ejection/desk.js';
 import { ActionExecutor } from '../executor/actionExecutor.js';
-import { watchLabelFor } from '../watchLabels.js';
+import { lessonLabelFor, watchLabelFor } from '../watchLabels.js';
 import { Harness } from '../harness.js';
 import { RuntimeControl } from '../runtimeControl.js';
 import { LocalRunner } from '../localRun/runner.js';
@@ -63,7 +63,7 @@ import type { PortLister } from '../localRun/ports.js';
 import { ErrorLog } from '../errorLog.js';
 import type { ErrorLogEntry } from '../types.js';
 import type { Fleet } from './systemFleet.js';
-import type { BenchDesks, EnvironmentDesks } from './systemDesks.js';
+import type { BenchDesks, EnvironmentDesks, IntakeDesks, LessonDesks } from './systemDesks.js';
 import type { LocalRuns } from './systemLocalRuns.js';
 
 // → docs/spec/01-overview.md
@@ -121,7 +121,7 @@ interface Late {
   remoteListings: RemoteListingDesk;
   remoteRuns: EnvironmentDesks['remoteRuns'];
   remoteIntents: EnvironmentDesks['remoteIntents'];
-  lessonOutcomes: EnvironmentDesks['lessonOutcomes'];
+  lessonOutcomes: LessonDesks['lessonOutcomes'];
   harness: Harness;
   localRun: LocalRunner;
   localRunWatch: LocalRunWatch;
@@ -148,7 +148,7 @@ export function lateBinding(): LateBinding {
   };
 }
 
-export function lateParts({ fleet, envs, bench, harness, local, prAssign, asks }: LatePhases): Late {
+export function lateParts({ fleet, envs, lessons, bench, harness, local, intake, asks }: LatePhases): Late {
   return {
     agents: fleet.agents,
     escalations: fleet.escalations,
@@ -165,12 +165,12 @@ export function lateParts({ fleet, envs, bench, harness, local, prAssign, asks }
     remoteListings: envs.remoteListings,
     remoteRuns: envs.remoteRuns,
     remoteIntents: envs.remoteIntents,
-    lessonOutcomes: envs.lessonOutcomes,
+    lessonOutcomes: lessons.lessonOutcomes,
     harness,
     localRun: local.localRun,
     localRunWatch: local.localRunWatch,
     localValidations: local.localValidations,
-    prAssign,
+    prAssign: intake.prAssign,
     askSnapshot: asks,
   };
 }
@@ -178,10 +178,11 @@ export function lateParts({ fleet, envs, bench, harness, local, prAssign, asks }
 interface LatePhases {
   fleet: Fleet;
   envs: EnvironmentDesks;
+  lessons: LessonDesks;
   bench: BenchDesks;
   harness: Harness;
   local: LocalRuns;
-  prAssign: PrAssignDesk;
+  intake: Pick<IntakeDesks, 'prAssign'>;
   asks: () => AskSnapshot;
 }
 
@@ -268,6 +269,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     recordingRetention,
     appErrorDetails: opts.appErrorDetailRunner ?? new CommandAppErrorDetailRunner(config.repoRoot),
     watchLabel: watchLabelFor(config.labelPrefix),
+    lessonReading: { reviewAreas: config.reviewAreas, lessonLabel: lessonLabelFor(config.labelPrefix) },
     discussions,
     discussionPulls: new DiscussionPullDesk({
       discussions,

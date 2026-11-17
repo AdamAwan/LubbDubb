@@ -1,3 +1,4 @@
+import type { LESSON_FIXES } from '../lessons/fixes.js';
 import type { RemedyCause, RemedyGuard, RemedyKind } from './remedies.js';
 
 // → docs/spec/41-repo-lessons.md#the-record-and-the-desk
@@ -7,7 +8,7 @@ export type LessonDraftStatus =
 
 export type LessonOutcome = 'pull_request' | 'ticket' | 'nothing';
 
-export type LessonFix = 'code' | 'guard' | 'contradiction' | 'note';
+export type LessonFix = (typeof LESSON_FIXES)[number];
 
 /** One remedy a draft was made on, as the evidence cites it. */
 export interface LessonMiss {
@@ -25,10 +26,9 @@ export interface LessonDraft {
   kind: RemedyKind;
   cause: RemedyCause;
   where: string;
+  /** Distinct goals the draft was made on; their count is the bar a redraft must clear again. */
   goals: string[];
   misses: LessonMiss[];
-  /** Distinct goals the draft was made on: the bar a redraft must clear again. */
-  missCount: number;
   status: LessonDraftStatus;
   taskId: string | null;
   fix: LessonFix | null;
@@ -44,4 +44,10 @@ export interface LessonDraft {
 /** The one draft waiting for its agent, with the briefing it is dispatched with. */
 export interface PendingLessonDraft extends LessonDraft {
   briefing: string;
+}
+
+/** One side of an adopted lesson's merge: the group's misses in distinct goals, and the same-kind return dispatches. */
+export interface LessonPeriod {
+  misses: number;
+  returns: number;
 }

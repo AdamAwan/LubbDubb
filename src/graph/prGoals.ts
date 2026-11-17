@@ -23,3 +23,8 @@ export function prGoalIndex(nodes: readonly WorkNode[]): Map<number, string> {
   }
   return out;
 }
+
+/** A pull request's goal, or `pr:<n>` for one the graph roots in no issue. */
+export function goalOf(goalOfPr: ReadonlyMap<number, string>, prNumber: number): string {
+  return goalOfPr.get(prNumber) ?? `pr:${prNumber}`;
+}

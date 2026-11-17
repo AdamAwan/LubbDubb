@@ -134,6 +134,8 @@ export interface StageContext {
    * → docs/spec/20-validation.md#the-authoring-gate
    */
   checkSets: boolean;
+  /** `lessons.minGoals` is on: the remedy ask says what a repeat miss can turn into. → 41-repo-lessons.md */
+  lessonsOn: boolean;
   validationRoot: string;
   liveLocalRun: LocalRun | null;
   /** Every live run row, with what the agent must read already rendered. → 36-remote-validation.md */

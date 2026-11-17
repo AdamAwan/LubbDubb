@@ -721,11 +721,16 @@ Stated where a person reads it, it is a reading like every other number here.
 
 A fleet's adopted [repo lessons](41-repo-lessons.md#across-fleets), one row each: `kind`, `cause`,
 `guards` (`documented` and `undocumented` counts), `fix`, `prUrl`, `mergedAt`, and `before` and `after`
-as `{ misses, dispatches }` — the group's misses in distinct goals and the same-kind return dispatches,
+as `{ misses, returns }` (`LessonPeriod`, the fleet's own reading's shape) — the group's misses in
+distinct goals and the same-kind return dispatches,
 over the 30 days either side of the merge. `after` is null until those 30 days have passed. The counts
 are `buildLessonInsights`' (`src/insights/lessonInsights.ts`), read through `readLessonInsights`
 (`src/lessons/lessonReading.ts`) — the same reading the fleet's own Causes tab draws, never a second
-fold. `poolLessons` in `src/pool/digestArm.ts` builds it.
+fold. `poolLessons` in `src/pool/digestArm.ts` builds it, over `store.lessons.adoptedSince(since)`:
+the drafts `adopted` with a pull request and a fix whose merge (`settled_at`) falls inside the
+ninety-day retention (`retentionStart`). That one query is also what the Pool tab counts as this
+fleet's own adopted causes, so the set published and the set counted toward a company-wide cause are
+the same set.
 
 **No title, no free text, no `where`.** A title is prose an agent wrote, and the pool carries none
 ([data classification](#data-classification)); a `where` is a check name or a review area of one
@@ -748,11 +753,13 @@ lessons never reach the table. **Two fleets on one repository publish one lesson
 projects.
 
 **The fold** (`foldPoolLessons`, `src/pool/aggregate.ts`) ranks the lessons by **effect**: the relative
-drop in misses per same-kind return dispatch, after against before, with a null after-rate as zero
-(the reading [41](41-repo-lessons.md#did-it-work) takes). A lesson with no before-misses has no effect
+drop in misses per same-kind return dispatch, after against before, through the same `missRate` the
+verdict reads — a null rate (no return dispatch) as zero, the rule
+[41](41-repo-lessons.md#did-it-work) states. A lesson with no before-misses has no effect
 to read and ranks below those that do; a lesson **too early** to read ranks last. A `cause` with adopted
-lessons in **three or more distinct projects** — the mirror's projects plus this fleet's own, from its
-own adopted drafts inside the retention — is a **company-wide candidate**: a rule for a shared plugin or
+lessons in **three or more distinct projects** — the mirror's projects plus this fleet's own, from
+`adoptedSince` over the retention, the set the digest publishes (one it cannot link to a URL is
+counted but not published) — is a **company-wide candidate**: a rule for a shared plugin or
 an organisation-level `CLAUDE.md` rather than one repository's file. Keyed on `cause` alone, because the
 `where` that would narrow it does not cross.
 
@@ -760,6 +767,9 @@ an organisation-level `CLAUDE.md` rather than one repository's file. Keyed on `c
 ignores a key it does not ask for. **No per-field opt-out**: the company-wide mark counts projects, so
 an optional section would make it silently partial
 ([anything summed is mandatory](#anything-summed-is-mandatory-anything-read-alone-may-be-withheld)).
+Each row is labelled once, `poolKindCauseLabel` (`CI · <cause>` or `Review · <cause>`), shared with
+`poolCauseLabel`; the markdown and the payload's `kindCauseLabel` both carry it, so the cockpit draws
+it rather than rebuilding it.
 
 **Nothing from it is acted on.** The Causes tab under the pool scope lists the lessons with a link out
 and nothing else — no prefilled brief, no button that sends a pooled row anywhere, and nothing from it

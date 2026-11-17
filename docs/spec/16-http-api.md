@@ -1436,8 +1436,10 @@ filter would sum two unrelated pipelines, and null makes that unreachable rather
 
 `lessons` is the [lessons section](28-cross-fleet-pool.md#the-lessons-section) folded by
 `foldPoolLessons`: other fleets' adopted lessons, one per pull request URL, ranked by `effectPct` with
-the too-early ones last, each with `companyWide`; and `companyWide`, the causes adopted in three or more
-projects — this fleet's own adopted drafts counted for its own project, never mirrored. It is not
+the too-early ones last, each with `kindCauseLabel` (`CI · <cause>`) and `companyWide`; and
+`companyWide`, the causes adopted in three or more projects — this fleet's own adopted drafts
+(`store.lessons.adoptedSince`, the set its digest publishes) counted for its own project, never
+mirrored. It is not
 narrowed by `?project=` or `?since=`: a lesson's periods are fixed to its merge, and another project's
 lesson is what the list is for.
 

@@ -1,4 +1,5 @@
 import { CAUSE_COPY, GUARD_COPY } from '../remedies/remedies.js';
+import { missRate } from '../insights/lessonInsights.js';
 import { PHASE_ORDER, phaseLabel, type SpendPhase } from '../insights/spendInsights.js';
 import type { PoolDigestMirrorRow, PoolLessonMirrorRow } from '../store/pool.js';
 import type { RemedyCause, RemedyGuard, RemedyKind } from '../types.js';
@@ -104,9 +105,11 @@ export function poolPhaseLabel(key: string): string {
 
 export function poolCauseLabel(key: string): string {
   const [kind, cause, guard] = key.split('/') as [RemedyKind, RemedyCause, RemedyGuard];
-  const causeLabel = CAUSE_COPY[cause]?.label ?? cause;
-  const guardLabel = GUARD_COPY[guard]?.label ?? guard;
-  return `${kind === 'ci' ? 'CI' : 'Review'} · ${causeLabel} · ${guardLabel}`;
+  return `${poolKindCauseLabel(kind, cause)} · ${GUARD_COPY[guard]?.label ?? guard}`;
+}
+
+export function poolKindCauseLabel(kind: RemedyKind, cause: RemedyCause): string {
+  return `${kind === 'ci' ? 'CI' : 'Review'} · ${CAUSE_COPY[cause]?.label ?? cause}`;
 }
 
 export function poolUsageLabel(key: string): string {
@@ -121,7 +124,8 @@ function roundUsd(value: number): number {
 const COMPANY_WIDE_PROJECTS = 3;
 
 interface PoolLesson extends PoolLessonMirrorRow {
-  causeLabel: string;
+  /** `CI · <cause>` or `Review · <cause>`, as every surface names the row. */
+  kindCauseLabel: string;
   /** The relative drop in misses per same-kind return dispatch, in percent; null where it cannot be read. */
   effectPct: number | null;
   companyWide: boolean;
@@ -154,7 +158,7 @@ export function foldPoolLessons(
   const wide = new Set([...projects].filter(([, p]) => p.size >= COMPANY_WIDE_PROJECTS).map(([cause]) => cause));
   const lessons = rows.map((row) => ({
     ...row,
-    causeLabel: CAUSE_COPY[row.cause]?.label ?? row.cause,
+    kindCauseLabel: poolKindCauseLabel(row.kind, row.cause),
     effectPct: lessonEffect(row),
     companyWide: wide.has(row.cause),
   }));
@@ -167,9 +171,9 @@ export function foldPoolLessons(
 }
 
 function lessonEffect(row: PoolLessonMirrorRow): number | null {
-  if (row.after === null || row.before.dispatches === 0 || row.before.misses === 0) return null;
-  const before = row.before.misses / row.before.dispatches;
-  const after = row.after.dispatches === 0 ? 0 : row.after.misses / row.after.dispatches;
+  const before = missRate(row.before);
+  if (row.after === null || before === null || before === 0) return null;
+  const after = missRate(row.after) ?? 0;
   return Math.round(((before - after) / before) * 100);
 }
 

@@ -34,7 +34,7 @@ export class PoolStore {
       this.ctx.prep(`DELETE FROM pool_lessons WHERE fleet_id=?`).run(fleetId);
       const lesson = this.ctx.prep(
         `INSERT OR REPLACE INTO pool_lessons (fleet_id, project, kind, cause, documented, undocumented, fix, pr_url,
-           merged_at, before_misses, before_dispatches, after_misses, after_dispatches)
+           merged_at, before_misses, before_returns, after_misses, after_returns)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const row of document.lessons) {
@@ -49,9 +49,9 @@ export class PoolStore {
           row.prUrl,
           row.mergedAt,
           row.before.misses,
-          row.before.dispatches,
+          row.before.returns,
           row.after?.misses ?? null,
-          row.after?.dispatches ?? null,
+          row.after?.returns ?? null,
         );
       }
     });
@@ -161,11 +161,11 @@ export class PoolStore {
         fix: r.fix as LessonFix,
         prUrl: r.pr_url,
         mergedAt: r.merged_at,
-        before: { misses: r.before_misses, dispatches: r.before_dispatches },
+        before: { misses: r.before_misses, returns: r.before_returns },
         after:
-          r.after_misses === null || r.after_dispatches === null
+          r.after_misses === null || r.after_returns === null
             ? null
-            : { misses: r.after_misses, dispatches: r.after_dispatches },
+            : { misses: r.after_misses, returns: r.after_returns },
       });
     }
     return out;
@@ -264,9 +264,9 @@ interface LessonRow {
   pr_url: string;
   merged_at: string;
   before_misses: number;
-  before_dispatches: number;
+  before_returns: number;
   after_misses: number | null;
-  after_dispatches: number | null;
+  after_returns: number | null;
 }
 
 interface DigestRow {

@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import { isThroughputMeasure } from '../insights/throughputInsights.js';
 import { CAUSES_BY_KIND } from '../remedies/remedies.js';
+import { LESSON_FIXES } from '../lessons/fixes.js';
 import type {
-  LessonFix,
+  LessonPeriod,
   PoolClockDocument,
   PoolClockKind,
   PoolDigestDocument,
   PoolDocument,
-  PoolLessonPeriod,
   PoolLessonRow,
   RemedyKind,
 } from '../types.js';
@@ -122,8 +122,6 @@ function readMeasures(raw: unknown): string[] {
   return raw.filter((key): key is string => typeof key === 'string' && isThroughputMeasure(key));
 }
 
-const LESSON_FIXES: readonly LessonFix[] = ['code', 'guard', 'contradiction', 'note'];
-
 /* Rebuilt field by field, so a row carrying a title, a `where` or anything else
    this build does not publish lands without it. → docs/spec/28-cross-fleet-pool.md#the-lessons-section */
 function readLessons(raw: unknown): PoolLessonRow[] {
@@ -167,9 +165,9 @@ function readTimestamp(raw: unknown): string | null {
   return Number.isNaN(at.getTime()) ? null : at.toISOString();
 }
 
-function readPeriod(raw: unknown): PoolLessonPeriod | null {
+function readPeriod(raw: unknown): LessonPeriod | null {
   if (!isRecord(raw)) return null;
-  return { misses: countOf(raw.misses), dispatches: countOf(raw.dispatches) };
+  return { misses: countOf(raw.misses), returns: countOf(raw.returns) };
 }
 
 function readRows(raw: unknown): PoolDigestDocument['byPhase'] {

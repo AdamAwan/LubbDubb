@@ -30,7 +30,6 @@ import { appErrorView, CurrentAppErrors } from '../appErrors/current.js';
 import { AppErrorTriageDesk } from '../appErrors/triageDesk.js';
 import { LessonDesk } from '../lessons/lessonDesk.js';
 import { LessonOutcomeDesk } from '../lessons/outcomeDesk.js';
-import { lessonLabelFor } from '../watchLabels.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber } from '../environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from '../environments/observer.js';
@@ -192,21 +191,16 @@ export function buildEnvironmentDesks(
     watchAsks,
     appErrorPayloads,
     appErrorTriage,
-    ...buildLessonDesks(config, base),
     ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
   };
 }
 
+export type LessonDesks = ReturnType<typeof buildLessonDesks>;
+
 /** → docs/spec/41-repo-lessons.md#the-record-and-the-desk */
-function buildLessonDesks(config: Config, base: Foundation) {
-  const { store, sink, errors, connector, watchLabel } = base;
-  const lessonLabel = lessonLabelFor(config.labelPrefix);
-  const lessons = new LessonDesk({
-    store,
-    minGoals: config.lessons.minGoals,
-    reviewAreas: config.reviewAreas,
-    lessonLabel,
-  });
+export function buildLessonDesks(config: Config, base: Foundation) {
+  const { store, sink, errors, connector, watchLabel, lessonReading } = base;
+  const lessons = new LessonDesk({ store, minGoals: config.lessons.minGoals, ...lessonReading });
   const lessonOutcomes = new LessonOutcomeDesk({
     store,
     sink,
@@ -214,10 +208,10 @@ function buildLessonDesks(config: Config, base: Foundation) {
     refUrl: (ref) => connector.resolveRefUrl(ref),
     defaultBranch: config.defaultBranch,
     watchLabel,
-    lessonLabel,
+    lessonLabel: lessonReading.lessonLabel,
     errors,
   });
-  return { lessons, lessonOutcomes };
+  return { lessons, lessonOutcomes, lessonReading };
 }
 
 /** The environment desks the composed system exposes. */
@@ -229,8 +223,6 @@ export function environmentParts(envs: EnvironmentDesks) {
     remoteValidation: envs.remoteValidation,
     appErrorTracker: envs.appErrorTracker,
     appErrorTriage: envs.appErrorTriage,
-    lessons: envs.lessons,
-    lessonOutcomes: envs.lessonOutcomes,
     remoteRuns: envs.remoteRuns,
     remoteIntents: envs.remoteIntents,
     remoteReadings: envs.remoteReadings,
@@ -385,7 +377,7 @@ export function buildBenchDesks(
 function buildPool(
   config: Config,
   opts: BuildOptions,
-  { store, now, errors, connector }: Foundation,
+  { store, now, errors, connector, lessonReading }: Foundation,
 ): PoolDesk | undefined {
   const fleetId = config.fleetId ?? '';
   const poolTransport =
@@ -406,11 +398,7 @@ function buildPool(
           now,
           digestIntervalMs: config.pool?.digestIntervalMs ?? 60 * 60 * 1000,
           worldScope: worldScope(config.integrations, { store, config, now, errors }),
-          lessons: {
-            reviewAreas: config.reviewAreas,
-            lessonLabel: lessonLabelFor(config.labelPrefix),
-            refUrl: (ref) => connector.resolveRefUrl(ref),
-          },
+          lessons: { ...lessonReading, refUrl: (ref) => connector.resolveRefUrl(ref) },
           errors,
         });
   return pool;

@@ -1839,7 +1839,9 @@ interpolated into it, are five things:
   [18](18-observability.md#the-note-a-later-dispatch-carries)). Scoped to the checks that are red now
   and empty when the record says nothing about them, so a fresh deployment's prompt is byte-identical
   to a build without it.
-- **`remedyAskNote`** — the ask to call `report_remedy` before finishing. Unconditional, unlike the
+- **`remedyAskNote`** — the ask to call `report_remedy` before finishing (one sentence of it, on what
+  a repeat miss can become, only where `lessons.minGoals` is on —
+  [41](41-repo-lessons.md#the-record-and-the-desk)). Unconditional, unlike the
   note above it, because the account is the thing being asked for and a fleet with nothing recorded
   yet is the one that most needs the ask. It is here rather than only in the tool description because
   `report_remedy` is named nowhere in the protocol addendum — a tool discoverable from `tools/list`

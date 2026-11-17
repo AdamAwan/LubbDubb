@@ -35,7 +35,7 @@ export function ciFailingConcern(
             ctx.priorRemedies ?? [],
             ciVerdict.dispatch.map((m) => m.name),
           ) +
-          remedyAskNote('ci') +
+          remedyAskNote('ci', s.lessonsOn) +
           dependencyCiBrief(pr, ctx.botPrRisks?.find((r) => r.prNumber === pr.number) ?? null) +
           s.instrumentationNote,
         dispatchReason: ciDispatchReason(pr.number, ciVerdict),

@@ -1,3 +1,4 @@
+import { goalOf } from '../graph/prGoals.js';
 import type { LessonDraft, LessonFix, LessonMiss, Remedy } from '../types.js';
 import { lessonMarker } from './lessonOrigin.js';
 
@@ -17,7 +18,7 @@ export function lessonMisses(
     .map((r) => ({
       remedyId: r.id,
       prNumber: r.prNumber,
-      goal: goalOfPr.get(r.prNumber) ?? `pr:${r.prNumber}`,
+      goal: goalOf(goalOfPr, r.prNumber),
       guard: r.guard,
       summary: r.summary,
     }));
@@ -70,11 +71,10 @@ export function lessonTicketBody(
 }
 
 function lessonEvidence(draft: LessonDraft, fix: LessonFix, refUrl: RefUrl): string {
-  const documented = draft.misses.filter((m) => m.guard === 'documented').length;
-  const undocumented = draft.misses.filter((m) => m.guard === 'undocumented').length;
+  const { documented, undocumented } = lessonGuardCounts(draft.misses);
   const prs = [...new Set(draft.misses.map((m) => m.prNumber))].sort((a, b) => a - b);
   return [
-    `A repo lesson: the fleet came back to pull requests on ${String(draft.missCount)} goals for the same reason.`,
+    `A repo lesson: the fleet came back to pull requests on ${String(draft.goals.length)} goals for the same reason.`,
     [
       `- Kind: ${draft.kind}`,
       `- Cause: ${draft.cause}`,
@@ -88,4 +88,11 @@ function lessonEvidence(draft: LessonDraft, fix: LessonFix, refUrl: RefUrl): str
       ...prs.map((n) => `- ${refUrl(`pr:${String(n)}`) ?? `pull request ${String(n)}`}`),
     ].join('\n'),
   ].join('\n\n');
+}
+
+/** How many of a draft's misses were documented and how many undocumented: the tally the evidence and the pool share. */
+export function lessonGuardCounts(misses: readonly LessonMiss[]): { documented: number; undocumented: number } {
+  const guards = { documented: 0, undocumented: 0 };
+  for (const miss of misses) if (miss.guard === 'documented' || miss.guard === 'undocumented') guards[miss.guard] += 1;
+  return guards;
 }

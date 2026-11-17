@@ -136,7 +136,7 @@ test('remedies on two goals put one repo-lesson agent on lesson/<id>, with the e
     assert.equal(task.originRef, `lessons:draft:${draft.id}`);
     assert.equal(draft.groupKey, 'ci/missed_gate/lint');
     assert.equal(draft.status, 'dispatched');
-    assert.equal(draft.missCount, 2);
+    assert.equal(draft.goals.length, 2);
     const evidence = task.prompt.indexOf('## The evidence');
     assert.ok(evidence > task.prompt.indexOf('lesson_conclude'), 'the evidence follows the rendered template');
     assert.match(task.prompt.slice(evidence), /pr:11 \(undocumented\): lint rule no-floating on pr 11/);
@@ -408,7 +408,6 @@ test('both providers cite every pull request as a full URL, never #n and never w
       { remedyId: 'r1', prNumber: 31, goal: 'issue:4', guard: 'documented', summary: 'fixes #4 by renaming' },
       { remedyId: 'r2', prNumber: 32, goal: 'issue:5', guard: 'undocumented', summary: 'closes #5' },
     ],
-    missCount: 2,
     status: 'dispatched',
     taskId: 't',
     fix: null,

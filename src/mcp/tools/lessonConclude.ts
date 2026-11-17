@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LESSON_FIXES } from '../../lessons/fixes.js';
 import { toolError } from '../protocol.js';
 import { toolSchema } from '../schema.js';
 import type { ToolFactory } from './context.js';
@@ -14,7 +15,7 @@ const LessonConcludeArgs = z.object({
         'nothing: no change to the repository is right — a matter of taste is not a rule.',
     ),
   fix: z
-    .enum(['code', 'guard', 'contradiction', 'note'])
+    .enum(LESSON_FIXES)
     .optional()
     .describe(
       'Required unless the outcome is nothing. code: the cause removed in the code. guard: a lint rule, type or ' +

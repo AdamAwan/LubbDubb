@@ -4,8 +4,9 @@ import type { Store } from '../store/store.js';
 import { isActiveTask } from '../tasks.js';
 import type { LessonDraft, PullRequest, WorldSnapshot } from '../types.js';
 import { lessonBriefing, lessonMisses } from './evidence.js';
-import { lessonCandidates, LESSON_WINDOW_MS, type LessonGroupInputs, type PriorDraft } from './groups.js';
-import { lessonMarker } from './lessonOrigin.js';
+import { prState } from '../pr/prHealth.js';
+import { lessonCandidates, LESSON_WINDOW_MS, type LessonGroupInputs } from './groups.js';
+import { isLessonBranch, lessonMarker } from './lessonOrigin.js';
 
 // → docs/spec/41-repo-lessons.md#the-record-and-the-desk
 
@@ -38,12 +39,11 @@ export class LessonDesk {
 
   private settle(): void {
     const { store } = this.deps;
-    const merged = store.graph.settledPrs();
-    for (const draft of store.lessons.listDrafts()) {
+    for (const draft of store.lessons.unsettledDrafts()) {
       if (draft.status === 'dispatched' && !taskStillRuns(store, draft))
         store.lessons.settle(draft.id, 'unanswered', ['dispatched']);
       if (draft.status !== 'pr-open' || draft.prNumber === null) continue;
-      const settled = merged.get(draft.prNumber);
+      const settled = store.graph.getWorkNode(`pr:${String(draft.prNumber)}`)?.status;
       if (settled === 'merged') store.lessons.settle(draft.id, 'adopted', ['pr-open']);
       else if (settled === 'closed') store.lessons.settle(draft.id, 'declined', ['pr-open']);
     }
@@ -65,8 +65,8 @@ export class LessonDesk {
       reviewAreas: this.deps.reviewAreas,
       since,
     };
-    const open = world.pullRequests.filter((pr) => pr.state === undefined || pr.state === 'open');
-    const candidate = lessonCandidates(input, drafts.map(priorDraft), this.deps.minGoals).find(
+    const open = world.pullRequests.filter((pr) => prState(pr) === 'open');
+    const candidate = lessonCandidates(input, drafts, this.deps.minGoals).find(
       (c) => !open.some((pr) => pr.body?.includes(lessonMarker(c.key)) === true),
     );
     if (candidate === undefined) return;
@@ -91,7 +91,7 @@ export function lessonExcludedPrs(
 ): Set<number> {
   const out = new Set<number>();
   const leftOut = (pr: PullRequest) =>
-    pr.botAuthored === true || pr.branch.startsWith('lesson/') || (pr.labels ?? []).includes(lessonLabel);
+    pr.botAuthored === true || isLessonBranch(pr.branch) || (pr.labels ?? []).includes(lessonLabel);
   for (const pr of [...(world?.pullRequests ?? []), ...(world?.closedPullRequests ?? [])])
     if (leftOut(pr)) out.add(pr.number);
   for (const d of drafts) if (d.prNumber !== null) out.add(d.prNumber);
@@ -102,8 +102,4 @@ function taskStillRuns(store: Store, draft: LessonDraft): boolean {
   if (draft.taskId === null) return true;
   const task = store.tasks.getTask(draft.taskId);
   return task !== null && isActiveTask(task);
-}
-
-function priorDraft(d: LessonDraft): PriorDraft {
-  return { groupKey: d.groupKey, status: d.status, missCount: d.missCount, settledAt: d.settledAt };
 }

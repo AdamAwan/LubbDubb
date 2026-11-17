@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from 'react';
 import type { PoolFleetReading, PoolInsightsPayload, PoolRollupRow } from '../types.js';
-import { fmtUsd, relTime } from './util.js';
+import { ExtLink, fmtUsd, relTime } from './util.js';
 import { MethodNote } from './insightsMethod.js';
 import { fleetClass } from './PoolStatus.js';
 
@@ -89,25 +89,23 @@ function Lessons({ reading }: { reading: PoolInsightsPayload['lessons'] }): JSX.
             {reading.lessons.map((lesson) => (
               <tr key={lesson.prUrl}>
                 <td>
-                  {lesson.kind === 'ci' ? 'CI' : 'Review'} · {lesson.causeLabel}
+                  {lesson.kindCauseLabel}
                   {lesson.companyWide ? <span className="pool-wide"> company-wide</span> : null}
                 </td>
                 <td>{lesson.fix}</td>
                 <td>{lesson.project}</td>
                 <td className="num">
-                  {lesson.before.misses} / {lesson.before.dispatches}
+                  {lesson.before.misses} / {lesson.before.returns}
                 </td>
                 <td className="num">
                   {lesson.after === null
                     ? 'too early'
-                    : `${String(lesson.after.misses)} / ${String(lesson.after.dispatches)}`}
+                    : `${String(lesson.after.misses)} / ${String(lesson.after.returns)}`}
                 </td>
                 <td className="num">{lesson.effectPct === null ? '—' : `${String(lesson.effectPct)}%`}</td>
                 <td>
                   {/* No `<Ref/>`: the pull request is in another fleet's repository, and the link is all that crosses. */}
-                  <a href={lesson.prUrl} target="_blank" rel="noopener noreferrer">
-                    open
-                  </a>
+                  <ExtLink href={lesson.prUrl}>open</ExtLink>
                 </td>
               </tr>
             ))}

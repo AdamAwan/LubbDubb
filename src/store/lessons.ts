@@ -13,7 +13,7 @@ import type { StoreContext } from './context.js';
 // → docs/spec/14-persistence.md, docs/spec/41-repo-lessons.md#the-record-and-the-desk
 
 const COLUMNS =
-  'id, group_key, kind, cause, place, goals, misses, miss_count, status, task_id, fix, title, summary, reason, ' +
+  'id, group_key, kind, cause, place, goals, misses, status, task_id, fix, title, summary, reason, ' +
   'pr_number, ticket_ref, created_at, settled_at';
 
 /** What `lesson_conclude` says, kept on the row. */
@@ -43,8 +43,8 @@ export class LessonStore {
     const info = this.ctx
       .prep(
         `INSERT OR IGNORE INTO lesson_drafts
-           (id, group_key, kind, cause, place, goals, misses, miss_count, briefing, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+           (id, group_key, kind, cause, place, goals, misses, briefing, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
       )
       .run(
         id,
@@ -54,7 +54,6 @@ export class LessonStore {
         input.where,
         JSON.stringify(input.goals),
         JSON.stringify(input.misses),
-        input.goals.length,
         input.briefing,
         this.ctx.now(),
       );
@@ -124,6 +123,33 @@ export class LessonStore {
       this.ctx.prep(`SELECT ${COLUMNS} FROM lesson_drafts ORDER BY created_at ASC, rowid ASC`).all() as DraftRow[]
     ).map(toDraft);
   }
+
+  /** The drafts still waiting on their agent or on the operator's review: what the desk settles. */
+  unsettledDrafts(): LessonDraft[] {
+    return (
+      this.ctx
+        .prep(
+          `SELECT ${COLUMNS} FROM lesson_drafts WHERE status IN ('dispatched', 'pr-open') ORDER BY created_at ASC, rowid ASC`,
+        )
+        .all() as DraftRow[]
+    ).map(toDraft);
+  }
+
+  /**
+   * This fleet's adopted lessons whose pull request merged at or after `since`: the one set the pool
+   * digest publishes and the pool tab counts toward a company-wide cause.
+   */
+  adoptedSince(since: string): LessonDraft[] {
+    return (
+      this.ctx
+        .prep(
+          `SELECT ${COLUMNS} FROM lesson_drafts
+            WHERE status = 'adopted' AND settled_at >= ? AND pr_number IS NOT NULL AND fix IS NOT NULL
+            ORDER BY settled_at ASC, rowid ASC`,
+        )
+        .all(since) as DraftRow[]
+    ).map(toDraft);
+  }
 }
 
 function toDraft(r: DraftRow): LessonDraft {
@@ -135,7 +161,6 @@ function toDraft(r: DraftRow): LessonDraft {
     where: r.place,
     goals: parseArray<string>(r.goals),
     misses: parseArray<LessonMiss>(r.misses),
-    missCount: r.miss_count,
     status: r.status as LessonDraftStatus,
     taskId: r.task_id,
     fix: r.fix as LessonFix | null,
@@ -166,7 +191,6 @@ interface DraftRow {
   place: string;
   goals: string;
   misses: string;
-  miss_count: number;
   status: string;
   task_id: string | null;
   fix: string | null;

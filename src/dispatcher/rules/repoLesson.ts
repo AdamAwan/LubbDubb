@@ -11,7 +11,7 @@ export function repoLesson(s: StageContext): void {
   const branch = lessonBranch(draft.id);
   const title = `Draft a repo lesson for ${draft.groupKey}`;
   const reason =
-    `The fleet came back to pull requests on ${String(draft.missCount)} goals for the same reason — ` +
+    `The fleet came back to pull requests on ${String(draft.goals.length)} goals for the same reason — ` +
     `${draft.cause} in ${draft.where} — and nothing in the repository stopped it.`;
   s.candidates.push({
     origin,
@@ -26,7 +26,7 @@ export function repoLesson(s: StageContext): void {
       base: s.defaultBranch,
       title,
       prompt:
-        s.templates.render('repo-lesson', { cause: draft.cause, where: draft.where, goals: draft.missCount }) +
+        s.templates.render('repo-lesson', { cause: draft.cause, where: draft.where, goals: draft.goals.length }) +
         draft.briefing,
       lessonDraft: { id: draft.id },
       originRef: origin,

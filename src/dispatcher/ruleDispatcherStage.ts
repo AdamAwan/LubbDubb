@@ -229,8 +229,13 @@ export function cycleLookups(
   | 'remoteRuns'
   | 'botPrRiskRun'
   | 'appErrorTriageRun'
+  | 'lessonDraft'
   | 'localValidations'
 > {
+  return { ...decisionLookups(ctx), ...runLookups(ctx) };
+}
+
+function decisionLookups(ctx: DispatchContext) {
   return {
     notified: notifiedOriginsByAgent(ctx.recentDecisions),
     dispatchedSignals: dispatchedSignalsByBranch(ctx.recentDecisions),
@@ -243,10 +248,17 @@ export function cycleLookups(
     uncheckedDescriptions: ctx.uncheckedDescriptions ?? [],
     prReviews: new Map((ctx.prReviews ?? []).map((review) => [review.prNumber, review])),
     prReviewedElsewhere: ctx.prReviewedElsewhere ?? new Set<number>(),
+  };
+}
+
+/** The one-at-a-time runs and drafts waiting for, or held by, an agent. */
+function runLookups(ctx: DispatchContext) {
+  return {
     liveLocalRun: ctx.localRun ?? null,
     remoteRuns: ctx.remoteRuns ?? [],
     botPrRiskRun: ctx.botPrRiskRun ?? null,
     appErrorTriageRun: ctx.appErrorTriageRun ?? null,
+    lessonDraft: ctx.lessonDraft ?? null,
     localValidations: ctx.localValidations ?? [],
   };
 }

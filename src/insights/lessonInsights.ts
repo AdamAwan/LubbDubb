@@ -4,6 +4,7 @@ import { CAUSE_COPY } from '../remedies/remedies.js';
 import type {
   LessonDraftStatus,
   LessonFix,
+  LessonPeriod,
   PrThreadLabel,
   Remedy,
   RemedyCause,
@@ -14,14 +15,6 @@ import type {
 // → docs/spec/41-repo-lessons.md#did-it-work
 
 type LessonVerdict = 'working' | 'not-working' | 'too-early';
-
-/** One side of a merge: the group's misses in distinct goals, the same-kind return dispatches, and their ratio. */
-interface LessonPeriod {
-  misses: number;
-  returns: number;
-  /** Misses per return dispatch; null with no return dispatch to divide by. */
-  rate: number | null;
-}
 
 export interface LessonRow {
   id: string;
@@ -53,9 +46,10 @@ export interface LessonInsights {
   tooEarly: number;
 }
 
-/** A return dispatch as the reading counts it: the origin it answered and when. */
-interface ReturnDispatch {
-  originRef: string;
+/** A return dispatch as the reading counts it: the pull request it went back to, which kind of return, and when. */
+export interface ReturnDispatch {
+  prNumber: number;
+  kind: RemedyKind;
   createdAt: string;
 }
 
@@ -104,7 +98,7 @@ function row(d: LessonDraft, input: LessonInsightInput): LessonRow {
     status: d.status,
     fix: d.fix,
     title: d.title,
-    goals: d.missCount,
+    goals: d.goals.length,
     prRef: d.prNumber === null ? null : `pr:${d.prNumber}`,
     ticketRef: d.ticketRef,
     createdAt: d.createdAt,
@@ -121,7 +115,9 @@ function period(d: LessonDraft, input: LessonInsightInput, start: number, end: n
   const since = new Date(start).toISOString();
   const until = new Date(end).toISOString();
   const group = lessonGroups({
-    remedies: input.remedies.filter((r) => r.createdAt < until),
+    remedies: input.remedies.filter(
+      (r) => r.kind === d.kind && r.cause === d.cause && r.createdAt >= since && r.createdAt < until,
+    ),
     threadLabels: input.threadLabels,
     goalOfPr: input.goalOfPr,
     excludedPrs: input.excludedPrs,
@@ -130,19 +126,18 @@ function period(d: LessonDraft, input: LessonInsightInput, start: number, end: n
   }).find((g) => g.key === d.groupKey);
   const misses = group?.goals.length ?? 0;
   const returns = input.returnDispatches.filter(
-    (t) => t.createdAt >= since && t.createdAt < until && returnOf(t.originRef, input.excludedPrs) === d.kind,
+    (t) => t.kind === d.kind && t.createdAt >= since && t.createdAt < until && !input.excludedPrs.has(t.prNumber),
   ).length;
-  return { misses, returns, rate: returns > 0 ? misses / returns : null };
+  return { misses, returns };
 }
 
-function returnOf(originRef: string, excludedPrs: ReadonlySet<number>): RemedyKind | null {
-  const m = /^pr:(\d+):(ci|comments)$/.exec(originRef);
-  if (m === null || excludedPrs.has(Number(m[1]))) return null;
-  return m[2] === 'ci' ? 'ci' : 'review';
+/** Misses per same-kind return dispatch; null with no return dispatch to divide by. */
+export function missRate(period: LessonPeriod): number | null {
+  return period.returns > 0 ? period.misses / period.returns : null;
 }
 
 function verdict(before: LessonPeriod, after: LessonPeriod | null): LessonVerdict {
   if (after === null) return 'too-early';
   if (after.misses === 0) return 'working';
-  return (after.rate ?? 0) < (before.rate ?? 0) ? 'working' : 'not-working';
+  return (missRate(after) ?? 0) < (missRate(before) ?? 0) ? 'working' : 'not-working';
 }

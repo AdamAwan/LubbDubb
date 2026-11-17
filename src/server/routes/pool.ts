@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { foldPoolDigest, foldPoolLessons, foldPoolTrends } from '../../pool/aggregate.js';
-import { POOL_RETENTION_DAYS } from '../../pool/digestArm.js';
+import { retentionStart } from '../../pool/digestArm.js';
 import type { PoolInsightsPayload, PoolStatePayload } from '../../wire.js';
 import type { RemedyCause } from '../../types.js';
 import { checked } from '../validation.js';
@@ -49,9 +49,5 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
 }
 
 function ownAdoptedCauses(system: RouteContext['system']): RemedyCause[] {
-  const since = new Date(Date.now() - POOL_RETENTION_DAYS * 86_400_000).toISOString();
-  return system.store.lessons
-    .listDrafts()
-    .filter((d) => d.status === 'adopted' && d.settledAt !== null && d.settledAt >= since)
-    .map((d) => d.cause);
+  return system.store.lessons.adoptedSince(retentionStart(new Date().toISOString())).map((d) => d.cause);
 }

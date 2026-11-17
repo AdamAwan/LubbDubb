@@ -35,9 +35,8 @@ export const reportRemedy: ToolFactory = ({ deps, agent, task, ok }) => {
       'nowhere — say so in the guard itself, plainly: that answer is what an operator reads to ' +
       'decide what to write down.\n\n' +
       'It closes nothing and is posted nowhere, and it does not say your work is finished — nothing ' +
-      'here replaces pushing the fix. It gates nothing either. Where the operator has turned repo lessons ' +
-      'on, the same cause and guard on several goals is what a later agent drafts a fix to the repository ' +
-      'from, as a pull request a person reviews: one more reason to answer the guard honestly.',
+      'here replaces pushing the fix. It gates nothing either, though other features may act on these ' +
+      'accounts — one more reason to answer the guard honestly.',
     inputSchema: toolSchema(
       z.object({
         cause: z.enum(causes).describe(causes.map((c) => `${c}: ${CAUSE_COPY[c].blurb}`).join('. ')),

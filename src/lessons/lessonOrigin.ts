@@ -14,6 +14,10 @@ export function lessonBranch(draftId: string): string {
   return `lesson/${draftId}`;
 }
 
+export function isLessonBranch(branch: string): boolean {
+  return /^lesson\/.+$/.test(branch);
+}
+
 /** What an open pull request for a group carries, and how the world is read for one. */
 export function lessonMarker(groupKey: string): string {
   return `<!-- lubbdubb:lesson:${groupKey} -->`;

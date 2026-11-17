@@ -69,15 +69,17 @@ export function remedyOrigin(
   };
 }
 
-export function remedyAskNote(kind: RemedyKind): string {
+export function remedyAskNote(kind: RemedyKind, lessonsOn: boolean): string {
   const subject = kind === 'ci' ? 'why CI was red' : 'why the reviewer asked for changes';
+  const lessons = lessonsOn
+    ? `The same miss on several goals is what a later agent drafts a fix to the repository from, for a ` +
+      `person to review — so answer`
+    : `Answer`;
   return (
     `\n\n---\n\nBefore you finish, call \`report_remedy\` to say ${subject} and what settled it. ` +
     `Two enums and a line — it takes a moment, and it is the only record anywhere of *why* the ` +
-    `fleet keeps coming back to pull requests. It changes nothing about your work. Where the operator ` +
-    `has turned repo lessons on, the same miss on several goals is what a later agent drafts a fix to ` +
-    `the repository from, for a person to review — so answer the "what would have caught it" half ` +
-    `honestly even when the answer is unflattering.\n`
+    `fleet keeps coming back to pull requests. It changes nothing about your work. ${lessons} the ` +
+    `"what would have caught it" half honestly even when the answer is unflattering.\n`
   );
 }
 

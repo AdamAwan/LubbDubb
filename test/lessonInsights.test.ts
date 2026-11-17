@@ -49,7 +49,6 @@ function draft(over: Partial<LessonDraft> = {}): LessonDraft {
     where: 'lint',
     goals: ['issue:1', 'issue:2'],
     misses: [],
-    missCount: 2,
     status: 'adopted',
     taskId: 't',
     fix: 'guard',
@@ -65,7 +64,7 @@ function draft(over: Partial<LessonDraft> = {}): LessonDraft {
 }
 
 function ciReturns(days: number[], prNumber = 1) {
-  return days.map((d) => ({ originRef: `pr:${prNumber}:ci`, createdAt: at(d) }));
+  return days.map((d) => ({ prNumber, kind: 'ci' as const, createdAt: at(d) }));
 }
 
 function read(over: Partial<Parameters<typeof buildLessonInsights>[0]> = {}) {
@@ -87,7 +86,7 @@ test('the rate is the group’s misses in distinct goals per same-kind return di
     remedies: [remedy(1, -10), remedy(1, -9), remedy(2, -3), remedy(3, 12)],
     returnDispatches: [
       ...ciReturns([-10, -9, -3, -2]),
-      { originRef: 'pr:5:comments', createdAt: at(-4) },
+      { prNumber: 5, kind: 'review', createdAt: at(-4) },
       ...ciReturns([5, 12, 20, 25, 28]),
       ...ciReturns([-1, 3], 90),
     ],
@@ -95,10 +94,10 @@ test('the rate is the group’s misses in distinct goals per same-kind return di
   const [row] = insights.drafts;
   assert.deepEqual(
     row!.before,
-    { misses: 2, returns: 4, rate: 0.5 },
+    { misses: 2, returns: 4 },
     'two goals, four CI returns; review and the lesson PR left out',
   );
-  assert.deepEqual(row!.after, { misses: 1, returns: 5, rate: 0.2 });
+  assert.deepEqual(row!.after, { misses: 1, returns: 5 });
   assert.equal(row!.verdict, 'working');
   assert.equal(row!.prRef, 'pr:90');
   assert.equal(row!.mergedAt, at(0));
@@ -123,7 +122,7 @@ test('a miss that keeps coming back at the same rate or worse is not working', (
 
 test('no miss after the merge is working; remedies past the after side are not counted', () => {
   const insights = read({ remedies: [remedy(1, -3), remedy(2, 40)], returnDispatches: ciReturns([-3, 40]) });
-  assert.deepEqual(insights.drafts[0]!.after, { misses: 0, returns: 0, rate: null });
+  assert.deepEqual(insights.drafts[0]!.after, { misses: 0, returns: 0 });
   assert.equal(insights.drafts[0]!.verdict, 'working');
 });
 

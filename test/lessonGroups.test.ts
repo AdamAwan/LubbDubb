@@ -120,7 +120,7 @@ test('only documented and undocumented guards count, and the noisy causes never 
     groups.map((g) => g.key),
     ['ci/stale_test/lint'],
   );
-  assert.deepEqual(groups[0]!.guards, { documented: 1, undocumented: 0 });
+  assert.deepEqual(groups[0]!.remedyIds, [remedies.at(-1)!.id]);
 });
 
 test('remedies outside the window, on bot-authored or on lesson pull requests are left out', () => {
@@ -130,7 +130,7 @@ test('remedies outside the window, on bot-authored or on lesson pull requests ar
     remedy({ prNumber: 3 }),
   ];
   const groups = lessonGroups(inputs({ remedies, excludedPrs: new Set([2]) }));
-  assert.deepEqual(groups[0]!.prNumbers, [3]);
+  assert.deepEqual(groups[0]!.remedyIds, [remedies[2]!.id]);
 });
 
 test('goals are counted distinct, with a pull request outside the graph standing as its own pr:<n>', () => {
@@ -141,9 +141,7 @@ test('goals are counted distinct, with a pull request outside the graph standing
   ]);
   const [group] = lessonGroups(inputs({ remedies, goalOfPr }));
   assert.deepEqual(group!.goals, ['issue:10', 'pr:3']);
-  assert.deepEqual(group!.prNumbers, [1, 2, 3]);
   assert.equal(group!.remedyIds.length, 4);
-  assert.deepEqual(group!.guards, { documented: 0, undocumented: 4 });
 });
 
 test('a review remedy is placed by the areas of the threads its task changed code for', () => {
@@ -186,10 +184,6 @@ const twoGoals = (): LessonGroupInputs =>
     ]),
   });
 
-test('minGoals 0 is off and drafts nothing, however often a miss repeats', () => {
-  assert.deepEqual(lessonCandidates(twoGoals(), [], 0), []);
-});
-
 test('a group is a candidate once it spans minGoals distinct goals, and not before', () => {
   assert.deepEqual(
     lessonCandidates(twoGoals(), [], 2).map((c) => c.key),
@@ -206,10 +200,10 @@ test('a group is a candidate once it spans minGoals distinct goals, and not befo
   assert.deepEqual(lessonCandidates(sameGoal, [], 2), [], 'two pull requests of one goal are one miss');
 });
 
-const draft = (status: PriorDraft['status'], settledAt: string | null, missCount = 2): PriorDraft => ({
+const draft = (status: PriorDraft['status'], settledAt: string | null, goals = 2): PriorDraft => ({
   groupKey: 'ci/missed_gate/lint',
   status,
-  missCount,
+  goals: Array.from({ length: goals }, (_, i) => `issue:${String(i + 1)}`),
   settledAt,
 });
 
@@ -241,12 +235,12 @@ test('a declined, nothing or unanswered draft is redrafted only once as many new
   const more = [...remedies, remedy({ prNumber: 4, createdAt: '2026-06-16T00:00:00.000Z' })];
   goalOfPr.set(4, 'issue:4');
   const [again] = lessonCandidates(inputs({ remedies: more, goalOfPr }), [draft('declined', settled)], 2);
-  assert.equal(again?.redrafts?.status, 'declined');
+  assert.equal(again?.key, 'ci/missed_gate/lint');
 
   assert.deepEqual(
     lessonCandidates(inputs({ remedies: more, goalOfPr }), [draft('declined', settled, 3)], 2),
     [],
-    'the bar is the larger of the miss count it was drafted on and minGoals',
+    'the bar is the larger of the goals it was drafted on and minGoals',
   );
 });
 
@@ -270,5 +264,4 @@ test('the latest settled draft sets the bar, and candidates rank by goals spanne
       ['ci/missed_gate/lint', 3],
     ],
   );
-  assert.equal(candidates[1]!.redrafts?.status, 'unanswered');
 });

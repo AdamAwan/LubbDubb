@@ -1,12 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { ReliabilityPayload } from '../../wire.js';
-import type { LessonInsights } from '../../insights/lessonInsights.js';
 import { buildReliabilityInsights } from '../../insights/reliabilityInsights.js';
 import { buildRemedyInsights, isReturnOrigin } from '../../insights/remedyInsights.js';
 import { buildReviewLabelInsights } from '../../insights/reviewLabelInsights.js';
 import { InsightsQuery, resolveWindow, sinceOrEpoch } from '../../insights/insightsWindow.js';
 import { readLessonInsights } from '../../lessons/lessonReading.js';
-import { lessonLabelFor } from '../../watchLabels.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -42,17 +40,8 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           areas: system.config.reviewAreas,
           botAuthors: system.config.review.machineAuthors,
         }),
-        lessons: lessonReading(system, now),
+        lessons: readLessonInsights(store, { ...system.lessonReading, now }),
       } satisfies ReliabilityPayload;
     }),
   );
-}
-
-function lessonReading(system: RouteContext['system'], now: number): LessonInsights {
-  const { store, config } = system;
-  return readLessonInsights(store, store.lessons.listDrafts(), {
-    reviewAreas: config.reviewAreas,
-    lessonLabel: lessonLabelFor(config.labelPrefix),
-    now,
-  });
 }

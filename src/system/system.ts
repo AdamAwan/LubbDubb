@@ -83,6 +83,8 @@ import {
   type EnvironmentDesks,
   buildEnvironmentDesks,
   environmentParts,
+  type LessonDesks,
+  buildLessonDesks,
   type BenchDesks,
   buildBenchDesks,
 } from './systemDesks.js';
@@ -121,9 +123,11 @@ export interface System {
   appErrorTracker: AppErrorTrackerDesk;
   appErrorTriage: EnvironmentDesks['appErrorTriage'];
   /** Settles repo-lesson drafts and opens the next. → docs/spec/41-repo-lessons.md#the-record-and-the-desk */
-  lessons: EnvironmentDesks['lessons'];
+  lessons: LessonDesks['lessons'];
   /** What `lesson_conclude` does. → docs/spec/41-repo-lessons.md#the-outcome */
-  lessonOutcomes: EnvironmentDesks['lessonOutcomes'];
+  lessonOutcomes: LessonDesks['lessonOutcomes'];
+  /** The review areas and lesson label every did-it-work reading is made with. → docs/spec/41-repo-lessons.md#did-it-work */
+  lessonReading: LessonDesks['lessonReading'];
   validationReady: ValidationReadyDesk;
   remoteRuns: RemoteRunDesk;
   remoteIntents: EnvironmentDesks['remoteIntents'];
@@ -176,11 +180,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const fleet = buildFleet(config, opts, base, runtime, channels, crew);
   const intake = buildIntakeDesks(config, opts, base, channels);
   const envs = buildEnvironmentDesks(config, opts, base, fleet.proposals);
+  const lessons = buildLessonDesks(config, base);
   const bench = {
     ...buildBenchDesks(config, opts, base, channels, fleet),
     graph: new WorkGraphRecorder({ store: base.store, errors: base.errors }),
   };
-  const harness = buildHarness(config, opts, { base, channels, fleet, intake, envs, bench, late });
+  const harness = buildHarness(config, opts, { base, channels, fleet, intake, envs, lessons, bench, late });
   const pulse = wirePulse(config, base, fleet, harness);
   const local = buildLocalRuns(config, opts, base, runtime);
   const system: System = {
@@ -208,6 +213,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     filing: bench.filing,
     upstream: bench.upstream,
     ...environmentParts(envs),
+    ...lessons,
     validationReady: bench.validationReady,
     prAssign: intake.prAssign,
     botPrs: bench.botPrs,
@@ -231,9 +237,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors: base.errors,
     runtimeHealth: base.runtimeHealth,
   };
-  late.bind(
-    lateParts({ fleet, envs, bench, harness, local, prAssign: intake.prAssign, asks: () => askSnapshot(system) }),
-  );
+  late.bind(lateParts({ fleet, envs, lessons, bench, harness, local, intake, asks: () => askSnapshot(system) }));
   return system;
 }
 
@@ -253,6 +257,7 @@ interface HarnessPhases {
   fleet: Fleet;
   intake: IntakeDesks;
   envs: EnvironmentDesks;
+  lessons: LessonDesks;
   bench: BenchDesks & { graph: WorkGraphRecorder };
   late: LateBinding;
 }
@@ -331,7 +336,7 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
 function buildHarness(
   config: Config,
   opts: BuildOptions,
-  { base, fleet, intake, envs, bench, late }: HarnessPhases,
+  { base, fleet, intake, envs, lessons, bench, late }: HarnessPhases,
 ): Harness {
   const { store, connector, areaPaths, errors, runtimeControl, watchLabel } = base;
   const reads = harnessReads(config, store, fleet.featureBoard);
@@ -363,7 +368,7 @@ function buildHarness(
     appErrors: envs.appErrors,
     appErrorTracker: envs.appErrorTracker,
     appErrorTriage: envs.appErrorTriage,
-    lessons: envs.lessons,
+    lessons: lessons.lessons,
     remoteValidation: envs.remoteValidation,
     remoteIntents: envs.remoteIntents,
     prWatch: intake.prWatch,

@@ -4,13 +4,12 @@ import type {
   PoolClockKind,
   PoolDigestDocument,
   PoolDigestRow,
-  PoolLessonPeriod,
+  LessonPeriod,
   PoolLessonRow,
 } from '../types.js';
-import { CAUSE_COPY } from '../remedies/remedies.js';
 import { throughputMeasureLabel } from '../insights/throughputInsights.js';
 import { choiceLabel } from '../insights/choiceInsights.js';
-import { poolCauseLabel, poolPhaseLabel, poolUsageLabel } from './aggregate.js';
+import { poolCauseLabel, poolKindCauseLabel, poolPhaseLabel, poolUsageLabel } from './aggregate.js';
 import { ruleName } from '../insights/taskTypeSpend.js';
 import { POOL_RETENTION_DAYS } from './digestArm.js';
 import { utcDay } from '../primitives.js';
@@ -193,7 +192,7 @@ function lessonsSection(lessons: readonly PoolLessonRow[]): string[] {
   for (const lesson of lessons) {
     lines.push(
       row([
-        `${lesson.kind === 'ci' ? 'CI' : 'Review'} · ${CAUSE_COPY[lesson.cause]?.label ?? lesson.cause}`,
+        poolKindCauseLabel(lesson.kind, lesson.cause),
         lesson.fix,
         String(lesson.guards.documented),
         String(lesson.guards.undocumented),
@@ -215,8 +214,8 @@ function lessonsSection(lessons: readonly PoolLessonRow[]): string[] {
   return lines;
 }
 
-function period(p: PoolLessonPeriod): string {
-  return `${String(p.misses)} / ${String(p.dispatches)}`;
+function period(p: LessonPeriod): string {
+  return `${String(p.misses)} / ${String(p.returns)}`;
 }
 
 interface RolledKey {

@@ -23,10 +23,10 @@ import { VERBS_BY_SUBJECT } from '../usage/events.js';
 import { choiceKey, choiceSightings } from '../insights/choiceInsights.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
 import { isDispatchRule } from '../insights/taskTypeSpend.js';
-import { utcDay } from '../primitives.js';
-import type { ReviewAreaRule } from '../config/config.js';
-import { readLessonInsights } from '../lessons/lessonReading.js';
-import type { LessonDraft, PoolLessonRow } from '../types.js';
+import { DAY_MS, utcDay } from '../primitives.js';
+import { lessonGuardCounts } from '../lessons/evidence.js';
+import { readLessonInsights, type LessonReadingContext } from '../lessons/lessonReading.js';
+import type { PoolLessonRow } from '../types.js';
 
 // → docs/spec/28-cross-fleet-pool.md
 
@@ -88,48 +88,40 @@ export function buildDigestDocument(
   };
 }
 
-/** What an adopted lesson's reading needs beyond the store; without it nothing resolves to a link, so nothing is published. */
-export interface PoolLessonContext {
-  reviewAreas: readonly ReviewAreaRule[];
-  lessonLabel: string;
+/** What an adopted lesson's reading needs beyond the store; without `refUrl` nothing resolves to a link, so nothing is published. */
+export interface PoolLessonContext extends LessonReadingContext {
   refUrl: (ref: string) => string | null;
 }
 
 function poolLessons(store: Store, context: PoolLessonContext, since: string, now: string): PoolLessonRow[] {
-  const drafts = store.lessons.listDrafts();
-  const byId = new Map(drafts.map((d) => [d.id, d]));
-  const reading = readLessonInsights(store, drafts, { ...context, now: Date.parse(now) });
+  const adopted = store.lessons.adoptedSince(since);
+  const reading = new Map(
+    readLessonInsights(store, { ...context, now: Date.parse(now) }, adopted).drafts.map((row) => [row.id, row]),
+  );
   const rows: PoolLessonRow[] = [];
-  for (const lesson of reading.drafts) {
-    const draft = byId.get(lesson.id);
-    if (draft === undefined || draft.prNumber === null || lesson.fix === null) continue;
-    if (lesson.mergedAt === null || lesson.mergedAt < since || lesson.before === null) continue;
+  for (const draft of adopted) {
+    const lesson = reading.get(draft.id);
+    if (draft.prNumber === null || draft.fix === null || lesson === undefined) continue;
+    if (lesson.mergedAt === null || lesson.before === null) continue;
     const prUrl = context.refUrl(`pr:${String(draft.prNumber)}`);
     if (prUrl === null) continue;
     rows.push({
-      kind: lesson.kind,
-      cause: lesson.cause,
-      guards: guardCounts(draft),
-      fix: lesson.fix,
+      kind: draft.kind,
+      cause: draft.cause,
+      guards: lessonGuardCounts(draft.misses),
+      fix: draft.fix,
       prUrl,
       mergedAt: lesson.mergedAt,
-      before: { misses: lesson.before.misses, dispatches: lesson.before.returns },
-      after: lesson.after === null ? null : { misses: lesson.after.misses, dispatches: lesson.after.returns },
+      before: lesson.before,
+      after: lesson.after,
     });
   }
   return rows.sort((a, b) => a.mergedAt.localeCompare(b.mergedAt) || a.prUrl.localeCompare(b.prUrl));
 }
 
-function guardCounts(draft: LessonDraft): PoolLessonRow['guards'] {
-  const guards = { documented: 0, undocumented: 0 };
-  for (const miss of draft.misses) {
-    if (miss.guard === 'documented' || miss.guard === 'undocumented') guards[miss.guard] += 1;
-  }
-  return guards;
-}
-
-function retentionStart(now: string): string {
-  return new Date(new Date(now).getTime() - POOL_RETENTION_DAYS * 86_400_000).toISOString();
+/** The first instant the pool's ninety days reach back to from `now`. */
+export function retentionStart(now: string): string {
+  return new Date(new Date(now).getTime() - POOL_RETENTION_DAYS * DAY_MS).toISOString();
 }
 
 function perRun(
