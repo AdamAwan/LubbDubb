@@ -33,7 +33,11 @@ export class LessonDesk {
   /** @public called by the pulse, beside `appErrorTriage`. */
   run(world: WorldSnapshot): void {
     this.settle();
-    if (this.deps.minGoals < 2) return;
+    if (this.deps.minGoals < 2) {
+      const pending = this.deps.store.lessons.pendingDraft();
+      if (pending) this.deps.store.lessons.settle(pending.id, 'unanswered', ['pending']);
+      return;
+    }
     this.open(world);
   }
 

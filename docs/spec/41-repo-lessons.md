@@ -216,7 +216,8 @@ harness's own, so they are reaped. The origin and branch spelling live in
 `isHarnessBranch` and the desk's exclusion both call it. The pending draft reaches the rule through
 `cycleLookups` (`src/dispatcher/ruleDispatcherStage.ts`), beside the other one-at-a-time runs. `RuleConditions` carries whether lessons are on (`lessons`), so
 `minGoals: 0` reads as an inert rule rather than an empty one — even over a draft row left from when
-it was on. The rule pushes one candidate for the one `pending` draft and nothing else, so it takes a
+it was on; and the desk settles such a `pending` row as `unanswered` on its next pulse, so turning
+lessons back on months later never dispatches an old briefing. The rule pushes one candidate for the one `pending` draft and nothing else, so it takes a
 fleet slot like any rule and queues below the cut when there is none; the dispatch claims the draft
 (`pending` → `dispatched`) the way a triage run is claimed. A draft is one assembly rather than a
 standing signal, so there is no cooldown budget and no escalation.
@@ -371,9 +372,12 @@ merge**: `buildLessonInsights` (`src/insights/lessonInsights.ts`), served on the
   often the fleet came back at all is what makes the two sides comparable. A period is carried as its
   two counts, `{ misses, returns }` (`LessonPeriod`, the same shape the pool publishes), and the rate
   is derived by one helper, `missRate` (`src/insights/lessonInsights.ts`): with **no return dispatch
-  in a period the rate is null**, and every reader — the verdict here and the pool's effect
+  and no miss in a period the rate is null**, and every reader — the verdict here and the pool's effect
   ([28](28-cross-fleet-pool.md#the-lessons-section)) — reads a null rate as **zero**: nothing came
-  back, so nothing came back for this. Each period folds only the remedies of the draft's own kind and
+  back, so nothing came back for this. **A miss with no return dispatch to divide by is unbounded,
+  never zero** — the two counts are taken on different dates, so a remedy filed just after the merge
+  for a return created just before it lands alone in the after period, and reading that as zero would
+  call a lesson whose miss came back working. The pool's effect is null for an unbounded period. Each period folds only the remedies of the draft's own kind and
   cause inside its 30 days; no other remedy can reach its group.
 - **The after side is null until 30 days have passed** since the merge, and the verdict is then
   **too early**. A partial month compared with a whole one reads every young lesson as working.

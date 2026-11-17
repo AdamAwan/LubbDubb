@@ -174,6 +174,7 @@ function lessonEffect(row: PoolLessonMirrorRow): number | null {
   const before = missRate(row.before);
   if (row.after === null || before === null || before === 0) return null;
   const after = missRate(row.after) ?? 0;
+  if (!Number.isFinite(before) || !Number.isFinite(after)) return null;
   return Math.round(((before - after) / before) * 100);
 }
 

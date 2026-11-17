@@ -754,7 +754,8 @@ projects.
 
 **The fold** (`foldPoolLessons`, `src/pool/aggregate.ts`) ranks the lessons by **effect**: the relative
 drop in misses per same-kind return dispatch, after against before, through the same `missRate` the
-verdict reads — a null rate (no return dispatch) as zero, the rule
+verdict reads — a null rate (nothing missed, nothing came back) as zero, and no effect at all for an
+unbounded one (a miss with no return dispatch), the rule
 [41](41-repo-lessons.md#did-it-work) states. A lesson with no before-misses has no effect
 to read and ranks below those that do; a lesson **too early** to read ranks last. A `cause` with adopted
 lessons in **three or more distinct projects** — the mirror's projects plus this fleet's own, from

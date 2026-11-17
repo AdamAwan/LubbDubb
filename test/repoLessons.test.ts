@@ -152,7 +152,7 @@ test('remedies on two goals put one repo-lesson agent on lesson/<id>, with the e
   }
 });
 
-test('minGoals 0 drafts nothing, and the rule is inert even over a draft row', async () => {
+test('minGoals 0 drafts nothing, the rule is inert even over a draft row, and the row is settled', async () => {
   const { system } = build(0);
   try {
     miss(system, 11);
@@ -170,6 +170,11 @@ test('minGoals 0 drafts nothing, and the rule is inert even over a draft row', a
     });
     await system.harness.runCycle('manual');
     assert.equal(lessonTasks(system).length, 0);
+    system.lessons.run(world());
+    assert.deepEqual(
+      system.store.lessons.listDrafts().map((d) => d.status),
+      ['unanswered'],
+    );
   } finally {
     system.store.close();
   }

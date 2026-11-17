@@ -131,9 +131,10 @@ function period(d: LessonDraft, input: LessonInsightInput, start: number, end: n
   return { misses, returns };
 }
 
-/** Misses per same-kind return dispatch; null with no return dispatch to divide by. */
+/** Misses per same-kind return dispatch; null when nothing missed and nothing came back, unbounded for a miss with no return to divide by. */
 export function missRate(period: LessonPeriod): number | null {
-  return period.returns > 0 ? period.misses / period.returns : null;
+  if (period.returns > 0) return period.misses / period.returns;
+  return period.misses > 0 ? Number.POSITIVE_INFINITY : null;
 }
 
 function verdict(before: LessonPeriod, after: LessonPeriod | null): LessonVerdict {

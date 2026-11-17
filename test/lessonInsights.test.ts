@@ -120,6 +120,12 @@ test('a miss that keeps coming back at the same rate or worse is not working', (
   assert.equal(insights.notWorking, 1);
 });
 
+test('a miss with no return dispatch to divide by is not working, never a zero rate', () => {
+  const insights = read({ remedies: [remedy(1, -3), remedy(2, 1)], returnDispatches: ciReturns([-3, -1]) });
+  assert.deepEqual(insights.drafts[0]!.after, { misses: 1, returns: 0 });
+  assert.equal(insights.drafts[0]!.verdict, 'not-working');
+});
+
 test('no miss after the merge is working; remedies past the after side are not counted', () => {
   const insights = read({ remedies: [remedy(1, -3), remedy(2, 40)], returnDispatches: ciReturns([-3, 40]) });
   assert.deepEqual(insights.drafts[0]!.after, { misses: 0, returns: 0 });

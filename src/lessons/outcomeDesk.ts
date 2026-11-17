@@ -103,12 +103,17 @@ export class LessonOutcomeDesk {
     const prNumber = Number(ref);
     if (ref === undefined || !Number.isInteger(prNumber))
       return { ok: false, error: 'the provider did not say which pull request it opened; call lesson_conclude again.' };
-    store.lessons.concludePr(draft.id, prNumber, {
+    const recorded = store.lessons.concludePr(draft.id, prNumber, {
       fix: input.fix,
       title: input.title,
       summary: input.summary,
       reason: input.reason,
     });
+    if (!recorded)
+      errors?.record({
+        source: 'agent',
+        message: `lesson PR ${String(prNumber)} opened for draft ${draft.id}, which was no longer dispatched`,
+      });
     try {
       await sink.setPrLabel({ prNumber, label: this.deps.lessonLabel, present: true });
     } catch (err) {

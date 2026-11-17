@@ -1162,7 +1162,7 @@ merge and the 30 days after, each divided by the **return dispatches of the same
 (`pr:<n>:ci` for a CI lesson, `pr:<n>:comments` for a review one), so a busier month does not read as
 a worse lesson. Bot-authored and lesson pull requests are left out of both numbers, as they are out of
 the grouping. Each period is the two counts, `{ misses, returns }`; the rate is `missRate`'s, null
-with no return dispatch and read as zero by the verdict.
+with neither and read as zero by the verdict, and unbounded for a miss with no return dispatch.
 
 **It is not windowed by the page's window bar.** The periods are fixed to the merge, and a window
 that cut one in half would compare a fortnight with a month. The full rules are
