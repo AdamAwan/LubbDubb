@@ -92,13 +92,15 @@ test('a wrong-shaped answer aborts the slot signal', async () => {
   } };`);
   const result = await h.call('count', null);
   assert.equal(result.ok, false);
-  assert.equal((globalThis as { __extShapeSignal?: AbortSignal }).__extShapeSignal?.aborted, true);
+  const holder = globalThis as { __extShapeSignal?: AbortSignal };
+  assert.equal(holder.__extShapeSignal?.aborted, true);
+  delete holder.__extShapeSignal;
 });
 
 test('a configured extension that was never loaded refuses to build the system', () => {
   const config = loadConfig({ dbPath: ':memory:', repoRoot: gitRepo(), extensions: ['ext.mjs'] });
-  assert.throws(() => buildSystem(config, { errorMirror: () => {} }), /were not loaded: .*ext\.mjs/);
-  assert.throws(() => buildSystem(config, { errorMirror: () => {}, extensions: [] }), /were not loaded: .*ext\.mjs/);
+  assert.throws(() => buildSystem(config, { errorMirror: () => {} }), /not loaded: .*ext\.mjs/);
+  assert.throws(() => buildSystem(config, { errorMirror: () => {}, extensions: [] }), /not loaded: .*ext\.mjs/);
 });
 
 test('extension paths resolve against repoRoot', () => {
@@ -147,6 +149,22 @@ test('an extension that is not there, or not shaped like one, refuses to start',
   );
 });
 
+test('an unreadable throw while loading still refuses naming the file', async () => {
+  assert.match(
+    await refusalOf(`throw Object.create(null);`),
+    /could not be loaded: it threw a value that is not an error/,
+  );
+});
+
+test('extensions passed to buildSystem that config does not name refuse to build', () => {
+  const config = loadConfig({ dbPath: ':memory:', repoRoot: gitRepo() });
+  const stray = { name: 'stray', path: '/elsewhere/ext.mjs', slots: new Map() };
+  assert.throws(
+    () => buildSystem(config, { errorMirror: () => {}, extensions: [stray] }),
+    /not in config: \/elsewhere\/ext\.mjs/,
+  );
+});
+
 test('two extensions may not share a name or a slot', async () => {
   const a = extensionFile(`export default { apiVersion: 1, name: 'a', slots: { greet: () => '' } };`);
   const sameName = extensionFile(`export default { apiVersion: 1, name: 'a', slots: {} };`);
@@ -178,7 +196,7 @@ test('a slot that throws, rejects, times out or answers the wrong shape is not-o
   assert.equal(recorded.at(-1)?.detail, 'at plain');
 
   const bare = await h.call('greet', { who: 'bare' });
-  assert.match(bare.ok ? '' : bare.detail, /a value that cannot be read$/);
+  assert.match(bare.ok ? '' : bare.detail, /a value that is not an error$/);
 
   assert.equal(recorded.length, 7);
   assert.ok(recorded.every((entry) => entry.source === 'runtime' && entry.message.startsWith('extension "acme"')));
@@ -190,5 +208,7 @@ test('a timed-out slot sees its signal aborted', async () => {
     } };`);
   const result = await h.call('count', null);
   assert.equal(result.ok, false);
-  assert.equal((globalThis as { __extAborted?: boolean }).__extAborted, true);
+  const holder = globalThis as { __extAborted?: boolean };
+  assert.equal(holder.__extAborted, true);
+  delete holder.__extAborted;
 });

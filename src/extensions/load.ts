@@ -1,5 +1,4 @@
 import { pathToFileURL } from 'node:url';
-import { failure } from '../primitives.js';
 import {
   EXTENSION_API_VERSION,
   type LoadedExtension,
@@ -7,6 +6,7 @@ import {
   type SlotImplementation,
   type SlotMap,
 } from './contract.js';
+import { thrownText } from './thrown.js';
 
 // → docs/spec/42-extensions.md#loading
 
@@ -24,7 +24,7 @@ export async function loadExtensions(opts: {
     try {
       module = await importModule(pathToFileURL(path).href);
     } catch (err) {
-      throw refusal(path, `it could not be loaded: ${failure(err)}`, err);
+      throw refusal(path, `it could not be loaded: ${thrownText(err)}`, err);
     }
     const extension = readExtension(path, module, opts.book);
     const clash = loaded.find((other) => other.name === extension.name);
