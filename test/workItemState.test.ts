@@ -10,6 +10,7 @@ import type { ActionSink, SendResult, WorkItemStateInput } from '../src/sink/act
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
+import type { Plan } from '../src/types.js';
 import { failAppraisalOpen, planWithOnePart, workedAsOnePart } from './support/plans.js';
 
 function testConfig() {
@@ -414,7 +415,8 @@ test('a work item moved too often in an hour is held and logged once', async () 
 test('a shortfall on an item in the review state asks a human once and never moves it back', async () => {
   const system = walkSystem({ issuePickupStates: ['Ready'], issueInReviewState: 'In Review' });
   await trackedIssue(system, 27, 'In Review');
-  planWithOnePart(system.store, 27);
+  finishPlan(system, planWithOnePart(system.store, 27));
+  await tick();
   system.store.verdicts.recordShortfall({
     originRef: 'issue:27',
     cause: 'goal',
@@ -429,5 +431,54 @@ test('a shortfall on an item in the review state asks a human once and never mov
     .filter((e) => e.context.originRef === 'issue:27:review-stranded');
   assert.equal(asked.length, 1, 'the operator is told once, not every pulse');
   assert.match(asked[0]!.prompt, /Move it back to "Ready"/);
+  system.store.close();
+});
+
+const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5));
+
+function finishPlan(system: System, plan: Plan): void {
+  for (const part of system.store.plans.listPlanParts(plan.id)) {
+    system.store.plans.updatePlanPart(part.id, { status: 'merged', branch: `issue/${part.slug}` });
+  }
+  system.store.plans.rollUpPlanStatus(plan.id);
+}
+
+function strandedAsks(system: System, number: number): number {
+  return system.store.escalations
+    .listEscalations()
+    .filter((e) => e.context.originRef === `issue:${number}:review-stranded`).length;
+}
+
+test('a verdict older than the merge that finished the plan does not strand the item', async () => {
+  const system = walkSystem({ issuePickupStates: ['Ready'], issueInReviewState: 'In Review' });
+  await trackedIssue(system, 29, 'In Review');
+  const plan = planWithOnePart(system.store, 29);
+  system.store.verdicts.recordIssueConclusion({
+    originRef: 'issue:29',
+    verdict: 'more_work',
+    note: 'not finished yet',
+    by: 'agent',
+  });
+  await tick();
+  finishPlan(system, plan);
+
+  for (let i = 0; i < 3; i++) await system.harness.runCycle('manual');
+  assert.equal(strandedAsks(system, 29), 0, 'the merge answered the verdict; the assessor judges from here');
+  system.store.close();
+});
+
+test('a shortfall between one part merging and the next opening does not strand the item', async () => {
+  const system = walkSystem({ issuePickupStates: ['Ready'], issueInReviewState: 'In Review' });
+  await trackedIssue(system, 30, 'In Review');
+  planWithOnePart(system.store, 30);
+  system.store.verdicts.recordShortfall({
+    originRef: 'issue:30',
+    cause: 'goal',
+    summary: 'the metric the ticket asks for is missing',
+    by: 'assessor',
+  });
+
+  for (let i = 0; i < 3; i++) await system.harness.runCycle('manual');
+  assert.equal(strandedAsks(system, 30), 0, 'a plan with parts still to go is not stranded');
   system.store.close();
 });

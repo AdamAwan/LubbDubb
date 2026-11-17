@@ -153,7 +153,7 @@ const RULES = [
     kind: 'rule',
     name: 'Stranded in review state',
     description:
-      'A still-open work item parked in the review state with no open PR and an explicit verdict that work is outstanding is put to a human, once: move it back to the first pickup state, or mark the issue done. The harness never moves a work item backwards itself — an item in review with nothing open for it is a problem somebody should see, not one to hide by quietly re-filing it.',
+      'A still-open work item parked in the review state with no open PR, no plan still in flight, and an explicit verdict that work is outstanding — newer than the merge that finished its plan — is put to a human, once: move it back to the first pickup state, or mark the issue done. The harness never moves a work item backwards itself — an item in review with nothing open for it is a problem somebody should see, not one to hide by quietly re-filing it.',
     enabled: (c) => c.workItemStates,
   },
 
