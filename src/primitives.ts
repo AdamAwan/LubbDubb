@@ -53,7 +53,9 @@ export function groupBy<T, K>(rows: readonly T[], key: (row: T) => K): Map<K, T[
 }
 
 export function failure(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) return error.message;
+  const message = (error as { message?: unknown } | null)?.message;
+  return typeof message === 'string' ? message : String(error);
 }
 
 export function withDeadline<T>(work: Promise<T>, ms: number, message: string): Promise<T> {

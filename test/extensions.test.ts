@@ -6,6 +6,7 @@ import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system/system.js';
 import { loadExtensions } from '../src/extensions/load.js';
 import { ExtensionHost } from '../src/extensions/host.js';
+import { EXTENSION_SLOTS } from '../src/extensions/slots.js';
 import type { SlotBook } from '../src/extensions/contract.js';
 import type { ErrorLogInput, ErrorLogEntry } from '../src/types.js';
 import { gitRepo, tmpDir } from './support/gitRepo.js';
@@ -72,12 +73,17 @@ test('no extensions configured loads nothing, and the system builds exactly as b
   assert.deepEqual(system.extensions.names(), []);
 });
 
-test('by default an extension is checked against the harness book, which has no slots yet', async () => {
-  const path = extensionFile(`export default { apiVersion: 1, name: 'a', slots: { greet: () => '' } };`);
+test('main checks extensions against the harness book, and a slot outside it refuses to start', async () => {
+  const path = extensionFile(`export default { apiVersion: 1, name: 'a', slots: { notASlot: () => '' } };`);
   await assert.rejects(
-    loadExtensions({ paths: [path] }),
-    /"greet" slot, which this harness does not have; this harness has no slots yet/,
+    loadExtensions({ paths: [path], book: EXTENSION_SLOTS }),
+    /"notASlot" slot, which this harness does not have/,
   );
+});
+
+test('a configured extension that was never loaded refuses to build the system', () => {
+  const config = loadConfig({ dbPath: ':memory:', repoRoot: gitRepo(), extensions: ['ext.mjs'] });
+  assert.throws(() => buildSystem(config, { errorMirror: () => {} }), /none were loaded/);
 });
 
 test('extension paths resolve against repoRoot', () => {
@@ -136,7 +142,7 @@ test('two extensions may not share a name or a slot', async () => {
 
 test('a slot that throws, rejects, times out or answers the wrong shape is not-ok and recorded — never thrown', async () => {
   const { host: h, recorded } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
-    greet: ({ who }) => { if (who === 'sync') throw new Error('boom'); if (who === 'async') return Promise.reject(new Error('later')); if (who === 'null') throw null; return new Promise(() => {}); },
+    greet: ({ who }) => { if (who === 'sync') throw new Error('boom'); if (who === 'async') return Promise.reject(new Error('later')); if (who === 'null') throw null; if (who === 'plain') throw { message: 'plain object', stack: 'at plain' }; return new Promise(() => {}); },
     count: () => 'seven',
   } };`);
 
@@ -152,7 +158,11 @@ test('a slot that throws, rejects, times out or answers the wrong shape is not-o
   const thrown = await h.call('greet', { who: 'null' });
   assert.match(thrown.ok ? '' : thrown.detail, /failed the "greet" slot: null$/);
 
-  assert.equal(recorded.length, 5);
+  const plain = await h.call('greet', { who: 'plain' });
+  assert.match(plain.ok ? '' : plain.detail, /: plain object$/);
+  assert.equal(recorded.at(-1)?.detail, 'at plain');
+
+  assert.equal(recorded.length, 6);
   assert.ok(recorded.every((entry) => entry.source === 'runtime' && entry.message.startsWith('extension "acme"')));
 });
 

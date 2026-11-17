@@ -238,7 +238,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp: channels.mcp,
     desktop: channels.desktop,
     plugin: buildPluginDesk(config, opts, base.errors),
-    extensions: buildExtensionHost(opts.extensions ?? [], config.repoRoot, base.errors),
+    extensions: buildExtensionHost(config, opts.extensions, base.errors),
     ...foundationParts(base),
     errors: base.errors,
     runtimeHealth: base.runtimeHealth,

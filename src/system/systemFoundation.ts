@@ -90,7 +90,7 @@ export interface BuildOptions {
   environmentObserver?: EnvironmentObserver;
   stateReader?: StateReader;
   tenants?: TenantKeeper;
-  /** What `loadExtensions` read from `config.extensions`. Absent is none: `main` is the one caller that loads them. */
+  /** What `loadExtensions` read from `config.extensions`. */
   extensions?: readonly LoadedExtension[];
   pluginCli?: PluginCli;
   errorMirror?: (entry: ErrorLogEntry) => void;

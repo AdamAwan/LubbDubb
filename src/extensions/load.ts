@@ -7,7 +7,6 @@ import {
   type SlotImplementation,
   type SlotMap,
 } from './contract.js';
-import { EXTENSION_SLOTS } from './slots.js';
 
 // → docs/spec/42-extensions.md#loading
 
@@ -15,7 +14,7 @@ const KNOWN_KEYS = new Set(['apiVersion', 'name', 'slots']);
 
 export async function loadExtensions(opts: {
   paths: readonly string[];
-  book?: SlotBook<SlotMap>;
+  book: SlotBook<SlotMap>;
   importModule?: (url: string) => Promise<unknown>;
 }): Promise<LoadedExtension[]> {
   const importModule = opts.importModule ?? ((url: string) => import(url) as Promise<unknown>);
@@ -27,7 +26,7 @@ export async function loadExtensions(opts: {
     } catch (err) {
       throw refusal(path, `it could not be loaded: ${failure(err)}`, err);
     }
-    const extension = readExtension(path, module, opts.book ?? EXTENSION_SLOTS);
+    const extension = readExtension(path, module, opts.book);
     const clash = loaded.find((other) => other.name === extension.name);
     if (clash) throw refusal(path, `its name "${extension.name}" is already taken by ${clash.path}`);
     for (const slot of extension.slots.keys()) {
