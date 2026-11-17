@@ -62,9 +62,9 @@ export class LessonOutcomeDesk {
         ok: false,
         error: 'name no pull request or work item in the title: the harness cites every one in the body as a link.',
       };
+    const branch = task.branch ?? lessonBranch(draft.id, draft.groupKey);
     if (input.outcome === 'pull_request') {
-      const branch = task.branch ?? lessonBranch(draft.id, draft.groupKey);
-      const covered = await this.coveredBy(draft, branch);
+      const covered = await this.coveredBy(draft);
       if (covered === undefined)
         return {
           ok: false,
@@ -83,16 +83,17 @@ export class LessonOutcomeDesk {
       }
     }
     return input.outcome === 'pull_request'
-      ? this.openPr(draft, task.branch ?? lessonBranch(draft.id, draft.groupKey), { ...input, fix: input.fix, title })
+      ? this.openPr(draft, branch, { ...input, fix: input.fix, title })
       : this.fileTicket(draft, { ...input, fix: input.fix, title });
   }
 
   /** Another fleet's open or merged lesson pull request for the draft's group, by URL; undefined when unread. */
-  private async coveredBy(draft: LessonDraft, branch: string): Promise<string | null | undefined> {
+  private async coveredBy(draft: LessonDraft): Promise<string | null | undefined> {
     const read = await this.deps.lessonPrs.read();
     if (read === null) return undefined;
-    const prs = othersLessonPrs(read, [draft]).filter((pr) => pr.branch !== branch);
-    return lessonPrsForGroup(prs, draft.groupKey).find((pr) => pr.state !== 'closed')?.url ?? null;
+    return (
+      lessonPrsForGroup(othersLessonPrs(read, [draft]), draft.groupKey).find((pr) => pr.state !== 'closed')?.url ?? null
+    );
   }
 
   private async dropBranch(branch: string): Promise<void> {
