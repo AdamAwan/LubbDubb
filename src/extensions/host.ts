@@ -70,7 +70,6 @@ export class ExtensionHost<S extends SlotMap> {
 
 function thrown(err: unknown): { why: string; stack: string | null } {
   try {
-    if (err instanceof Error) return { why: err.message, stack: err.stack ?? null };
     const { message, stack } = (err ?? {}) as { message?: unknown; stack?: unknown };
     return {
       why: typeof message === 'string' ? message : String(err),
