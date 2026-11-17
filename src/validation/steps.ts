@@ -1,5 +1,6 @@
 import type { ValidationCheck, ValidationStep, ValidationStepKind } from '../types.js';
 import { harnessReadable } from '../environments/watchSource.js';
+import { declaresTenant } from '../environments/policy.js';
 
 // → docs/spec/20-validation.md#the-test-plan
 
@@ -26,7 +27,7 @@ export interface StepCapabilities {
   state: boolean;
   /** Some environment declares a watch source the harness runs. */
   observe: boolean;
-  /** Some environment names a tenant — a literal, a variable, or an `ensureTenant` command. */
+  /** Some environment names a tenant — a literal, a variable, an `ensureTenant` command or the project's extension. */
   tenant: boolean;
 }
 
@@ -45,6 +46,7 @@ interface CapabilityEnvironment {
     tenant?: string;
     tenantEnv?: string;
     ensureTenant?: string;
+    tenantExtension?: true;
     browser?: unknown;
     state?: { run?: string };
   };
@@ -57,8 +59,7 @@ export function stepCapabilities(environments: readonly CapabilityEnvironment[])
     if (validate === undefined) continue;
     if (validate.browser !== undefined) caps.browser = true;
     if (typeof validate.state?.run === 'string' && validate.state.run.trim() !== '') caps.state = true;
-    if (validate.tenant !== undefined || validate.tenantEnv !== undefined || validate.ensureTenant !== undefined)
-      caps.tenant = true;
+    if (declaresTenant(validate)) caps.tenant = true;
     if (harnessReadable(env.watch)) caps.observe = true;
   }
   return caps;

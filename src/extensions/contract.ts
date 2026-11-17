@@ -2,7 +2,7 @@
 
 export const EXTENSION_API_VERSION = 1;
 
-export interface SlotSignature {
+interface SlotSignature {
   input: unknown;
   output: unknown;
 }

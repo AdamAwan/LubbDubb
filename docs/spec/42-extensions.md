@@ -7,10 +7,9 @@ An **extension** is a project's own code that LubbDubb loads at boot and calls a
 **slots**. It is how a behaviour that only one project needs lives _in that project_, while LubbDubb
 keeps the orchestration around it: when to ask, the locks, the record, the cockpit.
 
-**Built**: the loader, the host and the `extensions` key. **Not yet built**: any slot. The book in
-`src/extensions/slots.ts` is empty, so today an extension can load but has nothing to fill. Each slot
-is added by the change that needs it, following [Adding a slot](#adding-a-slot); the first planned is
-remote-validation tenants ([36](36-remote-validation.md#tenants)).
+**Built**: the loader, the host, the `extensions` key, and the two tenant slots
+([36](36-remote-validation.md#a-tenant-from-the-projects-extension)). Each further slot is added by
+the change that needs it, following [Adding a slot](#adding-a-slot).
 
 ## Invariants
 
@@ -45,6 +44,7 @@ export default {
   name: 'acme',
   slots: {
     // one function per slot this project fills: (input, { repoRoot, signal }) => answer
+    ensureTenant: async ({ environment }) => ({ tenant: await provisionFor(environment) }),
   },
 };
 ```
@@ -126,10 +126,12 @@ is what lets the harness change underneath without breaking projects.
 
 ## The slots
 
-None yet. Each slot added is a row here, and links the spec of the feature that asks it.
+Each slot is a row here, and links the spec of the feature that asks it.
 
-| Slot | Asked by | Input | Answer | Timeout |
-| ---- | -------- | ----- | ------ | ------- |
+| Slot           | Asked by                                                                                                                                  | Input                                     | Answer                                      | Timeout |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------- | ------- |
+| `ensureTenant` | The tenant press, for an environment with `validate.tenantExtension` ([36](36-remote-validation.md#a-tenant-from-the-projects-extension)) | `{ environment, tenant: string \| null }` | `{ tenant }`, a non-blank one-line name     | 1 hour  |
+| `reseedTenant` | The same press, after `ensureTenant`; optional                                                                                            | `{ environment, tenant }`                 | nothing (`undefined`); a throw is a failure | 1 hour  |
 
 ## Adding a slot
 
@@ -146,8 +148,11 @@ A slot is a promise to every project that fills it. Make it in one change, with 
 4. **Keep the generic part in LubbDubb.** Locks, records, retries, the cockpit and the error log stay
    in the calling desk; the slot answers only the project-specific question.
 5. **Decide what not-ok means**, and write it in the calling feature's spec.
-6. **Keep the old path.** A feature that had a built-in or config-driven version keeps it for every
-   deployment whose extension does not fill the slot, until a later change retires it.
+6. **Keep the old path, behind an explicit opt-in.** A feature that had a built-in or config-driven
+   version keeps it for every deployment that has not opted in, until a later change retires it. One
+   object routes each deployment to the old or the extension implementation and answers anything the
+   desk labels with it, so what runs and what is shown cannot disagree. Opting in with no extension
+   filling the slot refuses to build.
 7. **Test both paths** at the `buildSystem` seam: with an extension filling the slot (a temp `.mjs`
    file, as `test/extensions.test.ts` does) and without.
 8. **Add a row to [The slots](#the-slots)** and update the calling feature's spec.

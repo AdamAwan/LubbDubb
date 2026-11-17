@@ -3,7 +3,7 @@ import { groupBy } from '../primitives.js';
 import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
 import { goneCheckRows, okScope, okStanding, pageRows } from '../validation/remote/intent.js';
-import { noStanding, resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
+import { noStanding, resolveTenant, type OperatorTenants, type TenantSteps } from '../validation/remote/tenants.js';
 import type {
   EnvironmentHealthReading,
   GoalArrival,
@@ -21,14 +21,7 @@ import type {
   WatchOutcome,
   WorkNode,
 } from '../types.js';
-import type {
-  GoalReachView,
-  GoalWatchView,
-  RemoteReadingView,
-  RemoteSheetView,
-  TenantCommandView,
-  TenantPreparation,
-} from '../wire.js';
+import type { GoalReachView, GoalWatchView, RemoteReadingView, RemoteSheetView, TenantCommandView } from '../wire.js';
 import { allGoalReach } from '../environments/reach.js';
 import { arrivalSheetStep } from '../environments/watchWindow.js';
 import { environmentGateHold } from '../environments/arrival.js';
@@ -250,13 +243,14 @@ interface RemoteSheetSigners {
  * beside the reading it describes. Absent entirely where no environment declares a `validate` block:
  * a card of question marks on a deployment that configured nothing reads as broken.
  */
-export function buildRemoteSheets(
+function buildRemoteSheets(
   store: System['store'],
   environments: EnvironmentConfig[],
   tasks: readonly TaskSummary[],
   signers: RemoteSheetSigners,
-  operatorTenants?: OperatorTenants,
-  checks: readonly ValidationCheck[] = [],
+  operatorTenants: OperatorTenants | undefined,
+  checks: readonly ValidationCheck[],
+  steps: (environment: EnvironmentConfig) => TenantSteps,
 ): RemoteSheetView[] {
   if (!environments.some((e) => e.validate !== undefined)) return [];
   const sheets = store.remoteValidation.listRemoteSheets();
@@ -314,26 +308,48 @@ export function buildRemoteSheets(
       ok: okStanding({ rows, intent, run, validates: validate !== undefined }),
       tenant: {
         ...standing,
-        reseedable: validate?.reseed !== undefined || validate?.ensureTenant !== undefined,
-        destructive: validate?.reseed !== undefined,
+        ...tenantControls(environment === undefined ? null : steps(environment)),
         preparation: prepares.get(sheet.environment) ?? null,
       },
     };
   });
 }
 
-export function tenantCommandViews(
-  environments: readonly EnvironmentConfig[],
-  prepares: readonly TenantPreparation[],
-): TenantCommandView[] {
-  return environments.flatMap((env) => {
-    const validate = env.validate;
-    if (validate?.ensureTenant === undefined && validate?.reseed === undefined) return [];
+/** The sheets a snapshot draws, with the tenant controls read off the desk. */
+export function snapshotRemoteSheets(
+  system: Pick<System, 'store' | 'config' | 'remoteRuns'>,
+  tasks: readonly TaskSummary[],
+  checks: readonly ValidationCheck[],
+  signers: RemoteSheetSigners = {},
+): RemoteSheetView[] {
+  return buildRemoteSheets(
+    system.store,
+    system.config.environments,
+    tasks,
+    signers,
+    system.config.remoteValidation.tenants,
+    checks,
+    (environment) => system.remoteRuns.tenantSteps(environment),
+  );
+}
+
+function tenantControls(steps: TenantSteps | null): { reseedable: boolean; destructive: boolean } {
+  return {
+    reseedable: (steps?.ensure ?? steps?.reseed ?? null) !== null,
+    destructive: (steps?.reseed ?? null) !== null,
+  };
+}
+
+export function tenantCommandViews(system: Pick<System, 'config' | 'store' | 'remoteRuns'>): TenantCommandView[] {
+  const prepares = system.store.remoteValidation.listTenantPrepares();
+  return system.config.environments.flatMap((env) => {
+    const steps = system.remoteRuns.tenantSteps(env);
+    if (steps.ensure === null && steps.reseed === null) return [];
     return [
       {
         environment: env.name,
-        ensureTenant: validate.ensureTenant ?? null,
-        reseed: validate.reseed ?? null,
+        ensureTenant: steps.ensure,
+        reseed: steps.reseed,
         preparation: prepares.find((p) => p.environment === env.name) ?? null,
       },
     ];

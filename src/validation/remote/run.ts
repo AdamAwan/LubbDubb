@@ -17,6 +17,7 @@ import {
   type OperatorTenants,
   type TenantEnvironment,
   type TenantKeeper,
+  type TenantSteps,
 } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md#the-press
@@ -226,6 +227,11 @@ export class RemoteRunDesk extends EventEmitter {
     }
   }
 
+  /** @public the seam the cockpit and the desktop channel read tenant steps through */
+  tenantSteps(environment: EnvironmentConfig): TenantSteps {
+    return this.deps.tenants.steps(environment);
+  }
+
   /** @public the seam the tenant-command output route reads through */
   tenantOutput(environmentName: string): { lines: string[]; lastOutputAt: string | null } {
     const launched = this.deps.store.remoteValidation.tenantLaunch(environmentName);
@@ -310,8 +316,7 @@ export class RemoteRunDesk extends EventEmitter {
     resumed: { call: TenantCall; launch: TenantLaunch } | null = null,
   ): Promise<Prepared> {
     const environment = this.deps.environments.find((e) => e.name === environmentName);
-    const validate = environment?.validate;
-    if (environment === undefined || validate === undefined)
+    if (environment?.validate === undefined)
       return {
         ok: false,
         detail: `"${environmentName}" declares no "validate" block, so it has no tenant to prepare.`,
@@ -319,14 +324,15 @@ export class RemoteRunDesk extends EventEmitter {
       };
 
     const said: string[] = [];
-    if (validate.ensureTenant !== undefined && resumed?.call !== 'reseed') {
-      const refused = await this.ensureStep(environmentName, validate.ensureTenant, resumed, said);
+    const steps = this.deps.tenants.steps(environment);
+    if (steps.ensure !== null && resumed?.call !== 'reseed') {
+      const refused = await this.ensureStep(environmentName, steps.ensure, steps.ensureName, resumed, said);
       if (refused !== null) return refused;
     }
 
     const resolved = this.resolve(environment);
-    if (validate.reseed !== undefined) {
-      const refused = await this.reseedStep(environmentName, validate.reseed, resolved, resumed, said);
+    if (steps.reseed !== null) {
+      const refused = await this.reseedStep(environmentName, steps.reseed, resolved, resumed, said);
       if (refused !== null) return refused;
     }
 
@@ -342,6 +348,7 @@ export class RemoteRunDesk extends EventEmitter {
   private async ensureStep(
     environmentName: string,
     command: string,
+    name: string,
     resumed: { call: TenantCall; launch: TenantLaunch } | null,
     said: string[],
   ): Promise<Prepared | null> {
@@ -354,7 +361,7 @@ export class RemoteRunDesk extends EventEmitter {
     if (provisioned.detail !== null || provisioned.tenant === null)
       return {
         ok: false,
-        detail: `the "ensureTenant" command did not provide a tenant — ${provisioned.detail ?? 'it named none'}`,
+        detail: `${name} did not provide a tenant — ${provisioned.detail ?? 'it named none'}`,
         standing: this.standing(environmentName),
       };
     this.deps.store.remoteValidation.stampRemoteTenant(environmentName, provisioned.tenant, 'ensured_at');

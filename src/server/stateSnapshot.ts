@@ -29,7 +29,7 @@ import {
   buildEnvironmentReach,
   buildGoalWatchOutcomes,
   buildGoalWatchWindows,
-  buildRemoteSheets,
+  snapshotRemoteSheets,
   tenantCommandViews,
 } from './stateEnvironmentViews.js';
 import { localRunView, localRunRefFacts, localRunTargetViews } from './stateLocalRunViews.js';
@@ -184,7 +184,7 @@ function harnessSection(
   | 'planning'
   | 'dispatchRules'
 > {
-  const { system, store, connector, config, watchLabel, world, tasks, placementCtx, planPartsOf, prByBranch } = r;
+  const { system, connector, config, watchLabel, world, tasks, placementCtx, planPartsOf, prByBranch } = r;
   return {
     config: {
       /* The declaration, in promotion order, and never a goal's reading of it: the goal page's
@@ -245,7 +245,7 @@ function harnessSection(
       tasks,
       defaultBranch: config.defaultBranch,
     }),
-    tenantCommands: tenantCommandViews(config.environments, store.remoteValidation.listTenantPrepares()),
+    tenantCommands: tenantCommandViews(system),
     planning: config.planning,
     dispatchRules: DISPATCH_RULES,
   };
@@ -276,19 +276,15 @@ function goalsSection(
   | 'stackLandings'
 > {
   const { store, config, opts, baseline, world, tasks, stacks, withReview } = r;
+  const { environments } = config;
   // Read once and folded twice: the sheet card draws these rows, and the Environments card's own row
   // carries their fold. Two readers would be two opinions drawn beside each other.
   const remoteSheets = once(() =>
-    buildRemoteSheets(
-      store,
-      config.environments,
-      tasks,
-      { capture: opts?.remoteCaptureSigner, recording: opts?.remoteRecordingSigner },
-      config.remoteValidation.tenants,
-      r.validationChecks(),
-    ),
+    snapshotRemoteSheets(r.system, tasks, r.validationChecks(), {
+      capture: opts?.remoteCaptureSigner,
+      recording: opts?.remoteRecordingSigner,
+    }),
   );
-  const environments = config.environments;
   const arrivals = environments.length === 0 ? [] : store.environments.listGoalArrivals();
   const prByNumber = new Map<number, PullRequest>();
   for (const pr of world.pullRequests) if (!prByNumber.has(pr.number)) prByNumber.set(pr.number, pr);

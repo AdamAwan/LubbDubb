@@ -76,7 +76,7 @@ import {
 } from './systemFoundation.js';
 import { type Fleet, buildAgentManager, buildFleet } from './systemFleet.js';
 import { buildLocalRuns } from './systemLocalRuns.js';
-import { buildExtensionHost } from '../extensions/host.js';
+import type { buildExtensionHost } from '../extensions/host.js';
 import { watchHintRequired } from '../plans/planning.js';
 import {
   type IntakeDesks,
@@ -238,7 +238,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp: channels.mcp,
     desktop: channels.desktop,
     plugin: buildPluginDesk(config, opts, base.errors),
-    extensions: buildExtensionHost(config, opts.extensions, base.errors),
+    extensions: base.extensions,
     ...foundationParts(base),
     errors: base.errors,
     runtimeHealth: base.runtimeHealth,

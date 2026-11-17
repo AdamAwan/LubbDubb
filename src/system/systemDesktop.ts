@@ -10,7 +10,7 @@ import type { RemoteRunDesk } from '../validation/remote/run.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 import { prRefStyle } from '../pr/prRef.js';
 import { apiUrl } from '../server/apiUrl.js';
-import { buildRemoteSheets } from '../server/stateEnvironmentViews.js';
+import { snapshotRemoteSheets } from '../server/stateEnvironmentViews.js';
 import type { Foundation, LateBinding } from './systemFoundation.js';
 
 // → docs/spec/11-mcp-tools.md#the-desktop-channel
@@ -73,17 +73,16 @@ export function desktopRemoteValidation(
 ): DesktopRemoteValidation {
   return {
     sheets: (goalRef) =>
-      buildRemoteSheets(
-        store,
-        config.environments,
-        [],
-        {},
-        config.remoteValidation.tenants,
-        store.validation.listAllValidationChecks(),
-      ).filter((sheet) => sheet.goalRef === goalRef),
+      snapshotRemoteSheets({ store, config, remoteRuns }, [], store.validation.listAllValidationChecks()).filter(
+        (sheet) => sheet.goalRef === goalRef,
+      ),
     give: (goalRef, environment) => remoteIntents.give(goalRef, environment),
     press: (goalRef, environment) => remoteRuns.press(goalRef, environment),
     cancel: (environment) => remoteRuns.cancel(environment, null),
     prepareTenant: (environment) => remoteRuns.beginPrepareTenant(environment),
+    tenantSteps: (environment) => {
+      const env = config.environments.find((e) => e.name === environment);
+      return env === undefined ? null : remoteRuns.tenantSteps(env);
+    },
   };
 }

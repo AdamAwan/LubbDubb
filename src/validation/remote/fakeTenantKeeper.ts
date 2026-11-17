@@ -1,6 +1,13 @@
 import type { TenantCall, TenantLaunch } from '../../types.js';
 import type { TenantTail } from './tenantLog.js';
-import type { TenantKeeper, TenantOutcome, TenantRequest } from './tenants.js';
+import type { EnvironmentConfig } from '../../environments/policy.js';
+import {
+  commandSteps,
+  type TenantKeeper,
+  type TenantOutcome,
+  type TenantRequest,
+  type TenantSteps,
+} from './tenants.js';
 
 // → docs/spec/36-remote-validation.md#seams-and-why-the-fake-comes-first
 
@@ -21,6 +28,10 @@ export class FakeTenantKeeper implements TenantKeeper {
   private launches = 0;
 
   constructor(private readonly scripted: Record<string, TenantOutcome> = {}) {}
+
+  steps(environment: EnvironmentConfig): TenantSteps {
+    return commandSteps(environment.validate);
+  }
 
   ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome> {
     return this.launch('ensure', request, launched);

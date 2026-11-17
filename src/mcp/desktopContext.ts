@@ -45,6 +45,8 @@ export interface DesktopRemoteValidation {
   press: RemoteRunDesk['press'];
   cancel(environment: string): RemoteRun | null;
   prepareTenant(environment: string): ReturnType<RemoteRunDesk['beginPrepareTenant']>;
+  /** What answers each tenant step, as the press runs it. Null for an environment config does not name. */
+  tenantSteps(environment: string): ReturnType<RemoteRunDesk['tenantSteps']> | null;
 }
 
 export interface DesktopToolDeps {

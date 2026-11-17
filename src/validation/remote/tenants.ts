@@ -30,6 +30,25 @@ export interface TenantOutcome {
 }
 
 /**
+ * What runs each tenant step for an environment, in the words the gate shows, and how a failed
+ * provisioning names what failed. Null is a step it does not have.
+ */
+export interface TenantSteps {
+  ensure: string | null;
+  reseed: string | null;
+  ensureName: string;
+}
+
+/** The steps an environment's own commands answer. */
+export function commandSteps(validate: EnvironmentConfig['validate']): TenantSteps {
+  return {
+    ensure: validate?.ensureTenant ?? null,
+    reseed: validate?.reseed ?? null,
+    ensureName: 'the "ensureTenant" command',
+  };
+}
+
+/**
  * `ensureTenant` and `reseed`, the two project-supplied commands that touch a tenant. Both are
  * operator-invoked and neither runs per arrival: provisioning is possibly very slow, and reseeding
  * is destructive to the residue an operator may still be reading.
@@ -45,6 +64,8 @@ export interface TenantKeeper {
   follow(call: TenantCall, request: TenantRequest, launch: TenantLaunch): Promise<TenantOutcome | null>;
   /** The tail of what a launch has printed, stdout and stderr together. */
   tail(environment: string, launch: TenantLaunch): TenantTail;
+  /** What answers each step for this environment, as the gate draws it. */
+  steps(environment: EnvironmentConfig): TenantSteps;
 }
 
 /**
@@ -63,6 +84,10 @@ export class CommandTenantKeeper implements TenantKeeper {
   constructor(private readonly opts: { repoRoot: string; logRoot: string; timeoutMs?: number; followPollMs?: number }) {
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TENANT_TIMEOUT_MS;
     this.followPollMs = opts.followPollMs ?? FOLLOW_POLL_MS;
+  }
+
+  steps(environment: EnvironmentConfig): TenantSteps {
+    return commandSteps(environment.validate);
   }
 
   ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome> {
@@ -196,8 +221,12 @@ export function resolveTenant(input: {
   if (validate?.tenantEnv !== undefined)
     return fromTenantEnv({ ...input, variable: validate.tenantEnv, stamps, freshnessMs });
 
-  if (validate?.ensureTenant !== undefined) {
+  if (validate?.ensureTenant !== undefined || validate?.tenantExtension === true) {
     const provisioned = stamps.find((t) => t.ensuredAt !== null) ?? stamps[0];
+    const by =
+      validate.ensureTenant === undefined
+        ? 'the project\'s extension, through its "ensureTenant" slot,'
+        : `its "validate.ensureTenant" command — \`${validate.ensureTenant}\` —`;
     if (provisioned === undefined)
       return {
         value: null,
@@ -205,8 +234,7 @@ export function resolveTenant(input: {
           freshnessMs,
           blockedReason:
             `"${input.environment.name}" provisions its tenant on demand and nothing has provisioned one yet. ` +
-            `Run its "validate.ensureTenant" command — \`${validate.ensureTenant}\` — from this goal's sheet, ` +
-            'and it will name the tenant every row here is put to.',
+            `Run ${by} from this goal's sheet, and it will name the tenant every row here is put to.`,
         }),
       };
     return dated({ tenant: provisioned.tenant, value: provisioned.tenant, stamps, freshnessMs, now: input.now });

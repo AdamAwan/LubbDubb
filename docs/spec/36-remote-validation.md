@@ -112,6 +112,7 @@ principle is a rule rather than a preference.
 ## Invariants
 
 - **With no environment declaring a `validate` block nothing is assembled, spawned or written, and the desk's early return stamps no arrival.** `goal_arrivals.sheeted_at` null is the freshness guard, and stamping on the way past makes turning the feature on later sheet every goal that ever arrived. → [§](#the-desk) · `test/remoteValidationOff.test.ts`
+- **An environment without `validate.tenantExtension` provisions and reseeds exactly as it did before extensions existed, whatever extensions are loaded; one with it is answered by the extension and runs no tenant command.** → [§](#a-tenant-from-the-projects-extension) · `test/extensionTenants.test.ts`
 - **The harness never generates or infers a tenant identifier, and a `tenantEnv`'s value goes into the spawn env and nowhere else.** A missing tenant is `blocked` naming the command or variable; an invented one is reaped within the hour and presents as mysterious mass failure. → [§](#tenants) · `test/remoteValidationTenants.test.ts`
 - **A reseed that launched marks its tenant `halfSeeded` on the tenant's own row until a reseed finishes, and that is a qualifier on every reading, never a block or a fourth outcome.** Only a successful reseed stamps its age, so without it the gate draws the last good age beside a half-wiped tenant and its red rows read as the code's fault; read off the per-environment preparation row instead, the next press clears it with nothing repaired. → [§](#a-reseed-that-did-not-finish) · `test/remoteValidationTenants.test.ts`
 - **The runner's report is the only source of row outcomes; the exit code is never read, and a selector matching no test is `blocked`, never `passed`.** One invocation carries many rows and one exit code. → [§](#the-report-is-the-only-source-of-row-outcomes) · `test/remoteValidationReadings.test.ts`
@@ -1278,14 +1279,15 @@ hard-delete tenants matching a name pattern past a short age; a harness-invented
 an hour, and its disappearance presents as mysterious mass failure. The rule costs nothing in the easy
 case and is the whole ballgame in the hard one.
 
-A project supplies one of three shapes, and the schema does not force the awkward one on a project
+A project supplies one of four shapes, and the schema does not force the awkward one on a project
 that has the easy one:
 
-| Shape          | When                                                                                                                                                                                                                                                                                                                                                                 |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tenant`       | A literal name — **the shape to prefer**. A stable name means a failed row points at something that still exists and can be opened.                                                                                                                                                                                                                                  |
-| `tenantEnv`    | A **per-operator** tenant. Config names an env var; the harness reads it into the spawn env and nowhere else — the **lock and every surface carry the variable's own name**, `$VALIDATION_TENANT`, never what it holds. Unset, the operator's own `remoteValidation.tenants` answers ([below](#an-operators-own-tenant)); neither set blocks the press, naming both. |
-| `ensureTenant` | An idempotent command, where tenancy is provisioned on demand. Possibly very slow, so it is an **operator-invoked setup step, never run per arrival**; a missing tenant produces a legible `blocked` naming the command. It **prints the tenant it provisioned**, and that name — the project's own — is what is stamped and locked on.                              |
+| Shape             | When                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tenant`          | A literal name — **the shape to prefer**. A stable name means a failed row points at something that still exists and can be opened.                                                                                                                                                                                                                                  |
+| `tenantEnv`       | A **per-operator** tenant. Config names an env var; the harness reads it into the spawn env and nowhere else — the **lock and every surface carry the variable's own name**, `$VALIDATION_TENANT`, never what it holds. Unset, the operator's own `remoteValidation.tenants` answers ([below](#an-operators-own-tenant)); neither set blocks the press, naming both. |
+| `ensureTenant`    | An idempotent command, where tenancy is provisioned on demand. Possibly very slow, so it is an **operator-invoked setup step, never run per arrival**; a missing tenant produces a legible `blocked` naming the command. It **prints the tenant it provisioned**, and that name — the project's own — is what is stamped and locked on.                              |
+| `tenantExtension` | `true`: the project's [extension](42-extensions.md) provisions and reseeds the tenant, through its `ensureTenant` and `reseedTenant` slots ([below](#a-tenant-from-the-projects-extension)). Otherwise as `ensureTenant`.                                                                                                                                            |
 
 An environment that supplies none of the three permits no row kind that needs one, and says so. A
 deterministic row needs none, so such an environment presses on the **empty key** — the absence,
@@ -1326,6 +1328,38 @@ The two operator acts on a tenant are one route,
 `POST /api/issues/:number/remote-validation/:environment/reseed`: where the environment provisions on
 demand it runs `ensureTenant` first, and where it declares a `reseed` it runs that, stamping
 `remote_tenants` with whatever the project's own command named. Neither ever runs per arrival.
+
+### A tenant from the project's extension
+
+**Built**, in `src/validation/remote/extensionTenants.ts`. `"validate": { "tenantExtension": true }`
+hands an environment's tenant to the project's own code instead of to shell commands — the first slot
+of [42](42-extensions.md#the-slots). It is the `ensureTenant` shape with an extension where the command
+was: the same gate, the same route, the same `remote_tenants` stamps, preparation record, lock and
+half-seeded reading. Only what answers changes.
+
+- **Opt-in per environment.** An environment without the key keeps `CommandTenantKeeper` even when an
+  extension fills the slots, so a deployment changes nothing until it sets the key. The tenant
+  commands stay for every environment that does not, until a later change retires them.
+- **`ensureTenant`** is handed `{ environment, tenant }` — the tenant the environment stands on, or
+  null — and answers `{ tenant }`, the name it provisioned. That name is stamped and locked on; a blank
+  or multi-line one is refused by the slot's `check`, because the harness still never invents one.
+- **`reseedTenant`** is optional. Handed `{ environment, tenant }`, it answers nothing, and a throw is
+  how it fails. Without it the gate's press only provisions.
+- **One owner.** The key with any other tenant shape, or with a `reseed` command, refuses boot: two
+  answers to one question. The key with no loaded extension filling `ensureTenant` refuses to build,
+  beside the other extension checks in `buildFoundation`.
+- **Not-ok is the preparation failing**, in the slot's own words (`extension "acme" failed the
+"ensureTenant" slot: …`), recorded on the error log, and nothing stamped. It never falls back to a
+  command.
+- **A restart ends it.** The extension runs inside the harness, so unlike a command it does not
+  outlive the process: a preparation it was answering is closed at boot as not knowable (`ok: null`),
+  exactly as a command whose runner is gone. Its output is the asking and the answer, kept in memory
+  for the latest preparation per environment.
+- **The reseed control is drawn destructive** only where an extension fills `reseedTenant`; provisioning
+  alone is not. Both the gate and the cockpit's tenant panel read this from the desk's
+  `tenantSteps`, the same answer the press runs on, never from config.
+- Its timeout is the slot's, one hour, and not `remoteValidation.tenantTimeoutMs`, which is the
+  commands' kill.
 
 ### Reseeding is destructive, and the gate says so
 
@@ -1447,7 +1481,7 @@ name the project's own command provisioned, which is the one place that name is 
 _Provision the tenant_ rather than _Reseed_. Provisioning is idempotent and destroys nothing; warning
 about a wipe that will not happen teaches an operator that this card's warnings are noise, which is
 how the one that matters stops being read. That distinction is `RemoteTenantView.destructive`
-(`validate.reseed !== undefined`), folded on the **server** beside `reseedable` — a cockpit that
+(a reseed step in the desk's `tenantSteps` — a `reseed` command, or an extension's `reseedTenant` slot), folded on the **server** beside `reseedable` — a cockpit that
 worked out for itself whether a command destroys anything would be a second opinion about the blast
 radius of somebody else's script.
 
@@ -2500,7 +2534,8 @@ silent:
   no command to take, so `matched` stays null and the rows block through the arm that null has always
   blocked through — the refusal names that step rather than the pre-flight it used to name
   ([The listing the run takes](#the-listing-is-taken-by-the-run-and-not-by-the-harness));
-- **more than one** of `tenant`, `tenantEnv` and `ensureTenant`, which is two answers to one question;
+- **more than one** of `tenant`, `tenantEnv`, `ensureTenant` and `tenantExtension`, which is two answers to one question;
+- a `tenantExtension` that is not `true`, or one beside a `reseed` command;
 - a `reseed` or a `tenantFreshnessMs` with **no tenant of any shape**, which is freshness about
   nothing;
 - an **empty** command anywhere in the block, which is a command that answers nothing.
@@ -2662,11 +2697,12 @@ environment, or queries a deployed store — and passes while doing it. That is 
 lesson exactly ([15](15-integrations.md)): the failure is not that the test breaks, it is that it
 succeeds.
 
-| Seam                                                   | Implementations                                        | Covers                   |
-| ------------------------------------------------------ | ------------------------------------------------------ | ------------------------ |
-| `EnvironmentProber` (existing)                         | `CommandEnvironmentProber` · `FakeEnvironmentProber`   | `at`, for the pin        |
-| `StateReader` (`src/validation/remote/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**   | `state.run`              |
-| `TenantKeeper` (`src/validation/remote/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built** | `ensureTenant`, `reseed` |
+| Seam                                                   | Implementations                                                                                                                                                                                                                                                                             | Covers                   |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `EnvironmentProber` (existing)                         | `CommandEnvironmentProber` · `FakeEnvironmentProber`                                                                                                                                                                                                                                        | `at`, for the pin        |
+| `StateReader` (`src/validation/remote/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**                                                                                                                                                                                                                                        | `state.run`              |
+| `TenantKeeper` (`src/validation/remote/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built**                                                                                                                                                                                                                                      | `ensureTenant`, `reseed` |
+| `TenantKeeper`, for `tenantExtension`                  | `ExtensionTenantKeeper` — **built**, always real: it runs the extension a test loads, never a command. `RoutedTenantKeeper` hands each environment to it or to the command keeper (`opts.tenants` in a test), and the same choice answers `steps`, the labels the gate and the cockpit draw | the two tenant slots     |
 
 **The harness spawns none of the three browser commands, and there is no seam for them.** `runner`,
 `publishArtefacts` and `listSelectors` are all invoked by the run agent in its own shell, from its

@@ -32,6 +32,8 @@ interface EnvironmentValidate {
   tenant?: string;
   tenantEnv?: string;
   ensureTenant?: string;
+  /** The project's extension provisions and reseeds the tenant. → docs/spec/36-remote-validation.md#a-tenant-from-the-projects-extension */
+  tenantExtension?: true;
   reseed?: string;
   tenantFreshnessMs?: number;
   instruction?: string;
@@ -383,7 +385,12 @@ function validateWatchQueryUrl(queryUrl: string | undefined, where: string, fiel
     );
 }
 
-const TENANT_SHAPES = ['tenant', 'tenantEnv', 'ensureTenant'] as const;
+const TENANT_SHAPES = ['tenant', 'tenantEnv', 'ensureTenant', 'tenantExtension'] as const;
+
+/** Whether a `validate` block names a tenant in any of its shapes. */
+export function declaresTenant(validate: Partial<Record<(typeof TENANT_SHAPES)[number], unknown>>): boolean {
+  return TENANT_SHAPES.some((shape) => validate[shape] !== undefined);
+}
 
 function commandFields(validate: EnvironmentValidate): { path: string; value: unknown }[] {
   return [
@@ -488,12 +495,13 @@ function validateRunnable(validate: EnvironmentValidate, where: string): void {
 }
 
 function validateTenantShape(validate: EnvironmentValidate, where: string): void {
+  validateTenantExtension(validate, where);
   const shapes = TENANT_SHAPES.filter((shape) => validate[shape] !== undefined);
   if (shapes.length > 1)
     throw new Error(
       `${where}: "validate" declares ${shapes.map((s) => `"${s}"`).join(' and ')} — two answers to one ` +
-        'question. A tenant is a literal "tenant", a "tenantEnv" naming the variable that carries one, or an ' +
-        '"ensureTenant" command that provisions one. Name exactly one.',
+        'question. A tenant is a literal "tenant", a "tenantEnv" naming the variable that carries one, an ' +
+        '"ensureTenant" command that provisions one, or "tenantExtension": true. Name exactly one.',
     );
   if (shapes.length === 0) {
     if (validate.reseed !== undefined)
@@ -511,5 +519,18 @@ function validateTenantShape(validate: EnvironmentValidate, where: string): void
     throw new Error(
       `${where}: "validate.tenantFreshnessMs" must be a positive number of milliseconds — how old a tenant ` +
         'may be before a reading against it is drawn as stale.',
+    );
+}
+
+function validateTenantExtension(validate: EnvironmentValidate, where: string): void {
+  const value: unknown = validate.tenantExtension;
+  if (value !== undefined && value !== true)
+    throw new Error(
+      `${where}: "validate.tenantExtension" must be true, or be left out — true hands this tenant to the project's extension.`,
+    );
+  if (value === true && validate.reseed !== undefined)
+    throw new Error(
+      `${where}: "validate.reseed" and "validate.tenantExtension" both reseed this tenant — the extension reseeds ` +
+        'through its "reseedTenant" slot, so drop the "reseed" command.',
     );
 }
