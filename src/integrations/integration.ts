@@ -32,7 +32,15 @@ import type {
 import type { BodyFormat } from '../sink/signOff.js';
 import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
-import type { BotPrDetail, BotPullRequest, PrPerson, TrackerComment, TrackerItem, WorldSnapshot } from '../types.js';
+import type {
+  BotPrDetail,
+  BotPullRequest,
+  LessonPullRequest,
+  PrPerson,
+  TrackerComment,
+  TrackerItem,
+  WorldSnapshot,
+} from '../types.js';
 import type { ReadPlan } from '../world/readPlan.js';
 
 // → docs/spec/15-integrations.md
@@ -99,6 +107,15 @@ export interface BotPrReadable {
 
 export function isBotPrReadable(x: Integration): x is Integration & BotPrReadable {
   return typeof (x as Partial<BotPrReadable>).listBotPullRequests === 'function';
+}
+
+/** Every pull request on a `lesson/` branch, open or closed since `since`, with no author or label filter. */
+export interface LessonPrReadable {
+  listLessonPullRequests(since: string): Promise<LessonPullRequest[]>;
+}
+
+export function isLessonPrReadable(x: Integration): x is Integration & LessonPrReadable {
+  return typeof (x as Partial<LessonPrReadable>).listLessonPullRequests === 'function';
 }
 
 /** What a risk summary reads beyond the listing: the changed files, and the body where the list truncates it. */

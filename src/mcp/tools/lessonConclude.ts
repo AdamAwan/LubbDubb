@@ -78,6 +78,12 @@ export const lessonConclude: ToolFactory = ({ deps, task, ok }) => ({
         ticket: result.ticketRef,
         note: 'Filed for the operator to decide on. You are done.',
       });
+    if (result.outcome === 'nothing' && result.coveredBy !== undefined)
+      return ok({
+        concluded: true,
+        coveredBy: result.coveredBy,
+        note: 'Another lesson pull request for this miss was opened first, so none was opened for yours. Settled with nothing. You are done.',
+      });
     return ok({ concluded: true, note: 'Settled with nothing. You are done.' });
   },
 });

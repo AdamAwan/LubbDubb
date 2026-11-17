@@ -7,6 +7,7 @@ import { lessonBriefing, lessonMisses } from './evidence.js';
 import { prState } from '../pr/prHealth.js';
 import { lessonCandidates, LESSON_WINDOW_MS, type LessonGroupInputs } from './groups.js';
 import { isLessonBranch, lessonMarker } from './lessonOrigin.js';
+import { othersLessonPrs, type LessonPrReading } from './lessonPrs.js';
 
 // → docs/spec/41-repo-lessons.md#the-record-and-the-desk
 
@@ -19,6 +20,8 @@ interface LessonDeskDeps {
   minGoals: number;
   reviewAreas: readonly ReviewAreaRule[];
   lessonLabel: string;
+  /** Every fleet's lesson pull requests. */
+  lessonPrs: LessonPrReading;
   now?: () => number;
 }
 
@@ -69,8 +72,11 @@ export class LessonDesk {
       reviewAreas: this.deps.reviewAreas,
       since,
     };
+    if (lessonCandidates(input, drafts, this.deps.minGoals).length === 0) return;
+    const read = this.deps.lessonPrs.held();
+    if (read === null) return;
     const open = world.pullRequests.filter((pr) => prState(pr) === 'open');
-    const candidate = lessonCandidates(input, drafts, this.deps.minGoals).find(
+    const candidate = lessonCandidates(input, drafts, this.deps.minGoals, othersLessonPrs(read, drafts)).find(
       (c) => !open.some((pr) => pr.body?.includes(lessonMarker(c.key)) === true),
     );
     if (candidate === undefined) return;

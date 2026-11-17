@@ -15,7 +15,16 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { BotPrDetail, BotPullRequest, PrPerson, PrThreadState, PullRequest } from '../../types.js';
+import type {
+  BotPrDetail,
+  BotPullRequest,
+  LessonPullRequest,
+  PrPerson,
+  PrThreadState,
+  PullRequest,
+} from '../../types.js';
+import { lessonPullsOf } from '../../lessons/lessonPrs.js';
+import { prState } from '../../pr/prHealth.js';
 import { searchLogins } from '../../pr/assigneeSearch.js';
 import { threadComments } from '../../pr/prThreads.js';
 import { authoredBy } from '../integration.js';
@@ -108,6 +117,15 @@ export class FakeGitHubIntegration
         ...(pr.body === undefined ? {} : { body: pr.body }),
         headSha: pr.headSha,
       }));
+  }
+
+  async listLessonPullRequests(since: string): Promise<LessonPullRequest[]> {
+    const world = this.world.read();
+    const listed = (pr: PullRequest) => ({ ...pr, url: pr.url ?? '' });
+    const closed = world.closedPullRequests
+      .filter((pr) => (pr.closedAt ?? '') >= since)
+      .map((pr) => ({ ...listed(pr), merged: prState(pr) === 'merged', closedAt: pr.closedAt! }));
+    return lessonPullsOf(world.pullRequests.map(listed), closed);
   }
 
   async readBotPrDetail(): Promise<BotPrDetail> {

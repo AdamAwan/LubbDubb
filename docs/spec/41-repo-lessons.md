@@ -38,6 +38,8 @@ adopted or published.
 - **Nothing about a lesson is injected into any agent's prompt, and nothing from the pool is dispatched on.** Blanket context is skimmed rather than read, and other fleets' prose is not knowledge about this repository. → [§](#why-the-claim-store-failed) · _no test_
 - **A lesson pull request cites the pull requests behind it as full URLs, never `#n` and never with a closing keyword.** On Azure DevOps `#n` links a work item, which would adopt the lesson into another goal. → [§](#the-outcome) · `test/repoLessons.test.ts`
 - **One draft is out at a time, at most two lesson pull requests are open, and a group with an open pull request carrying its marker is not drafted.** Each open lesson is watched, so its CI and review are fleet work nobody has asked for yet. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
+- **Another fleet's lesson pull request for a group counts as a draft of this fleet's — open holds the group, merged ends it, closed waits for `minGoals` new goals — and is found by the group tag in its branch, never by author or label.** Fleets on one repository run under different authors and label prefixes, and the world each reads is filtered to its own author, so a check that reads the world sees none of the others and every fleet drafts the same lesson. → [§](#across-fleets) · `test/lessonCrossFleet.test.ts`
+- **A draft is not opened before the lesson pull requests have been read once, the desk never waits on that read, and `lesson_conclude` re-reads them before it opens one — refusing, and asking to be called again, when that read fails.** An unread repository is not an empty one; a pulse that waited on a 30-day listing would hold up every desk after it; and two fleets that drafted the same group in the same hour would otherwise both open. → [§](#across-fleets) · `test/lessonCrossFleet.test.ts`
 - **A lesson is concluded only by `lesson_conclude`, from the draft's own task: `open_pr` on a lesson origin refuses and says so, and there is no `body` argument.** A pull request opened by hand carries no marker, label or evidence, and nothing would ever settle its draft. → [§](#the-prompt) · `test/repoLessons.test.ts`
 - **A lesson ticket carries the lesson label and never the watch label.** Filing it must not also dispatch for it: the operator decides whether the fleet takes a refactor on. → [§](#a-pull-request-or-a-ticket) · `test/repoLessons.test.ts`
 - **A draft whose agent's task ended without concluding settles `unanswered`; a lesson pull request merged is `adopted`, closed is `declined`.** A draft nothing settles holds its group for ever. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
@@ -209,7 +211,8 @@ Candidates are ranked by the goals they span, most first, then by key.
 
 Rule `repo-lesson` (`kind: 'rule'`, in the rule book right after `validation-failed` and before
 `bot-pr-risk`, [05](05-dispatcher.md#the-rules-in-evaluation-order)) dispatches **one code agent** per
-draft, on its own branch `lesson/<id>`, for origin `lessons:draft:<id>` — the shape of
+draft, on its own branch `lesson/<tag>/<id>` — `<tag>` is `lessonGroupTag`, the first ten hex digits of the
+SHA-1 of the group key, so every fleet derives the same one ([across fleets](#across-fleets)) — for origin `lessons:draft:<id>` — the shape of
 `app-errors:triage:<id>` ([39](39-app-errors.md#agent-triage)), not an `issue:<n>:…` family, because a
 lesson is not a goal. `isHarnessBranch` (`src/pr/prOwnership.ts`) treats `lesson/` branches as the
 harness's own, so they are reaped. The origin and branch spelling live in
@@ -243,7 +246,7 @@ The agent's job is to pick **the fix that stops the miss for good**, which is of
 ### A pull request or a ticket
 
 **Small fixes are a pull request; big ones are a ticket.** A rename, a test, a lint rule or a doc edit
-the agent makes itself, on `lesson/<id>`. A refactor touching many files is **filed as a ticket**
+the agent makes itself, on `lesson/<tag>/<id>`. A refactor touching many files is **filed as a ticket**
 carrying the evidence, with the lesson label and **without the watch label**: the operator decides
 whether the fleet takes it on, and if they do, it goes through appraisal and planning like any other
 goal. A lesson agent does not get to start a refactor by itself.
@@ -282,7 +285,12 @@ fenced to the draft's own task — the origin must parse and the draft's `task_i
 — and answers once: a draft no longer `dispatched` refuses a second call. A title naming a pull
 request or work item (`#n`, `!n`) is refused, for the citation rule below.
 
-- **`pull_request`** — `sink.createPullRequest` on `lesson/<id>` against the default branch, the
+- **`pull_request`** — first a fresh read of every fleet's lesson pull requests
+  ([across fleets](#across-fleets)). A failed read refuses and asks to be called again. If another
+  lesson for the same group is open or merged, nothing is opened: the agent's pushed branch is deleted,
+  the draft settles `nothing` with that pull request's URL as its reason, and the tool answers with the
+  URL. Otherwise `sink.createPullRequest` on the branch the task was dispatched on (`task.branch`, never
+  re-derived, so a draft dispatched on an older branch shape still opens) against the default branch, the
   lesson label (`${labelPrefix}-lesson`, or `lesson` with no prefix, from `lessonLabelFor` in
   `src/watchLabels.ts`, computed once on the foundation), then `seedPrWatch`, so CI and review on it are answered like any of the
   fleet's own pull requests; the draft goes `pr-open` with the pull request's number. A refused open
@@ -296,7 +304,7 @@ The body cites every pull request behind the group as a **full URL**, from the c
 never `#n` and never with a closing keyword. On Azure DevOps `#n` links a work item, which would adopt
 the lesson pull request into another goal and hand its merge to that goal's landings. The body carries
 the marker `<!-- lubbdubb:lesson:<groupKey> -->`, which is how an open lesson for a group is recognised
-in the world.
+in the fleet's own world; another fleet's is recognised by its branch ([across fleets](#across-fleets)).
 
 ## The ruling: adopted or declined
 
@@ -325,7 +333,10 @@ desk, so below `graph` and `environments`. Each pulse it:
   only the unsettled rows (`store.lessons.unsettledDrafts()`, `status IN ('dispatched', 'pr-open')`),
   and the graph only for a `pr-open` one;
 - opens a draft for the top candidate when none is `pending` or `dispatched`, **fewer than 2 are
-  `pr-open`**, and no open pull request of its own world carries the group's marker. The pull requests
+  `pr-open`**, no open pull request of its own world carries the group's marker, and no other fleet's
+  lesson pull request holds the group ([across fleets](#across-fleets)). The lesson pull requests are
+  asked for only once some group is a candidate, and never waited on: before the first read lands
+  nothing opens. The pull requests
   left out of the fold are read off the same world: every bot-authored one, every one on a `lesson/`
   branch or carrying the lesson label, and every one a draft recorded. The draft keeps the misses it
   was made on — remedy, pull request, goal, guard, summary — and the briefing, assembled once: the
@@ -397,9 +408,36 @@ route alike.
 
 **Same repository, several fleets: git already does it.** A merged lesson reaches every fleet and every
 engineer using Claude Code on that repository with nothing built. Two fleets drafting the same lesson
-is avoided through the **world**, not the pool: an open pull request carrying the group's marker is a
-fact every fleet sees. That dedupe is own-world only — a fleet does not consult the pool before
-drafting.
+is avoided through the **repository**, not the pool — but not through the world snapshot either: each
+fleet's world holds only the pull requests its own `prAuthor` opened ([15](15-integrations.md)), and
+fleets differ in label prefix, so neither the marker in a body nor the lesson label is visible across
+them.
+
+What every fleet can see is a **branch**. A lesson branch is `lesson/<tag>/<id>`, where the tag is
+`lessonGroupTag(groupKey)` — the same ten hex digits on every fleet. `LessonPrReading`
+(`src/lessons/lessonPrs.ts`) asks the connector for every pull request on a `lesson/` branch, open or
+closed inside the 30-day lesson window, whoever opened it (`listLessonPullRequests`,
+[15](15-integrations.md); each provider hands its listings to one shared reduction, `lessonPullsOf`). The
+desk reads `held()`, which never waits: it returns the last good read and, when that is missing or over
+30 minutes old, starts one in the background (one at a time). A failed read keeps the last good one and
+still counts as a read for the 30 minutes, so a failing provider is not re-listed every pulse.
+`lesson_conclude` calls `read()`, which waits and answers null on failure. `othersLessonPrs` drops this fleet's own
+drafts' branches, and `lessonCandidates` reads each remaining one whose tag matches a group as a draft of
+that group: **open** is `pr-open` and holds it, **merged** is `adopted` and ends it, **closed** is
+`declined` at its close time with no goals, so the group comes back only on `minGoals` new goals after
+it — the [redraft rule](#the-redraft-rule), applied to another operator's no. A branch cut before the tag
+names no group and is only excluded from the fold, as before; the body-marker check on the fleet's own
+world stays for those.
+
+The desk's check runs when a draft opens; the agent then works for a while, and another fleet may open
+its own lesson for the group meanwhile. So `lesson_conclude` re-reads, past the held read, before
+it opens a pull request ([the outcome](#the-outcome)). Two fleets concluding in the same minute can
+still both open; the operator closes one.
+
+A merged lesson is seen only while its close is inside the 30-day window. After that its group's misses
+before the merge have aged out too, and a group that keeps missing is drafted again — on this fleet, as
+the lesson [not working](#did-it-work) would be read on the one that wrote it. None of it consults the pool: the pool is for other
+repositories.
 
 **Different repositories: the pool carries what landed, as counts.** The daily digest
 ([28](28-cross-fleet-pool.md#the-digest-arm)) gains a `lessons` section — no new kind, no version

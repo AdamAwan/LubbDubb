@@ -18,6 +18,7 @@ import type { CiCheck, CiStatus, MergeableState, PrApproval, PrReviewThread, Pul
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import { claimGitHubBotPr, listGitHubBotPulls, readGitHubBotPrDetail, readGitHubReleaseNotes } from './botPulls.js';
+import { listGitHubLessonPulls } from './lessonPulls.js';
 import { stripLogTimestamp } from '../ciLogLines.js';
 import { cachedLogins, loginPeople, searchLogins } from '../../pr/assigneeSearch.js';
 import type {
@@ -232,6 +233,7 @@ export class GitHubSourceControlIntegration
     listGitHubBotPulls(this.opts.api, authors, async (p) => (await this.pullCi(p, 0)).ciStatus);
   claimBotPr = (prNumber: number, on?: boolean) => claimGitHubBotPr(this.opts.api, prNumber, on);
   readBotPrDetail = (prNumber: number) => readGitHubBotPrDetail(this.opts.api, prNumber);
+  listLessonPullRequests = (since: string) => listGitHubLessonPulls(this.opts.api, since);
   readReleaseNotes: ReleaseNotesReadable['readReleaseNotes'] = (s, t) => readGitHubReleaseNotes(this.opts.api, s, t);
 
   private async pullCi(p: GhPullSummary, maxAgeMs: number): Promise<CachedPullCi> {

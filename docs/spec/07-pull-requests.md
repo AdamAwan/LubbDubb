@@ -479,7 +479,7 @@ It stays out of `isOurPr` — nothing renames or reaps a bot's branch. →
 bug of the fleet's own. → [37](37-bot-prs.md#when-ci-fails-on-one)
 
 `isHarnessBranch(branch)` is the unknown arm's second half: `issue/<n>`, `issue/<n>/<slug>`,
-`job/<id>` or `lesson/<id>` ([41](41-repo-lessons.md#drafting-a-lesson)), the branch shapes only a
+`job/<id>` or `lesson/<tag>/<id>` ([41](41-repo-lessons.md#drafting-a-lesson)), the branch shapes only a
 dispatch cuts. Derived rather than stored — recording every
 opened PR number would be a second answer to a question the branch already answers.
 
@@ -2056,7 +2056,7 @@ Opt-in on its own would stop the harness acting on the pull requests it opened i
   same for a repo lesson's pull request, beside the lesson label, so its CI and review are answered
   like any of the fleet's own ([41](41-repo-lessons.md#the-outcome)).
 - **On the pulse.** `PrWatchDesk` tags any open pull request on a branch only a dispatch cuts —
-  `issue/<n>`, `issue/<n>/<slug>`, `job/<id>`, `lesson/<id>`, the one predicate `isHarnessBranch` in
+  `issue/<n>`, `issue/<n>/<slug>`, `job/<id>`, `lesson/<tag>/<id>`, the one predicate `isHarnessBranch` in
   `src/pr/prOwnership.ts` — that carries no tag. That is the floor under the first: an agent that opened
   its own after the tool reported itself unwired, a code job's pull request, and every pull request
   already open the first pulse a deployment runs this.

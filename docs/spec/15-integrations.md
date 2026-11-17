@@ -74,6 +74,12 @@ requests without `prAuthor` and keeps only the authors `botPrs.authors` names, f
 rows never enter the world snapshot, so nothing the fleet reasons over widens. →
 [37](37-bot-prs.md#the-read)
 
+**So does the lesson read.** `LessonPrReadable.listLessonPullRequests(since)` lists every open pull
+request and every one closed since `since` whose branch is a `lesson/` branch, with no `prAuthor` filter
+and no label test — fleets on one repository run under different authors and label prefixes, and this is
+how they see each other's lessons. Each row is a number, branch, URL, state and close time; nothing else,
+and none of it enters the world snapshot. → [41](41-repo-lessons.md#across-fleets)
+
 **A watched bot pull request is in the slice.** The snapshot's own filter also admits a pull request whose
 author matches `botPrs.authors` **and** that carries the watch label, and marks it `botAuthored`. Azure
 lists no labels, so it reads them for a bot-authored pull request first and hydrates only the watched

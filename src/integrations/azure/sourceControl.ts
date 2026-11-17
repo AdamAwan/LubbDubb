@@ -21,6 +21,7 @@ import type { CiCheck, CiStatus, MergeableState, PrPerson, PrReviewThread, PullR
 import { ourReplyRefs, replyKey, threadComments, threadState, type SentPrReplies } from '../../pr/prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import { azAuthorName, claimAzureBotPr, listAzureBotPulls, readAzureBotPrDetail } from './botPulls.js';
+import { listAzureLessonPulls } from './lessonPulls.js';
 import { stripLogTimestamp, taskIssueLine } from '../ciLogLines.js';
 import type {
   BotPrClaimable,
@@ -187,6 +188,7 @@ export class AzureDevOpsSourceControlIntegration
     listAzureBotPulls(this.opts.api, authors, aggregatePolicyCiStatus);
   claimBotPr = (prNumber: number, on?: boolean) => claimAzureBotPr(this.opts.api, prNumber, on);
   readBotPrDetail = (prNumber: number) => readAzureBotPrDetail(this.opts.api, prNumber, this.opts.errors);
+  listLessonPullRequests = (since: string) => listAzureLessonPulls(this.opts.api, since);
 
   private async pullBody(p: AzPull, maxAgeMs: number): Promise<string | undefined> {
     if (p.description === undefined) return undefined;

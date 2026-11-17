@@ -12,8 +12,9 @@ import { buildTools } from '../src/mcp/tools.js';
 import { resolveOpenPr } from '../src/mcp/openPr.js';
 import { toolsForRule } from '../src/mcp/names.js';
 import { LessonOutcomeDesk } from '../src/lessons/outcomeDesk.js';
+import { LessonPrReading } from '../src/lessons/lessonPrs.js';
 import { lessonPrBody, type RefUrl } from '../src/lessons/evidence.js';
-import { lessonMarker } from '../src/lessons/lessonOrigin.js';
+import { lessonBranch, lessonMarker } from '../src/lessons/lessonOrigin.js';
 import { isHarnessBranch } from '../src/pr/prOwnership.js';
 import { ticketFiler } from '../src/tickets/filing.js';
 import { githubRefUrl } from '../src/integrations/github/refUrl.js';
@@ -108,6 +109,7 @@ function lessonTasks(system: System): Task[] {
 async function dispatched(system: System): Promise<{ task: Task; draft: LessonDraft }> {
   miss(system, 11);
   miss(system, 12);
+  await system.lessonPrs.read();
   system.lessons.run(world());
   await system.harness.runCycle('manual');
   const tasks = lessonTasks(system);
@@ -128,11 +130,11 @@ function concludeTool(system: System, task: Task, desk: LessonOutcomeDesk = syst
 const GITHUB: RefUrl = (ref) => githubRefUrl('acme', 'shop', ref);
 const AZURE: RefUrl = (ref) => azureRefUrl('acme', 'Shop', 'shop', ref);
 
-test('remedies on two goals put one repo-lesson agent on lesson/<id>, with the evidence appended', async () => {
+test('remedies on two goals put one repo-lesson agent on lesson/<tag>/<id>, with the evidence appended', async () => {
   const { system } = build(2);
   try {
     const { task, draft } = await dispatched(system);
-    assert.equal(task.branch, `lesson/${draft.id}`);
+    assert.equal(task.branch, lessonBranch(draft.id, draft.groupKey));
     assert.equal(task.originRef, `lessons:draft:${draft.id}`);
     assert.equal(draft.groupKey, 'ci/missed_gate/lint');
     assert.equal(draft.status, 'dispatched');
@@ -216,6 +218,7 @@ test('a pull_request outcome opens the PR with URL citations and the marker, lab
       defaultBranch: 'main',
       watchLabel: 'ld-watch',
       lessonLabel: 'ld-lesson',
+      lessonPrs: new LessonPrReading({ source: { listLessonPullRequests: async () => [] } }),
     });
     const tool = concludeTool(system, task, desk);
     const titled = await tool.handler({ outcome: 'pull_request', fix: 'guard', title: 'Lint: see #12' });
@@ -230,7 +233,7 @@ test('a pull_request outcome opens the PR with URL citations and the marker, lab
     assert.equal(result.isError, undefined, JSON.stringify(result));
 
     const opened = calls.find((c) => c.method === 'createPullRequest')!.input;
-    assert.equal(opened.branch, `lesson/${draft.id}`);
+    assert.equal(opened.branch, lessonBranch(draft.id, draft.groupKey));
     assert.equal(opened.base, 'main');
     const body = String(opened.body);
     assert.ok(body.includes('https://github.com/acme/shop/pull/11'));
@@ -342,8 +345,9 @@ test('a merged lesson pull request is adopted, a closed one declined', () => {
   }
 });
 
-test('at most two lesson pull requests are open, and an open PR carrying the marker holds its group', () => {
+test('at most two lesson pull requests are open, and an open PR carrying the marker holds its group', async () => {
   const { system } = build(2);
+  await system.lessonPrs.read();
   try {
     prOpen(system, 'ci/missed_gate/a', 'a', 77);
     prOpen(system, 'ci/missed_gate/b', 'b', 78);
@@ -356,6 +360,7 @@ test('at most two lesson pull requests are open, and an open PR carrying the mar
   }
 
   const other = build(2).system;
+  await other.lessonPrs.read();
   try {
     miss(other, 11);
     miss(other, 12);
@@ -372,6 +377,7 @@ test('at most two lesson pull requests are open, and an open PR carrying the mar
 
 test('a declined group is redrafted only after as many new goals again; an adopted one never', async () => {
   const { system } = build(2);
+  await system.lessonPrs.read();
   try {
     miss(system, 11);
     miss(system, 12);

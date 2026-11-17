@@ -5,7 +5,8 @@ import type { Store } from '../store/store.js';
 import type { TicketFiler } from '../tickets/filing.js';
 import type { LessonDraft, LessonFix, LessonOutcome, Task } from '../types.js';
 import { lessonPrBody, lessonTicketBody, type RefUrl } from './evidence.js';
-import { lessonBranch, lessonDraftId, lessonSearchKey } from './lessonOrigin.js';
+import { lessonBranch, lessonDraftId, lessonPrsForGroup, lessonSearchKey } from './lessonOrigin.js';
+import { othersLessonPrs, type LessonPrReading } from './lessonPrs.js';
 
 // → docs/spec/41-repo-lessons.md#the-outcome
 
@@ -20,7 +21,7 @@ export interface LessonConcludeInput {
 type Concluded =
   | { ok: true; outcome: 'pull_request'; prNumber: number; branch: string }
   | { ok: true; outcome: 'ticket'; ticketRef: string }
-  | { ok: true; outcome: 'nothing' }
+  | { ok: true; outcome: 'nothing'; coveredBy?: string }
   | { ok: false; error: string };
 
 interface LessonOutcomeDeps {
@@ -31,6 +32,8 @@ interface LessonOutcomeDeps {
   defaultBranch: string;
   watchLabel: string;
   lessonLabel: string;
+  /** Every fleet's lesson pull requests, read fresh before one is opened. */
+  lessonPrs: LessonPrReading;
   errors?: ErrorRecorder;
 }
 
@@ -59,9 +62,49 @@ export class LessonOutcomeDesk {
         ok: false,
         error: 'name no pull request or work item in the title: the harness cites every one in the body as a link.',
       };
+    const branch = task.branch ?? lessonBranch(draft.id, draft.groupKey);
+    if (input.outcome === 'pull_request') {
+      const covered = await this.coveredBy(draft);
+      if (covered === undefined)
+        return {
+          ok: false,
+          error:
+            'Could not read the other lesson pull requests on the repository to check for one already open. Call lesson_conclude again.',
+        };
+      if (covered !== null) {
+        await this.dropBranch(branch);
+        this.deps.store.lessons.settle(draft.id, 'nothing', ['dispatched'], {
+          fix: input.fix,
+          title,
+          summary: input.summary,
+          reason: `Another lesson pull request for this group was opened first: ${covered}`,
+        });
+        return { ok: true, outcome: 'nothing', coveredBy: covered };
+      }
+    }
     return input.outcome === 'pull_request'
-      ? this.openPr(draft, { ...input, fix: input.fix, title })
+      ? this.openPr(draft, branch, { ...input, fix: input.fix, title })
       : this.fileTicket(draft, { ...input, fix: input.fix, title });
+  }
+
+  /** Another fleet's open or merged lesson pull request for the draft's group, by URL; undefined when unread. */
+  private async coveredBy(draft: LessonDraft): Promise<string | null | undefined> {
+    const read = await this.deps.lessonPrs.read();
+    if (read === null) return undefined;
+    return (
+      lessonPrsForGroup(othersLessonPrs(read, [draft]), draft.groupKey).find((pr) => pr.state !== 'closed')?.url ?? null
+    );
+  }
+
+  private async dropBranch(branch: string): Promise<void> {
+    try {
+      await this.deps.sink.deleteBranch({ branch });
+    } catch (err) {
+      this.deps.errors?.record({
+        source: 'cycle',
+        message: `deleting covered lesson branch ${branch} failed: ${(err as Error).message}`,
+      });
+    }
   }
 
   private ownDraft(task: Task): LessonDraft | { error: string } {
@@ -78,9 +121,12 @@ export class LessonOutcomeDesk {
     return draft;
   }
 
-  private async openPr(draft: LessonDraft, input: LessonConcludeInput & { fix: LessonFix }): Promise<Concluded> {
+  private async openPr(
+    draft: LessonDraft,
+    branch: string,
+    input: LessonConcludeInput & { fix: LessonFix },
+  ): Promise<Concluded> {
     const { store, sink, errors } = this.deps;
-    const branch = lessonBranch(draft.id);
     let ref: string | undefined;
     try {
       ref = (

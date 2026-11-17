@@ -1,5 +1,6 @@
 import type { LESSON_FIXES } from '../lessons/fixes.js';
 import type { RemedyCause, RemedyGuard, RemedyKind } from './remedies.js';
+import type { PrState } from './world.js';
 
 // → docs/spec/41-repo-lessons.md#the-record-and-the-desk
 
@@ -50,4 +51,13 @@ export interface PendingLessonDraft extends LessonDraft {
 export interface LessonPeriod {
   misses: number;
   returns: number;
+}
+
+/** A pull request on a `lesson/` branch, whoever opened it and whatever it is labelled: how fleets see each other's lessons. */
+export interface LessonPullRequest {
+  number: number;
+  branch: string;
+  url: string;
+  state: PrState;
+  closedAt: string | null;
 }

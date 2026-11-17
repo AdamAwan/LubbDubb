@@ -30,7 +30,15 @@ import type {
   WorkItemParentInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
-import type { BotPrDetail, BotPullRequest, PrPerson, TrackerComment, TrackerItem, WorldSnapshot } from '../types.js';
+import type {
+  BotPrDetail,
+  BotPullRequest,
+  LessonPullRequest,
+  PrPerson,
+  TrackerComment,
+  TrackerItem,
+  WorldSnapshot,
+} from '../types.js';
 import { DEFAULT_READ_LANES, type ReadLanes, type ReadPlan } from '../world/readPlan.js';
 import { signOff, type SignOffKind } from '../sink/signOff.js';
 import { markdownToHtml } from '../sink/markdownToHtml.js';
@@ -48,6 +56,7 @@ import {
   isIssueImageCapable,
   isIssueKeySearchCapable,
   isIssueReopenCapable,
+  isLessonPrReadable,
   isIssueLabelCapable,
   isPrBaseCapable,
   isPrAssignCapable,
@@ -378,6 +387,13 @@ export class CompositeConnector
   async listBotPullRequests(authors: readonly RegExp[]): Promise<BotPullRequest[]> {
     const lists = await Promise.all(
       this.integrations.filter(isBotPrReadable).map((i) => i.listBotPullRequests(authors)),
+    );
+    return lists.flat();
+  }
+
+  async listLessonPullRequests(since: string): Promise<LessonPullRequest[]> {
+    const lists = await Promise.all(
+      this.integrations.filter(isLessonPrReadable).map((i) => i.listLessonPullRequests(since)),
     );
     return lists.flat();
   }
