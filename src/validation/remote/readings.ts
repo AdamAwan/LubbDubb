@@ -146,16 +146,14 @@ export class RemoteReadingDesk {
     // name, and only the end of the run knows what the second one was.
     store.remoteValidation.attributeRemoteReadings(run.id, endedSha);
     const { recording, video } = await this.keepRecording(run);
+    const task = run.taskId === null ? null : store.tasks.getTask(run.taskId);
     const ended = store.remoteValidation.endRemoteRun(run.id, {
       status: 'ended',
       endedSha,
       reportPath: input.reportPath,
       artefacts: input.artefacts,
       recording,
-      recordingStatus:
-        video === null
-          ? null
-          : recordingStatus(run.taskId === null ? null : this.deps.store.tasks.getTask(run.taskId), video),
+      recordingStatus: video === null ? null : recordingStatus(task, video),
     });
     return { ok: true, run: ended ?? run, read, blocked, wrote, captured, kept, moved };
   }
@@ -337,7 +335,6 @@ export class RemoteReadingDesk {
     return join(remoteValidationRunDir(this.deps.validationRoot, run.goalRef, run.id), 'artefacts');
   }
 
-  /** `video` is whether the browser wrote one — null where the artefacts could not be listed. */
   private async keepRecording(run: RemoteRun): Promise<{ recording: string | null; video: boolean | null }> {
     const dir = this.artefactsDir(run);
     let names: string[];

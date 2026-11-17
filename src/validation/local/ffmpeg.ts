@@ -12,9 +12,10 @@ interface Host {
   exists: (path: string) => boolean;
 }
 
-function playwrightCacheDir(host: Host): string {
+function playwrightCacheDir(host: Host): string | null {
   const set = host.env.PLAYWRIGHT_BROWSERS_PATH;
-  if (set !== undefined && set !== '') return set;
+  if (set === '0') return null;
+  if (set) return set;
   if (host.platform === 'win32')
     return join(host.env.LOCALAPPDATA || join(host.home, 'AppData', 'Local'), 'ms-playwright');
   if (host.platform === 'darwin') return join(host.home, 'Library', 'Caches', 'ms-playwright');
@@ -23,9 +24,10 @@ function playwrightCacheDir(host: Host): string {
 
 export function ffmpegPreflight(browser: ExtraMcpServer | null, host: Host): string | null {
   if (browser === null || !recorderOffered(browser)) return null;
-  if (host.env.PLAYWRIGHT_BROWSERS_PATH === '0') return null;
   if (!browser.args.includes(`@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}`)) return null;
-  const dir = join(playwrightCacheDir(host), `ffmpeg-${FFMPEG_REVISION}`);
+  const cache = playwrightCacheDir(host);
+  if (cache === null) return null;
+  const dir = join(cache, `ffmpeg-${FFMPEG_REVISION}`);
   if (host.exists(dir)) return null;
   return (
     `Validation runs will not be recorded: Playwright's ffmpeg-${FFMPEG_REVISION} is not installed at ${dir}. ` +
