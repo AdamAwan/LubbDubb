@@ -127,8 +127,5 @@ export function validateExtensions(merged: Config): void {
   const paths = merged.extensions;
   const repeated = paths.find((path, index) => paths.indexOf(path) !== index);
   if (repeated !== undefined)
-    throw new Error(
-      `Refusing to start: "extensions" lists ${repeated} more than once. List each extension once — ` +
-        "if your lubbdubb.config.json repeats the project file's list, the two lists replace rather than add.",
-    );
+    throw new Error(`Refusing to start: "extensions" lists ${repeated} more than once. List each extension once.`);
 }

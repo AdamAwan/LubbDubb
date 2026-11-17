@@ -27,12 +27,12 @@ import { dropRetiredKeys, refuseRemovedKeys } from './retiredKeys.js';
 import {
   validateAgentMode,
   validateAppErrors,
+  validateExtensions,
   validateFleetStall,
   validateLessons,
   validatePool,
   validateReview,
   validateWorkItemStates,
-  validateExtensions,
 } from './configChecks.js';
 
 // → docs/spec/02-configuration.md

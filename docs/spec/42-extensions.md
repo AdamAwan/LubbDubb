@@ -84,14 +84,14 @@ Each of these refuses boot with `Refusing to start: the extension at <path> — 
 - `name` is missing or empty, or another extension already has it;
 - `slots` names a slot the book does not have (the refusal lists the ones it does), or a value that
   is not a function;
-- a slot another extension already fills;
-- the same file loaded twice.
+- a slot another extension already fills.
 
 One rule (`extensionClash`, `src/extensions/contract.ts`) decides a clash — one file twice, one name
 twice, one slot twice — for the loader, the `buildSystem` check and the host alike, and its refusal
 names the files of the clash it found. A path `extensions` lists twice is also refused earlier, when the config
 loads (`validateExtensions`, `src/config/configChecks.ts`), so the operator is told to list it once
-rather than that a file was loaded twice.
+rather than that a file was loaded twice. The `buildSystem`-time refusals name their files in their own
+words rather than in the `the extension at <path>` form.
 
 There is no warning-and-skip path. Every case above is a project behaviour that would be missing
 while the harness looked healthy. Each loaded extension is announced on the console at boot.
