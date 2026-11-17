@@ -89,8 +89,9 @@ Each of these refuses boot with `Refusing to start: the extension at <path> — 
 
 One rule (`extensionClash`, `src/extensions/contract.ts`) decides a clash — one file twice, one name
 twice, one slot twice — for the loader, the `buildSystem` check and the host alike, and its refusal
-names the files of the clash it found. A path `extensions` lists twice is refused when the config
-loads, before any of this, saying to list it once.
+names the files of the clash it found. A path `extensions` lists twice is also refused earlier, when the config
+loads (`validateExtensions`, `src/config/configChecks.ts`), so the operator is told to list it once
+rather than that a file was loaded twice.
 
 There is no warning-and-skip path. Every case above is a project behaviour that would be missing
 while the harness looked healthy. Each loaded extension is announced on the console at boot.

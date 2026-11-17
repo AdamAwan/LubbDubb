@@ -1,4 +1,3 @@
-import { validateExtensionPaths } from '../extensions/contract.js';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { IntegrationSelection } from '../integrations/integration.js';
@@ -33,6 +32,7 @@ import {
   validatePool,
   validateReview,
   validateWorkItemStates,
+  validateExtensions,
 } from './configChecks.js';
 
 // → docs/spec/02-configuration.md
@@ -527,7 +527,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
 
   validatePool(merged);
   validateReview(merged);
-  validateExtensionPaths(merged.extensions);
+  validateExtensions(merged);
 
   merged.claudeArgs = merged.claudeArgs.map((arg) => {
     if (isAbsolute(arg)) return arg;
