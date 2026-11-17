@@ -31,9 +31,9 @@ Today's slots, `apiVersion` **1**:
 | `reseedTenant` | Straight after `ensureTenant`, same press                                                                                  | `{ environment, tenant }`                 | nothing (`return;`). Throw to fail                            |
 
 - `ensureTenant` must be **idempotent**. `tenant` is the one already stamped, or null the
-  first time, so hand it back when it still exists. **Never make up a name LubbDubb
-  could not have chosen itself**: environments that reap tenants by name pattern
-  delete invented ones within the hour.
+  first time, so hand it back while it still exists. **Return the name your provisioning
+  actually created, never one you made up**: environments that reap tenants by name
+  pattern delete invented ones within the hour.
 - `reseedTenant` is **optional**, and it **destroys** what is in the tenant. Filling it makes the cockpit's
   control a confirm-twice "Reseed". Leaving it out gives a harmless "Provision".
 - Both time out after **one hour**. The context's `signal` fires when the call times out or fails.
@@ -48,7 +48,7 @@ Today's slots, `apiVersion` **1**:
 Start from [`starter.ts`](starter.ts) beside this skill. Copy it to, say,
 `tools/lubbdubb.extension.ts` and delete the slots you do not fill.
 
-- The default export has **exactly** `apiVersion`, `name` and `slots`. Any other key refuses boot.
+- The default export carries only `apiVersion`, `name` and `slots`. Any other key refuses boot.
 - Each slot is `(input, { repoRoot, signal }) => answer`, and may be `async`.
 - `.ts`, `.js` and `.mjs` all work. Imports resolve from the file's own folder, so
   it can use the project's own dependencies.

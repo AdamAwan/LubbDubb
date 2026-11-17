@@ -18,7 +18,7 @@ the change that needs it, following [Adding a slot](#adding-a-slot).
 - **The extensions passed to `buildSystem` must be exactly the ones `extensions` names, or it refuses to build, naming each path that is missing or extra.** It also refuses two with one name or one slot, however they were loaded, and checks before anything else is built. `buildSystem` cannot load (it is synchronous), so a caller that forgot to would otherwise run without the project's code. → [§](#loading) · `test/extensions.test.ts`
 - **A slot has at most one owner, and an extension may fill only slots in the book.** Two answers to one question, or an answer nobody asks for, is a misconfiguration that looks like it works. → [§](#loading) · `test/extensions.test.ts`
 - **`ExtensionHost.call` never throws.** A throw of any value (even one that cannot be turned into text), a rejection, a timeout or a wrong-shaped answer comes back as `{ ok: false, detail }` and is recorded on the error log; the caller decides what not-ok means. → [§](#calling-a-slot) · `test/extensions.test.ts`
-- **Every slot in the book is described to project authors, and the starter they copy loads against it.** The `/lubbdubb:extension` skill is the only place a project learns a slot exists. → [§](#writing-an-extension) · `test/extensionSkill.test.ts`
+- **Every slot in the book is described to project authors, and the starter they copy loads against it and type-checks against its slot types.** The `/lubbdubb:extension` skill is the only place a project learns a slot exists. → [§](#writing-an-extension) · `test/extensionSkill.test.ts`
 - **A slot's contract changes only with `EXTENSION_API_VERSION`.** An extension written against the old shape is then refused at boot instead of reading the new input wrongly. → [§](#adding-a-slot) · _no test_
 
 ## When to use one
@@ -169,8 +169,8 @@ A slot is a promise to every project that fills it. Make it in one change, with 
    file, as `test/extensions.test.ts` does) and without.
 8. **Add a row to [The slots](#the-slots)** and update the calling feature's spec.
 9. **Teach it to project authors**: a row in the `/lubbdubb:extension` skill's slots table, and the
-   slot in its `starter.ts` ([Writing an extension](#writing-an-extension)). The build refuses
-   either missing.
+   slot in its `starter.ts` ([Writing an extension](#writing-an-extension)). `npm test`
+   (`test/extensionSkill.test.ts`) fails on either missing.
 
 Changing an existing slot's input or answer — anything an existing extension would read wrongly — bumps
 `EXTENSION_API_VERSION`, so old extensions are refused at boot with a message naming both versions
