@@ -41,8 +41,9 @@ write down what a restart now means. Tenants answer "not knowable": `follow` ret
 - **Route in one object.** Write a `Routed<Thing>` that picks the config or extension implementation per
   deployment. Have it also answer any labels the desk shows (as `RoutedTenantKeeper.steps`), so the
   implementation that runs and the label shown always agree. Wire it in `src/system/systemDesks.ts`,
-  wrapping `opts.<thing>` so test fakes keep working. The cockpit view may call the same pure label
-  function (`tenantSteps`) directly.
+  wrapping `opts.<thing>` so test fakes keep working. Route on one key only, and make the label method
+  part of the seam, so every implementation, fakes included, answers it. The cockpit asks the desk
+  (`system.remoteRuns.tenantSteps`), never the config.
 - **Boot check.** In `buildFoundation` (`src/system/systemFoundation.ts`), beside
   `checkLoadedExtensions`, refuse to build if the key is opted in and no loaded extension fills the slot.
   Test that with `opts.extensions`' `slots.has(slot)`.

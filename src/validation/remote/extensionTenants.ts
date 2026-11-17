@@ -5,30 +5,11 @@ import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { TenantCall, TenantLaunch } from '../../types.js';
 import type { TenantTail } from './tenantLog.js';
 import { sentence } from '../../primitives.js';
-import {
-  commandSteps,
-  type TenantKeeper,
-  type TenantOutcome,
-  type TenantRequest,
-  type TenantSteps,
-} from './tenants.js';
+import { type TenantKeeper, type TenantOutcome, type TenantRequest, type TenantSteps } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md#a-tenant-from-the-projects-extension
 
 type TenantHost = Pick<ExtensionHost<ExtensionSlots>, 'provider' | 'call'>;
-
-type SlotProvider = Pick<TenantHost, 'provider'>;
-
-export function tenantSteps(validate: EnvironmentConfig['validate'], host: SlotProvider): TenantSteps {
-  if (validate?.tenantExtension !== true) return commandSteps(validate);
-  const ensure = slotStep(host, 'ensureTenant');
-  return { ensure, reseed: slotStep(host, 'reseedTenant'), ensureName: ensure ?? 'the "ensureTenant" slot' };
-}
-
-function slotStep(host: SlotProvider, slot: keyof ExtensionSlots): string | null {
-  const provider = host.provider(slot);
-  return provider === null ? null : `the "${slot}" slot of extension "${provider}"`;
-}
 
 /** Every environment that takes its tenant from the extension needs one that provisions it. */
 export function checkTenantExtension(
@@ -56,6 +37,16 @@ export class ExtensionTenantKeeper implements TenantKeeper {
     private readonly host: TenantHost,
     private readonly now: () => number = Date.now,
   ) {}
+
+  steps(): TenantSteps {
+    const ensure = this.slotStep('ensureTenant');
+    return { ensure, reseed: this.slotStep('reseedTenant'), ensureName: ensure ?? 'the "ensureTenant" slot' };
+  }
+
+  private slotStep(slot: keyof ExtensionSlots): string | null {
+    const provider = this.host.provider(slot);
+    return provider === null ? null : `the "${slot}" slot of extension "${provider}"`;
+  }
 
   async ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome> {
     const lines = this.launch('ensure', request, launched);
@@ -107,19 +98,16 @@ function failed(detail: string): TenantOutcome {
 export class RoutedTenantKeeper implements TenantKeeper {
   private readonly fromExtension: ReadonlySet<string>;
 
-  private readonly extension: ExtensionTenantKeeper;
-
   constructor(
     environments: readonly EnvironmentConfig[],
     private readonly commands: TenantKeeper,
-    private readonly host: TenantHost,
+    private readonly extension: TenantKeeper,
   ) {
     this.fromExtension = new Set(environments.filter((e) => e.validate?.tenantExtension === true).map((e) => e.name));
-    this.extension = new ExtensionTenantKeeper(host);
   }
 
-  steps(validate: EnvironmentConfig['validate']): TenantSteps {
-    return tenantSteps(validate, this.host);
+  steps(environment: EnvironmentConfig): TenantSteps {
+    return this.for(environment.name).steps(environment);
   }
 
   ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome> {

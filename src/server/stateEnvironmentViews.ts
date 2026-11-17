@@ -4,7 +4,6 @@ import { noSheetReason, sheetFoldLine } from '../validation/remote/sheet.js';
 import type { CheckSetStanding } from '../validation/planApproval.js';
 import { goneCheckRows, okScope, okStanding, pageRows } from '../validation/remote/intent.js';
 import { noStanding, resolveTenant, type OperatorTenants } from '../validation/remote/tenants.js';
-import { tenantSteps } from '../validation/remote/extensionTenants.js';
 import type {
   EnvironmentHealthReading,
   GoalArrival,
@@ -323,10 +322,10 @@ function tenantControls(validate: EnvironmentConfig['validate']): { reseedable: 
   };
 }
 
-export function tenantCommandViews(system: Pick<System, 'config' | 'store' | 'extensions'>): TenantCommandView[] {
+export function tenantCommandViews(system: Pick<System, 'config' | 'store' | 'remoteRuns'>): TenantCommandView[] {
   const prepares = system.store.remoteValidation.listTenantPrepares();
   return system.config.environments.flatMap((env) => {
-    const steps = tenantSteps(env.validate, system.extensions);
+    const steps = system.remoteRuns.tenantSteps(env);
     if (steps.ensure === null && steps.reseed === null) return [];
     return [
       {

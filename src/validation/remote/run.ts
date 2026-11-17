@@ -11,13 +11,13 @@ import type { RemoteValidationDesk } from './desk.js';
 import { noSheetAssembled, rowRun } from './sheet.js';
 import { checkSetStanding } from '../planApproval.js';
 import {
-  commandSteps,
   resolveTenant,
   noStanding,
   tenantNote,
   type OperatorTenants,
   type TenantEnvironment,
   type TenantKeeper,
+  type TenantSteps,
 } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md#the-press
@@ -227,6 +227,11 @@ export class RemoteRunDesk extends EventEmitter {
     }
   }
 
+  /** @public what answers each tenant step for an environment, as the cockpit draws it */
+  tenantSteps(environment: EnvironmentConfig): TenantSteps {
+    return this.deps.tenants.steps(environment);
+  }
+
   /** @public the seam the tenant-command output route reads through */
   tenantOutput(environmentName: string): { lines: string[]; lastOutputAt: string | null } {
     const launched = this.deps.store.remoteValidation.tenantLaunch(environmentName);
@@ -320,7 +325,7 @@ export class RemoteRunDesk extends EventEmitter {
       };
 
     const said: string[] = [];
-    const steps = this.deps.tenants.steps?.(validate) ?? commandSteps(validate);
+    const steps = this.deps.tenants.steps(environment);
     if (steps.ensure !== null && resumed?.call !== 'reseed') {
       const refused = await this.ensureStep(environmentName, steps.ensure, steps.ensureName, resumed, said);
       if (refused !== null) return refused;

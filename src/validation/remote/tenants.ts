@@ -30,15 +30,6 @@ export interface TenantOutcome {
 }
 
 /**
- * `ensureTenant` and `reseed`, the two project-supplied commands that touch a tenant. Both are
- * operator-invoked and neither runs per arrival: provisioning is possibly very slow, and reseeding
- * is destructive to the residue an operator may still be reading.
- *
- * A command outlives the harness that started it, so each launch is named by a `TenantLaunch` the
- * caller records, and a later process `follow`s it by that record.
- * → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
- */
-/**
  * What runs each tenant step for an environment, in the words the gate shows, and how a failed
  * provisioning names what failed. Null is a step it does not have.
  */
@@ -57,6 +48,15 @@ export function commandSteps(validate: EnvironmentConfig['validate']): TenantSte
   };
 }
 
+/**
+ * `ensureTenant` and `reseed`, the two project-supplied commands that touch a tenant. Both are
+ * operator-invoked and neither runs per arrival: provisioning is possibly very slow, and reseeding
+ * is destructive to the residue an operator may still be reading.
+ *
+ * A command outlives the harness that started it, so each launch is named by a `TenantLaunch` the
+ * caller records, and a later process `follow`s it by that record.
+ * → docs/spec/36-remote-validation.md#what-the-gate-shows-while-it-runs
+ */
 export interface TenantKeeper {
   ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome>;
   reseed(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome>;
@@ -64,8 +64,8 @@ export interface TenantKeeper {
   follow(call: TenantCall, request: TenantRequest, launch: TenantLaunch): Promise<TenantOutcome | null>;
   /** The tail of what a launch has printed, stdout and stderr together. */
   tail(environment: string, launch: TenantLaunch): TenantTail;
-  /** What answers each step for an environment, where it is not that environment's own commands. */
-  steps?(validate: EnvironmentConfig['validate']): TenantSteps;
+  /** What answers each step for this environment, as the gate draws it. */
+  steps(environment: EnvironmentConfig): TenantSteps;
 }
 
 /**
@@ -84,6 +84,10 @@ export class CommandTenantKeeper implements TenantKeeper {
   constructor(private readonly opts: { repoRoot: string; logRoot: string; timeoutMs?: number; followPollMs?: number }) {
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_TENANT_TIMEOUT_MS;
     this.followPollMs = opts.followPollMs ?? FOLLOW_POLL_MS;
+  }
+
+  steps(environment: EnvironmentConfig): TenantSteps {
+    return commandSteps(environment.validate);
   }
 
   ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome> {
