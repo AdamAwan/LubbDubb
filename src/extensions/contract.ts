@@ -55,3 +55,12 @@ export function extensionClash(extensions: readonly LoadedExtension[]): string |
   }
   return null;
 }
+
+export function validateExtensionPaths(paths: readonly string[]): void {
+  const repeated = paths.find((path, index) => paths.indexOf(path) !== index);
+  if (repeated !== undefined)
+    throw new Error(
+      `Refusing to start: "extensions" lists ${repeated} more than once. List each extension once — ` +
+        "if your lubbdubb.config.json repeats the project file's list, the two lists replace rather than add.",
+    );
+}

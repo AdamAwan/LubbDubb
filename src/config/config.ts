@@ -1,3 +1,4 @@
+import { validateExtensionPaths } from '../extensions/contract.js';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { IntegrationSelection } from '../integrations/integration.js';
@@ -526,6 +527,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
 
   validatePool(merged);
   validateReview(merged);
+  validateExtensionPaths(merged.extensions);
 
   merged.claudeArgs = merged.claudeArgs.map((arg) => {
     if (isAbsolute(arg)) return arg;

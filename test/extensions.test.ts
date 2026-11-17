@@ -196,6 +196,27 @@ test('extensions passed to buildSystem that config does not name refuse to build
   );
 });
 
+test('a path config lists twice is refused when the config loads', () => {
+  assert.throws(
+    () => loadConfig({ dbPath: ':memory:', repoRoot: tmpDir('lubbdubb-ext-'), extensions: ['ext.mjs', './ext.mjs'] }),
+    /lists .*ext\.mjs more than once/,
+  );
+});
+
+test('a host built directly still refuses two owners of one slot', async () => {
+  const a = extensionFile(`export default { apiVersion: 1, name: 'a', slots: { greet: () => '' } };`);
+  const b = extensionFile(`export default { apiVersion: 1, name: 'b', slots: { greet: () => '' } };`);
+  const extensions = [
+    ...(await loadExtensions({ paths: [a], book: BOOK })),
+    ...(await loadExtensions({ paths: [b], book: BOOK })),
+  ];
+  const { errors } = recorder();
+  assert.throws(
+    () => new ExtensionHost({ book: BOOK, extensions, repoRoot: '/repo', errors }),
+    /"a" .* and "b" .* both fill the "greet" slot/,
+  );
+});
+
 test('two extensions may not share a name or a slot', async () => {
   const a = extensionFile(`export default { apiVersion: 1, name: 'a', slots: { greet: () => '' } };`);
   const sameName = extensionFile(`export default { apiVersion: 1, name: 'a', slots: {} };`);
