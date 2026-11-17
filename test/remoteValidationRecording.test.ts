@@ -196,6 +196,7 @@ test('a settled run keeps the newest video it recorded, under a name the harness
 
   const run = b.system.store.remoteValidation.getRemoteRun(b.runId);
   assert.equal(run?.recording, `recording-${b.runId}.webm`);
+  assert.equal(run?.recordingStatus, 'kept');
 
   const state = buildStateSnapshot(b.system, { remoteRecordingSigner: (runId) => `tok-${runId}` });
   assert.equal(state.remoteSheets[0]?.run?.recordingUrl, `/validation-captures/recording/${b.runId}?tk=tok-${b.runId}`);
@@ -214,6 +215,11 @@ test('a run that recorded nothing has no recording, and the route says so', asyn
   await settle(b);
 
   assert.equal(b.system.store.remoteValidation.getRemoteRun(b.runId)?.recording, null);
+  assert.equal(
+    b.system.store.remoteValidation.getRemoteRun(b.runId)?.recordingStatus,
+    'missing',
+    'the default browser offers the recorder, so no video is a recording that went missing',
+  );
   const state = buildStateSnapshot(b.system, { remoteRecordingSigner: (runId) => `tok-${runId}` });
   assert.equal(state.remoteSheets[0]?.run?.recordingUrl, null);
 
@@ -221,6 +227,15 @@ test('a run that recorded nothing has no recording, and the route says so', asyn
   const served = await app.inject({ method: 'GET', url: `/validation-captures/recording/${b.runId}` });
   assert.equal(served.statusCode, 404);
   await app.close();
+  close(b);
+});
+
+test('a run whose browser offers no recorder reads as not offered, never as missing', async () => {
+  const b = bench();
+  b.system.config.localValidation = { ...b.system.config.localValidation, browser: null };
+  await settle(b);
+
+  assert.equal(b.system.store.remoteValidation.getRemoteRun(b.runId)?.recordingStatus, 'not_offered');
   close(b);
 });
 
@@ -270,6 +285,7 @@ test('videos older than the retention window are deleted, and nothing else is', 
     visited: [],
     screenshots: ['shot.png', 'video-1.webm'],
     note: null,
+    recordingStatus: 'kept',
   });
 
   const desk = (days: number, ahead: number): RecordingRetentionDesk =>

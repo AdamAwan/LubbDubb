@@ -5,6 +5,7 @@ import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
 import type { LocalRun, LocalValidation, LocalValidationFinding, Task } from '../../types.js';
 import { mediaKind } from '../media.js';
+import { recordingStatus } from './policy.js';
 import { localValidationOriginParts, localValidationOutputDir } from './origin.js';
 import { localValidationIsOpen, validationRunStale } from './stale.js';
 
@@ -18,6 +19,8 @@ interface LocalValidationDeskDeps {
   store: Store;
   validationRoot: string;
   errors: ErrorRecorder;
+  /** Whether the live browser block offers the recorder — read when a report lands. */
+  recorderOffered: () => boolean;
 }
 
 export class LocalValidationDesk extends EventEmitter {
@@ -104,13 +107,18 @@ export class LocalValidationDesk extends EventEmitter {
             `against, and it is no longer what is running. Report "blocked" with what you did manage to see.`,
         };
     }
+    const media = this.media(row);
     const written = this.deps.store.localValidations.recordLocalValidationReport(row.id, {
       status: result.status,
       summary: result.summary,
       findings: result.findings,
       visited: result.visited,
-      screenshots: this.media(row),
+      screenshots: media,
       note: result.status === 'blocked' ? result.summary : null,
+      recordingStatus: recordingStatus(
+        this.deps.recorderOffered(),
+        media.some((name) => mediaKind(name) === 'video'),
+      ),
     });
     if (written === null)
       return {

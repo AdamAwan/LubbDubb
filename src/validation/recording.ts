@@ -12,6 +12,8 @@ export function recordingInstructions(browserKey: string, input: { where: string
     `4. \`browser_stop_video\` once the last step is done, **before** you report. A video that is never ` +
     `stopped is never written.\n\n` +
     `These tools are on the \`${browserKey}\` server only where this deployment enabled them. If they are not ` +
-    `there, carry on without a recording: it is not a finding and it is not a reason to report \`blocked\`.\n`
+    `there, or \`browser_start_video\` answers with an error, carry on without a recording: it is not a finding ` +
+    `and it is not a reason to report \`blocked\`. The harness sees for itself whether a video was written, so ` +
+    `do not report on it — and a file name in \`browser_stop_video\`'s answer is no proof that one was.\n`
   );
 }

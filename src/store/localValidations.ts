@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
-import type { LocalValidation, LocalValidationFinding, LocalValidationStatus } from '../types.js';
+import { toRecordingStatus } from './rows/remoteValidation.js';
+import type { LocalValidation, LocalValidationFinding, LocalValidationStatus, RecordingStatus } from '../types.js';
 
 // → docs/spec/14-persistence.md
 
+// No backfill for `recording_status`: null is *not known*, true of every row from before the column.
 export const LOCAL_VALIDATION_COLUMNS: ColumnMigrations = {
-  local_validations: {},
+  local_validations: { recording_status: 'TEXT' },
 };
 
 const OPEN: LocalValidationStatus[] = ['pending', 'dispatched'];
@@ -40,6 +42,7 @@ export class LocalValidationStore {
       visited: [],
       screenshots: [],
       note: null,
+      recordingStatus: null,
     };
     this.ctx
       .prep(
@@ -129,12 +132,13 @@ export class LocalValidationStore {
       visited: string[];
       screenshots: string[];
       note: string | null;
+      recordingStatus: RecordingStatus;
     },
   ): LocalValidation | null {
     const info = this.ctx
       .prep(
         `UPDATE local_validations SET status = ?, summary = ?, findings = ?, visited = ?, screenshots = ?,
-           note = ?, ended_at = ? WHERE id = ? AND status IN ${OPEN_SQL}`,
+           note = ?, recording_status = ?, ended_at = ? WHERE id = ? AND status IN ${OPEN_SQL}`,
       )
       .run(
         result.status,
@@ -143,6 +147,7 @@ export class LocalValidationStore {
         JSON.stringify(result.visited),
         JSON.stringify(result.screenshots),
         result.note,
+        result.recordingStatus,
         this.ctx.now(),
         id,
       );
@@ -177,6 +182,7 @@ interface Row {
   visited: string | null;
   screenshots: string | null;
   note: string | null;
+  recording_status: string | null | undefined;
 }
 
 const STATUSES: LocalValidationStatus[] = ['pending', 'dispatched', 'passed', 'failed', 'blocked', 'abandoned'];
@@ -212,5 +218,6 @@ function toLocalValidation(row: Row): LocalValidation {
     visited: parseList<string>(row.visited),
     screenshots: parseList<string>(row.screenshots),
     note: row.note,
+    recordingStatus: toRecordingStatus(row.recording_status),
   };
 }

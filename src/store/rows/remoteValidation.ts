@@ -1,4 +1,5 @@
 import type {
+  RecordingStatus,
   RemoteReading,
   RemoteRowOutcome,
   RemoteRun,
@@ -118,6 +119,7 @@ export interface RunRow {
   listing_path: string | null | undefined;
   artefacts: string | null | undefined;
   recording: string | null | undefined;
+  recording_status: string | null | undefined;
 }
 
 export function toTenantPreparation(r: PrepareRow): TenantPreparation {
@@ -164,6 +166,12 @@ export interface TenantRow {
   reseed_launched_at: string | null;
 }
 
+const RECORDING_STATUSES: RecordingStatus[] = ['kept', 'not_offered', 'missing'];
+
+export function toRecordingStatus(raw: string | null | undefined): RecordingStatus | null {
+  return RECORDING_STATUSES.find((status) => status === raw) ?? null;
+}
+
 const RUN_STATUSES: RemoteRunStatus[] = ['pending', 'dispatched', 'ended', 'abandoned'];
 
 export function toRemoteRun(row: RunRow): RemoteRun {
@@ -183,6 +191,7 @@ export function toRemoteRun(row: RunRow): RemoteRun {
     listingPath: row.listing_path ?? null,
     artefacts: row.artefacts ?? null,
     recording: row.recording ?? null,
+    recordingStatus: toRecordingStatus(row.recording_status),
   };
 }
 

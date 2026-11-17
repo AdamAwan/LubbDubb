@@ -38,6 +38,7 @@ import { RemoteValidationDesk } from '../validation/remote/desk.js';
 import { RemoteRunDesk } from '../validation/remote/run.js';
 import { RemoteIntentDesk } from '../validation/remote/intent.js';
 import type { ProposalDesk } from '../proposals/proposalDesk.js';
+import { recorderOffered } from '../validation/local/policy.js';
 import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
 import { CommandTenantKeeper, tenantLogRoot } from '../validation/remote/tenants.js';
@@ -258,6 +259,7 @@ function buildRemoteValidationDesks(
     prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
     validationRoot: config.validationRoot,
     errors,
+    recorderOffered: () => recorderOffered(config.localValidation.browser),
   });
   return { stateQueries, remoteValidation, remoteRuns, remoteIntents, remoteListings, remoteReadings };
 }

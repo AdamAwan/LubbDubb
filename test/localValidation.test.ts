@@ -116,6 +116,7 @@ function row(over: Partial<LocalValidation> = {}): LocalValidation {
     visited: [],
     screenshots: [],
     note: null,
+    recordingStatus: null,
     ...over,
   };
 }
@@ -333,6 +334,8 @@ test('a configured browser is asked to record the run, and a missing recorder is
   assert.match(prompt, /browser_video_chapter/);
   assert.match(prompt, /browser_stop_video/);
   assert.match(prompt, /not a reason to report `blocked`/);
+  assert.match(prompt, /`browser_start_video` answers with an error/);
+  assert.match(prompt, /no proof/);
 });
 
 test('with no browser configured the prompt says so rather than leaving the agent to find out', async () => {
@@ -593,12 +596,29 @@ test('a recording is listed beside the screenshots and served as video', async (
     'shot.png',
     'video-1.webm',
   ]);
+  assert.equal(system.store.localValidations.getLocalValidation(validation.id)?.recordingStatus, 'kept');
 
   const served = await app.inject({ method: 'GET', url: `/local-validations/${validation.id}/files/video-1.webm` });
   assert.equal(served.statusCode, 200);
   assert.equal(served.headers['content-type'], 'video/webm');
 
   await app.close();
+  system.store.close();
+});
+
+test('a run whose recorder was on offer and wrote no video says so, and is still a pass', async () => {
+  const system = build();
+  liveRun(system);
+  const validation = request(system);
+  system.store.localValidations.markLocalValidationDispatched(validation.id, 'task-x');
+  const agent = spawnAgent(system, `issue:12:validate-local:${validation.id}`);
+  writeFileSync(join(system.localValidations.outputDir(validation), 'shot.png'), 'not really a png');
+
+  const reported = await callTool(system, agent, 'local_validation_report', { result: 'passed', summary: 'it worked' });
+  assert.ok(!reported.isError, reported.text);
+  const row = system.store.localValidations.getLocalValidation(validation.id);
+  assert.equal(row?.status, 'passed');
+  assert.equal(row?.recordingStatus, 'missing');
   system.store.close();
 });
 

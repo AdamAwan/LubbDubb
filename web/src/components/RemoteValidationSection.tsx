@@ -9,6 +9,7 @@ import type {
   TenantPreparation,
 } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
+import { RecordingMissing } from './RecordingMissing.js';
 import { BareButton, Button } from './button.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { ExtLink } from './util.js';
@@ -176,6 +177,7 @@ function Gate({
       {sheet.run?.recordingUrl != null && (
         <video className="cn-recording" src={sheet.run.recordingUrl} controls preload="metadata" />
       )}
+      <RecordingMissing status={sheet.run?.recordingStatus ?? null} />
       {!tenantAbove && <PrepareLine tenant={sheet.tenant} />}
       {!tenantAbove && sheet.tenant.reseedable && sheet.tenant.destructive && preparing(sheet.tenant) === null && (
         <span className="cn-sub cn-sheet-warn">{reseedWarning(sheet.tenant)}</span>
