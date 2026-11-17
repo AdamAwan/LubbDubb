@@ -1,5 +1,6 @@
 import type { AllowanceInsights } from '../insights/allowanceInsights.js';
 import type { ApiErrorInsights } from '../insights/apiErrorInsights.js';
+import type { LessonInsights } from '../insights/lessonInsights.js';
 import type { McpInsights } from '../insights/mcpInsights.js';
 import type { OperatorInsights } from '../insights/operatorInsights.js';
 import type { ReliabilityInsights } from '../insights/reliabilityInsights.js';
@@ -59,6 +60,7 @@ export interface ReliabilityPayload {
   insights: ReliabilityInsights;
   remedies: RemedyInsights;
   reviewLabels: ReviewLabelInsights;
+  lessons: LessonInsights;
 }
 
 export interface ThroughputPayload {

@@ -23,10 +23,10 @@ repository. There is no store of lessons.
 [the grouping](#noticing-a-repeat-miss) — `lessonGroups` and `lessonCandidates` in
 `src/lessons/groups.ts` — and the pull-request-to-goal index it reads (`prGoalIndex`,
 `src/graph/prGoals.ts`), [the draft](#drafting-a-lesson) (rule, prompt, outcome tool),
-[the ruling](#the-ruling-adopted-or-declined) and [the record and the desk that settles
-it](#the-record-and-the-desk). **Not yet built**, and each section that describes it says so:
-[the Causes tab reading](#did-it-work) and [the pool section](#across-fleets). With `lessons.minGoals`
-at its default nothing differs either way.
+[the ruling](#the-ruling-adopted-or-declined), [the record and the desk that settles
+it](#the-record-and-the-desk) and [the Causes tab reading](#did-it-work). **Not yet built**, and the
+section that describes it says so: [the pool section](#across-fleets). With `lessons.minGoals` at its
+default nothing differs either way.
 
 ## Invariants
 
@@ -43,6 +43,8 @@ at its default nothing differs either way.
 - **A lesson is concluded only by `lesson_conclude`, from the draft's own task: `open_pr` on a lesson origin refuses and says so, and there is no `body` argument.** A pull request opened by hand carries no marker, label or evidence, and nothing would ever settle its draft. → [§](#the-prompt) · `test/repoLessons.test.ts`
 - **A lesson ticket carries the lesson label and never the watch label.** Filing it must not also dispatch for it: the operator decides whether the fleet takes a refactor on. → [§](#a-pull-request-or-a-ticket) · `test/repoLessons.test.ts`
 - **A draft whose agent's task ended without concluding settles `unanswered`; a lesson pull request merged is `adopted`, closed is `declined`.** A draft nothing settles holds its group for ever. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
+- **An adopted lesson is read as its group's misses — in distinct goals, by `lessonGroups` — per same-kind return dispatch, over the 30 days before its merge and the 30 after; the after side is null, and the verdict `too early`, until those 30 days have passed.** A partial month after compared with a whole one before reads every young lesson as working. → [§](#did-it-work) · `test/lessonInsights.test.ts`
+- **The lessons reading is not bounded by the Insights page's window.** Its periods are fixed to each merge, and a window that cut one would compare unequal stretches. → [§](#did-it-work) · `test/lessonInsights.test.ts`
 
 ## What it is not
 
@@ -335,11 +337,31 @@ remedy ask and the `report_remedy` description say so.
 
 ## Did it work
 
-**Not yet built.**
+The Causes tab ([17](17-cockpit.md#causes)) lists every draft — its group, status, fix and the pull
+request or ticket it ended in — and, for each **adopted** lesson, its group **before and after the
+merge**: `buildLessonInsights` (`src/insights/lessonInsights.ts`), served on the reliability payload
+([16](16-http-api.md#get-apireliability)).
 
-The Causes tab ([17](17-cockpit.md#causes)) shows each landed lesson's group **before and after its
-merge**, over 30 days each side (_src/insights/lessonInsights.ts_). A lesson whose miss keeps coming
-back is shown as **not working** — the input a later step that corrects its own lessons would read.
+- **The merge instant** is the draft's `settled_at`, which the desk sets on the pulse that sees the
+  lesson pull request merged ([the record](#the-record-and-the-desk)). The harness keeps no merge time
+  of its own for a pull request that roots in no goal, and a pulse is well inside the 30-day grain.
+- **Misses** are the group's distinct goals in each period, folded by `lessonGroups` — the same
+  grouping, exclusions and fallbacks that drafted it, never a second one — over the remedies filed in
+  `[merge − 30 days, merge)` and `[merge, merge + 30 days)`. The 30 days is `LESSON_WINDOW_MS`.
+- **The rate** is misses per **return dispatch of the same kind** in the same period — tasks with
+  origin `pr:<n>:ci` for a CI lesson, `pr:<n>:comments` for a review one — leaving out the same bot and
+  lesson pull requests the grouping does. A raw count would read a quiet month as a lesson that
+  worked; dividing by how often the fleet came back at all is what makes the two sides comparable. With
+  no return dispatch in a period the rate is null.
+- **The after side is null until 30 days have passed** since the merge, and the verdict is then
+  **too early**. A partial month compared with a whole one reads every young lesson as working.
+- **Working** is no miss in the after period, or a lower rate after than before (a null rate counting
+  as zero). Anything else is **not working**: the miss kept coming back at the same rate or worse with
+  the lesson merged — the input a later step that corrects its own lessons would read.
+
+**Not windowed by the page's window bar.** Every draft is listed whatever window is chosen, and each
+lesson's periods are fixed to its merge; the tab's method note says so. The reading is pure and
+derived at request time, like every fold on the page.
 
 ## Across fleets
 

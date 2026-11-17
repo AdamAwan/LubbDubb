@@ -1147,6 +1147,22 @@ renders unconditionally, because the account is the thing being asked for and a 
 recorded yet is the fleet that most needs it. The note renders only when the record says something,
 so a deployment with an empty table produces byte-identical prompts to a build without the feature.
 
+### Did a repo lesson work
+
+`buildLessonInsights` (`src/insights/lessonInsights.ts`) reads the `lesson_drafts` rows
+([41](41-repo-lessons.md#the-record-and-the-desk)) beside the remedies, for the Causes tab's lessons
+section ([17](17-cockpit.md#causes)). For every draft it gives the group, status, fix and the lesson's
+pull request or ticket; for an **adopted** one it also counts the group's misses — distinct goals, by
+the same `lessonGroups` fold that drafted it, never a second grouping — over the 30 days before the
+merge and the 30 days after, each divided by the **return dispatches of the same kind** in that period
+(`pr:<n>:ci` for a CI lesson, `pr:<n>:comments` for a review one), so a busier month does not read as
+a worse lesson. Bot-authored and lesson pull requests are left out of both numbers, as they are out of
+the grouping.
+
+**It is not windowed by the page's window bar.** The periods are fixed to the merge, and a window
+that cut one in half would compare a fortnight with a month. The full rules are
+[41](41-repo-lessons.md#did-it-work).
+
 ## Which part of the code a review thread was about
 
 Causes say why the fleet came back. They cannot say **what the reviewer was talking about**, and they

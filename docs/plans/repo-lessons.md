@@ -83,7 +83,7 @@ delete `docs/proposals/repo-lessons.md`, update `docs/README.md`. `src/graph/prG
 B. **Store, rule, tool, desk, settlement — one stage.** _Done._ (A rule that cannot conclude must not land
 alone.) Everything in decisions 4–11 and 13; `buildSystem`-seam tests with `FakeWorktreeManager`.
 Specs 04, 05, 07, 11, 13, 14, 18, 41.
-C. **Causes tab.** _src/insights/lessonInsights.ts_, reliability payload, `CausesTab.tsx`. Specs 16,
+C. **Causes tab.** _Done._ `src/insights/lessonInsights.ts`, reliability payload, `CausesTab.tsx`. Specs 16,
 17, 18, 41.
 D. **Pool section** per decision 14. Specs 14, 16, 17, 28, 41. Then the timeline row, remove the
 last unbuilt marker, delete this plan.

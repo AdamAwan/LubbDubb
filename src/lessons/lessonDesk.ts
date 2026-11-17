@@ -61,7 +61,7 @@ export class LessonDesk {
       remedies,
       threadLabels: store.prThreadLabels.listThreadLabelsSince(since),
       goalOfPr,
-      excludedPrs: this.excludedPrs(world, drafts),
+      excludedPrs: lessonExcludedPrs(world, drafts, this.deps.lessonLabel),
       reviewAreas: this.deps.reviewAreas,
       since,
     };
@@ -81,16 +81,21 @@ export class LessonDesk {
       briefing: lessonBriefing(candidate, misses, (goal) => store.scratch.getRetrospective(goal)?.summary ?? null),
     });
   }
+}
 
-  /** Bot-authored pull requests, and lesson pull requests by label, branch or record. */
-  private excludedPrs(world: WorldSnapshot, drafts: readonly LessonDraft[]): Set<number> {
-    const out = new Set<number>();
-    const leftOut = (pr: PullRequest) =>
-      pr.botAuthored === true || pr.branch.startsWith('lesson/') || (pr.labels ?? []).includes(this.deps.lessonLabel);
-    for (const pr of [...world.pullRequests, ...(world.closedPullRequests ?? [])]) if (leftOut(pr)) out.add(pr.number);
-    for (const d of drafts) if (d.prNumber !== null) out.add(d.prNumber);
-    return out;
-  }
+/** Bot-authored pull requests, and lesson pull requests by label, branch or record. */
+export function lessonExcludedPrs(
+  world: Pick<WorldSnapshot, 'pullRequests' | 'closedPullRequests'> | null,
+  drafts: readonly LessonDraft[],
+  lessonLabel: string,
+): Set<number> {
+  const out = new Set<number>();
+  const leftOut = (pr: PullRequest) =>
+    pr.botAuthored === true || pr.branch.startsWith('lesson/') || (pr.labels ?? []).includes(lessonLabel);
+  for (const pr of [...(world?.pullRequests ?? []), ...(world?.closedPullRequests ?? [])])
+    if (leftOut(pr)) out.add(pr.number);
+  for (const d of drafts) if (d.prNumber !== null) out.add(d.prNumber);
+  return out;
 }
 
 function taskStillRuns(store: Store, draft: LessonDraft): boolean {

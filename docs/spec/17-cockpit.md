@@ -7214,6 +7214,15 @@ No area gets a colour. Areas are operator-configured, so a token could not be re
 advance ([tokens](#tokens)), and a literal at the use site is a colour no theme can reach — the section
 is tables throughout for that reason.
 
+Last comes **Repo lessons** ([41](41-repo-lessons.md#did-it-work)), drawn only once a draft exists, and
+**not windowed by the bar** — the method note says so, because it is the one block on the tab the
+window does not move. Two tables. **Did it work** lists each adopted lesson with its merge, the group's
+misses and the same-kind return dispatches over the 30 days before and after, and a verdict tag —
+_working_, _not working_ or _too early_ — where the after side is a dash until 30 days have passed.
+Below it, every draft with its status, fix and goal count. Each row carries its lesson pull request or
+ticket as a `<Ref>`, beside the name rather than inside it ([links](#links)). The tags use the existing
+tones; nothing here is a new colour.
+
 ### The Trend tab
 
 `web/src/components/SpendTrendTab.tsx`, drawing `GET /api/spend/trend`
