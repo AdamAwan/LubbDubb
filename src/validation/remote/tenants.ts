@@ -3,6 +3,7 @@ import type { Config } from '../../config/config.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { RemoteTenant, TenantCall, TenantLaunch, TenantStanding } from '../../types.js';
 import { firstLine } from '../../primitives.js';
+import type { TenantSteps } from './extensionTenants.js';
 import {
   launchDir,
   readExit,
@@ -45,6 +46,8 @@ export interface TenantKeeper {
   follow(call: TenantCall, request: TenantRequest, launch: TenantLaunch): Promise<TenantOutcome | null>;
   /** The tail of what a launch has printed, stdout and stderr together. */
   tail(environment: string, launch: TenantLaunch): TenantTail;
+  /** What answers each step for an environment, where it is not that environment's own commands. */
+  steps?(validate: EnvironmentConfig['validate']): TenantSteps;
 }
 
 /**

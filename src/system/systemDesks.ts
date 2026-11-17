@@ -44,7 +44,7 @@ import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
 import { CommandTenantKeeper, tenantLogRoot } from '../validation/remote/tenants.js';
-import { ExtensionTenantKeeper, RoutedTenantKeeper, tenantSteps } from '../validation/remote/extensionTenants.js';
+import { RoutedTenantKeeper } from '../validation/remote/extensionTenants.js';
 import { WatchDesk } from '../environments/watchDesk.js';
 import { WatchAsks } from '../environments/watchAsks.js';
 import { PrWatchDesk } from '../pr/prWatchDesk.js';
@@ -275,9 +275,8 @@ function buildRemoteValidationDesks(
           logRoot: tenantLogRoot(config.validationRoot),
           timeoutMs: config.remoteValidation.tenantTimeoutMs,
         }),
-      new ExtensionTenantKeeper(extensions),
+      extensions,
     ),
-    tenantSteps: (validate) => tenantSteps(validate, extensions),
     errors,
     operatorTenants: config.remoteValidation.tenants,
   });

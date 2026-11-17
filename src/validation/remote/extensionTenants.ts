@@ -118,12 +118,19 @@ function failed(detail: string): TenantOutcome {
 export class RoutedTenantKeeper implements TenantKeeper {
   private readonly fromExtension: ReadonlySet<string>;
 
+  private readonly extension: ExtensionTenantKeeper;
+
   constructor(
     environments: readonly EnvironmentConfig[],
     private readonly commands: TenantKeeper,
-    private readonly extension: TenantKeeper,
+    private readonly host: TenantHost,
   ) {
     this.fromExtension = new Set(environments.filter((e) => e.validate?.tenantExtension === true).map((e) => e.name));
+    this.extension = new ExtensionTenantKeeper(host);
+  }
+
+  steps(validate: EnvironmentConfig['validate']): TenantSteps {
+    return tenantSteps(validate, this.host);
   }
 
   ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome> {

@@ -18,7 +18,7 @@ import {
   type TenantEnvironment,
   type TenantKeeper,
 } from './tenants.js';
-import { NO_EXTENSIONS, tenantSteps, type TenantSteps } from './extensionTenants.js';
+import { NO_EXTENSIONS, tenantSteps } from './extensionTenants.js';
 
 // → docs/spec/36-remote-validation.md#the-press
 
@@ -29,8 +29,6 @@ interface RemoteRunDeps {
   prober: EnvironmentProber;
   git: GitObserver;
   tenants: TenantKeeper;
-  /** What answers each tenant step for an environment. Defaults to its commands. */
-  tenantSteps?: (validate: EnvironmentConfig['validate']) => TenantSteps;
   errors?: ErrorRecorder;
   now?: () => number;
   /** Where a `tenantEnv`'s value is read from. Injected so a test never reads the machine's own. */
@@ -322,9 +320,9 @@ export class RemoteRunDesk extends EventEmitter {
       };
 
     const said: string[] = [];
-    const steps = this.deps.tenantSteps?.(validate) ?? tenantSteps(validate, NO_EXTENSIONS);
+    const steps = this.deps.tenants.steps?.(validate) ?? tenantSteps(validate, NO_EXTENSIONS);
     if (steps.ensure !== null && resumed?.call !== 'reseed') {
-      const refused = await this.ensureStep(environmentName, steps, resumed, said);
+      const refused = await this.ensureStep(environmentName, steps.ensure, steps.ensureName, resumed, said);
       if (refused !== null) return refused;
     }
 
@@ -345,15 +343,12 @@ export class RemoteRunDesk extends EventEmitter {
 
   private async ensureStep(
     environmentName: string,
-    steps: TenantSteps,
+    command: string,
+    name: string,
     resumed: { call: TenantCall; launch: TenantLaunch } | null,
     said: string[],
   ): Promise<Prepared | null> {
-    const request = {
-      environment: environmentName,
-      command: steps.ensure ?? '',
-      tenant: this.standing(environmentName).tenant,
-    };
+    const request = { environment: environmentName, command, tenant: this.standing(environmentName).tenant };
     const provisioned =
       resumed === null
         ? await this.deps.tenants.ensure(request, this.launched(environmentName, 'ensure'))
@@ -362,7 +357,7 @@ export class RemoteRunDesk extends EventEmitter {
     if (provisioned.detail !== null || provisioned.tenant === null)
       return {
         ok: false,
-        detail: `${steps.ensureName} did not provide a tenant — ${provisioned.detail ?? 'it named none'}`,
+        detail: `${name} did not provide a tenant — ${provisioned.detail ?? 'it named none'}`,
         standing: this.standing(environmentName),
       };
     this.deps.store.remoteValidation.stampRemoteTenant(environmentName, provisioned.tenant, 'ensured_at');
