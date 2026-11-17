@@ -74,6 +74,8 @@ existing tests and operators read it.
 ## 7. Specs and check
 
 - Spec 42: add a row to [The slots](../../../docs/spec/42-extensions.md#the-slots).
+- Teach it to project authors: add a row to the slots table in `plugin/skills/extension/SKILL.md` and
+  a stub in `plugin/skills/extension/starter.ts`. `test/extensionSkill.test.ts` fails without them.
 - The feature's own spec: add a section on the extension path, and an `## Invariants` bullet that the
   old path is unchanged without the opt-in.
 - Run `npm run check`. Two traps:
