@@ -1,42 +1,55 @@
+import type { LoadedExtension } from '../../extensions/contract.js';
 import type { ExtensionHost } from '../../extensions/host.js';
 import type { ExtensionSlots } from '../../extensions/slots.js';
 import type { EnvironmentConfig } from '../../environments/policy.js';
 import type { TenantCall, TenantLaunch } from '../../types.js';
 import type { TenantTail } from './tenantLog.js';
+import { sentence } from '../../primitives.js';
 import type { TenantKeeper, TenantOutcome, TenantRequest } from './tenants.js';
 
 // → docs/spec/36-remote-validation.md#a-tenant-from-the-projects-extension
 
 type TenantHost = Pick<ExtensionHost<ExtensionSlots>, 'provider' | 'call'>;
 
-const SLOT_OF: Record<TenantCall, keyof ExtensionSlots> = { ensure: 'ensureTenant', reseed: 'reseedTenant' };
-
-/** What runs each tenant step for an environment, in the words the gate shows. Null is a step it does not have. */
+/**
+ * What runs each tenant step for an environment, in the words the gate shows, and how a failed
+ * provisioning names what failed. Null is a step it does not have.
+ */
 export interface TenantSteps {
   ensure: string | null;
   reseed: string | null;
+  ensureName: string;
 }
 
-export function tenantSteps(validate: EnvironmentConfig['validate'], host: Pick<TenantHost, 'provider'>): TenantSteps {
+type SlotProvider = Pick<TenantHost, 'provider'>;
+
+export const NO_EXTENSIONS: SlotProvider = { provider: () => null };
+
+export function tenantSteps(validate: EnvironmentConfig['validate'], host: SlotProvider): TenantSteps {
   if (validate?.tenantExtension !== true)
-    return { ensure: validate?.ensureTenant ?? null, reseed: validate?.reseed ?? null };
-  return { ensure: slotStep(host, 'ensure'), reseed: slotStep(host, 'reseed') };
+    return {
+      ensure: validate?.ensureTenant ?? null,
+      reseed: validate?.reseed ?? null,
+      ensureName: 'the "ensureTenant" command',
+    };
+  const ensure = slotStep(host, 'ensureTenant');
+  return { ensure, reseed: slotStep(host, 'reseedTenant'), ensureName: ensure ?? 'the "ensureTenant" slot' };
 }
 
-function slotStep(host: Pick<TenantHost, 'provider'>, call: TenantCall): string | null {
-  const provider = host.provider(SLOT_OF[call]);
-  return provider === null ? null : `the "${SLOT_OF[call]}" slot of extension "${provider}"`;
+function slotStep(host: SlotProvider, slot: keyof ExtensionSlots): string | null {
+  const provider = host.provider(slot);
+  return provider === null ? null : `the "${slot}" slot of extension "${provider}"`;
 }
 
 /** Every environment that takes its tenant from the extension needs one that provisions it. */
 export function checkTenantExtension(
   environments: readonly EnvironmentConfig[],
-  host: Pick<TenantHost, 'provider'>,
+  loaded: readonly LoadedExtension[] = [],
 ): void {
   const unanswered = environments.filter((env) => env.validate?.tenantExtension === true);
-  if (unanswered.length === 0 || host.provider('ensureTenant') !== null) return;
+  if (unanswered.length === 0 || loaded.some((extension) => extension.slots.has('ensureTenant'))) return;
   throw new Error(
-    `Refusing to start: ${unanswered.map((env) => `"${env.name}"`).join(', ')} set "validate.tenantExtension" ` +
+    `Refusing to start: ${sentence(unanswered.map((env) => `"${env.name}"`))} set "validate.tenantExtension" ` +
       'and no extension fills the "ensureTenant" slot, so nothing could provision its tenant. Add the extension ' +
       'to "extensions", or declare the tenant another way.',
   );
@@ -66,10 +79,6 @@ export class ExtensionTenantKeeper implements TenantKeeper {
     if (request.tenant === null) return this.done(lines, failed('nothing named a tenant to reseed'));
     const answer = await this.host.call('reseedTenant', { environment: request.environment, tenant: request.tenant });
     return this.done(lines, answer.ok ? { tenant: request.tenant, detail: null } : failed(answer.detail));
-  }
-
-  provider(slot: keyof ExtensionSlots): string | null {
-    return this.host.provider(slot);
   }
 
   follow(): Promise<TenantOutcome | null> {
@@ -103,4 +112,37 @@ export class ExtensionTenantKeeper implements TenantKeeper {
 
 function failed(detail: string): TenantOutcome {
   return { tenant: null, detail };
+}
+
+/** The tenant keeper for each environment: the extension's where it sets `validate.tenantExtension`, else the commands'. */
+export class RoutedTenantKeeper implements TenantKeeper {
+  private readonly fromExtension: ReadonlySet<string>;
+
+  constructor(
+    environments: readonly EnvironmentConfig[],
+    private readonly commands: TenantKeeper,
+    private readonly extension: TenantKeeper,
+  ) {
+    this.fromExtension = new Set(environments.filter((e) => e.validate?.tenantExtension === true).map((e) => e.name));
+  }
+
+  ensure(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome> {
+    return this.for(request.environment).ensure(request, launched);
+  }
+
+  reseed(request: TenantRequest, launched?: (launch: TenantLaunch) => void): Promise<TenantOutcome> {
+    return this.for(request.environment).reseed(request, launched);
+  }
+
+  follow(call: TenantCall, request: TenantRequest, launch: TenantLaunch): Promise<TenantOutcome | null> {
+    return this.for(request.environment).follow(call, request, launch);
+  }
+
+  tail(environment: string, launch: TenantLaunch): TenantTail {
+    return this.for(environment).tail(environment, launch);
+  }
+
+  private for(environment: string): TenantKeeper {
+    return this.fromExtension.has(environment) ? this.extension : this.commands;
+  }
 }

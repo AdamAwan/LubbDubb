@@ -1,5 +1,6 @@
 import type { ValidationCheck, ValidationStep, ValidationStepKind } from '../types.js';
 import { harnessReadable } from '../environments/watchSource.js';
+import { declaresTenant } from '../environments/policy.js';
 
 // → docs/spec/20-validation.md#the-test-plan
 
@@ -58,13 +59,7 @@ export function stepCapabilities(environments: readonly CapabilityEnvironment[])
     if (validate === undefined) continue;
     if (validate.browser !== undefined) caps.browser = true;
     if (typeof validate.state?.run === 'string' && validate.state.run.trim() !== '') caps.state = true;
-    if (
-      validate.tenant !== undefined ||
-      validate.tenantEnv !== undefined ||
-      validate.ensureTenant !== undefined ||
-      validate.tenantExtension === true
-    )
-      caps.tenant = true;
+    if (declaresTenant(validate)) caps.tenant = true;
     if (harnessReadable(env.watch)) caps.observe = true;
   }
   return caps;

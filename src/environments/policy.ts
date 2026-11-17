@@ -387,6 +387,11 @@ function validateWatchQueryUrl(queryUrl: string | undefined, where: string, fiel
 
 const TENANT_SHAPES = ['tenant', 'tenantEnv', 'ensureTenant', 'tenantExtension'] as const;
 
+/** Whether a `validate` block names a tenant in any of its shapes. */
+export function declaresTenant(validate: Partial<Record<(typeof TENANT_SHAPES)[number], unknown>>): boolean {
+  return TENANT_SHAPES.some((shape) => validate[shape] !== undefined);
+}
+
 function commandFields(validate: EnvironmentValidate): { path: string; value: unknown }[] {
   return [
     { path: 'ensureTenant', value: validate.ensureTenant },
@@ -519,11 +524,13 @@ function validateTenantShape(validate: EnvironmentValidate, where: string): void
 
 function validateTenantExtension(validate: EnvironmentValidate, where: string): void {
   const value: unknown = validate.tenantExtension;
-  const why =
-    value !== undefined && value !== true
-      ? '"validate.tenantExtension" must be true, or be left out — true hands this tenant to the project\'s extension'
-      : value === true && validate.reseed !== undefined
-        ? '"validate.reseed" and "validate.tenantExtension" both reseed this tenant — the extension reseeds through its "reseedTenant" slot, so drop the "reseed" command'
-        : null;
-  if (why !== null) throw new Error(`${where}: ${why}.`);
+  if (value !== undefined && value !== true)
+    throw new Error(
+      `${where}: "validate.tenantExtension" must be true, or be left out — true hands this tenant to the project's extension.`,
+    );
+  if (value === true && validate.reseed !== undefined)
+    throw new Error(
+      `${where}: "validate.reseed" and "validate.tenantExtension" both reseed this tenant — the extension reseeds ` +
+        'through its "reseedTenant" slot, so drop the "reseed" command.',
+    );
 }

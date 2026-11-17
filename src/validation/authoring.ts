@@ -5,6 +5,7 @@ import { assessIssueNumber } from '../delivery/assessment.js';
 import { ValidationCheckSchema, ValidationResourceSchema } from './checkDocument.js';
 import type { ValidationCheck, ValidationPlanRecord } from '../types.js';
 import { harnessReadable } from '../environments/watchSource.js';
+import { declaresTenant } from '../environments/policy.js';
 
 // → docs/spec/20-validation.md#when-the-check-set-is-written
 
@@ -360,10 +361,7 @@ export function validationPlanNote(
     lines.push(
       `- **${env.name}** — permits ${validate.permits.map((kind) => `\`${kind}\``).join(', ')}` +
         (can.length === 0 ? '.' : `; ${can.join(', and ')}.`) +
-        (validate.tenant === undefined &&
-        validate.tenantEnv === undefined &&
-        validate.ensureTenant === undefined &&
-        validate.tenantExtension === undefined
+        (!declaresTenant(validate)
           ? ' No tenant is configured, so a run that writes has nowhere to write and a `browser` step is a person’s.'
           : ''),
     );

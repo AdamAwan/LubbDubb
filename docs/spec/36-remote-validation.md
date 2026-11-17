@@ -1346,7 +1346,8 @@ half-seeded reading. Only what answers changes.
 - **`reseedTenant`** is optional. Handed `{ environment, tenant }`, it answers nothing, and a throw is
   how it fails. Without it the gate's press only provisions.
 - **One owner.** The key with any other tenant shape, or with a `reseed` command, refuses boot: two
-  answers to one question. The key with no extension filling `ensureTenant` refuses to build.
+  answers to one question. The key with no loaded extension filling `ensureTenant` refuses to build,
+  beside the other extension checks in `buildFoundation`.
 - **Not-ok is the preparation failing**, in the slot's own words (`extension "acme" failed the
 "ensureTenant" slot: …`), recorded on the error log, and nothing stamped. It never falls back to a
   command.
@@ -2695,12 +2696,12 @@ environment, or queries a deployed store — and passes while doing it. That is 
 lesson exactly ([15](15-integrations.md)): the failure is not that the test breaks, it is that it
 succeeds.
 
-| Seam                                                   | Implementations                                                                                       | Covers                   |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------ |
-| `EnvironmentProber` (existing)                         | `CommandEnvironmentProber` · `FakeEnvironmentProber`                                                  | `at`, for the pin        |
-| `StateReader` (`src/validation/remote/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**                                                  | `state.run`              |
-| `TenantKeeper` (`src/validation/remote/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built**                                                | `ensureTenant`, `reseed` |
-| `TenantKeeper`, for `tenantExtension`                  | `ExtensionTenantKeeper` — **built**, always real: it runs the extension a test loads, never a command | the two tenant slots     |
+| Seam                                                   | Implementations                                                                                                                                                                                              | Covers                   |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+| `EnvironmentProber` (existing)                         | `CommandEnvironmentProber` · `FakeEnvironmentProber`                                                                                                                                                         | `at`, for the pin        |
+| `StateReader` (`src/validation/remote/stateReader.ts`) | `CommandStateReader` · `FakeStateReader` — **built**                                                                                                                                                         | `state.run`              |
+| `TenantKeeper` (`src/validation/remote/tenants.ts`)    | `CommandTenantKeeper` · `FakeTenantKeeper` — **built**                                                                                                                                                       | `ensureTenant`, `reseed` |
+| `TenantKeeper`, for `tenantExtension`                  | `ExtensionTenantKeeper` — **built**, always real: it runs the extension a test loads, never a command. `RoutedTenantKeeper` hands each environment to it or to the command keeper (`opts.tenants` in a test) | the two tenant slots     |
 
 **The harness spawns none of the three browser commands, and there is no seam for them.** `runner`,
 `publishArtefacts` and `listSelectors` are all invoked by the run agent in its own shell, from its
