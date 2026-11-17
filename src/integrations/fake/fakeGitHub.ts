@@ -23,7 +23,7 @@ import type {
   PrThreadState,
   PullRequest,
 } from '../../types.js';
-import { isLessonBranch } from '../../lessons/lessonOrigin.js';
+import { lessonPullsOf } from '../../lessons/lessonPrs.js';
 import { prState } from '../../pr/prHealth.js';
 import { searchLogins } from '../../pr/assigneeSearch.js';
 import { threadComments } from '../../pr/prThreads.js';
@@ -121,15 +121,11 @@ export class FakeGitHubIntegration
 
   async listLessonPullRequests(since: string): Promise<LessonPullRequest[]> {
     const world = this.world.read();
-    return [...world.pullRequests, ...world.closedPullRequests]
-      .filter((pr) => isLessonBranch(pr.branch) && (prState(pr) === 'open' || (pr.closedAt ?? '') >= since))
-      .map((pr) => ({
-        number: pr.number,
-        branch: pr.branch,
-        url: pr.url ?? '',
-        state: prState(pr),
-        closedAt: pr.closedAt ?? null,
-      }));
+    const listed = (pr: PullRequest) => ({ ...pr, url: pr.url ?? '' });
+    const closed = world.closedPullRequests
+      .filter((pr) => (pr.closedAt ?? '') >= since)
+      .map((pr) => ({ ...listed(pr), merged: prState(pr) === 'merged', closedAt: pr.closedAt! }));
+    return lessonPullsOf(world.pullRequests.map(listed), closed);
   }
 
   async readBotPrDetail(): Promise<BotPrDetail> {

@@ -12,6 +12,7 @@ import { buildTools } from '../src/mcp/tools.js';
 import { resolveOpenPr } from '../src/mcp/openPr.js';
 import { toolsForRule } from '../src/mcp/names.js';
 import { LessonOutcomeDesk } from '../src/lessons/outcomeDesk.js';
+import { LessonPrReading } from '../src/lessons/lessonPrs.js';
 import { lessonPrBody, type RefUrl } from '../src/lessons/evidence.js';
 import { lessonBranch, lessonMarker } from '../src/lessons/lessonOrigin.js';
 import { isHarnessBranch } from '../src/pr/prOwnership.js';
@@ -216,6 +217,7 @@ test('a pull_request outcome opens the PR with URL citations and the marker, lab
       defaultBranch: 'main',
       watchLabel: 'ld-watch',
       lessonLabel: 'ld-lesson',
+      lessonPrs: new LessonPrReading({ source: { listLessonPullRequests: async () => [] } }),
     });
     const tool = concludeTool(system, task, desk);
     const titled = await tool.handler({ outcome: 'pull_request', fix: 'guard', title: 'Lint: see #12' });

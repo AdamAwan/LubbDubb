@@ -414,12 +414,14 @@ What every fleet can see is a **branch**. A lesson branch is `lesson/<tag>/<id>`
 `lessonGroupTag(groupKey)` — the same ten hex digits on every fleet. `LessonPrReading`
 (`src/lessons/lessonPrs.ts`) asks the connector for every pull request on a `lesson/` branch, open or
 closed inside the 30-day lesson window, whoever opened it (`listLessonPullRequests`,
-[15](15-integrations.md)), and holds the answer 30 minutes. `othersLessonPrs` drops this fleet's own
+[15](15-integrations.md); each provider hands its listings to one shared reduction, `lessonPullsOf`), and
+holds the answer 30 minutes — a failed read too, so a failing provider is not re-listed every pulse. `othersLessonPrs` drops this fleet's own
 drafts' branches, and `lessonCandidates` reads each remaining one whose tag matches a group as a draft of
 that group: **open** is `pr-open` and holds it, **merged** is `adopted` and ends it, **closed** is
 `declined` at its close time with no goals, so the group comes back only on `minGoals` new goals after
 it — the [redraft rule](#the-redraft-rule), applied to another operator's no. A branch cut before the tag
-names no group and is only excluded from the fold, as before.
+names no group and is only excluded from the fold, as before; the body-marker check on the fleet's own
+world stays for those.
 
 The desk's check runs when a draft opens; the agent then works for a while, and another fleet may open
 its own lesson for the group meanwhile. So `lesson_conclude` re-reads, bypassing the held read, before

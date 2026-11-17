@@ -5,8 +5,8 @@ import type { Store } from '../store/store.js';
 import type { TicketFiler } from '../tickets/filing.js';
 import type { LessonDraft, LessonFix, LessonOutcome, Task } from '../types.js';
 import { lessonPrBody, lessonTicketBody, type RefUrl } from './evidence.js';
-import { lessonBranch, lessonBranchTag, lessonDraftId, lessonGroupTag, lessonSearchKey } from './lessonOrigin.js';
-import type { LessonPrReading } from './lessonPrs.js';
+import { lessonBranch, lessonDraftId, lessonPrsForGroup, lessonSearchKey } from './lessonOrigin.js';
+import { othersLessonPrs, type LessonPrReading } from './lessonPrs.js';
 
 // → docs/spec/41-repo-lessons.md#the-outcome
 
@@ -33,7 +33,7 @@ interface LessonOutcomeDeps {
   watchLabel: string;
   lessonLabel: string;
   /** Every fleet's lesson pull requests, read fresh before one is opened. */
-  lessonPrs?: LessonPrReading;
+  lessonPrs: LessonPrReading;
   errors?: ErrorRecorder;
 }
 
@@ -81,11 +81,8 @@ export class LessonOutcomeDesk {
 
   /** Another fleet's open or merged lesson pull request for the draft's group, by URL. */
   private async coveredBy(draft: LessonDraft): Promise<string | null> {
-    const prs = (await this.deps.lessonPrs?.read(true)) ?? [];
-    const tag = lessonGroupTag(draft.groupKey);
-    const own = lessonBranch(draft.id, draft.groupKey);
-    const hit = prs.find((pr) => pr.branch !== own && pr.state !== 'closed' && lessonBranchTag(pr.branch) === tag);
-    return hit === undefined ? null : hit.url;
+    const prs = othersLessonPrs((await this.deps.lessonPrs.read(true)) ?? [], [draft]);
+    return lessonPrsForGroup(prs, draft.groupKey).find((pr) => pr.state !== 'closed')?.url ?? null;
   }
 
   private ownDraft(task: Task): LessonDraft | { error: string } {

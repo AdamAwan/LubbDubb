@@ -10,11 +10,10 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { LESSON_WINDOW_MS, lessonCandidates, type LessonGroupInputs } from '../src/lessons/groups.js';
 import { LessonDesk } from '../src/lessons/lessonDesk.js';
 import { LessonOutcomeDesk } from '../src/lessons/outcomeDesk.js';
-import { LessonPrReading, othersLessonPrs, type LessonPrSource } from '../src/lessons/lessonPrs.js';
+import { LessonPrReading, lessonPullsOf, othersLessonPrs } from '../src/lessons/lessonPrs.js';
+import type { LessonPrReadable } from '../src/integrations/integration.js';
 import { lessonBranch, lessonBranchTag, lessonGroupTag, isLessonBranch } from '../src/lessons/lessonOrigin.js';
-import { listGitHubLessonPulls } from '../src/integrations/github/lessonPulls.js';
 import { ticketFiler } from '../src/tickets/filing.js';
-import type { GitHubApi } from '../src/integrations/github/githubApi.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { LessonDraft, LessonPullRequest, Remedy, WorldSnapshot } from '../src/types.js';
 
@@ -86,18 +85,17 @@ test('the fleet’s own lesson pull requests are not read as another fleet’s',
   assert.deepEqual(othersLessonPrs([mine, theirs('open')], [own]), [theirs('open')]);
 });
 
-test('the GitHub read takes every lesson branch whoever authored it, open and closed', async () => {
-  const api = {
-    listOpenPulls: async () => [
-      { number: 1, branch: lessonBranch('a', KEY), url: 'u1', authorLogin: 'fleet-b' },
-      { number: 2, branch: 'issue/2', url: 'u2', authorLogin: 'fleet-b' },
+test('a provider listing is reduced to its lesson branches, open and closed, whoever authored them', () => {
+  const prs = lessonPullsOf(
+    [
+      { number: 1, branch: lessonBranch('a', KEY), url: 'u1' },
+      { number: 2, branch: 'issue/2', url: 'u2' },
     ],
-    listRecentlyClosedPulls: async () => [
+    [
       { number: 3, branch: lessonBranch('b', KEY), url: 'u3', merged: true, closedAt: '2026-06-01T00:00:00Z' },
       { number: 4, branch: lessonBranch('c', KEY), url: 'u4', merged: false, closedAt: '2026-06-02T00:00:00Z' },
     ],
-  } as unknown as GitHubApi;
-  const prs = await listGitHubLessonPulls(api, SINCE);
+  );
   assert.deepEqual(
     prs.map((p) => [p.number, p.state]),
     [
@@ -142,7 +140,7 @@ function miss(system: System, prNumber: number): void {
 
 const EMPTY: WorldSnapshot = { takenAt: new Date().toISOString(), pullRequests: [], issues: [] };
 
-function source(prs: LessonPullRequest[] | Error): LessonPrSource & { reads: number } {
+function source(prs: LessonPullRequest[] | Error): LessonPrReadable & { reads: number } {
   const s = {
     reads: 0,
     listLessonPullRequests: async () => {

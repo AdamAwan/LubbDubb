@@ -11,9 +11,12 @@ export function lessonDraftId(originRef: string | null): string | null {
   return match ? match[1]! : null;
 }
 
+const TAG_LENGTH = 10;
+const TAGGED_BRANCH = new RegExp(`^lesson/([0-9a-f]{${String(TAG_LENGTH)}})/.+$`);
+
 /** A group key in a form a branch name can carry: every fleet on the repository derives the same tag. */
 export function lessonGroupTag(groupKey: string): string {
-  return createHash('sha1').update(groupKey).digest('hex').slice(0, 10);
+  return createHash('sha1').update(groupKey).digest('hex').slice(0, TAG_LENGTH);
 }
 
 /** The branch a draft's agent commits to and its pull request is opened from. */
@@ -23,7 +26,7 @@ export function lessonBranch(draftId: string, groupKey: string): string {
 
 /** The group tag a lesson branch carries; null for one cut before branches carried it. */
 export function lessonBranchTag(branch: string): string | null {
-  return /^lesson\/([0-9a-f]{10})\/.+$/.exec(branch)?.[1] ?? null;
+  return TAGGED_BRANCH.exec(branch)?.[1] ?? null;
 }
 
 export function isLessonBranch(branch: string): boolean {
@@ -38,4 +41,10 @@ export function lessonMarker(groupKey: string): string {
 /** The ticket's search key: what a second filing for the same group would find. */
 export function lessonSearchKey(groupKey: string): string {
   return `lesson:${groupKey}`;
+}
+
+/** The pull requests whose branch carries the group's tag. */
+export function lessonPrsForGroup<T extends { branch: string }>(prs: readonly T[], groupKey: string): T[] {
+  const tag = lessonGroupTag(groupKey);
+  return prs.filter((pr) => lessonBranchTag(pr.branch) === tag);
 }

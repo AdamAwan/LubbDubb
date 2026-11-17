@@ -20,8 +20,8 @@ interface LessonDeskDeps {
   minGoals: number;
   reviewAreas: readonly ReviewAreaRule[];
   lessonLabel: string;
-  /** Every fleet's lesson pull requests; absent, the desk sees only its own world. */
-  lessonPrs?: LessonPrReading;
+  /** Every fleet's lesson pull requests. */
+  lessonPrs: LessonPrReading;
   now?: () => number;
 }
 
@@ -73,7 +73,7 @@ export class LessonDesk {
       since,
     };
     if (lessonCandidates(input, drafts, this.deps.minGoals).length === 0) return;
-    const read = this.deps.lessonPrs === undefined ? [] : await this.deps.lessonPrs.read();
+    const read = await this.deps.lessonPrs.read();
     if (read === null) return;
     const open = world.pullRequests.filter((pr) => prState(pr) === 'open');
     const candidate = lessonCandidates(input, drafts, this.deps.minGoals, othersLessonPrs(read, drafts)).find(
