@@ -426,9 +426,7 @@ test('a shortfall on an item in the review state asks a human once and never mov
 
   for (let i = 0; i < 4; i++) await system.harness.runCycle('manual');
   assert.deepEqual(transitions(system), [], 'the harness never moves a work item backwards');
-  const asked = system.store.escalations
-    .listEscalations()
-    .filter((e) => e.context.originRef === 'issue:27:review-stranded');
+  const asked = strandedAsks(system, 27);
   assert.equal(asked.length, 1, 'the operator is told once, not every pulse');
   assert.match(asked[0]!.prompt, /Move it back to "Ready"/);
   system.store.close();
@@ -443,10 +441,10 @@ function finishPlan(system: System, plan: Plan): void {
   system.store.plans.rollUpPlanStatus(plan.id);
 }
 
-function strandedAsks(system: System, number: number): number {
+function strandedAsks(system: System, number: number) {
   return system.store.escalations
     .listEscalations()
-    .filter((e) => e.context.originRef === `issue:${number}:review-stranded`).length;
+    .filter((e) => e.context.originRef === `issue:${number}:review-stranded`);
 }
 
 test('a verdict older than the merge that finished the plan does not strand the item', async () => {
@@ -463,7 +461,7 @@ test('a verdict older than the merge that finished the plan does not strand the 
   finishPlan(system, plan);
 
   for (let i = 0; i < 3; i++) await system.harness.runCycle('manual');
-  assert.equal(strandedAsks(system, 29), 0, 'the merge answered the verdict; the assessor judges from here');
+  assert.equal(strandedAsks(system, 29).length, 0, 'the merge answered the verdict; the assessor judges from here');
   system.store.close();
 });
 
@@ -479,6 +477,6 @@ test('a shortfall between one part merging and the next opening does not strand 
   });
 
   for (let i = 0; i < 3; i++) await system.harness.runCycle('manual');
-  assert.equal(strandedAsks(system, 30), 0, 'a plan with parts still to go is not stranded');
+  assert.equal(strandedAsks(system, 30).length, 0, 'a plan with parts still to go is not stranded');
   system.store.close();
 });
