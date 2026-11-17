@@ -33,6 +33,7 @@ function digest(fleetId: string, publishedAt: string): PoolDigestDocument {
     byChoice: [],
     byRule: [],
     byVersion: [],
+    lessons: [],
   };
 }
 

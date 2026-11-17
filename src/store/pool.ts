@@ -1,5 +1,15 @@
 import { poolStaleBefore } from '../pool/document.js';
-import type { PoolDigestDocument, PoolDigestRow, PoolClockKind, PoolFleetReading, PoolPublication } from '../types.js';
+import type {
+  LessonFix,
+  PoolDigestDocument,
+  PoolDigestRow,
+  PoolClockKind,
+  PoolFleetReading,
+  PoolLessonRow,
+  PoolPublication,
+  RemedyCause,
+  RemedyKind,
+} from '../types.js';
 import type { StoreContext } from './context.js';
 
 // → docs/spec/14-persistence.md
@@ -20,6 +30,29 @@ export class PoolStore {
         for (const row of rows) {
           insert.run(fleetId, project, row.day, section, row.key, row.count, row.costUsd, row.partial ? 1 : 0);
         }
+      }
+      this.ctx.prep(`DELETE FROM pool_lessons WHERE fleet_id=?`).run(fleetId);
+      const lesson = this.ctx.prep(
+        `INSERT OR REPLACE INTO pool_lessons (fleet_id, project, kind, cause, documented, undocumented, fix, pr_url,
+           merged_at, before_misses, before_dispatches, after_misses, after_dispatches)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const row of document.lessons) {
+        lesson.run(
+          fleetId,
+          project,
+          row.kind,
+          row.cause,
+          row.guards.documented,
+          row.guards.undocumented,
+          row.fix,
+          row.prUrl,
+          row.mergedAt,
+          row.before.misses,
+          row.before.dispatches,
+          row.after?.misses ?? null,
+          row.after?.dispatches ?? null,
+        );
       }
     });
     write();
@@ -72,12 +105,17 @@ export class PoolStore {
       .prep(
         `SELECT f.fleet_id AS fleet_id FROM pool_fleets f
           WHERE f.digest_at IS NOT NULL AND f.digest_at < ?
-            AND EXISTS (SELECT 1 FROM pool_digest_rows r WHERE r.fleet_id = f.fleet_id)`,
+            AND (EXISTS (SELECT 1 FROM pool_digest_rows r WHERE r.fleet_id = f.fleet_id)
+              OR EXISTS (SELECT 1 FROM pool_lessons l WHERE l.fleet_id = f.fleet_id))`,
       )
       .all(before) as { fleet_id: string }[];
     const write = this.ctx.db.transaction(() => {
       const drop = this.ctx.prep(`DELETE FROM pool_digest_rows WHERE fleet_id=?`);
-      for (const row of rows) drop.run(row.fleet_id);
+      const dropLessons = this.ctx.prep(`DELETE FROM pool_lessons WHERE fleet_id=?`);
+      for (const row of rows) {
+        drop.run(row.fleet_id);
+        dropLessons.run(row.fleet_id);
+      }
     });
     write();
     return rows.map((r) => r.fleet_id);
@@ -99,6 +137,38 @@ export class PoolStore {
       costUsd: r.cost_usd,
       partial: r.partial === 1,
     }));
+  }
+
+  /** One row per pull request URL: where two fleets published one lesson, the newer digest's reading stands. */
+  listPoolLessons(): PoolLessonMirrorRow[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT l.* FROM pool_lessons l LEFT JOIN pool_fleets f ON f.fleet_id = l.fleet_id
+          ORDER BY l.pr_url ASC, f.digest_at DESC, l.fleet_id ASC`,
+      )
+      .all() as LessonRow[];
+    const seen = new Set<string>();
+    const out: PoolLessonMirrorRow[] = [];
+    for (const r of rows) {
+      if (seen.has(r.pr_url)) continue;
+      seen.add(r.pr_url);
+      out.push({
+        fleetId: r.fleet_id,
+        project: r.project,
+        kind: r.kind as RemedyKind,
+        cause: r.cause as RemedyCause,
+        guards: { documented: r.documented, undocumented: r.undocumented },
+        fix: r.fix as LessonFix,
+        prUrl: r.pr_url,
+        mergedAt: r.merged_at,
+        before: { misses: r.before_misses, dispatches: r.before_dispatches },
+        after:
+          r.after_misses === null || r.after_dispatches === null
+            ? null
+            : { misses: r.after_misses, dispatches: r.after_dispatches },
+      });
+    }
+    return out;
   }
 
   recordHarnessDay(day: string, version: string, retentionDays: number): void {
@@ -176,6 +246,27 @@ export interface PoolDigestMirrorRow {
   count: number;
   costUsd: number | null;
   partial: boolean;
+}
+
+export interface PoolLessonMirrorRow extends PoolLessonRow {
+  fleetId: string;
+  project: string;
+}
+
+interface LessonRow {
+  fleet_id: string;
+  project: string;
+  kind: string;
+  cause: string;
+  documented: number;
+  undocumented: number;
+  fix: string;
+  pr_url: string;
+  merged_at: string;
+  before_misses: number;
+  before_dispatches: number;
+  after_misses: number | null;
+  after_dispatches: number | null;
 }
 
 interface DigestRow {

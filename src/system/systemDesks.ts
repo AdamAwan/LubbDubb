@@ -382,7 +382,11 @@ export function buildBenchDesks(
   };
 }
 
-function buildPool(config: Config, opts: BuildOptions, { store, now, errors }: Foundation): PoolDesk | undefined {
+function buildPool(
+  config: Config,
+  opts: BuildOptions,
+  { store, now, errors, connector }: Foundation,
+): PoolDesk | undefined {
   const fleetId = config.fleetId ?? '';
   const poolTransport =
     opts.poolTransport ??
@@ -402,6 +406,11 @@ function buildPool(config: Config, opts: BuildOptions, { store, now, errors }: F
           now,
           digestIntervalMs: config.pool?.digestIntervalMs ?? 60 * 60 * 1000,
           worldScope: worldScope(config.integrations, { store, config, now, errors }),
+          lessons: {
+            reviewAreas: config.reviewAreas,
+            lessonLabel: lessonLabelFor(config.labelPrefix),
+            refUrl: (ref) => connector.resolveRefUrl(ref),
+          },
           errors,
         });
   return pool;

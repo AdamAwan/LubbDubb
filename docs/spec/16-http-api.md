@@ -1434,6 +1434,13 @@ ninety of them, so the Insights window bar is not the question anybody asks of i
 `null` unless a project was named, and that is the shape rather than a flag: a reader that forgot the
 filter would sum two unrelated pipelines, and null makes that unreachable rather than merely wrong.
 
+`lessons` is the [lessons section](28-cross-fleet-pool.md#the-lessons-section) folded by
+`foldPoolLessons`: other fleets' adopted lessons, one per pull request URL, ranked by `effectPct` with
+the too-early ones last, each with `companyWide`; and `companyWide`, the causes adopted in three or more
+projects — this fleet's own adopted drafts counted for its own project, never mirrored. It is not
+narrowed by `?project=` or `?since=`: a lesson's periods are fixed to its merge, and another project's
+lesson is what the list is for.
+
 The pool has **no write** any more: the per-claim opt-out went with the claims arm and the store
 behind it ([28](28-cross-fleet-pool.md)). What is left is derived from rows this fleet already holds,
 and the desk's own clock decides when it goes out.

@@ -8730,6 +8730,11 @@ select:disabled {
   border-left: 2px solid var(--cn-line);
 }
 
+.pool-wide {
+  color: var(--cn-amber);
+  font-size: 11px;
+}
+
 .pool-fleets {
   display: flex;
   gap: 8px;

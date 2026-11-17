@@ -10,7 +10,7 @@ import type { SpendInsights } from '../insights/spendInsights.js';
 import type { SpendTrend } from '../insights/spendTrend.js';
 import type { SurfaceReachInsights } from '../insights/surfaceReachInsights.js';
 import type { ThroughputInsights } from '../insights/throughputInsights.js';
-import type { PoolRollup, PoolTrends } from '../pool/aggregate.js';
+import type { PoolLessons, PoolRollup, PoolTrends } from '../pool/aggregate.js';
 import type { PoolStatus } from '../pool/poolDesk.js';
 import type {
   AssessedBotPr,
@@ -82,4 +82,5 @@ export interface PoolInsightsPayload {
   trends: PoolTrends;
   projects: string[];
   fleets: PoolFleetReading[];
+  lessons: PoolLessons;
 }

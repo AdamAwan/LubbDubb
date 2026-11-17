@@ -50,7 +50,81 @@ export function PoolCauses({ payload }: { payload: PoolInsightsPayload }): JSX.E
         note="cause and guard, in closed vocabularies"
         rows={payload.rollup.byCause}
       />
+      <Lessons reading={payload.lessons} />
     </Pool>
+  );
+}
+
+/* Other fleets' adopted lessons: counts and a link, never a brief to send on.
+   → docs/spec/28-cross-fleet-pool.md#the-lessons-section */
+function Lessons({ reading }: { reading: PoolInsightsPayload['lessons'] }): JSX.Element {
+  return (
+    <section className="pool-section">
+      <h3>Lessons other repositories kept</h3>
+      <p className="pool-note">adopted repo lessons, ranked by how far the miss dropped after the merge</p>
+      {reading.companyWide.length === 0 ? null : (
+        <p className="pool-refusal">
+          <b>Company-wide candidates:</b>{' '}
+          {reading.companyWide.map((c) => `${c.label} (${String(c.projects)} projects)`).join(' · ')} — adopted in three
+          or more projects, so a rule for a shared plugin or an organisation-level CLAUDE.md rather than one
+          repository’s file.
+        </p>
+      )}
+      {reading.lessons.length === 0 ? (
+        <p className="empty">No other fleet has published an adopted lesson.</p>
+      ) : (
+        <table className="pool-table">
+          <thead>
+            <tr>
+              <th>Cause</th>
+              <th>Fix</th>
+              <th>Project</th>
+              <th className="num">Misses / returns before</th>
+              <th className="num">After</th>
+              <th className="num">Effect</th>
+              <th>Pull request</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reading.lessons.map((lesson) => (
+              <tr key={lesson.prUrl}>
+                <td>
+                  {lesson.kind === 'ci' ? 'CI' : 'Review'} · {lesson.causeLabel}
+                  {lesson.companyWide ? <span className="pool-wide"> company-wide</span> : null}
+                </td>
+                <td>{lesson.fix}</td>
+                <td>{lesson.project}</td>
+                <td className="num">
+                  {lesson.before.misses} / {lesson.before.dispatches}
+                </td>
+                <td className="num">
+                  {lesson.after === null
+                    ? 'too early'
+                    : `${String(lesson.after.misses)} / ${String(lesson.after.dispatches)}`}
+                </td>
+                <td className="num">{lesson.effectPct === null ? '—' : `${String(lesson.effectPct)}%`}</td>
+                <td>
+                  {/* No `<Ref/>`: the pull request is in another fleet's repository, and the link is all that crosses. */}
+                  <a href={lesson.prUrl} target="_blank" rel="noopener noreferrer">
+                    open
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <MethodNote>
+        <p>
+          <b>Only counts and a link cross.</b> What a lesson says is in its pull request; open it to read it, and write
+          your own brief if your repository needs the same. Nothing here is sent to an agent.
+        </p>
+        <p>
+          <b>Effect</b> is the drop in misses per same-kind return dispatch, the 30 days after the merge against the 30
+          before. A lesson merged less than 30 days ago is too early to read and ranks last.
+        </p>
+      </MethodNote>
+    </section>
   );
 }
 

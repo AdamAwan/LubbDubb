@@ -1,6 +1,6 @@
 import { CAUSE_COPY, GUARD_COPY } from '../remedies/remedies.js';
 import { PHASE_ORDER, phaseLabel, type SpendPhase } from '../insights/spendInsights.js';
-import type { PoolDigestMirrorRow } from '../store/pool.js';
+import type { PoolDigestMirrorRow, PoolLessonMirrorRow } from '../store/pool.js';
 import type { RemedyCause, RemedyGuard, RemedyKind } from '../types.js';
 import { throughputMeasureLabel } from '../insights/throughputInsights.js';
 import { choiceLabel } from '../insights/choiceInsights.js';
@@ -115,6 +115,72 @@ export function poolUsageLabel(key: string): string {
 
 function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/** A cause with adopted lessons in this many distinct projects is a rule for every repository, not one. */
+const COMPANY_WIDE_PROJECTS = 3;
+
+interface PoolLesson extends PoolLessonMirrorRow {
+  causeLabel: string;
+  /** The relative drop in misses per same-kind return dispatch, in percent; null where it cannot be read. */
+  effectPct: number | null;
+  companyWide: boolean;
+}
+
+interface PoolLessonCause {
+  cause: RemedyCause;
+  label: string;
+  projects: number;
+}
+
+export interface PoolLessons {
+  lessons: PoolLesson[];
+  companyWide: PoolLessonCause[];
+}
+
+/**
+ * Other fleets' adopted lessons ranked by effect, and the causes adopted in enough projects to be a
+ * company's rather than a repository's. `own` is this fleet's project and its adopted causes, never mirrored.
+ */
+export function foldPoolLessons(
+  rows: readonly PoolLessonMirrorRow[],
+  own: { project: string | null; causes: readonly RemedyCause[] },
+): PoolLessons {
+  const projects = new Map<RemedyCause, Set<string>>();
+  const note = (cause: RemedyCause, project: string) =>
+    projects.set(cause, (projects.get(cause) ?? new Set<string>()).add(project));
+  for (const row of rows) note(row.cause, row.project);
+  if (own.project !== null) for (const cause of own.causes) note(cause, own.project);
+  const wide = new Set([...projects].filter(([, p]) => p.size >= COMPANY_WIDE_PROJECTS).map(([cause]) => cause));
+  const lessons = rows.map((row) => ({
+    ...row,
+    causeLabel: CAUSE_COPY[row.cause]?.label ?? row.cause,
+    effectPct: lessonEffect(row),
+    companyWide: wide.has(row.cause),
+  }));
+  return {
+    lessons: lessons.sort(byEffect),
+    companyWide: [...wide]
+      .map((cause) => ({ cause, label: CAUSE_COPY[cause]?.label ?? cause, projects: projects.get(cause)?.size ?? 0 }))
+      .sort((a, b) => b.projects - a.projects || a.cause.localeCompare(b.cause)),
+  };
+}
+
+function lessonEffect(row: PoolLessonMirrorRow): number | null {
+  if (row.after === null || row.before.dispatches === 0 || row.before.misses === 0) return null;
+  const before = row.before.misses / row.before.dispatches;
+  const after = row.after.dispatches === 0 ? 0 : row.after.misses / row.after.dispatches;
+  return Math.round(((before - after) / before) * 100);
+}
+
+function byEffect(a: PoolLesson, b: PoolLesson): number {
+  const rank = (l: PoolLesson) => (l.after === null ? 2 : l.effectPct === null ? 1 : 0);
+  return (
+    rank(a) - rank(b) ||
+    (b.effectPct ?? 0) - (a.effectPct ?? 0) ||
+    b.mergedAt.localeCompare(a.mergedAt) ||
+    a.prUrl.localeCompare(b.prUrl)
+  );
 }
 
 const TREND_SMOOTHING_DAYS = 7;

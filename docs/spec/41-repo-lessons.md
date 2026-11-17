@@ -19,14 +19,13 @@ by the operator as an ordinary pull request review: noticed from the remedies, d
 and landed — or not — on the repository the fleet works on. It exists only as a merged change to that
 repository. There is no store of lessons.
 
-**Partly built.** What is described here as running is the [configuration key](#configuration),
-[the grouping](#noticing-a-repeat-miss) — `lessonGroups` and `lessonCandidates` in
-`src/lessons/groups.ts` — and the pull-request-to-goal index it reads (`prGoalIndex`,
-`src/graph/prGoals.ts`), [the draft](#drafting-a-lesson) (rule, prompt, outcome tool),
-[the ruling](#the-ruling-adopted-or-declined), [the record and the desk that settles
-it](#the-record-and-the-desk) and [the Causes tab reading](#did-it-work). **Not yet built**, and the
-section that describes it says so: [the pool section](#across-fleets). With `lessons.minGoals` at its
-default nothing differs either way.
+**Built.** The [configuration key](#configuration), [the grouping](#noticing-a-repeat-miss) —
+`lessonGroups` and `lessonCandidates` in `src/lessons/groups.ts` — and the pull-request-to-goal index it
+reads (`prGoalIndex`, `src/graph/prGoals.ts`), [the draft](#drafting-a-lesson) (rule, prompt, outcome
+tool), [the ruling](#the-ruling-adopted-or-declined), [the record and the desk that settles
+it](#the-record-and-the-desk), [the Causes tab reading](#did-it-work) and [the pool
+section](#across-fleets). With `lessons.minGoals` at its default nothing is drafted, and so nothing is
+adopted or published.
 
 ## Invariants
 
@@ -44,6 +43,7 @@ default nothing differs either way.
 - **A lesson ticket carries the lesson label and never the watch label.** Filing it must not also dispatch for it: the operator decides whether the fleet takes a refactor on. → [§](#a-pull-request-or-a-ticket) · `test/repoLessons.test.ts`
 - **A draft whose agent's task ended without concluding settles `unanswered`; a lesson pull request merged is `adopted`, closed is `declined`.** A draft nothing settles holds its group for ever. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
 - **An adopted lesson is read as its group's misses — in distinct goals, by `lessonGroups` — per same-kind return dispatch, over the 30 days before its merge and the 30 after; the after side is null, and the verdict `too early`, until those 30 days have passed.** A partial month after compared with a whole one before reads every young lesson as working. → [§](#did-it-work) · `test/lessonInsights.test.ts`
+- **The pool carries an adopted lesson as counts and its pull request's URL — never its title, free text or `where` — and nothing from another fleet's lesson is drafted on, briefed from or put in a prompt.** Prose and check names do not cross; a link and a count are read by a person, who decides. → [§](#across-fleets) · `test/poolLessonsSection.test.ts`
 - **The lessons reading is not bounded by the Insights page's window.** Its periods are fixed to each merge, and a window that cut one would compare unequal stretches. → [§](#did-it-work) · `test/lessonInsights.test.ts`
 
 ## What it is not
@@ -365,8 +365,6 @@ derived at request time, like every fold on the page.
 
 ## Across fleets
 
-**Not yet built.**
-
 **Same repository, several fleets: git already does it.** A merged lesson reaches every fleet and every
 engineer using Claude Code on that repository with nothing built. Two fleets drafting the same lesson
 is avoided through the **world**, not the pool: an open pull request carrying the group's marker is a
@@ -379,7 +377,11 @@ bump — one row per adopted lesson: `kind`, `cause`, `guards`, `fix`, the pull 
 merged, and the group's misses before and after, as counts. **No title, no free text and no `where`**:
 a title is prose crossing the pool, and check names do not cross projects
 ([28](28-cross-fleet-pool.md#check-names-cross-within-a-project-and-never-between)). Mirrored rows are
-replaced and expired with the digest they came in, and deduplicated by URL.
+replaced and expired with the digest they came in, and deduplicated by URL. The counts are the [did it
+work](#did-it-work) reading's own — `readLessonInsights` (`src/lessons/lessonReading.ts`) serves the
+Causes tab and the digest alike — and a lesson whose pull request the connector cannot resolve to a URL
+is not published. What the section carries and how it is folded is
+[28](28-cross-fleet-pool.md#the-lessons-section); `test/poolLessonsSection.test.ts` holds it.
 
 The Pool tab lists other fleets' lessons ranked by effect, each with its link. When the same `cause`
 has adopted lessons in **three or more projects**, it is marked a **company-wide candidate** — a rule

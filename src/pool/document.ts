@@ -1,6 +1,16 @@
 import { createHash } from 'node:crypto';
 import { isThroughputMeasure } from '../insights/throughputInsights.js';
-import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDocument } from '../types.js';
+import { CAUSES_BY_KIND } from '../remedies/remedies.js';
+import type {
+  LessonFix,
+  PoolClockDocument,
+  PoolClockKind,
+  PoolDigestDocument,
+  PoolDocument,
+  PoolLessonPeriod,
+  PoolLessonRow,
+  RemedyKind,
+} from '../types.js';
 
 // → docs/spec/28-cross-fleet-pool.md
 
@@ -97,6 +107,7 @@ function readDigest(raw: Record<string, unknown>): PoolParse {
     byChoice: readRows(raw.byChoice),
     byRule: readRows(raw.byRule),
     byVersion: readRows(raw.byVersion),
+    lessons: readLessons(raw.lessons),
   };
   return { ok: true, document };
 }
@@ -109,6 +120,56 @@ function readDigest(raw: Record<string, unknown>): PoolParse {
 function readMeasures(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((key): key is string => typeof key === 'string' && isThroughputMeasure(key));
+}
+
+const LESSON_FIXES: readonly LessonFix[] = ['code', 'guard', 'contradiction', 'note'];
+
+/* Rebuilt field by field, so a row carrying a title, a `where` or anything else
+   this build does not publish lands without it. → docs/spec/28-cross-fleet-pool.md#the-lessons-section */
+function readLessons(raw: unknown): PoolLessonRow[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isRecord).flatMap((row) => {
+    const lesson = readLesson(row);
+    return lesson === null ? [] : [lesson];
+  });
+}
+
+function readLesson(row: Record<string, unknown>): PoolLessonRow | null {
+  const kind = row.kind;
+  if (kind !== 'ci' && kind !== 'review') return null;
+  const cause = CAUSES_BY_KIND[kind as RemedyKind].find((c) => c === row.cause);
+  const fix = LESSON_FIXES.find((f) => f === row.fix);
+  const before = readPeriod(row.before);
+  const after = row.after === null ? null : readPeriod(row.after);
+  const prUrl = readUrl(row.prUrl);
+  const mergedAt = readTimestamp(row.mergedAt);
+  if (cause === undefined || fix === undefined || !isRecord(row.guards) || before === null) return null;
+  if ((row.after !== null && after === null) || prUrl === null || mergedAt === null) return null;
+  return {
+    kind,
+    cause,
+    guards: { documented: countOf(row.guards.documented), undocumented: countOf(row.guards.undocumented) },
+    fix,
+    prUrl,
+    mergedAt,
+    before,
+    after,
+  };
+}
+
+function readUrl(raw: unknown): string | null {
+  return typeof raw === 'string' && /^https?:\/\/\S+$/.test(raw) ? raw : null;
+}
+
+function readTimestamp(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const at = new Date(raw);
+  return Number.isNaN(at.getTime()) ? null : at.toISOString();
+}
+
+function readPeriod(raw: unknown): PoolLessonPeriod | null {
+  if (!isRecord(raw)) return null;
+  return { misses: countOf(raw.misses), dispatches: countOf(raw.dispatches) };
 }
 
 function readRows(raw: unknown): PoolDigestDocument['byPhase'] {

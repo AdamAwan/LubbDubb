@@ -7,7 +7,8 @@ against.
 
 This is the distance above one fleet. It carries a **daily digest** of what a fleet spent and what its
 returns to pull requests cost, so a person can read where the money goes across a company rather than
-across a laptop.
+across a laptop — and, beside it, the [repo lessons](41-repo-lessons.md) each fleet's repository
+adopted, as counts and a link ([the lessons section](#the-lessons-section)).
 
 **It carried a second thing and no longer does.** A fleet's vouched **claims** crossed here too, so
 other fleets' agents were not sent to buy them again — and the claim store behind that arm is gone.
@@ -32,6 +33,8 @@ already partitions spend by phase. Nothing here measures anything new. It moves 
 - **Only the throughput measures a fleet declared as its own are mirrored, and the cut is at the mirror.** An unnarrowed slice is the repository's, and four fleets on one project would sum the same merges four times. → [§](#only-a-slice-a-fleet-had-to-itself-may-cross) · `test/poolThroughputSection.test.ts`
 - **With the pool selected and no `fleetId`, no `PoolDesk` is wired and nothing is published or polled.** A `?? ''` publishes under `fleets//`, a document with no author in somebody else's repository. → [§](#a-fleet-with-no-name-yet) · `test/crossFleetPool.test.ts`
 - **A failed fetch leaves the last-known-good mirror in place; an unreachable pool is never folded into nobody having published.** Read as absence, an outage says that nobody else knows anything. → [§](#when-the-pool-is-unreachable) · `test/crossFleetPool.test.ts`
+- **A lesson row carries closed vocabularies, counts, a merge time and a pull request's URL — never a title, free text or a `where`; a parsed row is rebuilt field by field, and one whose URL cannot be resolved is never published.** A title is prose crossing the pool, and a `where` is a check name, which does not cross projects. → [§](#the-lessons-section) · `test/poolLessonsSection.test.ts`
+- **Mirrored lessons are replaced and expired with their fleet's digest, never taken from this fleet's own document, and read one per pull request URL; a cause is a company-wide candidate at three distinct projects, this fleet's own included.** Two fleets on one repository publish one lesson, and summed twice it reads as a second project. → [§](#the-lessons-section) · `test/poolLessonsSection.test.ts`
 
 ## What it is not
 
@@ -362,19 +365,20 @@ publish from rows the fleet already holds, so the envelope carries it and nothin
 
 Every dimension is a closed vocabulary that already exists, and none of them is a provider identifier.
 
-| Section        | Keyed by                                                               | Measures                                                            |
-| -------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `byPhase`      | `SpendPhase` (`src/insights/spendInsights.ts`)                         | costUsd, runs                                                       |
-| `byCause`      | `RemedyKind` × `RemedyCause` × `RemedyGuard`                           | accounts, costUsd                                                   |
-| `byCheck`      | the check's own name                                                   | accounts, costUsd                                                   |
-| `unaccounted`  | —                                                                      | return dispatches that filed no account                             |
-| `unmeasured`   | —                                                                      | runs that reported no usage at all                                  |
-| `byUsage`      | `UsageSubject` × `UsageVerb`                                           | times a person did it (no cost)                                     |
-| `byThroughput` | `ThroughputMeasure` (`src/insights/throughputInsights.ts`)             | times it happened (no cost)                                         |
-| `byFault`      | `ErrorLogEntry['source']`                                              | faults recorded (no cost)                                           |
-| `byChoice`     | `DecisionChoice` × `person`/`agent` (`src/insights/choiceInsights.ts`) | whose answer stood (no cost), [34](34-usage-metrics.md#who-decided) |
-| `byRule`       | `Task.rule`, a `DISPATCH_RULES` id (`src/dispatcher/rules.ts`)         | costUsd, runs — [the trend sections](#the-trend-sections)           |
-| `byVersion`    | the harness build that ran that day                                    | 1 per day per build — [the trend sections](#the-trend-sections)     |
+| Section        | Keyed by                                                               | Measures                                                                      |
+| -------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `byPhase`      | `SpendPhase` (`src/insights/spendInsights.ts`)                         | costUsd, runs                                                                 |
+| `byCause`      | `RemedyKind` × `RemedyCause` × `RemedyGuard`                           | accounts, costUsd                                                             |
+| `byCheck`      | the check's own name                                                   | accounts, costUsd                                                             |
+| `unaccounted`  | —                                                                      | return dispatches that filed no account                                       |
+| `unmeasured`   | —                                                                      | runs that reported no usage at all                                            |
+| `byUsage`      | `UsageSubject` × `UsageVerb`                                           | times a person did it (no cost)                                               |
+| `byThroughput` | `ThroughputMeasure` (`src/insights/throughputInsights.ts`)             | times it happened (no cost)                                                   |
+| `byFault`      | `ErrorLogEntry['source']`                                              | faults recorded (no cost)                                                     |
+| `byChoice`     | `DecisionChoice` × `person`/`agent` (`src/insights/choiceInsights.ts`) | whose answer stood (no cost), [34](34-usage-metrics.md#who-decided)           |
+| `byRule`       | `Task.rule`, a `DISPATCH_RULES` id (`src/dispatcher/rules.ts`)         | costUsd, runs — [the trend sections](#the-trend-sections)                     |
+| `byVersion`    | the harness build that ran that day                                    | 1 per day per build — [the trend sections](#the-trend-sections)               |
+| `lessons`      | an adopted lesson's pull request URL — not a day                       | misses and return dispatches before and after — [below](#the-lessons-section) |
 
 `byUsage` is what a person did, specified at [34](34-usage-metrics.md#the-digest-section) and held to
 every rule stated here. Both halves of its key are closed vocabularies the harness owns
@@ -595,9 +599,11 @@ both run fleets and share one pull request — one authored it, the other is ass
 each see it, so a merge can be counted twice. That needs both of them to have a fleet
 _and_ to be on the same pull request, and it over-counts by one rather than by the
 number of watchers. The alternative is publishing pull-request numbers so the pool could
-deduplicate, which is identifying data this arm has never carried: every dimension here
-is [a closed vocabulary that already exists](#the-keys), and none of them names a thing
-in somebody's repository.
+deduplicate, which is identifying data the summed sections do not carry: every dimension of
+them is [a closed vocabulary that already exists](#the-keys), and none of them names a thing
+in somebody's repository. The one thing in a digest that does is [a lesson's
+link](#the-lessons-section), which is read rather than summed, and is there because the link is
+the whole of what that section is for.
 
 **`Fleets` on a pooled row is how many fleets could vouch for it**, not how many
 published — a fleet whose world arrives unfiltered contributes to `reply-sent` and
@@ -711,6 +717,55 @@ record anything decides on — so an operator who clears the log publishes a fle
 quarter. Unstated, an empty table reads as a clean quarter, which is the one way this section can lie.
 Stated where a person reads it, it is a reading like every other number here.
 
+### The lessons section
+
+A fleet's adopted [repo lessons](41-repo-lessons.md#across-fleets), one row each: `kind`, `cause`,
+`guards` (`documented` and `undocumented` counts), `fix`, `prUrl`, `mergedAt`, and `before` and `after`
+as `{ misses, dispatches }` — the group's misses in distinct goals and the same-kind return dispatches,
+over the 30 days either side of the merge. `after` is null until those 30 days have passed. The counts
+are `buildLessonInsights`' (`src/insights/lessonInsights.ts`), read through `readLessonInsights`
+(`src/lessons/lessonReading.ts`) — the same reading the fleet's own Causes tab draws, never a second
+fold. `poolLessons` in `src/pool/digestArm.ts` builds it.
+
+**No title, no free text, no `where`.** A title is prose an agent wrote, and the pool carries none
+([data classification](#data-classification)); a `where` is a check name or a review area of one
+repository, and [check names do not cross projects](#check-names-cross-within-a-project-and-never-between).
+What a lesson says is in its pull request, and the URL is the way there. `readLessons`
+(`src/pool/document.ts`) rebuilds every row field by field from the closed vocabularies, so a row
+arriving with a title or a `where` lands without it, and a row with an unknown cause, fix or kind, a URL
+that is not `http(s)`, or a bad timestamp is dropped. A document from before the section parses with
+none.
+
+**Only what can be linked is published.** `prUrl` comes from the connector's ref URL resolver
+(`resolveRefUrl`); a lesson whose pull request resolves to nothing is left out rather than published
+without a way to it. A lesson merged before the ninety-day retention is left out like any other row.
+
+**Mirrored, replaced and expired with the digest.** `pool_lessons` is written in the same transaction
+as the fleet's digest rows, by `replaceFleetDigest`, and dropped with them by the week's expiry. This
+fleet's own document is a reading only ([the invariant](#a-mirrored-fleet-expires-after-a-week)), so its
+lessons never reach the table. **Two fleets on one repository publish one lesson under one URL**, and
+`listPoolLessons` keeps one row per `pr_url`, the newer digest's — summed twice it would read as two
+projects.
+
+**The fold** (`foldPoolLessons`, `src/pool/aggregate.ts`) ranks the lessons by **effect**: the relative
+drop in misses per same-kind return dispatch, after against before, with a null after-rate as zero
+(the reading [41](41-repo-lessons.md#did-it-work) takes). A lesson with no before-misses has no effect
+to read and ranks below those that do; a lesson **too early** to read ranks last. A `cause` with adopted
+lessons in **three or more distinct projects** — the mirror's projects plus this fleet's own, from its
+own adopted drafts inside the retention — is a **company-wide candidate**: a rule for a shared plugin or
+an organisation-level `CLAUDE.md` rather than one repository's file. Keyed on `cause` alone, because the
+`where` that would narrow it does not cross.
+
+**No version bump**, for the throughput section's reason: the section is additive and an older reader
+ignores a key it does not ask for. **No per-field opt-out**: the company-wide mark counts projects, so
+an optional section would make it silently partial
+([anything summed is mandatory](#anything-summed-is-mandatory-anything-read-alone-may-be-withheld)).
+
+**Nothing from it is acted on.** The Causes tab under the pool scope lists the lessons with a link out
+and nothing else — no prefilled brief, no button that sends a pooled row anywhere, and nothing from it
+reaches a prompt ([what nothing does](#what-nothing-does)). An operator who wants the same lesson for
+their own repository opens the link and writes their own brief.
+
 ## The clocks
 
 One desk in the pulse, and the pulse is the clock. Not a timer of its own: a `setInterval` keeps firing
@@ -757,18 +812,22 @@ It is not instant, and nothing here should be described as though it were.
 
 ## Data classification
 
-**What crosses is numbers over closed vocabularies**, and that is the whole of the surface now the
-claims arm is gone. A digest row is a day, a key from an enum the harness owns (a spend phase, a remedy
-cause and guard) or a provider's own check name, a count and a dollar figure. There is no free text in
-it, and nothing an agent wrote crosses at all.
+**What crosses is numbers over closed vocabularies, and one link per adopted lesson**, and that is the
+whole of the surface now the claims arm is gone. A digest row is a day, a key from an enum the harness
+owns (a spend phase, a remedy cause and guard) or a provider's own check name, a count and a dollar
+figure. A lesson row is a kind, cause and fix from the harness's vocabularies, counts, a merge time and
+**the pull request's URL** — which names the repository and the pull request, and so says to anyone who
+can read the pool where the lesson landed. There is no free text in either, and nothing an agent wrote
+crosses at all: not a lesson's title, not its summary, not its body.
 
 The controls, in order:
 
 1. **The project opts in**, in a committed file, through code review. The strongest gate in the design,
    and it costs nothing extra.
-2. **`byCheck` is the one field that carries anything a person chose**, and what it carries is a
-   provider's own job name. A deployment for which that is sensitive does not publish at all: it is
-   not optional, for [the rule below](#anything-summed-is-mandatory-anything-read-alone-may-be-withheld).
+2. **`byCheck` and a lesson's `prUrl` are the fields that carry anything a person chose** — a
+   provider's own job name, and the address of a merged pull request. A deployment for which either is
+   sensitive does not publish at all: neither is optional, for
+   [the rule below](#anything-summed-is-mandatory-anything-read-alone-may-be-withheld).
 3. **The secret-pattern backstop is gone with the prose it guarded.** It refused a claim matching a
    high-confidence structured pattern — a key, a token, a private-key header — and there is no longer a
    document with a sentence in it to refuse. A pool that carries prose again brings it back, refusing
@@ -801,7 +860,9 @@ the digest. `byCheck` has no off switch, because an optional field makes every a
 partial — a project's total summed over whichever fleets left it on, rendering as a complete figure.
 The one thing that ever _was_ withheld was a single claim, through `keepLocal`, and that was allowed
 precisely because claims were read one at a time and never totalled: withholding one left nothing
-corrupted, only absent. Nothing in a digest has that shape, so nothing in a digest may be withheld.
+corrupted, only absent. Nothing in a digest has that shape, so nothing in a digest may be withheld —
+a lesson row included: it is listed one at a time, but the company-wide mark counts the projects behind
+a cause, and a lesson withheld would make that count silently short.
 
 ## Configuration
 
@@ -952,7 +1013,7 @@ is no generated file, so there is nothing for two fleets to conflict on. It open
 **It is not a tab of its own.** The pool is a **scope** on the Insights page —
 [Just me or the pool](17-cockpit.md#just-me-or-the-pool) — because every rollup it carries is the
 cross-fleet half of a reading that already has a tab. `byPhase` and the two caveat counts are Economics,
-`byCause` is Causes, `byThroughput` is Throughput, `byUsage` is Usage and `byRule` with `byVersion` is
+`byCause` with the lessons is Causes, `byThroughput` is Throughput, `byUsage` is Usage and `byRule` with `byVersion` is
 Trend; those five tabs are what the scope offers, and the four the pool cannot answer are withheld
 rather than drawn empty. A tab that
 answered "the whole fleet's phase split" beside a tab that answered "this fleet's phase split" was two
@@ -975,7 +1036,8 @@ on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on 
 - **No rule, desk or gate reads anything that arrives.** Nothing is dispatched, held or ranked because
   of a pooled reading.
 - **Nothing arriving reaches a prompt.** There is no arm that could put another fleet's words in front
-  of an agent, and the one that used to is gone with the store behind it.
+  of an agent, and the one that used to is gone with the store behind it. Another fleet's lesson is a
+  link on a page; nothing drafts, briefs or dispatches from it.
 - **No reading acts.** A stale mirror and a fleet that has not published in a month are drawn for the
   person who can act on them, and neither moves anything. A fleet a week past its last digest has its
   rows expired out of the sums ([above](#a-mirrored-fleet-expires-after-a-week)) and is still only
@@ -996,8 +1058,10 @@ publish from rows the fleet already holds, and the envelope carries the project 
 week, read at the moment the row is read — a stored flag would be a second copy of the clock that goes
 wrong the minute nothing polls. → [above](#a-mirrored-fleet-expires-after-a-week)
 
-`pool_digest_rows`, `pool_fleets` and this fleet's own `pool_publications` and `pool_harness_days` are
-the four that remain; `pool_claims` went with the arm that filled it. `pool_harness_days` is the odd one
+`pool_digest_rows`, `pool_lessons`, `pool_fleets` and this fleet's own `pool_publications` and
+`pool_harness_days` are the five that remain; `pool_claims` went with the arm that filled it.
+`pool_lessons` is derived exactly as `pool_digest_rows` is — replaced with its fleet's digest, expired
+with it, and re-derivable from the pool. `pool_harness_days` is the odd one
 out: it is **not** derived. It is this fleet's own record of which version ran on which day, nothing else
 holds it, and dropping it loses the release markers it fed — so it is never retired the way
 `pool_claims` was. Each is created whole by `CREATE TABLE IF NOT EXISTS`

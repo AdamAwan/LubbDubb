@@ -47,6 +47,7 @@ function envelopeDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument
     byChoice: [],
     byRule: [],
     byVersion: [],
+    lessons: [],
     unaccounted: [],
     unmeasured: [],
     byUsage: [],
@@ -109,6 +110,7 @@ test('the digest buckets by UTC day and marks the current one partial', () => {
       'byThroughput',
       'byUsage',
       'byVersion',
+      'lessons',
       'poolableThroughput',
       'unaccounted',
       'unmeasured',
@@ -138,6 +140,7 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
     byChoice: [],
     byRule: [],
     byVersion: [],
+    lessons: [],
   });
   const s = store();
   s.pool.replaceFleetDigest(
@@ -222,6 +225,7 @@ test('a fleet’s faults are never mirrored, whatever its document carries', () 
     byChoice: [],
     byRule: [],
     byVersion: [],
+    lessons: [],
   });
 
   const mirrored = s.pool.listDigestRows('acme-api');
