@@ -123,6 +123,7 @@ export interface Config {
   claudeArgs: string[];
   docsFolderPrefix?: string | string[];
   promptTemplatesDir: string;
+  extensions: string[];
   worktreeRoot: string;
   prewarmWorktrees: boolean;
   deskRoot: string;
@@ -309,6 +310,7 @@ const DEFAULTS: Config = {
   claudeCommand: 'claude',
   claudeArgs: [],
   promptTemplatesDir: '.lubbdubb/prompts',
+  extensions: [],
   worktreeRoot: '.lubbdubb/worktrees',
   prewarmWorktrees: true,
   deskRoot: '.lubbdubb/desk',
@@ -336,6 +338,7 @@ function resolveRootPaths(merged: Config): void {
   } else delete merged.discussionsDir;
 
   merged.promptTemplatesDir = resolve(merged.repoRoot, merged.promptTemplatesDir);
+  merged.extensions = merged.extensions.map((path) => resolve(merged.repoRoot, path));
 }
 
 function mergeConfig(overrides: Partial<Config> = {}): Config {

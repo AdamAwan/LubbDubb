@@ -45,6 +45,7 @@ import { StateQueryDesk } from '../validation/remote/stateQueries.js';
 import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
 import type { TenantKeeper } from '../validation/remote/tenants.js';
+import type { LoadedExtension } from '../extensions/contract.js';
 import { ClaudePluginCli, PluginDesk, type PluginCli } from '../plugin/desk.js';
 import { installRoot } from '../selfUpdate/buildStanding.js';
 import { PERMISSION_PROMPT_TOOL } from '../mcp/names.js';
@@ -89,6 +90,8 @@ export interface BuildOptions {
   environmentObserver?: EnvironmentObserver;
   stateReader?: StateReader;
   tenants?: TenantKeeper;
+  /** What `loadExtensions` read from `config.extensions`; `main` loads them before the system is built. */
+  extensions?: readonly LoadedExtension[];
   pluginCli?: PluginCli;
   errorMirror?: (entry: ErrorLogEntry) => void;
   /** The event-loop delay histogram the runtime watch reads; `perf_hooks`' own unless a test injects one. */

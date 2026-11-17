@@ -110,6 +110,7 @@ Each holds the sharp edges for the code beside it. Read the one for a directory 
 - [`src/config/CLAUDE.md`](src/config/CLAUDE.md) — config layers and `mergeLayers`
 - [`src/dispatcher/CLAUDE.md`](src/dispatcher/CLAUDE.md) — the rule book, pipeline order, the investigate label, lenses
 - [`src/environments/CLAUDE.md`](src/environments/CLAUDE.md) — reach verdicts, landings, arrivals
+- [`src/extensions/CLAUDE.md`](src/extensions/CLAUDE.md) — project extensions: slot contracts and the API version
 - [`src/git/CLAUDE.md`](src/git/CLAUDE.md) — `resolveCommit` and `GitObserver`
 - [`src/integrations/CLAUDE.md`](src/integrations/CLAUDE.md) — providers: label authorship, review-reply attribution, `*Api` fakes
 - [`src/mcp/CLAUDE.md`](src/mcp/CLAUDE.md) — the tool channel: `buildTools` names, the desktop channel

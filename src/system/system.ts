@@ -76,6 +76,7 @@ import {
 } from './systemFoundation.js';
 import { type Fleet, buildAgentManager, buildFleet } from './systemFleet.js';
 import { buildLocalRuns } from './systemLocalRuns.js';
+import { buildExtensionHost } from '../extensions/host.js';
 import { watchHintRequired } from '../plans/planning.js';
 import {
   type IntakeDesks,
@@ -161,6 +162,8 @@ export interface System {
   mcp: McpBridgeServer;
   desktop: McpDesktopServer;
   plugin: ReturnType<typeof buildPluginDesk>;
+  /** The project's extensions and the slots they fill. → docs/spec/42-extensions.md */
+  extensions: ReturnType<typeof buildExtensionHost>;
   worktrees: Worktrees;
   /** The one object every discussion read and write goes through. → docs/spec/40-discussions.md */
   discussions: Foundation['discussions'];
@@ -235,6 +238,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp: channels.mcp,
     desktop: channels.desktop,
     plugin: buildPluginDesk(config, opts, base.errors),
+    extensions: buildExtensionHost(config, opts.extensions, base.errors),
     ...foundationParts(base),
     errors: base.errors,
     runtimeHealth: base.runtimeHealth,

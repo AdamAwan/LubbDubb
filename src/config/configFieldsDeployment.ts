@@ -38,6 +38,12 @@ export const DEPLOYMENT_FIELDS: readonly ConfigField[] = [
   },
   { path: 'promptTemplatesDir', type: 'string', access: 'advanced', why: 'Where prompt-book overrides are read from.' },
   {
+    path: 'extensions',
+    type: 'stringList',
+    access: 'fileOnly',
+    why: 'Project code the harness loads at boot to fill its extension slots. Each entry is a module that runs inside the harness.',
+  },
+  {
     path: 'docsFolderPrefix',
     type: 'json',
     access: 'advanced',
