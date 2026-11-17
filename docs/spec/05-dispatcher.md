@@ -213,7 +213,7 @@ unconditional.
 | `pr-merge-ready`           | Merge-ready PR                           | —                    | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                                                                                                                                                                                                                                                                                  |
 | `work-item-in-progress`    | Advance to in-progress state             | `workItemInProgress` | A work item in a pickup state has a live **work** agent on it, no open PR and no plan.                                                                                                                                                                                                                                                                                                                                          |
 | `work-item-in-review`      | Back off to review state                 | `workItemStates`     | A work item in a pickup state has an open PR (or is decomposed).                                                                                                                                                                                                                                                                                                                                                                |
-| `work-item-back-to-pickup` | Stranded in review state                 | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion — not the in-flight verdict of its own parts plan. Asks a human once; moves nothing.                                                                                                                                                                                                                                    |
+| `work-item-back-to-pickup` | Stranded in review state                 | `workItemStates`     | A still-open work item parked in the review state has no open PR, no plan in flight, and an explicit `more_work` conclusion newer than the merge that finished its plan. Asks a human once; moves nothing.                                                                                                                                                                                                                      |
 | `issue-appraisal`          | Issue goal needs checking                | —                    | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                                                                                                                                                                                                                                                              |
 | `issue-investigate`        | Bug needs investigating                  | —                    | A watched open issue carrying the investigate label, with nothing started and no findings against its current text. One read-only code agent on `issue:<n>:investigate` finds the cause; the planner stands aside until an operator resolves the findings or the label comes off. → [38](38-bug-investigation.md)                                                                                                               |
 | `issue-plan`               | Issue needs a plan                       | —                    | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                                                                                                                                                                                                                                                                       |
@@ -987,8 +987,8 @@ issues have none, so it is a no-op for them). It never fires on a closed item.
   none and was scheduled by the since-retired rule `issue-pickup`: `active` did not then mean the plan was working the
   issue, and reading it as one parked the work item in the review state for the life of a plan with
   no parts to finish.
-- Item in `issueInReviewState` with no open PR **and an explicit `more_work` conclusion** → **ask a
-  human**, once, on origin `issue:<n>:review-stranded`: move it back to the **first** entry of
+- Item in `issueInReviewState` with no open PR, **no plan in flight, and an explicit `more_work`
+  conclusion that is not older than the merge which finished its plan** → **ask a human**, once, on origin `issue:<n>:review-stranded`: move it back to the **first** entry of
   `issuePickupStates`, or mark the issue done. Nothing is moved.
 
 **The harness never moves a work item backwards.** Every state it writes is a step forward along the
@@ -1017,16 +1017,32 @@ the item where it is — see [the conclusion verdict](06-issue-pickup.md#conclud
 silence stops the harness rather than releasing it.
 
 Both arms read **one predicate**, `workItemRelease` (`src/dispatcher/rules/workItemRelease.ts`): no
-open PR, an explicit `more_work` conclusion, and that conclusion is **not** the in-flight roll-up of the
-item's own parts plan. Back-to-pickup acts only when it holds; in-review refuses to park when it holds.
+open PR, no plan in flight (`planInFlight` — `planning`, `awaiting_approval` or `active`), an explicit
+`more_work` conclusion, and, when the plan is `complete`, a conclusion **no older than the last of its
+parts to settle**. Back-to-pickup acts only when it holds; in-review refuses to park when it holds.
 One answer per world snapshot, so the two cannot disagree.
+
+**A plan in flight holds the item, whatever verdict stands.** Between one part's PR merging and the
+next opening there is no open PR, and a shortfall or an operator's `more_work` outranks the plan's
+roll-up in `resolveIssueConclusion` — so the arm used to ask "move it back?" on every gap between parts,
+and through every replan (`planning` is not `partsPlanFor`'s, so the carve-out below missed it). The
+plan is already the answer to "who does the rest".
+
+**A verdict the plan's last merge outdates is spent.** When the last part merges the plan rolls up
+`complete`, the in-flight hold lifts, and a stored `more_work` recorded _before_ that merge still
+outranks "every part of the plan merged" — `issue_conclusions` rows are cleared only by a person. The
+arm then raised its card the moment the final PR merged, about work the merge had just delivered.
+Whether the goal is reached after that merge is the assessor's question
+([`issue-assess`](#issue-assess--the-assessor)), and a shortfall it writes afterwards is newer
+than the merge and asks as before. The finish time is the latest `updatedAt` among the plan's settled
+parts, not `plan.updatedAt`, which a status-comment write also bumps.
 
 The plan carve-out is the bug this replaced. An in-flight plan resolves to `more_work` through the
 roll-up, and the arm once took that as a release — while `work-item-in-review` parks a decomposed item
 precisely _because_ it has a plan. Every decomposed item with no part PR open was moved to the pickup
 state by one rule and straight back by the other on the next pulse, forever (a tracker history of
 hundreds of New ⇄ Reviewing flips). Now a decomposed item stays in the review state for the life of its
-plan. An explicit verdict — a shortfall, an operator's or agent's `more_work` — still releases it: the
+plan. An explicit verdict on a finished plan — a shortfall, an operator's or agent's `more_work`, newer than its last merge — still releases it: the
 operator is asked to move it back, and once they have, in-review leaves it in the pickup state rather
 than parking it again.
 

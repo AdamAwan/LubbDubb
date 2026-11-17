@@ -36,7 +36,6 @@ export function workItemBackToPickup(s: StageContext): void {
 }
 
 function outstandingBy(conclusion: ReturnType<typeof resolveIssueConclusion>): string {
-  if (conclusion.by === 'plan') return conclusion.note;
   if (conclusion.by === 'assessor') return 'an assessment of the delivered work found the goal is not reached';
   return `${conclusion.by === 'operator' ? 'you' : 'the agent that worked it'} reported work outstanding`;
 }
