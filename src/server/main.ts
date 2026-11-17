@@ -6,6 +6,8 @@ import { loadDeploymentConfig, type Config } from '../config/config.js';
 import { watchConfigFile } from '../config/configWatch.js';
 import { UPGRADE_EXIT_CODE } from '../selfUpdate/handoff.js';
 import { buildSystem, type System } from '../system/system.js';
+import { loadExtensions } from '../extensions/load.js';
+import { EXTENSION_SLOTS } from '../extensions/slots.js';
 import { ffmpegPreflight } from '../validation/local/ffmpeg.js';
 import { buildApp } from './app.js';
 
@@ -91,9 +93,15 @@ function resumeLocalRun(system: System): void {
     console.log(`[lubbdubb] the local run of ${interrupted.run.originRef} did not survive: ${interrupted.reason}`);
 }
 
+function announceExtensions(system: System): void {
+  for (const name of system.extensions.names()) console.log(`[lubbdubb] extension "${name}" loaded`);
+}
+
 async function main(): Promise<void> {
   const config = loadDeploymentConfig();
-  const system = buildSystem(config);
+  const extensions = await loadExtensions({ paths: config.extensions, book: EXTENSION_SLOTS });
+  const system = buildSystem(config, { extensions });
+  announceExtensions(system);
   system.runtimeHealth.start();
 
   clearVivarium(system);

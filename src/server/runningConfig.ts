@@ -145,6 +145,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'localRunRoot',
       'discussionsDir',
       'promptTemplatesDir',
+      'extensions',
       'docsFolderPrefix',
       'dbPath',
     ],

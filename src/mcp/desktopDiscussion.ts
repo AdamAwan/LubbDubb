@@ -1,10 +1,6 @@
 import { z } from 'zod';
-import {
-  DISCUSSION_AUTHORS,
-  DISCUSSIONS_OFF,
-  failure,
-  type DiscussionSettlement,
-} from '../discussions/discussionFile.js';
+import { DISCUSSION_AUTHORS, DISCUSSIONS_OFF, type DiscussionSettlement } from '../discussions/discussionFile.js';
+import { failure } from '../primitives.js';
 import { openQuestions } from '../discussions/entries.js';
 import { DISCUSSION_KINDS, isOneOf } from '../discussions/parse.js';
 import { readDiscussion } from '../discussions/related.js';

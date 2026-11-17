@@ -27,6 +27,7 @@ import { dropRetiredKeys, refuseRemovedKeys } from './retiredKeys.js';
 import {
   validateAgentMode,
   validateAppErrors,
+  validateExtensions,
   validateFleetStall,
   validateLessons,
   validatePool,
@@ -123,6 +124,7 @@ export interface Config {
   claudeArgs: string[];
   docsFolderPrefix?: string | string[];
   promptTemplatesDir: string;
+  extensions: string[];
   worktreeRoot: string;
   prewarmWorktrees: boolean;
   deskRoot: string;
@@ -309,6 +311,7 @@ const DEFAULTS: Config = {
   claudeCommand: 'claude',
   claudeArgs: [],
   promptTemplatesDir: '.lubbdubb/prompts',
+  extensions: [],
   worktreeRoot: '.lubbdubb/worktrees',
   prewarmWorktrees: true,
   deskRoot: '.lubbdubb/desk',
@@ -336,6 +339,7 @@ function resolveRootPaths(merged: Config): void {
   } else delete merged.discussionsDir;
 
   merged.promptTemplatesDir = resolve(merged.repoRoot, merged.promptTemplatesDir);
+  merged.extensions = merged.extensions.map((path) => resolve(merged.repoRoot, path));
 }
 
 function mergeConfig(overrides: Partial<Config> = {}): Config {
@@ -523,6 +527,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
 
   validatePool(merged);
   validateReview(merged);
+  validateExtensions(merged);
 
   merged.claudeArgs = merged.claudeArgs.map((arg) => {
     if (isAbsolute(arg)) return arg;

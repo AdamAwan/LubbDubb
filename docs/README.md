@@ -138,6 +138,7 @@ deliberately left unchecked, and why, is in
 | [39](spec/39-app-errors.md)          | App errors                 | The errors nobody declared: the `errors` command, its contract, states, the key, linking, the tracker lock, the Errors tab — partly built                            |
 | [40](spec/40-discussions.md)         | Discussions                | Notes, ideas, decisions and open questions per story and feature, kept as Markdown in the operator's folder, talked through in Claude — partly built                 |
 | [41](spec/41-repo-lessons.md)        | Repo lessons               | A miss the fleet keeps repeating, drafted as a fix on the worked-on repository and ruled on as a pull request: the grouping, the draft, the ruling, the pool section |
+| [42](spec/42-extensions.md)          | Extensions                 | A project's own code loaded at boot to answer named slots: the file, loading and its refusals, calling a slot, adding one                                            |
 
 ## Conventions used throughout
 
