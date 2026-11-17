@@ -58,6 +58,11 @@ export function failure(error: unknown): string {
   return typeof message === 'string' ? message : String(error);
 }
 
+export function failureStack(error: unknown): string | null {
+  const stack = (error as { stack?: unknown } | null)?.stack;
+  return typeof stack === 'string' ? stack : null;
+}
+
 export function withDeadline<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(message)), ms);

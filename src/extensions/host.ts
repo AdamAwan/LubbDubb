@@ -1,6 +1,6 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Config } from '../config/config.js';
-import { failure, withDeadline } from '../primitives.js';
+import { failure, failureStack, withDeadline } from '../primitives.js';
 import type { LoadedExtension, SlotBook, SlotImplementation, SlotMap, SlotResult } from './contract.js';
 import { EXTENSION_SLOTS, type ExtensionSlots } from './slots.js';
 
@@ -46,19 +46,21 @@ export class ExtensionHost<S extends SlotMap> {
         `it did not answer within ${definition.timeoutMs} ms`,
       );
       const refused = definition.check(value);
-      if (refused !== null) {
-        controller.abort();
-        return this.failed(slot, bound, `it answered with the wrong shape: ${refused}`);
-      }
+      if (refused !== null) return this.failed(slot, bound, controller, `it answered with the wrong shape: ${refused}`);
       return { ok: true, value: value as S[K]['output'] };
     } catch (err) {
-      controller.abort();
-      const stack = (err as { stack?: unknown } | null)?.stack;
-      return this.failed(slot, bound, failure(err), typeof stack === 'string' ? stack : null);
+      return this.failed(slot, bound, controller, failure(err), failureStack(err));
     }
   }
 
-  private failed(slot: string, bound: Bound, why: string, stack: string | null = null): SlotResult<never> {
+  private failed(
+    slot: string,
+    bound: Bound,
+    controller: AbortController,
+    why: string,
+    stack: string | null = null,
+  ): SlotResult<never> {
+    controller.abort();
     const detail = `extension "${bound.extension}" failed the "${slot}" slot: ${why}`;
     this.opts.errors.record({ source: 'runtime', message: detail, detail: stack });
     return { ok: false, detail };
