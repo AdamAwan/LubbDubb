@@ -62,16 +62,28 @@ Each failure above is answered by construction:
    that recurs across **at least two distinct goals** inside the window is a candidate. One miss is
    noise; two on different goals is a pattern.
 2. **Draft.** Rule _repo-lesson_ dispatches one code agent on its own branch, handed the group's
-   remedy summaries, their pull request links and the retrospectives of those goals. It edits the
-   **nearest** document in the worked-on repository that would have been read — a directory
-   `CLAUDE.md` before the root one, because the root file is loaded for every agent and every
-   engineer, so each line there costs everyone.
-   - For `undocumented`: write the rule down.
-   - For `documented` (the rule exists and was missed): don't add more prose. Move it closer to the
-     code, or propose a lint rule or test that enforces it.
-   - The agent may conclude **no edit is warranted** — a taste disagreement is not a rule. That
-     settles the group without a pull request.
-3. **Rule.** The pull request carries a `${labelPrefix}-lesson` label and cites every remedy behind
+   remedy summaries, their pull request links and the retrospectives of those goals. Its job is to
+   pick **the fix that stops the miss for good**, which is often not more prose. In order of
+   preference:
+   - **Remove the cause in the code.** A misleading name, two places that must be kept in step, a
+     helper that looks reusable and isn't — `clarity` and `contract_drift` misses usually point here.
+     If the code is the confusion, a doc explaining it is a workaround.
+   - **Make it enforced.** A lint rule, type or test that fails when the miss is made. Best for
+     `documented` misses: the rule was written down and still missed, so more words won't help.
+   - **Fix a contradiction.** Where the code and the repository's spec or docs disagree, the agent
+     says which one is right, citing the evidence, and corrects the other. Where it can't tell, it
+     asks rather than guesses.
+   - **Write it down.** Only for what is genuinely a convention: the **nearest** `CLAUDE.md` or doc
+     that would have been read — a directory file before the root one, because the root file is
+     loaded for every agent and engineer, so each line there costs everyone.
+   - **Nothing.** A taste disagreement is not a rule. That settles the group without a pull request.
+
+   **Small fixes are a pull request; big ones are a ticket.** A rename, a test or a doc edit the
+   agent makes itself. A refactor touching many files is **filed as a ticket** carrying the
+   evidence, without the watch label — the operator decides whether the fleet takes it on, and if
+   they do, it goes through appraisal and planning like any other goal.
+
+3. **Rule.** The pull request (or ticket) carries a `${labelPrefix}-lesson` label and cites every remedy behind
    it. **Merged** means adopted. **Closed** means declined, and the group is not redrafted until the
    same number of _new_ misses arrives.
 4. **Check it worked.** The Causes tab shows each landed lesson's group before and after its merge.
