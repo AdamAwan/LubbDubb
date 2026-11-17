@@ -218,9 +218,10 @@ explain a missing video, because the harness reads that for itself:
 
 - **At boot**, and only at boot, `ffmpegPreflight` (`src/validation/local/ffmpeg.ts`, called from `main.ts`) looks for
   `ffmpeg-<FFMPEG_REVISION>` in the Playwright cache (a non-empty `PLAYWRIGHT_BROWSERS_PATH`, else the
-  platform's default, with an empty `XDG_CACHE_HOME` or `LOCALAPPDATA` read as unset). Under
-  `PLAYWRIGHT_BROWSERS_PATH=0` Playwright installs inside its own package, which this harness does not
-  locate, so it says nothing there rather than guess and records **one** `boot` error naming the install command when it is missing. It checks
+  platform's default, with an empty `XDG_CACHE_HOME` or `LOCALAPPDATA` read as unset) and records **one**
+  `boot` error naming the install command when it is missing. Under `PLAYWRIGHT_BROWSERS_PATH=0`
+  Playwright installs inside its own package, which this harness does not locate, so it says nothing
+  there rather than guess. It checks
   only a browser that offers the recorder _and_ launches the pinned package: an operator's own args
   name a revision this harness cannot know.
 - **On each settled run**, a `recordingStatus` is written beside the report — `kept` where a video is
