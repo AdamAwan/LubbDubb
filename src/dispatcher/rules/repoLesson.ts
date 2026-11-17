@@ -8,7 +8,7 @@ export function repoLesson(s: StageContext): void {
   if (draft === null) return;
   const origin = lessonDraftOrigin(draft.id);
   if (s.activeOrigins.has(origin)) return;
-  const branch = lessonBranch(draft.id);
+  const branch = lessonBranch(draft.id, draft.groupKey);
   const title = `Draft a repo lesson for ${draft.groupKey}`;
   const reason =
     `The fleet came back to pull requests on ${String(draft.goals.length)} goals for the same reason — ` +

@@ -13,7 +13,7 @@ import { resolveOpenPr } from '../src/mcp/openPr.js';
 import { toolsForRule } from '../src/mcp/names.js';
 import { LessonOutcomeDesk } from '../src/lessons/outcomeDesk.js';
 import { lessonPrBody, type RefUrl } from '../src/lessons/evidence.js';
-import { lessonMarker } from '../src/lessons/lessonOrigin.js';
+import { lessonBranch, lessonMarker } from '../src/lessons/lessonOrigin.js';
 import { isHarnessBranch } from '../src/pr/prOwnership.js';
 import { ticketFiler } from '../src/tickets/filing.js';
 import { githubRefUrl } from '../src/integrations/github/refUrl.js';
@@ -108,7 +108,7 @@ function lessonTasks(system: System): Task[] {
 async function dispatched(system: System): Promise<{ task: Task; draft: LessonDraft }> {
   miss(system, 11);
   miss(system, 12);
-  system.lessons.run(world());
+  await system.lessons.run(world());
   await system.harness.runCycle('manual');
   const tasks = lessonTasks(system);
   assert.equal(tasks.length, 1);
@@ -128,11 +128,11 @@ function concludeTool(system: System, task: Task, desk: LessonOutcomeDesk = syst
 const GITHUB: RefUrl = (ref) => githubRefUrl('acme', 'shop', ref);
 const AZURE: RefUrl = (ref) => azureRefUrl('acme', 'Shop', 'shop', ref);
 
-test('remedies on two goals put one repo-lesson agent on lesson/<id>, with the evidence appended', async () => {
+test('remedies on two goals put one repo-lesson agent on lesson/<tag>/<id>, with the evidence appended', async () => {
   const { system } = build(2);
   try {
     const { task, draft } = await dispatched(system);
-    assert.equal(task.branch, `lesson/${draft.id}`);
+    assert.equal(task.branch, lessonBranch(draft.id, draft.groupKey));
     assert.equal(task.originRef, `lessons:draft:${draft.id}`);
     assert.equal(draft.groupKey, 'ci/missed_gate/lint');
     assert.equal(draft.status, 'dispatched');
@@ -143,7 +143,7 @@ test('remedies on two goals put one repo-lesson agent on lesson/<id>, with the e
     assert.ok(toolsForRule('repo-lesson').has('lesson_conclude'));
     assert.ok(!toolsForRule('pr-ci-failing').has('lesson_conclude'), 'advertised to the lesson agent alone');
 
-    system.lessons.run(world());
+    await system.lessons.run(world());
     await system.harness.runCycle('manual');
     assert.equal(lessonTasks(system).length, 1, 'no second draft while one is out');
     assert.equal(system.store.lessons.listDrafts().length, 1);
@@ -157,7 +157,7 @@ test('minGoals 0 drafts nothing, the rule is inert even over a draft row, and th
   try {
     miss(system, 11);
     miss(system, 12);
-    system.lessons.run(world());
+    await system.lessons.run(world());
     assert.equal(system.store.lessons.listDrafts().length, 0);
     system.store.lessons.openDraft({
       groupKey: 'ci/missed_gate/lint',
@@ -170,7 +170,7 @@ test('minGoals 0 drafts nothing, the rule is inert even over a draft row, and th
     });
     await system.harness.runCycle('manual');
     assert.equal(lessonTasks(system).length, 0);
-    system.lessons.run(world());
+    await system.lessons.run(world());
     assert.deepEqual(
       system.store.lessons.listDrafts().map((d) => d.status),
       ['unanswered'],
@@ -230,7 +230,7 @@ test('a pull_request outcome opens the PR with URL citations and the marker, lab
     assert.equal(result.isError, undefined, JSON.stringify(result));
 
     const opened = calls.find((c) => c.method === 'createPullRequest')!.input;
-    assert.equal(opened.branch, `lesson/${draft.id}`);
+    assert.equal(opened.branch, lessonBranch(draft.id, draft.groupKey));
     assert.equal(opened.base, 'main');
     const body = String(opened.body);
     assert.ok(body.includes('https://github.com/acme/shop/pull/11'));
@@ -300,7 +300,7 @@ test('nothing settles the draft with its reason; a task that ends unconcluded se
     const { draft } = await dispatched(second.system);
     backend.last().emitExit(0);
     await delay(5);
-    second.system.lessons.run(world());
+    await second.system.lessons.run(world());
     assert.equal(second.system.store.lessons.getDraft(draft.id)!.status, 'unanswered');
   } finally {
     second.system.store.close();
@@ -322,7 +322,7 @@ function prOpen(system: System, key: string, where: string, prNumber: number): L
   return draft;
 }
 
-test('a merged lesson pull request is adopted, a closed one declined', () => {
+test('a merged lesson pull request is adopted, a closed one declined', async () => {
   const { system } = build(2);
   try {
     const merged = prOpen(system, 'ci/missed_gate/a', 'a', 77);
@@ -334,7 +334,7 @@ test('a merged lesson pull request is adopted, a closed one declined', () => {
       ],
     });
     system.graph.record(settled);
-    system.lessons.run(settled);
+    await system.lessons.run(settled);
     assert.equal(system.store.lessons.getDraft(merged.id)!.status, 'adopted');
     assert.equal(system.store.lessons.getDraft(closed.id)!.status, 'declined');
   } finally {
@@ -342,14 +342,14 @@ test('a merged lesson pull request is adopted, a closed one declined', () => {
   }
 });
 
-test('at most two lesson pull requests are open, and an open PR carrying the marker holds its group', () => {
+test('at most two lesson pull requests are open, and an open PR carrying the marker holds its group', async () => {
   const { system } = build(2);
   try {
     prOpen(system, 'ci/missed_gate/a', 'a', 77);
     prOpen(system, 'ci/missed_gate/b', 'b', 78);
     miss(system, 11);
     miss(system, 12);
-    system.lessons.run(world());
+    await system.lessons.run(world());
     assert.equal(system.store.lessons.pendingDraft(), null, 'the cap of two holds');
   } finally {
     system.store.close();
@@ -359,11 +359,11 @@ test('at most two lesson pull requests are open, and an open PR carrying the mar
   try {
     miss(other, 11);
     miss(other, 12);
-    other.lessons.run(world({ pullRequests: [pr(40, { body: `x\n\n${lessonMarker('ci/missed_gate/lint')}` })] }));
+    await other.lessons.run(world({ pullRequests: [pr(40, { body: `x\n\n${lessonMarker('ci/missed_gate/lint')}` })] }));
     assert.equal(other.store.lessons.pendingDraft(), null, 'another fleet’s open lesson for the group');
-    other.lessons.run(world({ pullRequests: [pr(11, { botAuthored: true })] }));
+    await other.lessons.run(world({ pullRequests: [pr(11, { botAuthored: true })] }));
     assert.equal(other.store.lessons.pendingDraft(), null, 'a bot’s pull request is not the fleet’s miss');
-    other.lessons.run(world());
+    await other.lessons.run(world());
     assert.equal(other.store.lessons.pendingDraft()?.groupKey, 'ci/missed_gate/lint');
   } finally {
     other.store.close();
@@ -375,17 +375,17 @@ test('a declined group is redrafted only after as many new goals again; an adopt
   try {
     miss(system, 11);
     miss(system, 12);
-    system.lessons.run(world());
+    await system.lessons.run(world());
     const first = system.store.lessons.pendingDraft()!;
     system.store.lessons.settle(first.id, 'declined', ['pending']);
     await delay(5);
-    system.lessons.run(world());
+    await system.lessons.run(world());
     assert.equal(system.store.lessons.pendingDraft(), null, 'the misses it was declined on do not bring it back');
     miss(system, 13);
-    system.lessons.run(world());
+    await system.lessons.run(world());
     assert.equal(system.store.lessons.pendingDraft(), null, 'one new goal is not as many again');
     miss(system, 14);
-    system.lessons.run(world());
+    await system.lessons.run(world());
     const again = system.store.lessons.pendingDraft();
     assert.ok(again, 'two new goals redraft it');
     assert.equal(again.groupKey, first.groupKey);
@@ -394,7 +394,7 @@ test('a declined group is redrafted only after as many new goals again; an adopt
     await delay(5);
     miss(system, 15);
     miss(system, 16);
-    system.lessons.run(world());
+    await system.lessons.run(world());
     assert.equal(system.store.lessons.pendingDraft(), null, 'an adopted lesson is never redrafted');
   } finally {
     system.store.close();

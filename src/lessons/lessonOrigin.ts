@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 // → docs/spec/41-repo-lessons.md#drafting-a-lesson
 
 export function lessonDraftOrigin(draftId: string): string {
@@ -9,9 +11,19 @@ export function lessonDraftId(originRef: string | null): string | null {
   return match ? match[1]! : null;
 }
 
+/** A group key in a form a branch name can carry: every fleet on the repository derives the same tag. */
+export function lessonGroupTag(groupKey: string): string {
+  return createHash('sha1').update(groupKey).digest('hex').slice(0, 10);
+}
+
 /** The branch a draft's agent commits to and its pull request is opened from. */
-export function lessonBranch(draftId: string): string {
-  return `lesson/${draftId}`;
+export function lessonBranch(draftId: string, groupKey: string): string {
+  return `lesson/${lessonGroupTag(groupKey)}/${draftId}`;
+}
+
+/** The group tag a lesson branch carries; null for one cut before branches carried it. */
+export function lessonBranchTag(branch: string): string | null {
+  return /^lesson\/([0-9a-f]{10})\/.+$/.exec(branch)?.[1] ?? null;
 }
 
 export function isLessonBranch(branch: string): boolean {

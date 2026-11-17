@@ -15,7 +15,16 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { BotPrDetail, BotPullRequest, PrPerson, PrThreadState, PullRequest } from '../../types.js';
+import type {
+  BotPrDetail,
+  BotPullRequest,
+  LessonPullRequest,
+  PrPerson,
+  PrThreadState,
+  PullRequest,
+} from '../../types.js';
+import { isLessonBranch } from '../../lessons/lessonOrigin.js';
+import { prState } from '../../pr/prHealth.js';
 import { searchLogins } from '../../pr/assigneeSearch.js';
 import { threadComments } from '../../pr/prThreads.js';
 import { authoredBy } from '../integration.js';
@@ -107,6 +116,19 @@ export class FakeGitHubIntegration
         ...(pr.url === undefined ? {} : { url: pr.url }),
         ...(pr.body === undefined ? {} : { body: pr.body }),
         headSha: pr.headSha,
+      }));
+  }
+
+  async listLessonPullRequests(since: string): Promise<LessonPullRequest[]> {
+    const world = this.world.read();
+    return [...world.pullRequests, ...world.closedPullRequests]
+      .filter((pr) => isLessonBranch(pr.branch) && (prState(pr) === 'open' || (pr.closedAt ?? '') >= since))
+      .map((pr) => ({
+        number: pr.number,
+        branch: pr.branch,
+        url: pr.url ?? '',
+        state: prState(pr),
+        closedAt: pr.closedAt ?? null,
       }));
   }
 

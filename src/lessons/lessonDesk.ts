@@ -7,6 +7,7 @@ import { lessonBriefing, lessonMisses } from './evidence.js';
 import { prState } from '../pr/prHealth.js';
 import { lessonCandidates, LESSON_WINDOW_MS, type LessonGroupInputs } from './groups.js';
 import { isLessonBranch, lessonMarker } from './lessonOrigin.js';
+import { othersLessonPrs, type LessonPrReading } from './lessonPrs.js';
 
 // → docs/spec/41-repo-lessons.md#the-record-and-the-desk
 
@@ -19,10 +20,12 @@ interface LessonDeskDeps {
   minGoals: number;
   reviewAreas: readonly ReviewAreaRule[];
   lessonLabel: string;
+  /** Every fleet's lesson pull requests; absent, the desk sees only its own world. */
+  lessonPrs?: LessonPrReading;
   now?: () => number;
 }
 
-/** Settles drafts and opens the next one; reads no world of its own and never waits on anything. */
+/** Settles drafts and opens the next one; reads no world of its own beyond the lesson pull requests. */
 export class LessonDesk {
   private readonly now: () => number;
 
@@ -31,14 +34,14 @@ export class LessonDesk {
   }
 
   /** @public called by the pulse, beside `appErrorTriage`. */
-  run(world: WorldSnapshot): void {
+  async run(world: WorldSnapshot): Promise<void> {
     this.settle();
     if (this.deps.minGoals < 2) {
       const pending = this.deps.store.lessons.pendingDraft();
       if (pending) this.deps.store.lessons.settle(pending.id, 'unanswered', ['pending']);
       return;
     }
-    this.open(world);
+    await this.open(world);
   }
 
   private settle(): void {
@@ -53,7 +56,7 @@ export class LessonDesk {
     }
   }
 
-  private open(world: WorldSnapshot): void {
+  private async open(world: WorldSnapshot): Promise<void> {
     const { store } = this.deps;
     const drafts = store.lessons.listDrafts();
     if (drafts.some((d) => d.status === 'pending' || d.status === 'dispatched')) return;
@@ -69,8 +72,11 @@ export class LessonDesk {
       reviewAreas: this.deps.reviewAreas,
       since,
     };
+    if (lessonCandidates(input, drafts, this.deps.minGoals).length === 0) return;
+    const read = this.deps.lessonPrs === undefined ? [] : await this.deps.lessonPrs.read();
+    if (read === null) return;
     const open = world.pullRequests.filter((pr) => prState(pr) === 'open');
-    const candidate = lessonCandidates(input, drafts, this.deps.minGoals).find(
+    const candidate = lessonCandidates(input, drafts, this.deps.minGoals, othersLessonPrs(read, drafts)).find(
       (c) => !open.some((pr) => pr.body?.includes(lessonMarker(c.key)) === true),
     );
     if (candidate === undefined) return;

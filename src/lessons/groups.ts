@@ -4,6 +4,7 @@ import { DAY_MS } from '../primitives.js';
 import type {
   LessonDraft,
   LessonDraftStatus,
+  LessonPullRequest,
   PrThreadLabel,
   Remedy,
   RemedyCause,
@@ -11,6 +12,7 @@ import type {
   RemedyKind,
 } from '../types.js';
 import { areasForPath } from '../review/areas.js';
+import { lessonBranchTag, lessonGroupTag } from './lessonOrigin.js';
 
 // → docs/spec/41-repo-lessons.md#noticing-a-repeat-miss
 
@@ -95,17 +97,31 @@ export function lessonCandidates(
   input: LessonGroupInputs,
   drafts: readonly PriorDraft[],
   minGoals: number,
+  others: readonly LessonPullRequest[] = [],
 ): LessonGroup[] {
   const out: LessonGroup[] = [];
   for (const group of lessonGroups(input)) {
     if (group.goals.length < minGoals) continue;
-    const own = drafts.filter((d) => d.groupKey === group.key);
+    const own = [...drafts.filter((d) => d.groupKey === group.key), ...othersAsDrafts(group.key, others)];
     if (own.some((d) => LIVE.has(d.status) || FINAL.has(d.status))) continue;
     const last = latestSettled(own);
     if (last !== null && goalsSince(group, input, last.settledAt) < Math.max(last.goals.length, minGoals)) continue;
     out.push(group);
   }
   return out.sort((a, b) => b.goals.length - a.goals.length || a.key.localeCompare(b.key));
+}
+
+/** Another fleet's lesson pull request for the group, read as a draft of this fleet's: open holds it, merged ends it, closed is a no. */
+function othersAsDrafts(groupKey: string, others: readonly LessonPullRequest[]): PriorDraft[] {
+  const tag = lessonGroupTag(groupKey);
+  return others
+    .filter((pr) => lessonBranchTag(pr.branch) === tag)
+    .map((pr) => ({
+      groupKey,
+      status: pr.state === 'open' ? 'pr-open' : pr.state === 'merged' ? 'adopted' : 'declined',
+      goals: [],
+      settledAt: pr.state === 'open' ? null : pr.closedAt,
+    }));
 }
 
 function counts(remedy: Remedy, input: LessonGroupInputs): boolean {

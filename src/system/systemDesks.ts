@@ -30,6 +30,7 @@ import { appErrorView, CurrentAppErrors } from '../appErrors/current.js';
 import { AppErrorTriageDesk } from '../appErrors/triageDesk.js';
 import { LessonDesk } from '../lessons/lessonDesk.js';
 import { LessonOutcomeDesk } from '../lessons/outcomeDesk.js';
+import { LessonPrReading } from '../lessons/lessonPrs.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber } from '../environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from '../environments/observer.js';
@@ -200,7 +201,8 @@ export type LessonDesks = ReturnType<typeof buildLessonDesks>;
 /** → docs/spec/41-repo-lessons.md#the-record-and-the-desk */
 export function buildLessonDesks(config: Config, base: Foundation) {
   const { store, sink, errors, connector, watchLabel, lessonReading } = base;
-  const lessons = new LessonDesk({ store, minGoals: config.lessons.minGoals, ...lessonReading });
+  const lessonPrs = new LessonPrReading({ source: connector, errors });
+  const lessons = new LessonDesk({ store, minGoals: config.lessons.minGoals, ...lessonReading, lessonPrs });
   const lessonOutcomes = new LessonOutcomeDesk({
     store,
     sink,
@@ -209,6 +211,7 @@ export function buildLessonDesks(config: Config, base: Foundation) {
     defaultBranch: config.defaultBranch,
     watchLabel,
     lessonLabel: lessonReading.lessonLabel,
+    lessonPrs,
     errors,
   });
   return { lessons, lessonOutcomes, lessonReading };

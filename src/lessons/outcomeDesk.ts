@@ -5,7 +5,8 @@ import type { Store } from '../store/store.js';
 import type { TicketFiler } from '../tickets/filing.js';
 import type { LessonDraft, LessonFix, LessonOutcome, Task } from '../types.js';
 import { lessonPrBody, lessonTicketBody, type RefUrl } from './evidence.js';
-import { lessonBranch, lessonDraftId, lessonSearchKey } from './lessonOrigin.js';
+import { lessonBranch, lessonBranchTag, lessonDraftId, lessonGroupTag, lessonSearchKey } from './lessonOrigin.js';
+import type { LessonPrReading } from './lessonPrs.js';
 
 // → docs/spec/41-repo-lessons.md#the-outcome
 
@@ -20,7 +21,7 @@ export interface LessonConcludeInput {
 type Concluded =
   | { ok: true; outcome: 'pull_request'; prNumber: number; branch: string }
   | { ok: true; outcome: 'ticket'; ticketRef: string }
-  | { ok: true; outcome: 'nothing' }
+  | { ok: true; outcome: 'nothing'; coveredBy?: string }
   | { ok: false; error: string };
 
 interface LessonOutcomeDeps {
@@ -31,6 +32,8 @@ interface LessonOutcomeDeps {
   defaultBranch: string;
   watchLabel: string;
   lessonLabel: string;
+  /** Every fleet's lesson pull requests, read fresh before one is opened. */
+  lessonPrs?: LessonPrReading;
   errors?: ErrorRecorder;
 }
 
@@ -59,9 +62,30 @@ export class LessonOutcomeDesk {
         ok: false,
         error: 'name no pull request or work item in the title: the harness cites every one in the body as a link.',
       };
+    if (input.outcome === 'pull_request') {
+      const covered = await this.coveredBy(draft);
+      if (covered !== null) {
+        this.deps.store.lessons.settle(draft.id, 'nothing', ['dispatched'], {
+          fix: input.fix,
+          title,
+          summary: input.summary,
+          reason: `Another lesson pull request for this group was opened first: ${covered}`,
+        });
+        return { ok: true, outcome: 'nothing', coveredBy: covered };
+      }
+    }
     return input.outcome === 'pull_request'
       ? this.openPr(draft, { ...input, fix: input.fix, title })
       : this.fileTicket(draft, { ...input, fix: input.fix, title });
+  }
+
+  /** Another fleet's open or merged lesson pull request for the draft's group, by URL. */
+  private async coveredBy(draft: LessonDraft): Promise<string | null> {
+    const prs = (await this.deps.lessonPrs?.read(true)) ?? [];
+    const tag = lessonGroupTag(draft.groupKey);
+    const own = lessonBranch(draft.id, draft.groupKey);
+    const hit = prs.find((pr) => pr.branch !== own && pr.state !== 'closed' && lessonBranchTag(pr.branch) === tag);
+    return hit === undefined ? null : hit.url;
   }
 
   private ownDraft(task: Task): LessonDraft | { error: string } {
@@ -80,7 +104,7 @@ export class LessonOutcomeDesk {
 
   private async openPr(draft: LessonDraft, input: LessonConcludeInput & { fix: LessonFix }): Promise<Concluded> {
     const { store, sink, errors } = this.deps;
-    const branch = lessonBranch(draft.id);
+    const branch = lessonBranch(draft.id, draft.groupKey);
     let ref: string | undefined;
     try {
       ref = (
