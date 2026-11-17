@@ -51,6 +51,7 @@ interface McpBridgeServerOptions {
   investigateLabel?: McpToolDeps['investigateLabel'];
   lowerProfile?: McpToolDeps['lowerProfile'];
   discussions?: McpToolDeps['discussions'];
+  lessons?: McpToolDeps['lessons'];
   repoRoot?: string;
   argsRetentionDays?: number;
   errors?: ErrorRecorder;
@@ -227,6 +228,7 @@ export class McpBridgeServer {
         investigateLabel: this.opts.investigateLabel,
         lowerProfile: this.opts.lowerProfile,
         discussions: this.opts.discussions,
+        lessons: this.opts.lessons,
         repoRoot: this.opts.repoRoot,
         errors: this.opts.errors,
       },

@@ -626,6 +626,7 @@ breaking silently:
 | `environments` → `appErrors`                       | an error read is held against the head the environment desk's probe just recorded ([39](39-app-errors.md#the-deploy-window))                             |
 | `appErrors` → `appErrorTracker`                    | the tracker is searched for the groups the read just moved ([39](39-app-errors.md#the-tracker-lock))                                                     |
 | `appErrorTracker` → `appErrorTriage`               | a triage run's briefing names a returned group's tracker ticket, so it is assembled after the search for it starts ([39](39-app-errors.md#agent-triage)) |
+| `graph` → `lessons`                                | a lesson pull request's merge or close is read off the graph, and each remedy's goal is walked up it ([41](41-repo-lessons.md#the-record-and-the-desk))  |
 | `remoteValidation` → `validationReady`             | the validate row's detail carries **this** pulse's sheet                                                                                                 |
 | `validationAsks` → `validationReady` → `closeOuts` | the bench asks for one thing at a time ([24](24-environments.md#the-bench-asks-for-one-thing-at-a-time))                                                 |
 | `plans` → `graph`                                  | the part→PR observations the reconciler just made are the ones recorded                                                                                  |

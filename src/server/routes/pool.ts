@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { foldPoolDigest, foldPoolTrends } from '../../pool/aggregate.js';
+import { foldPoolDigest, foldPoolLessons, foldPoolTrends } from '../../pool/aggregate.js';
+import { retentionStart } from '../../pool/digestArm.js';
 import type { PoolInsightsPayload, PoolStatePayload } from '../../wire.js';
+import type { RemedyCause } from '../../types.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -37,7 +39,15 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           ...new Set(store.pool.listPoolFleets().flatMap((f) => (f.project === null ? [] : [f.project]))),
         ].sort(),
         fleets: store.pool.listPoolFleets(),
+        lessons: foldPoolLessons(store.pool.listPoolLessons(), {
+          project: system.config.pool?.project ?? null,
+          causes: ownAdoptedCauses(system),
+        }),
       } satisfies PoolInsightsPayload;
     }),
   );
+}
+
+function ownAdoptedCauses(system: RouteContext['system']): RemedyCause[] {
+  return system.store.lessons.adoptedSince(retentionStart(new Date().toISOString())).map((d) => d.cause);
 }

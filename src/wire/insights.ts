@@ -1,5 +1,6 @@
 import type { AllowanceInsights } from '../insights/allowanceInsights.js';
 import type { ApiErrorInsights } from '../insights/apiErrorInsights.js';
+import type { LessonInsights } from '../insights/lessonInsights.js';
 import type { McpInsights } from '../insights/mcpInsights.js';
 import type { OperatorInsights } from '../insights/operatorInsights.js';
 import type { ReliabilityInsights } from '../insights/reliabilityInsights.js';
@@ -9,7 +10,7 @@ import type { SpendInsights } from '../insights/spendInsights.js';
 import type { SpendTrend } from '../insights/spendTrend.js';
 import type { SurfaceReachInsights } from '../insights/surfaceReachInsights.js';
 import type { ThroughputInsights } from '../insights/throughputInsights.js';
-import type { PoolRollup, PoolTrends } from '../pool/aggregate.js';
+import type { PoolLessons, PoolRollup, PoolTrends } from '../pool/aggregate.js';
 import type { PoolStatus } from '../pool/poolDesk.js';
 import type {
   AssessedBotPr,
@@ -59,6 +60,7 @@ export interface ReliabilityPayload {
   insights: ReliabilityInsights;
   remedies: RemedyInsights;
   reviewLabels: ReviewLabelInsights;
+  lessons: LessonInsights;
 }
 
 export interface ThroughputPayload {
@@ -80,4 +82,5 @@ export interface PoolInsightsPayload {
   trends: PoolTrends;
   projects: string[];
   fleets: PoolFleetReading[];
+  lessons: PoolLessons;
 }

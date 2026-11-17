@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type {
   AllowancePayload,
   InsightsWindow,
+  LessonInsights,
   McpInsights,
   PoolInsightsPayload,
   UsagePayload,
@@ -38,6 +39,7 @@ export function useInsightsData(
   const [reliability, setReliability] = useState<Fetched<ReliabilityInsights>>(PENDING);
   const [remedies, setRemedies] = useState<RemedyInsights | null>(null);
   const [reviewLabels, setReviewLabels] = useState<ReviewLabelInsights | null>(null);
+  const [lessons, setLessons] = useState<LessonInsights | null>(null);
   useEffect(() => {
     if (scope !== 'mine') return;
     let live = true;
@@ -54,6 +56,7 @@ export function useInsightsData(
         setReliability({ state: 'ready', data: res.insights });
         setRemedies(res.remedies);
         setReviewLabels(res.reviewLabels);
+        setLessons(res.lessons);
       })
       .catch(() => live && setReliability({ state: 'failed', data: null }));
     return () => {
@@ -74,7 +77,7 @@ export function useInsightsData(
     if (scope === 'pool') logUsage('pool.view');
   }, [scope]);
 
-  return { spend, reliability, remedies, reviewLabels, trend, throughput, mcp, allowance, usage, pool };
+  return { spend, reliability, remedies, reviewLabels, lessons, trend, throughput, mcp, allowance, usage, pool };
 }
 
 /** A read made only while its tab is open, once per window, and forgotten whenever the window or scope moves. A null key is the pool's scope. */

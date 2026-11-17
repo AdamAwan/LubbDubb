@@ -151,6 +151,7 @@ export type {
   ThroughputTotal,
 } from './insights/throughputInsights.js';
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth } from './insights/remedyInsights.js';
+export type { LessonInsights, LessonRow } from './insights/lessonInsights.js';
 export type { ReviewAreaTotal, ReviewLabelInsights } from './insights/reviewLabelInsights.js';
 export type { PrReviewState, PrReviewStatus } from './review/prReviewState.js';
 export type { PoolRollupRow, PoolTrends } from './pool/aggregate.js';

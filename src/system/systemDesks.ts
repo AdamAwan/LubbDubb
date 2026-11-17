@@ -28,6 +28,8 @@ import { AppErrorLinker } from '../appErrors/linker.js';
 import { AppErrorTrackerDesk } from '../appErrors/tracker.js';
 import { appErrorView, CurrentAppErrors } from '../appErrors/current.js';
 import { AppErrorTriageDesk } from '../appErrors/triageDesk.js';
+import { LessonDesk } from '../lessons/lessonDesk.js';
+import { LessonOutcomeDesk } from '../lessons/outcomeDesk.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber } from '../environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from '../environments/observer.js';
@@ -193,6 +195,42 @@ export function buildEnvironmentDesks(
   };
 }
 
+export type LessonDesks = ReturnType<typeof buildLessonDesks>;
+
+/** → docs/spec/41-repo-lessons.md#the-record-and-the-desk */
+export function buildLessonDesks(config: Config, base: Foundation) {
+  const { store, sink, errors, connector, watchLabel, lessonReading } = base;
+  const lessons = new LessonDesk({ store, minGoals: config.lessons.minGoals, ...lessonReading });
+  const lessonOutcomes = new LessonOutcomeDesk({
+    store,
+    sink,
+    filing: ticketFiler(config, sink),
+    refUrl: (ref) => connector.resolveRefUrl(ref),
+    defaultBranch: config.defaultBranch,
+    watchLabel,
+    lessonLabel: lessonReading.lessonLabel,
+    errors,
+  });
+  return { lessons, lessonOutcomes, lessonReading };
+}
+
+/** The environment desks the composed system exposes. */
+export function environmentParts(envs: EnvironmentDesks) {
+  return {
+    watch: envs.watchDryRun,
+    watchAsks: envs.watchAsks,
+    stateQueries: envs.stateQueries,
+    remoteValidation: envs.remoteValidation,
+    appErrorTracker: envs.appErrorTracker,
+    appErrorTriage: envs.appErrorTriage,
+    remoteRuns: envs.remoteRuns,
+    remoteIntents: envs.remoteIntents,
+    remoteReadings: envs.remoteReadings,
+    remoteListings: envs.remoteListings,
+    appErrorPayloads: envs.appErrorPayloads,
+  };
+}
+
 function buildRemoteValidationDesks(
   config: Config,
   opts: BuildOptions,
@@ -336,7 +374,11 @@ export function buildBenchDesks(
   };
 }
 
-function buildPool(config: Config, opts: BuildOptions, { store, now, errors }: Foundation): PoolDesk | undefined {
+function buildPool(
+  config: Config,
+  opts: BuildOptions,
+  { store, now, errors, connector, lessonReading }: Foundation,
+): PoolDesk | undefined {
   const fleetId = config.fleetId ?? '';
   const poolTransport =
     opts.poolTransport ??
@@ -356,6 +398,7 @@ function buildPool(config: Config, opts: BuildOptions, { store, now, errors }: F
           now,
           digestIntervalMs: config.pool?.digestIntervalMs ?? 60 * 60 * 1000,
           worldScope: worldScope(config.integrations, { store, config, now, errors }),
+          lessons: { ...lessonReading, refUrl: (ref) => connector.resolveRefUrl(ref) },
           errors,
         });
   return pool;

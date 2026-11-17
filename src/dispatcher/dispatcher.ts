@@ -33,6 +33,7 @@ import type {
   LocalValidation,
   RemoteRunBrief,
   PendingAppErrorTriageRun,
+  PendingLessonDraft,
   PendingBotPrRiskRun,
   ValidationCheck,
   ValidationPlanRecord,
@@ -89,6 +90,8 @@ export interface DispatchContext {
   botPrRiskRun?: PendingBotPrRiskRun | null;
   /** The one app error triage run waiting for its agent. → 39-app-errors.md#agent-triage */
   appErrorTriageRun?: PendingAppErrorTriageRun | null;
+  /** The one repo-lesson draft waiting for its agent. → 41-repo-lessons.md#drafting-a-lesson */
+  lessonDraft?: PendingLessonDraft | null;
   priorityOverrides?: PriorityOverride[];
   goalPriorities?: GoalPriority[];
   goalPauses?: GoalPause[];

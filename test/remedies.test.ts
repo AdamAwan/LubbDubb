@@ -139,7 +139,11 @@ test('the block is evidence rather than instruction, and names what it dropped',
 });
 
 test('the ask rides on every dispatch, record or no record', () => {
-  for (const kind of ['ci', 'review'] as const) assert.match(remedyAskNote(kind), /report_remedy/);
+  for (const kind of ['ci', 'review'] as const) {
+    assert.match(remedyAskNote(kind, false), /report_remedy/);
+    assert.doesNotMatch(remedyAskNote(kind, false), /later agent drafts a fix/, 'lessons off says nothing of them');
+    assert.match(remedyAskNote(kind, true), /later agent drafts a fix to the repository/);
+  }
 });
 
 test('cost is the filing agent’s spend, divided where it filed more than one', () => {

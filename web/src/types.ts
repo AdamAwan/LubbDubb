@@ -122,6 +122,8 @@ export type {
   BuildReading,
   UpgradeAction,
   SnoozeTarget,
+  LessonInsights,
+  LessonRow,
   ReliabilityInsights,
   RemedyCauseTotal,
   RemedyInsights,

@@ -2,7 +2,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { WorldScope } from '../integrations/registry.js';
 import type { Store } from '../store/store.js';
 import type { PoolClockDocument, PoolClockKind } from '../types.js';
-import { buildDigestDocument, POOL_RETENTION_DAYS } from './digestArm.js';
+import { buildDigestDocument, POOL_RETENTION_DAYS, type PoolLessonContext } from './digestArm.js';
 import { utcDay } from '../primitives.js';
 import { parsePoolDocument, poolContentHash, poolStaleBefore } from './document.js';
 import type { PoolTransport } from './transport.js';
@@ -27,6 +27,7 @@ export class PoolDesk {
       now: () => string;
       digestIntervalMs: number;
       worldScope: WorldScope;
+      lessons?: PoolLessonContext;
       errors?: ErrorRecorder;
     },
   ) {}
@@ -164,6 +165,7 @@ export class PoolDesk {
       harnessVersion: this.deps.harnessVersion,
       now,
       scope: this.deps.worldScope,
+      lessons: this.deps.lessons,
     };
     return buildDigestDocument(this.deps.store, context);
   }

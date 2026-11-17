@@ -8,6 +8,7 @@ import type {
   UsagePayload,
   ReliabilityInsights,
   ReviewLabelInsights,
+  LessonInsights,
   RemedyInsights,
   ThroughputInsights,
   SpendInsights,
@@ -104,7 +105,7 @@ export function InsightsPage({
   actions: CockpitActions;
 }): JSX.Element {
   const page = useRef<HTMLDivElement>(null);
-  const { spend, reliability, remedies, reviewLabels, trend, throughput, mcp, allowance, usage, pool } =
+  const { spend, reliability, remedies, reviewLabels, lessons, trend, throughput, mcp, allowance, usage, pool } =
     useInsightsData(view, scope, chosen, poolProject);
 
   const asks = askedBy(view, scope);
@@ -157,6 +158,7 @@ export function InsightsPage({
           reliability={reliability}
           remedies={remedies}
           reviewLabels={reviewLabels}
+          lessons={lessons}
           trend={trend}
           mcp={mcp}
           throughput={throughput}
@@ -329,6 +331,7 @@ function Body({
   reliability,
   remedies,
   reviewLabels,
+  lessons,
   trend,
   mcp,
   throughput,
@@ -345,6 +348,7 @@ function Body({
   reliability: Fetched<ReliabilityInsights>;
   remedies: RemedyInsights | null;
   reviewLabels: ReviewLabelInsights | null;
+  lessons: LessonInsights | null;
   trend: Fetched<SpendTrend>;
   mcp: Fetched<McpInsights>;
   throughput: Fetched<ThroughputInsights>;
@@ -366,7 +370,14 @@ function Body({
     return gated(reliability, 'Reading the run log…', 'Could not read the run log.', (data) => {
       if (view === 'reliability') return <ReliabilityTab insights={data} />;
       if (remedies === null) return <p className="empty">No causes were reported for this window.</p>;
-      return <CausesTab remedies={remedies} reviewLabels={reviewLabels} windowLabel={windowLabel.toLowerCase()} />;
+      return (
+        <CausesTab
+          remedies={remedies}
+          reviewLabels={reviewLabels}
+          lessons={lessons}
+          windowLabel={windowLabel.toLowerCase()}
+        />
+      );
     });
 
   if (view === 'throughput')

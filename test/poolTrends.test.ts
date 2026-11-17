@@ -31,6 +31,7 @@ function digest(fleetId: string, over: Partial<PoolDigestDocument>): PoolDigestD
     byChoice: [],
     byRule: [],
     byVersion: [],
+    lessons: [],
     ...over,
   };
 }

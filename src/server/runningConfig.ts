@@ -112,6 +112,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'ejection',
       'review',
       'botPrs',
+      'lessons',
       'reviewAreas',
       'spendBurn',
       'runway',

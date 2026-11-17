@@ -1368,10 +1368,17 @@ disagreement a reader attributes to the data.
 
 What the spending bought: run outcomes all-time, CI health over the last fortnight, and — over that
 same window — the accounts agents wrote of why they had to come back, and what the review threads they
-answered were about. Returns `{ insights, remedies, reviewLabels }` — see
+answered were about. Returns `{ insights, remedies, reviewLabels, lessons }` — see
 [18](18-observability.md#the-reliability-breakdown) for what each half of the first means and why
 `killed` is not counted as a failure, [18](18-observability.md#causes-why-the-fleet-came-back) for the
-second, and [18](18-observability.md#which-part-of-the-code-a-review-thread-was-about) for the third.
+second, [18](18-observability.md#which-part-of-the-code-a-review-thread-was-about) for the third, and
+[18](18-observability.md#did-a-repo-lesson-work) for the fourth.
+
+`lessons` (`LessonInsights`, `src/insights/lessonInsights.ts`) is the one part of the payload the
+`window` query **does not** bound: it lists every repo-lesson draft, and reads each adopted lesson over
+the 30 days either side of its merge ([41](41-repo-lessons.md#did-it-work)). It rides here because it
+is drawn on the Causes tab, beside the remedies it is folded from; a window that cut a lesson's "before"
+in half would make the comparison meaningless.
 
 `reviewLabels` rides here for the same reason `remedies` does, and it is folded against
 `config.reviewAreas` and `config.review.machineAuthors` at request time rather than from anything stored — the rows hold the thread's
@@ -1426,6 +1433,15 @@ an optional `?since=` UTC day, and **no `?window=`** — the digest's bucket is 
 ninety of them, so the Insights window bar is not the question anybody asks of it. `rollup.byCheck` is
 `null` unless a project was named, and that is the shape rather than a flag: a reader that forgot the
 filter would sum two unrelated pipelines, and null makes that unreachable rather than merely wrong.
+
+`lessons` is the [lessons section](28-cross-fleet-pool.md#the-lessons-section) folded by
+`foldPoolLessons`: other fleets' adopted lessons, one per pull request URL, ranked by `effectPct` with
+the too-early ones last, each with `kindCauseLabel` (`CI · <cause>`) and `companyWide`; and
+`companyWide`, the causes adopted in three or more projects — this fleet's own adopted drafts
+(`store.lessons.adoptedSince`, the set its digest publishes) counted for its own project, never
+mirrored. It is not
+narrowed by `?project=` or `?since=`: a lesson's periods are fixed to its merge, and another project's
+lesson is what the list is for.
 
 The pool has **no write** any more: the per-claim opt-out went with the claims arm and the store
 behind it ([28](28-cross-fleet-pool.md)). What is left is derived from rows this fleet already holds,

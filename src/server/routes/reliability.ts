@@ -4,6 +4,7 @@ import { buildReliabilityInsights } from '../../insights/reliabilityInsights.js'
 import { buildRemedyInsights, isReturnOrigin } from '../../insights/remedyInsights.js';
 import { buildReviewLabelInsights } from '../../insights/reviewLabelInsights.js';
 import { InsightsQuery, resolveWindow, sinceOrEpoch } from '../../insights/insightsWindow.js';
+import { readLessonInsights } from '../../lessons/lessonReading.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -39,6 +40,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           areas: system.config.reviewAreas,
           botAuthors: system.config.review.machineAuthors,
         }),
+        lessons: readLessonInsights(store, { ...system.lessonReading, now }),
       } satisfies ReliabilityPayload;
     }),
   );

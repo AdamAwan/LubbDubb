@@ -1,8 +1,15 @@
 import { PHASE_ORDER, type SpendPhase } from '../insights/spendInsights.js';
-import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDigestRow } from '../types.js';
+import type {
+  PoolClockDocument,
+  PoolClockKind,
+  PoolDigestDocument,
+  PoolDigestRow,
+  LessonPeriod,
+  PoolLessonRow,
+} from '../types.js';
 import { throughputMeasureLabel } from '../insights/throughputInsights.js';
 import { choiceLabel } from '../insights/choiceInsights.js';
-import { poolCauseLabel, poolPhaseLabel, poolUsageLabel } from './aggregate.js';
+import { poolCauseLabel, poolKindCauseLabel, poolPhaseLabel, poolUsageLabel } from './aggregate.js';
 import { ruleName } from '../insights/taskTypeSpend.js';
 import { POOL_RETENTION_DAYS } from './digestArm.js';
 import { utcDay } from '../primitives.js';
@@ -162,7 +169,53 @@ function digestBody(document: PoolDigestDocument): string[] {
     lines.push(...(rows.length === 0 ? ['Nothing recorded in the last ninety days.'] : table(section, rows)), '');
     if (section.caveat !== undefined) lines.push(section.caveat, '');
   }
+  lines.push(...lessonsSection(document.lessons));
   return lines;
+}
+
+function lessonsSection(lessons: readonly PoolLessonRow[]): string[] {
+  const lines = ['## Lessons the repository kept', ''];
+  if (lessons.length === 0) return [...lines, 'No lesson adopted in the last ninety days.', ''];
+  lines.push(
+    row([
+      'Kind · cause',
+      'Fix',
+      'Documented',
+      'Undocumented',
+      'Merged',
+      'Misses / returns before',
+      'After',
+      'Pull request',
+    ]),
+    row(['---', '---', '--:', '--:', '---', '--:', '--:', '---']),
+  );
+  for (const lesson of lessons) {
+    lines.push(
+      row([
+        poolKindCauseLabel(lesson.kind, lesson.cause),
+        lesson.fix,
+        String(lesson.guards.documented),
+        String(lesson.guards.undocumented),
+        lesson.mergedAt.slice(0, 10),
+        period(lesson.before),
+        lesson.after === null ? 'too early' : period(lesson.after),
+        `<${lesson.prUrl}>`,
+      ]),
+    );
+  }
+  lines.push(
+    '',
+    '_Each row is a repo lesson this fleet drafted and its repository merged. Before and after are the ' +
+      'group’s misses, in distinct goals, over its same-kind return dispatches, for the 30 days either side ' +
+      'of the merge; the after side waits until those 30 days have passed. What the lesson says is in the ' +
+      'pull request, not here._',
+    '',
+  );
+  return lines;
+}
+
+function period(p: LessonPeriod): string {
+  return `${String(p.misses)} / ${String(p.returns)}`;
 }
 
 interface RolledKey {

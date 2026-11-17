@@ -29,6 +29,7 @@ import type { EnvironmentDesk } from '../environments/environmentDesk.js';
 import type { AppErrorDesk } from '../appErrors/desk.js';
 import type { AppErrorTrackerDesk } from '../appErrors/tracker.js';
 import type { AppErrorTriageDesk } from '../appErrors/triageDesk.js';
+import type { LessonDesk } from '../lessons/lessonDesk.js';
 import type { RemoteValidationDesk } from '../validation/remote/desk.js';
 import type { RemoteIntentDesk } from '../validation/remote/intent.js';
 import type { PoolDesk } from '../pool/poolDesk.js';
@@ -59,6 +60,7 @@ export interface PulseDeps {
   appErrors?: AppErrorDesk;
   appErrorTracker?: AppErrorTrackerDesk;
   appErrorTriage?: AppErrorTriageDesk;
+  lessons?: LessonDesk;
   remoteValidation?: RemoteValidationDesk;
   remoteIntents?: RemoteIntentDesk;
   validationReady?: ValidationReadyDesk;
@@ -143,6 +145,7 @@ const ENTRIES = [
     { id: 'appErrors', readWorld: true, run: (d) => d.appErrors?.run() },
     { id: 'appErrorTracker', readWorld: true, run: (d) => d.appErrorTracker?.run() },
     { id: 'appErrorTriage', readWorld: false, run: (d) => d.appErrorTriage?.run() },
+    { id: 'lessons', readWorld: false, run: (d, at) => d.lessons?.run(at.world) },
     { id: 'remoteValidation', readWorld: true, run: (d) => d.remoteValidation?.run() },
     { id: 'remoteIntents', readWorld: true, run: (d) => d.remoteIntents?.run() },
     { id: 'validationReady', readWorld: false, run: (d, at) => d.validationReady?.run(at.world) },

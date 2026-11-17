@@ -63,5 +63,26 @@ CREATE TABLE IF NOT EXISTS pool_harness_days (
   PRIMARY KEY (day, version)
 );
 
+-- Everybody else's adopted repo lessons, from the digest's lessons section: counts
+-- and a link, never a title or a check name. Replaced and expired with that fleet's
+-- digest rows. Two fleets on one repository publish one lesson under one URL, so the
+-- read keeps one row per pr_url. → docs/spec/28-cross-fleet-pool.md#the-lessons-section
+CREATE TABLE IF NOT EXISTS pool_lessons (
+  fleet_id            TEXT NOT NULL,
+  project             TEXT NOT NULL,
+  kind                TEXT NOT NULL,   -- ci | review
+  cause               TEXT NOT NULL,   -- a RemedyCause
+  documented          INTEGER NOT NULL,
+  undocumented        INTEGER NOT NULL,
+  fix                 TEXT NOT NULL,   -- code | guard | contradiction | note
+  pr_url              TEXT NOT NULL,
+  merged_at           TEXT NOT NULL,
+  before_misses       INTEGER NOT NULL,
+  before_returns      INTEGER NOT NULL,
+  after_misses        INTEGER,         -- null until 30 days after the merge
+  after_returns       INTEGER,
+  PRIMARY KEY (fleet_id, pr_url)
+);
+
 CREATE INDEX IF NOT EXISTS idx_pool_digest_project ON pool_digest_rows(project, day);
 `;

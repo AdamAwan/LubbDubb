@@ -44,6 +44,7 @@ import type { LocalRunner } from '../../localRun/runner.js';
 import type { LocalRunWatch } from '../../localRun/watch.js';
 import type { StepCapabilities } from '../../validation/steps.js';
 import type { DiscussionFiles, DiscussionSubject } from '../../discussions/discussionFile.js';
+import type { LessonOutcomeDesk } from '../../lessons/outcomeDesk.js';
 import { issueSubtreeNumber } from '../../issueOrigins.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
@@ -208,6 +209,8 @@ export interface McpToolDeps {
     files: Pick<DiscussionFiles, 'enabled' | 'add'>;
     subject: (issueNumber: number) => DiscussionSubject;
   };
+  /** What `lesson_conclude` does. → docs/spec/41-repo-lessons.md#the-outcome */
+  lessons?: () => LessonOutcomeDesk;
   errors?: ErrorRecorder;
 }
 

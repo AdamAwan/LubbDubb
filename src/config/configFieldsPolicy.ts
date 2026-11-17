@@ -100,6 +100,12 @@ export const POLICY_FIELDS: readonly ConfigField[] = [
     why: 'When one desk agent reads every bot pull request it has not yet read on its current head — up to 20, majors first — and gives each a low, medium or high risk and a line on why. A five-field cron expression in the harness’s local time, such as "0 8 * * 1-5". Empty, and it runs only when somebody presses Summarise on the Bot PRs tab. Advice only: nothing is approved or merged from it.',
   },
   {
+    path: 'lessons.minGoals',
+    type: 'number',
+    access: 'plain',
+    why: 'How many distinct goals the same documented or undocumented miss — one cause on one check, or in one review area — must span inside 30 days before the fleet drafts a fix for it: a code change, a guard, a corrected doc or a note in the nearest CLAUDE.md, opened as a pull request on this repository for you to review. 0, the default, is off; otherwise at least 2, because one miss is noise.',
+  },
+  {
     path: 'review.publishedThreadRole',
     type: 'string',
     access: 'plain',

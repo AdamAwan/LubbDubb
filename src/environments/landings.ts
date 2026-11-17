@@ -1,4 +1,5 @@
-import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
+import { issueOriginRef } from '../issueOrigins.js';
+import { prGoalIndex } from '../graph/prGoals.js';
 import type { GoalLanding, PullRequest, WorkNode, WorldSnapshot } from '../types.js';
 import { issueForPr } from '../pr/prIssue.js';
 import { prState } from '../pr/prHealth.js';
@@ -21,7 +22,7 @@ interface LandingSweepInput {
 }
 
 export function unrecordedLandings(input: LandingSweepInput): LandingToRecord[] {
-  const goals = goalOfPr(input.nodes);
+  const goals = prGoalIndex(input.nodes);
   const out: LandingToRecord[] = [];
   for (const pr of mergedPulls(input.world)) {
     if (input.landed.has(pr.number)) continue;
@@ -46,7 +47,7 @@ interface CarriedLanding extends LandingToRecord {
 }
 
 export function carriedLandings(input: CarrySweepInput): CarriedLanding[] {
-  const goals = goalOfPr(input.nodes);
+  const goals = prGoalIndex(input.nodes);
   const landings = new Map(input.landings.map((l) => [l.prNumber, l]));
   const pulls = pullsByNumber(input.world);
   const stack = stackOf(input, pulls);
@@ -128,7 +129,7 @@ function mergedAfter(pr: PullRequest | undefined, carrier: PullRequest | undefin
 }
 
 export function unattributedMerges(goalRef: string, nodes: WorkNode[], landed: ReadonlySet<number>): number {
-  const goals = goalOfPr(nodes);
+  const goals = prGoalIndex(nodes);
   let n = 0;
   for (const node of nodes) {
     if (node.kind !== 'pr' || node.status !== 'merged') continue;
@@ -148,32 +149,9 @@ function allPulls(world: WorldSnapshot): PullRequest[] {
   return [...world.pullRequests, ...(world.closedPullRequests ?? [])];
 }
 
-function goalOfPr(nodes: WorkNode[]): Map<number, string> {
-  const byRef = new Map(nodes.map((n) => [n.ref, n]));
-  const out = new Map<number, string>();
-  for (const node of nodes) {
-    if (node.kind !== 'pr') continue;
-    const number = prNumberOf(node.ref);
-    if (number === null) continue;
-    let current: WorkNode | undefined = node;
-    for (let hops = 0; hops < nodes.length && current !== undefined; hops += 1) {
-      if (isGoalRoot(current.ref)) {
-        out.set(number, current.ref);
-        break;
-      }
-      current = current.parentRef === null ? undefined : byRef.get(current.parentRef);
-    }
-  }
-  return out;
-}
-
 function issueRefFor(pr: PullRequest, world: WorldSnapshot): string | null {
   const issue = issueForPr(pr, world.issues);
   return issue === null ? null : issueOriginRef('root', issue.number);
-}
-
-function isGoalRoot(ref: string): boolean {
-  return issueOriginNumber('root', ref) !== null;
 }
 
 /** A goal's landed commits on the integration branch. → docs/spec/24-environments.md#what-counts-as-a-landing */

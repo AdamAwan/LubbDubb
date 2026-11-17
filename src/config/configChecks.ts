@@ -112,3 +112,13 @@ export function validateFleetStall(merged: Config): void {
         `read as a stalled fleet, 0 for never. Got ${JSON.stringify(merged.fleetStallCycles)}.`,
     );
 }
+
+export function validateLessons(merged: Config): void {
+  const minGoals = merged.lessons.minGoals;
+  if (Number.isInteger(minGoals) && (minGoals === 0 || minGoals >= 2)) return;
+  throw new Error(
+    `lessons.minGoals: must be 0, which turns repo lessons off, or a whole number of at least 2 — the distinct ` +
+      `goals a repeated miss must span before a lesson is drafted. One goal is one miss, not a pattern. ` +
+      `Got ${JSON.stringify(minGoals)}.`,
+  );
+}

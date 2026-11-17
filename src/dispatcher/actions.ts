@@ -54,6 +54,11 @@ const extraTools = {
     .object({ id: z.string().min(1) })
     .nullable()
     .default(null),
+  /** The repo-lesson draft this dispatch claims, `remoteRun`'s shape. → docs/spec/41-repo-lessons.md#drafting-a-lesson */
+  lessonDraft: z
+    .object({ id: z.string().min(1) })
+    .nullable()
+    .default(null),
 };
 
 const ActionSchema = z.discriminatedUnion('type', [

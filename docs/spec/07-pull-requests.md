@@ -478,8 +478,9 @@ It stays out of `isOurPr` — nothing renames or reaps a bot's branch. →
 [37](37-bot-prs.md#working-one-as-the-fleets-own). Its CI fix is briefed as a dependency question, not a
 bug of the fleet's own. → [37](37-bot-prs.md#when-ci-fails-on-one)
 
-`isHarnessBranch(branch)` is the unknown arm's second half: `issue/<n>`, `issue/<n>/<slug>` or
-`job/<id>`, the branch shapes only a dispatch cuts. Derived rather than stored — recording every
+`isHarnessBranch(branch)` is the unknown arm's second half: `issue/<n>`, `issue/<n>/<slug>`,
+`job/<id>` or `lesson/<id>` ([41](41-repo-lessons.md#drafting-a-lesson)), the branch shapes only a
+dispatch cuts. Derived rather than stored — recording every
 opened PR number would be a second answer to a question the branch already answers.
 
 ### What it gates
@@ -2051,9 +2052,11 @@ Opt-in on its own would stop the harness acting on the pull requests it opened i
 **tags its own**, programmatically and never by asking an agent to:
 
 - **At creation.** `open_pr` writes the tag the moment the provider returns a number, so a pull
-  request the fleet just opened is never briefly invisible to the fleet.
+  request the fleet just opened is never briefly invisible to the fleet. `lesson_conclude` does the
+  same for a repo lesson's pull request, beside the lesson label, so its CI and review are answered
+  like any of the fleet's own ([41](41-repo-lessons.md#the-outcome)).
 - **On the pulse.** `PrWatchDesk` tags any open pull request on a branch only a dispatch cuts —
-  `issue/<n>`, `issue/<n>/<slug>`, `job/<id>`, the one predicate `isHarnessBranch` in
+  `issue/<n>`, `issue/<n>/<slug>`, `job/<id>`, `lesson/<id>`, the one predicate `isHarnessBranch` in
   `src/pr/prOwnership.ts` — that carries no tag. That is the floor under the first: an agent that opened
   its own after the tool reported itself unwired, a code job's pull request, and every pull request
   already open the first pulse a deployment runs this.

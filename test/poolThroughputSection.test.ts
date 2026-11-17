@@ -34,6 +34,7 @@ function digestDoc(over: Partial<PoolDigestDocument>): PoolDigestDocument {
     byChoice: [],
     byRule: [],
     byVersion: [],
+    lessons: [],
     ...over,
   };
 }

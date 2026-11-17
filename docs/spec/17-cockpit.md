@@ -6868,7 +6868,7 @@ state in exactly the way the window is: switching tabs keeps it.
 
 The [cross-fleet pool](28-cross-fleet-pool.md) was an eleventh tab, and that was the wrong seam for the
 reason the three panels were: every rollup it carries is the cross-fleet half of a question that already
-has a tab. `byPhase` is Economics, `byCause` is Causes, `byThroughput` is Throughput, `byUsage` is
+has a tab. `byPhase` is Economics, `byCause` and the lessons are Causes, `byThroughput` is Throughput, `byUsage` is
 Usage, and `byRule` with `byVersion` is Trend. Two tabs answering "the phase split" — one for this fleet, one for every fleet — leave the
 operator's question decided by which tab they happened to be on, and the comparison between the two
 answers, which is the only reason the pool exists, taken by reading one and remembering the other.
@@ -7213,6 +7213,27 @@ thread on no file is in no area at all, and the note says how many of each there
 No area gets a colour. Areas are operator-configured, so a token could not be registered for one in
 advance ([tokens](#tokens)), and a literal at the use site is a colour no theme can reach — the section
 is tables throughout for that reason.
+
+Last comes **Repo lessons** ([41](41-repo-lessons.md#did-it-work)), drawn only once a draft exists, and
+**not windowed by the bar** — the method note says so, because it is the one block on the tab the
+window does not move. Two tables. **Did it work** lists each adopted lesson with its merge, the group's
+misses and the same-kind return dispatches over the 30 days before and after, and a verdict tag —
+_working_, _not working_ or _too early_ — where the after side is a dash until 30 days have passed.
+Below it, every draft with its status, fix and goal count. Each row carries its lesson pull request or
+ticket as a `<Ref>`, beside the name rather than inside it ([links](#links)). The tags use the existing
+tones; nothing here is a new colour.
+
+**Under the pool scope** the tab draws the pool's cause table and, below it, **Lessons other
+repositories kept** (`PoolCauses`, `web/src/components/PoolTab.tsx`): every other fleet's adopted lesson,
+ranked by effect, with its cause, fix, project, the before and after counts, the effect as a percent —
+a dash where it cannot be read, _too early_ where the 30 days have not passed — and a plain link out to
+its pull request. An `<ExtLink>`, not a `<Ref>`: the pull request is in another fleet's repository and
+the URL is all that crossed. The kind-and-cause label is the payload's `kindCauseLabel`, never rebuilt
+here. Causes adopted in three or more projects are named above the table as
+**company-wide candidates**, and each of their rows carries the mark in the existing amber. There is
+**no prefilled brief and no button** that sends a pooled row anywhere: an operator who wants the lesson
+opens the link and writes their own ([28](28-cross-fleet-pool.md#the-lessons-section)). The list is not
+narrowed by the project picker — a lesson from another repository is the point of it.
 
 ### The Trend tab
 
