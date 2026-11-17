@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import { failure } from '../primitives.js';
 import {
   EXTENSION_API_VERSION,
   type LoadedExtension,
@@ -6,44 +7,43 @@ import {
   type SlotImplementation,
   type SlotMap,
 } from './contract.js';
+import { EXTENSION_SLOTS } from './slots.js';
 
 // → docs/spec/42-extensions.md#loading
 
 const KNOWN_KEYS = new Set(['apiVersion', 'name', 'slots']);
 
-export async function loadExtensions<S extends SlotMap>(opts: {
+export async function loadExtensions(opts: {
   paths: readonly string[];
-  book: SlotBook<S>;
+  book?: SlotBook<SlotMap>;
   importModule?: (url: string) => Promise<unknown>;
 }): Promise<LoadedExtension[]> {
   const importModule = opts.importModule ?? ((url: string) => import(url) as Promise<unknown>);
   const loaded: LoadedExtension[] = [];
-  const owners = new Map<string, string>();
   for (const path of opts.paths) {
     let module: unknown;
     try {
       module = await importModule(pathToFileURL(path).href);
     } catch (err) {
-      throw refusal(path, `it could not be loaded: ${(err as Error).message}`, err);
+      throw refusal(path, `it could not be loaded: ${failure(err)}`, err);
     }
-    const extension = readExtension(path, module, opts.book);
+    const extension = readExtension(path, module, opts.book ?? EXTENSION_SLOTS);
     const clash = loaded.find((other) => other.name === extension.name);
     if (clash) throw refusal(path, `its name "${extension.name}" is already taken by ${clash.path}`);
     for (const slot of extension.slots.keys()) {
-      const owner = owners.get(slot);
-      if (owner !== undefined)
+      const owner = loaded.find((other) => other.slots.has(slot));
+      if (owner)
         throw refusal(
           path,
-          `it fills the "${slot}" slot, which extension "${owner}" already fills — a slot has one owner`,
+          `it fills the "${slot}" slot, which extension "${owner.name}" already fills — a slot has one owner`,
         );
-      owners.set(slot, extension.name);
     }
     loaded.push(extension);
   }
   return loaded;
 }
 
-function readExtension<S extends SlotMap>(path: string, module: unknown, book: SlotBook<S>): LoadedExtension {
+function readExtension(path: string, module: unknown, book: SlotBook<SlotMap>): LoadedExtension {
   const value = (module as { default?: unknown } | null)?.default;
   if (typeof value !== 'object' || value === null || Array.isArray(value))
     throw refusal(path, 'its default export is not an object — write `export default { apiVersion, name, slots }`');
@@ -53,7 +53,7 @@ function readExtension<S extends SlotMap>(path: string, module: unknown, book: S
   if (unknown.length > 0)
     throw refusal(
       path,
-      `it exports ${list(unknown)}, which no extension carries; the keys are apiVersion, name and slots`,
+      `it exports ${list(unknown)}, which no extension carries; the keys are ${list([...KNOWN_KEYS])}`,
     );
 
   if (raw.apiVersion !== EXTENSION_API_VERSION)
@@ -67,11 +67,7 @@ function readExtension<S extends SlotMap>(path: string, module: unknown, book: S
   return { name: raw.name, path, slots: readSlots(path, raw.slots ?? {}, book) };
 }
 
-function readSlots<S extends SlotMap>(
-  path: string,
-  value: unknown,
-  book: SlotBook<S>,
-): Map<string, SlotImplementation> {
+function readSlots(path: string, value: unknown, book: SlotBook<SlotMap>): Map<string, SlotImplementation> {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
     throw refusal(path, '"slots" is not an object of functions');
   const slots = new Map<string, SlotImplementation>();

@@ -1,5 +1,5 @@
 import type { ErrorRecorder } from '../errorLog.js';
-import type { Config } from '../config/config.js';
+import { failure, withDeadline } from '../primitives.js';
 import type { LoadedExtension, SlotBook, SlotImplementation, SlotMap, SlotResult } from './contract.js';
 import { EXTENSION_SLOTS, type ExtensionSlots } from './slots.js';
 
@@ -38,29 +38,22 @@ export class ExtensionHost<S extends SlotMap> {
     if (!bound) return { ok: false, detail: `no extension fills the "${slot}" slot` };
     const definition = this.opts.book[slot];
     const controller = new AbortController();
-    let timer: NodeJS.Timeout | undefined;
-    const timedOut = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        controller.abort();
-        reject(new Error(`it did not answer within ${definition.timeoutMs} ms`));
-      }, definition.timeoutMs);
-    });
     try {
-      const value = await Promise.race([
+      const value = await withDeadline(
         Promise.resolve().then(() => bound.run(input, { repoRoot: this.opts.repoRoot, signal: controller.signal })),
-        timedOut,
-      ]);
+        definition.timeoutMs,
+        `it did not answer within ${definition.timeoutMs} ms`,
+      );
       const refused = definition.check(value);
       if (refused !== null) return this.failed(slot, bound, `it answered with the wrong shape: ${refused}`);
       return { ok: true, value: value as S[K]['output'] };
     } catch (err) {
-      return this.failed(slot, bound, (err as Error).message ?? String(err), (err as Error).stack ?? null);
-    } finally {
-      clearTimeout(timer);
+      controller.abort();
+      return this.failed(slot, bound, failure(err), err instanceof Error ? (err.stack ?? null) : null);
     }
   }
 
-  private failed(slot: string, bound: Bound, why: string, stack: string | null = null): { ok: false; detail: string } {
+  private failed(slot: string, bound: Bound, why: string, stack: string | null = null): SlotResult<never> {
     const detail = `extension "${bound.extension}" failed the "${slot}" slot: ${why}`;
     this.opts.errors.record({ source: 'runtime', message: detail, detail: stack });
     return { ok: false, detail };
@@ -68,14 +61,9 @@ export class ExtensionHost<S extends SlotMap> {
 }
 
 export function buildExtensionHost(
-  config: Config,
-  loaded: readonly LoadedExtension[] | undefined,
+  loaded: readonly LoadedExtension[],
+  repoRoot: string,
   errors: ErrorRecorder,
 ): ExtensionHost<ExtensionSlots> {
-  if (config.extensions.length > 0 && loaded === undefined)
-    throw new Error(
-      `Refusing to start: config names ${config.extensions.length} extension(s) and none were loaded — ` +
-        'call loadExtensions before buildSystem and pass what it returns as opts.extensions.',
-    );
-  return new ExtensionHost({ book: EXTENSION_SLOTS, extensions: loaded ?? [], repoRoot: config.repoRoot, errors });
+  return new ExtensionHost({ book: EXTENSION_SLOTS, extensions: loaded, repoRoot, errors });
 }

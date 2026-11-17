@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config/config.js';
 import { buildSystem } from '../src/system/system.js';
@@ -9,7 +8,7 @@ import { loadExtensions } from '../src/extensions/load.js';
 import { ExtensionHost } from '../src/extensions/host.js';
 import type { SlotBook } from '../src/extensions/contract.js';
 import type { ErrorLogInput, ErrorLogEntry } from '../src/types.js';
-import { gitRepo } from './support/gitRepo.js';
+import { gitRepo, tmpDir } from './support/gitRepo.js';
 
 type TestSlots = {
   greet: { input: { who: string }; output: string };
@@ -18,23 +17,17 @@ type TestSlots = {
 
 const BOOK: SlotBook<TestSlots> = {
   greet: {
-    what: 'Say hello to someone.',
     timeoutMs: 200,
     check: (value) => (typeof value === 'string' ? null : 'expected a string'),
   },
   count: {
-    what: 'Return a number.',
     timeoutMs: 200,
     check: (value) => (typeof value === 'number' ? null : 'expected a number'),
   },
 };
 
-function dir(): string {
-  return mkdtempSync(join(tmpdir(), 'lubbdubb-ext-'));
-}
-
 function extensionFile(source: string, name = 'ext.mjs'): string {
-  const path = join(dir(), name);
+  const path = join(tmpDir('lubbdubb-ext-'), name);
   writeFileSync(path, source);
   return path;
 }
@@ -79,13 +72,16 @@ test('no extensions configured loads nothing, and the system builds exactly as b
   assert.deepEqual(system.extensions.names(), []);
 });
 
-test('a configured extension that was never loaded refuses to build the system', () => {
-  const config = loadConfig({ dbPath: ':memory:', repoRoot: gitRepo(), extensions: ['ext.mjs'] });
-  assert.throws(() => buildSystem(config, { errorMirror: () => {} }), /none were loaded/);
+test('by default an extension is checked against the harness book, which has no slots yet', async () => {
+  const path = extensionFile(`export default { apiVersion: 1, name: 'a', slots: { greet: () => '' } };`);
+  await assert.rejects(
+    loadExtensions({ paths: [path] }),
+    /"greet" slot, which this harness does not have; this harness has no slots yet/,
+  );
 });
 
 test('extension paths resolve against repoRoot', () => {
-  const root = dir();
+  const root = tmpDir('lubbdubb-ext-');
   const config = loadConfig({ dbPath: ':memory:', repoRoot: root, extensions: ['tools/ext.mjs', '/abs/ext.mjs'] });
   assert.deepEqual(config.extensions, [join(root, 'tools/ext.mjs'), '/abs/ext.mjs']);
 });
@@ -110,13 +106,16 @@ test('an unfilled slot answers not-ok without recording an error', async () => {
 
 test('an extension that is not there, or not shaped like one, refuses to start', async () => {
   await assert.rejects(
-    loadExtensions({ paths: [join(dir(), 'missing.mjs')], book: BOOK }),
+    loadExtensions({ paths: [join(tmpDir('lubbdubb-ext-'), 'missing.mjs')], book: BOOK }),
     /Refusing to start: .*could not be loaded/,
   );
   assert.match(await refusalOf(`export const x = 1;`), /default export is not an object/);
   assert.match(await refusalOf(`export default { apiVersion: 2, name: 'a' };`), /apiVersion 2 .* speaks 1/);
   assert.match(await refusalOf(`export default { apiVersion: 1 };`), /has no name/);
-  assert.match(await refusalOf(`export default { apiVersion: 1, name: 'a', slot: {} };`), /exports "slot"/);
+  assert.match(
+    await refusalOf(`export default { apiVersion: 1, name: 'a', slot: {} };`),
+    /exports "slot", .* the keys are "apiVersion", "name", "slots"/,
+  );
   assert.match(
     await refusalOf(`export default { apiVersion: 1, name: 'a', slots: { greeet: () => '' } };`),
     /"greeet" slot, which this harness does not have; the slots are "greet", "count"/,
@@ -137,7 +136,7 @@ test('two extensions may not share a name or a slot', async () => {
 
 test('a slot that throws, rejects, times out or answers the wrong shape is not-ok and recorded — never thrown', async () => {
   const { host: h, recorded } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
-    greet: ({ who }) => { if (who === 'sync') throw new Error('boom'); if (who === 'async') return Promise.reject(new Error('later')); return new Promise(() => {}); },
+    greet: ({ who }) => { if (who === 'sync') throw new Error('boom'); if (who === 'async') return Promise.reject(new Error('later')); if (who === 'null') throw null; return new Promise(() => {}); },
     count: () => 'seven',
   } };`);
 
@@ -150,7 +149,10 @@ test('a slot that throws, rejects, times out or answers the wrong shape is not-o
   const shape = await h.call('count', null);
   assert.match(shape.ok ? '' : shape.detail, /wrong shape: expected a number/);
 
-  assert.equal(recorded.length, 4);
+  const thrown = await h.call('greet', { who: 'null' });
+  assert.match(thrown.ok ? '' : thrown.detail, /failed the "greet" slot: null$/);
+
+  assert.equal(recorded.length, 5);
   assert.ok(recorded.every((entry) => entry.source === 'runtime' && entry.message.startsWith('extension "acme"')));
 });
 

@@ -1,6 +1,7 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { DiscussionDocument, TrackerComment, WorldSnapshot } from '../types.js';
-import { DISCUSSION_AUTHORS, DISCUSSIONS_OFF, failure, type DiscussionFiles } from './discussionFile.js';
+import { DISCUSSION_AUTHORS, DISCUSSIONS_OFF, type DiscussionFiles } from './discussionFile.js';
+import { failure } from '../primitives.js';
 
 // → docs/spec/40-discussions.md#pulling-tracker-comments-in
 

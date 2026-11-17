@@ -17,7 +17,6 @@ interface SlotContext {
 export type SlotImplementation = (input: unknown, context: SlotContext) => unknown;
 
 interface SlotDefinition {
-  what: string;
   timeoutMs: number;
   /** A refusal in the operator's words, or null where the value is the shape the slot promised. */
   check: (value: unknown) => string | null;

@@ -15,6 +15,7 @@ import {
 import { basename, dirname, join } from 'node:path';
 import type { Config } from '../config/config.js';
 import type { ErrorRecorder } from '../errorLog.js';
+import { failure } from '../primitives.js';
 import type {
   DiscussionDocument,
   DiscussionEntry,
@@ -110,10 +111,6 @@ function definedKeys(keys: FrontMatterKeys): Record<string, string> {
 function localDate(now: Date): string {
   const pad = (n: number): string => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-export function failure(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 interface Listing {
