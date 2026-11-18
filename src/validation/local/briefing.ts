@@ -1,6 +1,13 @@
 import { join } from 'node:path';
 import { recordingInstructions } from '../recording.js';
-import type { LocalRun, LocalValidation, Plan, PlanPart, ValidationCheck } from '../../types.js';
+import type {
+  LocalRun,
+  LocalValidation,
+  LocalValidationFinding,
+  Plan,
+  PlanPart,
+  ValidationCheck,
+} from '../../types.js';
 
 // → docs/spec/32-local-validation.md
 
@@ -211,6 +218,15 @@ const SEVERITY_WORD: Record<string, string> = {
   nit: 'Nit',
 };
 
+export function findingItem(finding: LocalValidationFinding, index: number): string {
+  const where = finding.url === null ? '' : `\n\n  Found on: ${finding.url}`;
+  const shot =
+    finding.screenshot === null
+      ? ''
+      : `\n\n  Screenshot: \`${finding.screenshot}\` (in the goal's validation directory)`;
+  return `${String(index + 1)}. **${SEVERITY_WORD[finding.severity] ?? finding.severity} — ${finding.title}**\n\n  ${finding.detail.replace(/\n/g, '\n  ')}${where}${shot}`;
+}
+
 export function localValidationFixBriefing(row: LocalValidation, run: LocalRun | null): string {
   const lines = [
     `\n\n---\n`,
@@ -220,16 +236,7 @@ export function localValidationFixBriefing(row: LocalValidation, run: LocalRun |
     `> ${quote(row.summary ?? '(no summary was recorded)')}\n`,
     `### The findings\n`,
   ];
-  for (const [index, finding] of row.findings.entries()) {
-    const where = finding.url === null ? '' : `\n\n  Found on: ${finding.url}`;
-    const shot =
-      finding.screenshot === null
-        ? ''
-        : `\n\n  Screenshot: \`${finding.screenshot}\` (in the goal's validation directory)`;
-    lines.push(
-      `${String(index + 1)}. **${SEVERITY_WORD[finding.severity] ?? finding.severity} — ${finding.title}**\n\n  ${finding.detail.replace(/\n/g, '\n  ')}${where}${shot}\n`,
-    );
-  }
+  for (const [index, finding] of row.findings.entries()) lines.push(`${findingItem(finding, index)}\n`);
   if (row.plan !== null) lines.push(`### The plan it ran\n\n${row.plan}\n`);
   if (row.setup.length > 0)
     lines.push(

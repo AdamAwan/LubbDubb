@@ -80,7 +80,7 @@ export function localValidation(s: StageContext): void {
 function mergesFor(s: StageContext, row: LocalValidation): string[] {
   if (row.ref !== s.defaultBranch) return [];
   return (s.ctx.goalLandings ?? [])
-    .filter((l) => l.goalRef === row.originRef && l.onIntegration !== false)
+    .filter((l) => l.goalRef === row.originRef && l.onIntegration === true)
     .map((l) => l.sha);
 }
 

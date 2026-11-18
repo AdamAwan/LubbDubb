@@ -139,8 +139,9 @@ than validating code CI never saw.
 **And for what has already merged.** A goal whose work merged before anything pressed for it — a pull
 request that merged inside a pulse, or a goal whose CI was never green while it was open — is pressed
 from `goal_landings` ([24](24-environments.md#recording-a-landing)) rather than from the world, because
-`closedPullRequests` is a window and a landing is not. A goal qualifies when it has a landing not
-placed off the integration branch (`goalMergedAt`, [24](24-environments.md#what-counts-as-a-landing)), its run target is now `null` (no open pull request of its own and every part
+`closedPullRequests` is a window and a landing is not. A goal qualifies when it has a landing **confirmed** on the integration branch
+(`on_integration = yes` — an unasked one may not be in the clone yet, and the press checks no tip for
+a merged goal), its run target is now `null` (no open pull request of its own and every part
 merged or settled — the goal is all in), and nothing has read it: its latest row is absent, or is
 `blocked` or `abandoned` (neither says anything about the code) and was requested before the newest
 landing. A `passed`, `failed` or `skipped` row from before the merge already read the goal's head. It runs on the **integration branch**, so a
@@ -455,9 +456,13 @@ the fleet on the strength of an exploratory run against a branch — the same ov
   ([13](13-jobs-and-tickets.md#filing-a-ticket)) per failed reading with findings: related to the
   goal, carrying the **watch label** so the fleet picks it up, its body rendered from the
   `local-validation-ticket-body` template. Type, label and relation are arguments, never sentences
-  in the body, which is the one place an override could drop them. Latched on `fix_ticket_ref`, so a
-  reading files once; a filing that fails is recorded and tried again next pulse. Nothing is filed
-  where `trackerCoordinates` names no tracker — the findings stand on the page for a person.
+  in the body, which is the one place an override could drop them. **Claimed before it is filed**:
+  `fix_ticket_ref` goes from null to `''` first and to the ticket's ref after, so a harness that dies
+  mid-filing leaves a claim, never a second bug; a filing that throws releases the claim and that row
+  waits thirty minutes before it is tried again, rather than filing — or logging — once a pulse. The
+  search key `local-validation:<id>` rides the item, so a duplicate the tracker made anyway can be
+  found. A row with no plain goal number is claimed and left. Nothing is filed where
+  `trackerCoordinates` names no tracker — the findings stand on the page for a person.
 - **A finding may be wrong**, and the prompt says so: it is one agent's reading of a running
   application, taken without being able to ask anybody what was intended. Changing working code to
   satisfy a mistaken finding is the one outcome here worse than doing nothing.

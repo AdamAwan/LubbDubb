@@ -147,9 +147,16 @@ export class LocalValidationStore {
     return rows.map(toLocalValidation);
   }
 
-  markLocalValidationTicket(id: string, ticketRef: string): void {
+  claimLocalValidationTicket(id: string): boolean {
+    return (
+      this.ctx.prep(`UPDATE local_validations SET fix_ticket_ref = '' WHERE id = ? AND fix_ticket_ref IS NULL`).run(id)
+        .changes > 0
+    );
+  }
+
+  settleLocalValidationTicket(id: string, ticketRef: string | null): void {
     this.ctx
-      .prep(`UPDATE local_validations SET fix_ticket_ref = ? WHERE id = ? AND fix_ticket_ref IS NULL`)
+      .prep(`UPDATE local_validations SET fix_ticket_ref = ? WHERE id = ? AND fix_ticket_ref = ''`)
       .run(ticketRef, id);
   }
 

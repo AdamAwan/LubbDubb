@@ -1,5 +1,4 @@
 import type { ErrorRecorder } from '../../errorLog.js';
-import { goalMergedAt, landedCommits } from '../../environments/landings.js';
 import { issueOriginRef } from '../../issueOrigins.js';
 import type { LocalRunChoices } from '../../localRun/ref.js';
 import type { LocalRunner } from '../../localRun/runner.js';
@@ -145,24 +144,32 @@ export class LocalValidationAutoPress {
   }
 
   private landed(world: WorldSnapshot, since: number, latest: ReadonlyMap<string, LocalValidation>): Candidate[] {
-    const landings = this.deps.store.environments.listGoalLandings();
+    const newest = newestLandings(this.deps.store.environments.listGoalLandings());
     const found: Candidate[] = [];
     for (const issue of world.issues) {
       const originRef = issueOriginRef('root', issue.number);
-      const mergedAt = goalMergedAt(landings, originRef);
-      if (mergedAt === null || mergedAt < since) continue;
+      const landing = newest.get(originRef);
+      if (landing === undefined || landing.at < since) continue;
       const last = latest.get(originRef);
       if (last !== undefined && (localValidationIsOpen(last) || READ.has(last.status))) continue;
-      if (last !== undefined && Date.parse(last.requestedAt) >= mergedAt) continue;
+      if (last !== undefined && Date.parse(last.requestedAt) >= landing.at) continue;
       if (this.deps.choicesFor(originRef).target !== null) continue;
-      found.push({ originRef, commit: lastCommit(landings, originRef), readyAt: mergedAt });
+      found.push({ originRef, commit: landing.sha, readyAt: landing.at });
     }
     return found;
   }
 }
 
-function lastCommit(landings: readonly GoalLanding[], goalRef: string): string {
-  return landedCommits(landings, goalRef).at(-1) ?? goalRef;
+function newestLandings(landings: readonly GoalLanding[]): Map<string, { sha: string; at: number }> {
+  const newest = new Map<string, { sha: string; at: number }>();
+  for (const landing of landings) {
+    if (landing.onIntegration !== true) continue;
+    const at = Date.parse(landing.mergedAt ?? landing.recordedAt);
+    const seen = newest.get(landing.goalRef);
+    if (Number.isFinite(at) && (seen === undefined || at > seen.at))
+      newest.set(landing.goalRef, { sha: landing.sha, at });
+  }
+  return newest;
 }
 
 function key(originRef: string, commit: string): string {

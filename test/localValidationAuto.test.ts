@@ -351,6 +351,26 @@ test('a failed validation on the integration branch files one linked, watched bu
     assert.deepEqual(filed[0]?.labels, ['watch']);
     assert.match(filed[0]?.body ?? '', /Save is dead/);
     assert.equal(system.store.localValidations.getLocalValidation(onMain)?.fixTicketRef, '#900');
+
+    let attempts = 0;
+    const flaky = new LocalValidationTicketDesk({
+      store: system.store,
+      filing: () => {
+        attempts += 1;
+        return Promise.reject(new Error('tracker down'));
+      },
+      canFile: () => true,
+      prompts: system.prompts,
+      watchLabel: 'watch',
+      defaultBranch: 'main',
+      errors: { record: () => [] } as never,
+      changed: () => {},
+    });
+    const again = failed('issue:14', 'main');
+    await flaky.run();
+    await flaky.run();
+    assert.equal(attempts, 1, 'a failed filing waits before it is tried again');
+    assert.equal(system.store.localValidations.getLocalValidation(again)?.fixTicketRef, null, 'and is released to be');
   } finally {
     system.store.close();
   }
