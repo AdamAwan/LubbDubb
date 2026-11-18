@@ -6,6 +6,20 @@ import type { ToolFactory } from './context.js';
 
 // → docs/spec/11-mcp-tools.md
 
+const VISITED = z
+  .array(z.string())
+  .describe('The pages you opened, so somebody can go and look at the same ones.')
+  .optional();
+
+const SETUP = z
+  .array(z.string())
+  .describe(
+    "Every change you made to the environment's state to set your plan up, one entry each: the flag you " +
+      'turned on, the row you inserted, the setting you changed, the fixture you uploaded — and how. A pass ' +
+      'is judged against the setup that produced it, so leave nothing out. Empty if you changed nothing.',
+  )
+  .optional();
+
 export const localValidationReport: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Say what you found when you ran your plan against the running application. Once, at the end. ' +
@@ -58,10 +72,8 @@ export const localValidationReport: ToolFactory = ({ deps, task, ok }) => ({
             'can act on.',
         )
         .optional(),
-      visited: z
-        .array(z.string())
-        .describe('The pages you opened, so somebody can go and look at the same ones.')
-        .optional(),
+      visited: VISITED,
+      setup: SETUP,
     }),
   ),
   handler: (args) => {

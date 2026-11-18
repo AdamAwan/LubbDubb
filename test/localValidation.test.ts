@@ -14,6 +14,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
+import { localValidationFixBriefing } from '../src/validation/local/briefing.js';
 import { DEFAULT_LOCAL_VALIDATION, substituteBrowserArgs } from '../src/validation/local/policy.js';
 import { validationRunStale } from '../src/validation/local/stale.js';
 import { validateLocalValidationReport } from '../src/validation/local/report.js';
@@ -115,6 +116,7 @@ function row(over: Partial<LocalValidation> = {}): LocalValidation {
     summary: null,
     findings: [],
     visited: [],
+    setup: [],
     screenshots: [],
     note: null,
     recordingStatus: null,
@@ -340,7 +342,7 @@ test('a configured browser is asked to record the run, and a missing recorder is
 });
 
 test('with no browser configured the prompt says so rather than leaving the agent to find out', async () => {
-  const plan = await rules({ instruction: '', browser: null }).decide(ctx());
+  const plan = await rules({ instruction: '', setup: '', browser: null }).decide(ctx());
   const action = plan.actions.find((a) => 'originRef' in a && a.originRef === 'issue:12:validate-local:lv1');
   const dispatch = action as unknown as { prompt: string; mcpServers: unknown[] };
   assert.deepEqual(dispatch.mcpServers, []);
@@ -443,6 +445,50 @@ test('a failed reading writes the row and nothing else — never a shortfall', a
   assert.deepEqual(settled?.visited, ['http://localhost:5173/jobs/new']);
   assert.equal(system.store.verdicts.getShortfall('issue:12'), null);
   assert.equal(system.store.verdicts.getDelivery('issue:12'), null);
+  system.store.close();
+});
+
+test('the agent may set the environment up, plans it, and reports every change it made', async () => {
+  const plan = await rules({
+    ...DEFAULT_LOCAL_VALIDATION,
+    setup: 'psql postgres://localhost:5432/dev, then npm run seed:jobs',
+  }).decide(ctx());
+  const action = plan.actions.find((a) => 'originRef' in a && a.originRef === 'issue:12:validate-local:lv1');
+  const prompt = (action as unknown as { prompt: string; readOnly: boolean }).prompt;
+  assert.equal((action as unknown as { readOnly: boolean }).readOnly, true, 'the code stays fixed');
+  assert.match(prompt, /npm run seed:jobs/, "the operator's setup string is appended");
+  assert.match(prompt, /Set up what the plan needs/);
+  assert.match(prompt, /Change no code/);
+  assert.match(prompt, /`failed`, not `blocked`/);
+  assert.doesNotMatch(prompt, /Change nothing/);
+
+  const system = build();
+  liveRun(system);
+  const validation = request(system);
+  system.store.localValidations.markLocalValidationDispatched(validation.id, 'task-x');
+  const agent = spawnAgent(system, `issue:12:validate-local:${validation.id}`);
+
+  const planned = await callTool(system, agent, 'local_validation_plan', {
+    plan: '1. Open the jobs page.',
+    setup: 'Turn `jobs_v2` on.',
+  });
+  assert.ok(!planned.isError, planned.text);
+  assert.equal(
+    system.store.localValidations.getLocalValidation(validation.id)?.plan,
+    '1. Open the jobs page.\n\n## Set-up\n\nTurn `jobs_v2` on.',
+  );
+
+  const reported = await callTool(system, agent, 'local_validation_report', {
+    result: 'failed',
+    summary: 'the new list drops archived jobs',
+    findings: [{ title: 'archived jobs missing', detail: 'seeded three, saw two', severity: 'defect' }],
+    setup: ['Turned `jobs_v2` on in the flags table', 'Inserted three jobs, one archived'],
+  });
+  assert.ok(!reported.isError, reported.text);
+  const settled = system.store.localValidations.getLocalValidation(validation.id);
+  assert.deepEqual(settled?.setup, ['Turned `jobs_v2` on in the flags table', 'Inserted three jobs, one archived']);
+  assert.ok(settled);
+  assert.match(localValidationFixBriefing(settled, null), /Inserted three jobs, one archived/);
   system.store.close();
 });
 

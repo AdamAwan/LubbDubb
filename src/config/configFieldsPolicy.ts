@@ -184,6 +184,12 @@ export const POLICY_FIELDS: readonly ConfigField[] = [
     why: 'What a validating agent is told about reaching your environment — which URL is which, how to sign in, what to leave alone. Never a secret: it is readable here and a project layer commits it.',
   },
   {
+    path: 'localValidation.setup',
+    type: 'text',
+    access: 'plain',
+    why: 'How a validating agent reaches the local store and seeds what its plan needs — connection details, seed commands, the scripts that flip a flag. Saves it rediscovering them every run. Never a secret: it is readable here and a project layer commits it.',
+  },
+  {
     path: 'localValidation.browser',
     type: 'json',
     access: 'plain',

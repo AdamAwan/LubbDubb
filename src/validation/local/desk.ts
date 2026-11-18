@@ -90,6 +90,7 @@ export class LocalValidationDesk extends EventEmitter {
       summary: string;
       findings: LocalValidationFinding[];
       visited: string[];
+      setup: string[];
     },
   ): { ok: true; row: LocalValidation } | { ok: false; error: string } {
     const target = this.resolve(task);
@@ -111,6 +112,7 @@ export class LocalValidationDesk extends EventEmitter {
       summary: result.summary,
       findings: result.findings,
       visited: result.visited,
+      setup: result.setup,
       screenshots: media ?? [],
       note: result.status === 'blocked' ? result.summary : null,
       recordingStatus: recordingStatus(

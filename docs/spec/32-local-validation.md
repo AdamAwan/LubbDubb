@@ -3,7 +3,7 @@
 `src/validation/local/`. The fleet driving the machine's **one** dev environment and saying whether a
 goal's changes work: an operator presses a button, the harness brings the goal's code up
 ([23](23-local-runs.md)), and one agent writes a test plan for the change, waits for the environment,
-drives the running application through the plan, and reports.
+sets up the state the plan needs, drives the running application through the plan, and reports.
 
 Everything else in the harness reads the work. This is the one thing that **runs** it.
 
@@ -15,6 +15,7 @@ Everything else in the harness reads the work. This is the one thing that **runs
 - **One fix per reading, latched on `fix_task_id`, and none for a validation run from the integration branch.** A crashed fix is not retried behind the operator, and there is no goal branch to put one on. → [§](#when-it-fails) · `test/localValidation.test.ts`
 - **A `failed` report with no findings is refused and pointed at `blocked`.** A fix agent cannot act on a verdict with nothing in it. → [§](#the-three-tools) · `test/localValidation.test.ts`
 - **Which validation a report is about comes off the dispatch origin: `localValidationOriginParts` parses `:validate-local:` alone.** The fix agent is refused a reading by the parse, not by a sentence in a prompt. → [§](#the-three-tools) · `test/localValidation.test.ts`
+- **The agent owns the running environment's state and none of its code.** It may change flags, configuration and data by any means the project offers, and reports every change; the checkout stays read-only and the session stays the operator's. → [§](#setting-the-environment-up) · `test/localValidation.test.ts`
 - **A browser that will not start is `blocked`, never `failed`, and the prompt offers a configured browser as a claim to check.** A `failed` dispatches a fix for a defect that is not in the goal. → [§](#the-browser) · `test/localValidation.test.ts`
 - **The swap and refresh consents are given before the runner is called, with the route's 409 as the backstop.** Once `start` is reached the previous environment is already coming down. → [§](#the-press) · `test/localValidation.test.ts`
 - **`tasks.mcp_servers` has a real `TASK_COLUMNS` entry, and a launch's servers are read off the task row rather than re-derived at spawn.** Without it every resumed validation comes back without its browser. → [§](#persistence) · _no test_
@@ -136,9 +137,44 @@ other rule ([05](05-dispatcher.md#the-rule-book)).
 Everything the agent cannot act without is **appended** to the rendered `local-validation` prompt,
 never interpolated ([05](05-dispatcher.md#prompt-templates)): the goal, the plan, the goal's
 validation checks as **input**, the environment's URL, directory and commit, the operator's
-`localValidation.instruction` verbatim, whether it has a browser, and the rules of the run. Ports and
+`localValidation.instruction` and `localValidation.setup` verbatim, whether it has a browser, and the rules of the run. Ports and
 the session's output tail are deliberately **not** appended — they are live, and a copy frozen at
 dispatch would be minutes stale. `local_run_read` answers those.
+
+### Setting the environment up
+
+A local snapshot rarely holds what a change needs: a flag left off, a module not enabled for the
+tenant, no records of the right shape. Forbidden to touch the environment, the agent could only
+report `blocked` — no step run and no evidence either way, on the **normal** case for any feature
+behind a flag. And the environment is the machine's own dev stack, typically restored from a
+snapshot on every bring-up. The briefing does **not** tell the agent its writes are undone — that is
+the operator's fact to state, in `localValidation.setup`, since a stack that keeps its database
+would make the claim false.
+
+So the line is drawn between **state** and **code**:
+
+- **The state is the agent's.** Once `running`, it may change the environment's flags,
+  configuration and data by any means the project offers — the application's UI and APIs, reads and
+  writes straight against the local store, the project's own scripts and skills, fixture files it
+  writes and uploads.
+- **The code is fixed.** The checkout stays read-only, nothing is committed or pushed, and set-up
+  scripts and fixtures go in the output directory's `setup/` subdirectory, never the repository — and
+  never loose in the output directory itself, whose top-level media files the desk reads as the run's
+  screenshots and recording. A workaround that skips the
+  broken behaviour is still the test not being run.
+- **The session is the operator's.** The agent never starts, stops or restarts the environment, nor
+  types into the session bringing it up; state changes go through the running application or its
+  store.
+- **It is planned and reported.** `local_validation_plan` takes a `setup` section (what the plan
+  needs and how it will be created), recorded under a `## Set-up` heading in the row's `plan`;
+  `local_validation_report` takes `setup`, the list of every change made — and of any state the plan
+  relied on that was already there — stored on the row (`NOT NULL DEFAULT '[]'`), drawn on the card
+  and handed to the fix agent; a pass is judged against the setup that produced it.
+- **A set-up step that fails because of the change under test is a finding** — `failed`, not
+  `blocked`.
+
+[Remote validation](36-remote-validation.md) is untouched: it stays read-only against shared
+environments.
 
 ### The browser
 
@@ -278,11 +314,11 @@ named only in the `local-validation` prompt's own tool section
 every planner and part agent in the fleet, and a `local_run_read` reached for by an agent on somebody
 else's branch is a reading of a machine running code that is not theirs.
 
-| Tool                      | Does                                                                                                                |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `local_validation_plan`   | Record the test plan. Once, up front — it lands on the goal's page while the environment is still coming up.        |
-| `local_run_read`          | What the environment is doing now: status, URL, ports, freshness, the session's tail, and the caveat. Reports only. |
-| `local_validation_report` | `passed`, `failed` or `blocked`, with a summary and — for a failure — the findings. Ends the run.                   |
+| Tool                      | Does                                                                                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `local_validation_plan`   | Record the test plan and its `setup` section. Once, up front — it lands on the goal's page while the environment is still coming up.    |
+| `local_run_read`          | What the environment is doing now: status, URL, ports, freshness, the session's tail, and the caveat. Reports only.                     |
+| `local_validation_report` | `passed`, `failed` or `blocked`, with a summary, every state change it made (`setup`) and — for a failure — the findings. Ends the run. |
 
 `local_run_read` is `describeLocalRun` (`src/localRun/describe.ts`), the **same function** the
 desktop channel's `local_run` answers with ([11](11-mcp-tools.md#the-desktop-channel)). Two names,
@@ -349,12 +385,13 @@ agent that crashed, was killed or spent its stall park leaves a row nobody will 
 
 ## Configuration
 
-Two live keys, deep-merged, project-layerable ([02](02-configuration.md)):
+Three live keys, deep-merged, project-layerable ([02](02-configuration.md)):
 
-| Key                           | Default                                                                   | What it is                                                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `localValidation.instruction` | `''`                                                                      | What a validating agent is told about reaching **this** environment: which URL is which, how to sign in, what to leave alone. |
-| `localValidation.browser`     | `{node} {playwrightMcp} --output-dir … --user-data-dir … --caps devtools` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                            |
+| Key                           | Default                                                                   | What it is                                                                                                                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `localValidation.instruction` | `''`                                                                      | What a validating agent is told about reaching **this** environment: which URL is which, how to sign in, what to leave alone.                                                                        |
+| `localValidation.setup`       | `''`                                                                      | How a validating agent reaches the local store and seeds what its plan needs: connection details, seed commands, flag scripts. Appended beside the instruction, so it is not rediscovered every run. |
+| `localValidation.browser`     | `{node} {playwrightMcp} --output-dir … --user-data-dir … --caps devtools` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                                                                                                   |
 
 **The split with the prompt is the whole design.** The `local-validation` template says how to build
 a test plan and how to run one, which is the same job on every deployment; the instruction says how
@@ -435,8 +472,8 @@ run's own turns use.
 
 `local_validations`: `id`, `origin_ref`, `run_id`, `ref`, `commit_sha` (named for `local_runs`'
 reason — `COMMIT` is a keyword), `status`, `requested_at`, `dispatched_at`, `ended_at`, `task_id`,
-`fix_task_id`, `plan`, `summary`, `findings`, `visited`, `screenshots`, `note`, `recording_status`.
-`findings`, `visited` and `screenshots` are JSON. `recording_status` came after the table, so it has its
+`fix_task_id`, `plan`, `summary`, `findings`, `visited`, `setup`, `screenshots`, `note`, `recording_status`.
+`findings`, `visited`, `setup` and `screenshots` are JSON. `recording_status` and `setup` came after the table, so each has its
 `ALTER TABLE` in `LOCAL_VALIDATION_COLUMNS` — a table being new **once** does not keep it exempt
 ([14](14-persistence.md#migrations)); null is _not known_ and nothing is backfilled
 ([the recording](#the-recording)).
@@ -453,7 +490,7 @@ apart, with the fix's refused by the validation's parser; the browser's director
 extra grant appended to the fleet's rather than replacing them, one `--mcp-config`, no
 `--strict-mcp-config`; the rule firing on `starting` and on `running` and on neither of a stopped,
 swapped, restarted or refreshed environment; one agent per row; the checkout read-only and pinned to
-the commit; the instruction, the URL and the three tool names appended; the no-browser prompt saying
+the commit; the instruction, the URL and the three tool names appended; the setup string appended, the set-up rules in place of "change nothing", a plan's `setup` recorded under its heading and a report's `setup` stored and handed to the fix; the no-browser prompt saying
 so; the fix writable on the validated branch, once per reading, and never on the integration branch;
 a report against the same run recorded and one against a moved environment refused while `blocked` is
 still accepted; a failed reading writing the row and neither a shortfall nor a delivery; every other

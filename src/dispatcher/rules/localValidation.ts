@@ -60,6 +60,7 @@ export function localValidation(s: StageContext): void {
             run,
             base: partBaseOf(s, row.ref, issueNumber),
             instruction: s.localValidation.instruction,
+            setup: s.localValidation.setup,
             outputDir,
             browserKey: browser?.key ?? null,
           }),

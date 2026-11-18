@@ -20,6 +20,14 @@ export const localValidationPlan: ToolFactory = ({ deps, task, ok }) => ({
             'product. For each step say what you are checking, what you will do, and what a pass looks like, ' +
             'specifically enough that somebody else could run it and get the same answer.',
         ),
+      setup: z
+        .string()
+        .describe(
+          'The state the plan needs that the environment may not have — the flags to turn on, the configuration ' +
+            'to change, the records to create — and how you will create each once the environment is running. ' +
+            'Markdown. Leave it out only if the plan needs nothing set up.',
+        )
+        .optional(),
     }),
   ),
   handler: (args) => {
@@ -28,13 +36,14 @@ export const localValidationPlan: ToolFactory = ({ deps, task, ok }) => ({
       return toolError('Local validation is not wired on this deployment, so there is nowhere to record a plan.');
     const plan = typeof args.plan === 'string' ? args.plan.trim() : '';
     if (plan === '') return toolError('plan is required — a plan with nothing in it records nothing.');
-    const written = desk.recordPlan(task, plan);
+    const setup = typeof args.setup === 'string' ? args.setup.trim() : '';
+    const written = desk.recordPlan(task, setup === '' ? plan : `${plan}\n\n## Set-up\n\n${setup}`);
     if (!written.ok) return toolError(written.error);
     return ok({
       recorded: 'plan',
       means:
         'the operator can see it now. Next: watch for the environment with local_run_read, and when it is ' +
-        'running, open the application and work through this plan one step at a time.',
+        'running, set up what the plan needs, then open the application and work through it one step at a time.',
     });
   },
 });
