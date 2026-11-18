@@ -15,6 +15,8 @@ import { untriagedCount } from '../worldBuckets.js';
 import { tabUsage } from '../cockpit/usage.js';
 import { useThemeUnsaved } from '../hooks.js';
 import { environmentsReading, menuEntries, usageReading } from './topBarReadings.js';
+import { needsYouInFront } from '../view/needsYouPage.js';
+import { openOverview } from './NeedsYouPage.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -204,10 +206,7 @@ function FleetLine({ view, actions }: { view: CockpitView; actions: CockpitActio
     <BareButton
       usage={tabUsage('overview')}
       className="cn-read cn-act cn-ny-fleet"
-      onClick={() => {
-        actions.selectGoal(null);
-        actions.openTab('overview');
-      }}
+      onClick={() => openOverview(actions)}
       title={title}
     >
       <span>Fleet</span>
@@ -420,7 +419,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           next gets to decide. The countdown is inside this reading rather than a chip
           of its own because Pause is the control that stops the thing it is counting
           down to — see {@link Scan}. */}
-      {view.tab === 'needs' && view.goalPage === null && view.selectedPr === null ? (
+      {needsYouInFront(view) ? (
         <FleetLine view={view} actions={actions} />
       ) : (
         <div className="cn-read cn-cap">

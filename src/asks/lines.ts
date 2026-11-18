@@ -21,7 +21,13 @@ function standsFor(state: AskInputs, originRef: string | null): string | null {
   return ref;
 }
 
-function closedPrs(state: AskInputs): PullRequest[] {
+type PrGoalInputs = Pick<AskInputs, 'plans' | 'planParts' | 'archivedPullRequests'> & {
+  world: Pick<AskInputs['world'], 'pullRequests' | 'closedPullRequests'> & {
+    issues: readonly Pick<Issue, 'number' | 'linkedPrNumber'>[];
+  };
+};
+
+function closedPrs(state: PrGoalInputs): PullRequest[] {
   const byNumber = new Map<number, PullRequest>();
   for (const pr of state.archivedPullRequests ?? []) byNumber.set(pr.number, pr);
   for (const pr of state.world.closedPullRequests ?? []) byNumber.set(pr.number, pr);
@@ -33,7 +39,7 @@ function branchGoal(branch: string): string | null {
   return m ? `issue:${m[1]}` : null;
 }
 
-export function goalOfPr(state: AskInputs, prNumber: number): string | null {
+export function goalOfPr(state: PrGoalInputs, prNumber: number): string | null {
   const part = (state.planParts ?? []).find((p) => p.prNumber === prNumber);
   const plan = part ? (state.plans ?? []).find((pl) => pl.id === part.planId) : undefined;
   if (plan) return plan.originRef;
@@ -46,10 +52,10 @@ export function goalOfPr(state: AskInputs, prNumber: number): string | null {
 }
 
 /** The goal's issue, off the world or, once it has left the world, the retained runs. */
-export function goalIssue(
-  state: Pick<AskInputs, 'retainedRuns'> & { world: Pick<AskInputs['world'], 'issues'> },
+export function goalIssue<I extends Pick<Issue, 'number'>>(
+  state: { retainedRuns?: readonly I[]; world: { issues: readonly I[] } },
   ref: string,
-): Issue | undefined {
+): I | undefined {
   const number = issueOriginNumber('root', ref);
   if (number === null) return undefined;
   return (
@@ -94,6 +100,9 @@ export function prAddress(state: Pick<AskInputs, 'refUrls'>, number: number): st
   return state.refUrls[`pr:${number}`] ?? state.refUrls[`#${number}`];
 }
 
-export function issueAddress(state: Pick<AskInputs, 'refUrls'>, issue: Issue): string | undefined {
+export function issueAddress(
+  state: Pick<AskInputs, 'refUrls'>,
+  issue: Pick<Issue, 'url' | 'number'>,
+): string | undefined {
   return issue.url ?? state.refUrls[`issue:${issue.number}`] ?? state.refUrls[`#${issue.number}`];
 }

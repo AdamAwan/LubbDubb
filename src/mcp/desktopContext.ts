@@ -21,7 +21,7 @@ import type { ActionSink, SendResult, WorkItemAreaPathInput, WorkItemParentInput
 import type { DiscussionFiles } from '../discussions/discussionFile.js';
 import type { DiscussionPullDesk } from '../discussions/pullDesk.js';
 import type { Store } from '../store/store.js';
-import type { AskSnapshot } from '../asks/queue.js';
+import type { AskSnapshot, PrReadInputs } from '../asks/queue.js';
 import type { RemoteSheetView, StateSection, UpcomingPlan } from '../wire.js';
 import type { RemoteIntentDesk } from '../validation/remote/intent.js';
 import type { RemoteRunDesk } from '../validation/remote/run.js';
@@ -90,8 +90,10 @@ export interface DesktopToolDeps {
   labelPrefix: string;
   issueContainerTypes: string[];
   agentModels: AgentModels | undefined;
-  /** "Needs you" as a one-at-a-time reader walks it, with its inputs — `askSnapshot` in `src/server/stateSnapshot.ts`. */
+  /** "Needs you" as a one-at-a-time reader walks it, with its inputs — `askSnapshot` in `src/server/askReads.ts`. */
   asks(): AskSnapshot;
+  /** What `pr_read` reads, with no queue built — `prInputs` in `src/server/askReads.ts`. */
+  prInputs(): PrReadInputs;
   /** The listen loop `ask_wait` holds open. → docs/spec/44-needs-you.md#the-wait */
   listener: Pick<Listener, 'wait'>;
   /** Where the cockpit is served, for a link to the ask an answer here cannot give; null where none is. */

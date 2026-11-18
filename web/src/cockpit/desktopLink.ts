@@ -67,3 +67,17 @@ export function descriptionPrompt(issueNumber: number, slug: string): string {
 export function questionPrompt(): string {
   return skillPrompt('fleet');
 }
+
+/** → docs/spec/44-needs-you.md#is-a-chat-listening */
+export function listenPrompt(): string {
+  return skillPrompt('listen').trimEnd();
+}
+
+/** → docs/spec/44-needs-you.md#the-claude-button */
+export function prPrompt(prNumber: number): string {
+  return skillPrompt('pr', String(prNumber));
+}
+
+export function askOnlyPrompt(askId: string): string {
+  return skillPrompt('next', `${askId} only`);
+}

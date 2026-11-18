@@ -1,5 +1,5 @@
 import { tmpdir } from 'node:os';
-import type { AskSnapshot } from '../asks/queue.js';
+import type { AskSnapshot, PrReadInputs } from '../asks/queue.js';
 import { dirname, join } from 'node:path';
 import type { Config } from '../config/config.js';
 import { DiscussionFiles, discussionRepoFolder } from '../discussions/discussionFile.js';
@@ -119,7 +119,7 @@ export interface BuildOptions {
 }
 
 /** Components a later phase builds, reached only from closures that run after that phase. */
-interface Late {
+export interface Late {
   agents: AgentManager;
   escalations: EscalationInbox;
   permissions: PermissionDesk;
@@ -144,6 +144,7 @@ interface Late {
   localValidationTickets: LocalValidationTicketDesk;
   prAssign: PrAssignDesk;
   askSnapshot(): AskSnapshot;
+  prInputs(): PrReadInputs;
 }
 
 export interface LateBinding {
@@ -164,7 +165,7 @@ export function lateBinding(): LateBinding {
   };
 }
 
-export function lateParts({ fleet, envs, lessons, bench, harness, local, intake, asks }: LatePhases): Late {
+export function lateParts({ fleet, envs, lessons, bench, harness, local, intake, reads }: LatePhases): Late {
   return {
     agents: fleet.agents,
     escalations: fleet.escalations,
@@ -189,7 +190,7 @@ export function lateParts({ fleet, envs, lessons, bench, harness, local, intake,
     localValidationAuto: local.localValidationAuto,
     localValidationTickets: local.localValidationTickets,
     prAssign: intake.prAssign,
-    askSnapshot: asks,
+    ...reads,
   };
 }
 
@@ -201,7 +202,7 @@ interface LatePhases {
   harness: Harness;
   local: LocalRuns;
   intake: Pick<IntakeDesks, 'prAssign'>;
-  asks: () => AskSnapshot;
+  reads: Pick<Late, 'askSnapshot' | 'prInputs'>;
 }
 
 export function buildPluginDesk(config: Config, opts: BuildOptions, errors: ErrorLog): PluginDesk {

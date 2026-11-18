@@ -10,7 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { McpDesktopServer } from '../src/mcp/desktop.js';
 import { answerWith } from '../src/mcp/askAnswers.js';
-import { askQueue } from '../src/server/stateSnapshot.js';
+import { askQueue } from '../src/server/askReads.js';
 import type { AskRow } from '../src/asks/askRow.js';
 import type { ProposalKind } from '../src/types.js';
 import type { SetupReading } from '../src/setup/reading.js';

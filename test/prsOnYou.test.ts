@@ -32,9 +32,9 @@ test('each reason is read off the field the spec names', () => {
     ['comments'],
     'comments count even while the fleet answers them',
   );
-  assert.deepEqual(read(pr(4, { assignAsk: [{ id: 'p', name: 'Pat' }] })), ['reviewer']);
+  assert.deepEqual(read(pr(4, { assignAsk: [{ id: 'p', name: 'Pat' }] })), ['assign']);
   assert.deepEqual(read(pr(5, { assignAsk: [] })), [], 'an empty assign ask is no reason');
-  assert.deepEqual(read(pr(6, { body: '  \n ' })), ['description']);
+  assert.deepEqual(read(pr(6, { body: '  \n ' })), ['describe']);
   const unread = pr(7);
   delete unread.body;
   assert.deepEqual(read(unread), [], 'a body never read is not an empty one');
@@ -48,7 +48,7 @@ test('every reason that holds is a tag, in the table order', () => {
       attention: { status: 'you', reasons: [], assignedToYou: 'reviewer-required' },
     }),
   ])[0]!;
-  assert.deepEqual(row.reasons, ['review', 'comments', 'description']);
+  assert.deepEqual(row.reasons, ['review', 'comments', 'describe']);
   assert.deepEqual(
     row.reasons.map((r) => PR_REASON_LABEL[r]),
     ['Your review', 'Comments', 'No description'],

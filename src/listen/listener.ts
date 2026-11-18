@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { sameItem } from './sameItem.js';
 import type { ListenItem, ListenerState, ListenerView } from '../types.js';
 
 // → docs/spec/44-needs-you.md#the-wait
@@ -27,11 +28,8 @@ export interface WaitResult {
   superseded?: true;
 }
 
-/** What still stands, read off the snapshot: a sent entry outside it is dropped. */
-export interface ListenStanding {
-  askIds: ReadonlySet<string>;
-  prsOnYou: ReadonlySet<number>;
-}
+/** Whether a sent item still stands, read off the snapshot only for what is in `sent`: one that does not is dropped. */
+export type ListenStanding = (item: ListenItem) => boolean;
 
 interface Waiter {
   answer(result: WaitResult): void;
@@ -42,11 +40,6 @@ interface Sent {
   sentAt: number;
 }
 
-function sameItem(a: ListenItem, b: ListenItem): boolean {
-  if (a.kind === 'ask') return b.kind === 'ask' && a.id === b.id;
-  return b.kind === 'pr' && a.number === b.number;
-}
-
 export class Listener extends EventEmitter {
   private waiter: Waiter | null = null;
   private queue: Sent[] = [];
@@ -54,6 +47,7 @@ export class Listener extends EventEmitter {
   private sent: Sent[] = [];
   private lastEmptyReturn: number | null = null;
   private cancelGrace: (() => void) | null = null;
+  private lastEmitted = '';
 
   constructor(private readonly clock: ListenClock = realListenClock) {
     super();
@@ -75,7 +69,7 @@ export class Listener extends EventEmitter {
     const head = this.queue.shift();
     if (head !== undefined) {
       this.handOut(head);
-      this.emit('changed');
+      this.changed();
       return Promise.resolve({ item: head.item });
     }
     return new Promise((resolve) => {
@@ -93,7 +87,7 @@ export class Listener extends EventEmitter {
         },
       };
       this.waiter = waiter;
-      this.emit('changed');
+      this.changed();
     });
   }
 
@@ -107,23 +101,32 @@ export class Listener extends EventEmitter {
       this.handOut(entry);
       waiter.answer({ item });
     }
-    this.emit('changed');
+    this.changed();
     return { sent: true };
   }
 
-  view(standing: ListenStanding): ListenerView {
-    const since = this.clock.now() - SENT_KEPT_MS;
-    this.sent = this.sent.filter(
-      (s) =>
-        s.sentAt > since &&
-        (s.item.kind === 'ask' ? standing.askIds.has(s.item.id) : standing.prsOnYou.has(s.item.number)),
-    );
+  view(stands: ListenStanding): ListenerView {
+    if (this.sent.length > 0) {
+      const since = this.clock.now() - SENT_KEPT_MS;
+      this.sent = this.sent.filter((s) => s.sentAt > since && stands(s.item));
+    }
+    return this.current();
+  }
+
+  private current(): ListenerView {
     return {
       state: this.state(),
       on: this.working,
       queued: this.queue.length,
       sent: this.sent.map((s) => ({ item: s.item, sentAt: new Date(s.sentAt).toISOString() })),
     };
+  }
+
+  private changed(): void {
+    const seen = JSON.stringify(this.current());
+    if (seen === this.lastEmitted) return;
+    this.lastEmitted = seen;
+    this.emit('changed');
   }
 
   private state(): ListenerState {
@@ -143,9 +146,9 @@ export class Listener extends EventEmitter {
     this.stopGrace();
     this.cancelGrace = this.clock.after(LISTEN_GRACE_MS, () => {
       this.cancelGrace = null;
-      this.emit('changed');
+      this.changed();
     });
-    this.emit('changed');
+    this.changed();
   }
 
   private stopGrace(): void {

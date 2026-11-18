@@ -13,7 +13,7 @@ import type {
   CaveatAnswerInput,
   CheckDecline,
   InvestigationResolution,
-  AppState,
+  ListenItem,
 } from '../types.js';
 import type { FeatureMode, OverviewShape, Place } from './place.js';
 import type { GoalTab } from '../view/goalPage.js';
@@ -45,9 +45,6 @@ export type ConsolePanel =
 
 export type ConsoleTab =
   'overview' | 'needs' | 'tickets' | 'features' | 'bots' | 'handled' | 'errors' | 'insights' | 'pets' | 'config';
-
-/** What the Needs you page hands a listening Claude chat. → docs/spec/44-needs-you.md */
-export type ListenItem = NonNullable<AppState['listener']['on']>;
 
 export type InsightsView =
   'economics' | 'allowance' | 'reliability' | 'throughput' | 'causes' | 'trend' | 'mcp' | 'usage';

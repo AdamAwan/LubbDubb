@@ -135,7 +135,7 @@ interface CockpitUsage {
 }
 
 export type StateSection =
-  'harness' | 'control' | 'goals' | 'plans' | 'fleet' | 'queue' | 'inbox' | 'activity' | 'asks';
+  'harness' | 'control' | 'goals' | 'plans' | 'fleet' | 'queue' | 'inbox' | 'activity' | 'asks' | 'listener';
 
 export interface CockpitState {
   config: CockpitConfig;

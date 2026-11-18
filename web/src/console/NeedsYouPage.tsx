@@ -1,12 +1,12 @@
-import type { JSX, ReactNode } from 'react';
+import { useMemo, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
-import type { CockpitActions, ListenItem } from '../cockpit/actions.js';
-import type { AppState } from '../types.js';
+import type { CockpitActions } from '../cockpit/actions.js';
+import type { ListenItem, ListenerView, PrOnYouReason } from '../types.js';
 import type { NeedRow } from '../view/needsYou.js';
-import { prsOnYou, PR_REASON_LABEL, type PrReason } from '../view/prsOnYou.js';
-import { KIND_TONE } from '../view/askKinds.js';
+import { sameItem } from '../view/needsYouPage.js';
+import { prsOnYou, PR_REASON_LABEL, type PrOnYou } from '../view/prsOnYou.js';
 import { plural } from '../view/plural.js';
-import { askOnlyPrompt, LISTEN_PROMPT, prPrompt } from '../cockpit/listenPrompts.js';
+import { askOnlyPrompt, listenPrompt, prPrompt } from '../cockpit/desktopLink.js';
 import { tabUsage } from '../cockpit/usage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { BareButton, Button, type Destination } from '../components/button.js';
@@ -19,49 +19,39 @@ import { relTime } from '../components/util.js';
 import { PanelRows, type PanelRowModel } from './PanelRow.js';
 import { prRow } from './prRow.js';
 import { openRow } from './queueRailOpens.js';
-import { HandledLine, holdingLabel, KIND_VERB, KindTag, RailTiers } from './QueueRail.js';
+import {
+  configDestination,
+  HandledLine,
+  holdingLabel,
+  KIND_VERB,
+  KindTag,
+  RailTiers,
+  rowClass,
+  subjectRef,
+  UNNAMED_RUN,
+} from './QueueRail.js';
 
 // → docs/spec/44-needs-you.md
 
-type Listener = AppState['listener'];
-
-const PR_ORIGIN = /^pr:(\d+)(?::|$)/;
-
-const REASON_TONE: Record<PrReason, TagTone> = {
+const REASON_TONE: Record<PrOnYouReason, TagTone> = {
   review: 'red',
   call: 'amber',
   comments: 'blue',
-  reviewer: 'violet',
-  description: 'grey',
+  assign: 'violet',
+  describe: 'grey',
 };
 
-function askRef(row: NeedRow): string | null {
-  if (row.goalRef !== null) return row.goalRef;
-  const pr = row.prNumber ?? PR_ORIGIN.exec(row.originRef ?? '')?.[1];
-  return pr === undefined ? null : `pr:${pr}`;
-}
-
-function sameItem(a: ListenItem, b: ListenItem): boolean {
-  return a.kind === 'ask' ? b.kind === 'ask' && a.id === b.id : b.kind === 'pr' && a.number === b.number;
-}
-
-/** What one page draws per item: its Claude button, and its strip once sent. */
-interface Hand {
-  claude: (item: ListenItem) => ReactNode;
-  sent: (item: ListenItem) => ReactNode;
+/** Off to the overview, out of any goal opened over it. */
+export function openOverview(actions: CockpitActions): void {
+  actions.selectGoal(null);
+  actions.openTab('overview');
 }
 
 export function NeedsYouPage({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const listener = view.state.listener;
   const folder = view.state.config.desktopFolder;
-  const prs = prsOnYou(view.state.world.pullRequests);
-  const hand: Hand = {
-    claude: (item) => <ClaudeButton item={item} listener={listener} folder={folder} actions={actions} />,
-    sent: (item) => {
-      const at = listener.sent.find((entry) => sameItem(entry.item, item))?.sentAt;
-      return at === undefined ? null : <SentStrip at={at} now={view.now} />;
-    },
-  };
+  const pullRequests = view.state.world.pullRequests;
+  const prs = useMemo(() => prsOnYou(pullRequests), [pullRequests]);
   return (
     <div className="cn-ny">
       <header className="cn-ny-head">
@@ -72,14 +62,19 @@ export function NeedsYouPage({ view, actions }: { view: CockpitView; actions: Co
         <ListenerStatus asks={view.needsYou} listener={listener} folder={folder} />
       </header>
       <div className="cn-ny-cols">
-        <AsksColumn view={view} actions={actions} hand={hand} />
-        <PrsColumn view={view} actions={actions} hand={hand} prs={prs} />
+        <AsksColumn view={view} actions={actions} />
+        <PrsColumn view={view} actions={actions} prs={prs} />
       </div>
     </div>
   );
 }
 
-function AsksColumn({ view, actions, hand }: { view: CockpitView; actions: CockpitActions; hand: Hand }): JSX.Element {
+function SentLine({ item, view }: { item: ListenItem; view: CockpitView }): JSX.Element | null {
+  const at = view.state.listener.sent.find((entry) => sameItem(entry.item, item))?.sentAt;
+  return at === undefined ? null : <SentStrip at={at} now={view.now} />;
+}
+
+function AsksColumn({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const asks = view.needsYou;
   return (
     <section className="cn-card cn-ny-col">
@@ -97,8 +92,13 @@ function AsksColumn({ view, actions, hand }: { view: CockpitView; actions: Cockp
                 const item: ListenItem = { kind: 'ask', id: row.id };
                 return (
                   <div key={row.id} className="cn-ny-item">
-                    <AskCard row={row} now={view.now} open={askOpen(row, actions)} claude={hand.claude(item)} />
-                    {hand.sent(item)}
+                    <AskCard
+                      row={row}
+                      now={view.now}
+                      open={askOpen(row, actions)}
+                      claude={<ClaudeButton item={item} view={view} actions={actions} />}
+                    />
+                    <SentLine item={item} view={view} />
                   </div>
                 );
               })
@@ -114,28 +114,31 @@ function AsksColumn({ view, actions, hand }: { view: CockpitView; actions: Cockp
 function PrsColumn({
   view,
   actions,
-  hand,
   prs,
 }: {
   view: CockpitView;
   actions: CockpitActions;
-  hand: Hand;
-  prs: ReturnType<typeof prsOnYou>;
+  prs: readonly PrOnYou[];
 }): JSX.Element {
   const open = view.state.world.pullRequests.length;
-  const rows = prs.map(({ pr, reasons }): PanelRowModel => ({
-    ...prRow(pr, view, actions),
-    chips: (
-      <span className="cn-ny-chips">
-        {reasons.map((reason) => (
-          <Tag key={reason} tone={REASON_TONE[reason]}>
-            {PR_REASON_LABEL[reason]}
-          </Tag>
-        ))}
-      </span>
-    ),
-    action: hand.claude({ kind: 'pr', number: pr.number }),
-  }));
+  const drawn = prs.map(({ pr, reasons }) => {
+    const item: ListenItem = { kind: 'pr', number: pr.number };
+    const row: PanelRowModel = {
+      ...prRow(pr, view, actions),
+      chips: (
+        <span className="cn-ny-chips">
+          {reasons.map((reason) => (
+            <Tag key={reason} tone={REASON_TONE[reason]}>
+              {PR_REASON_LABEL[reason]}
+            </Tag>
+          ))}
+        </span>
+      ),
+      action: <ClaudeButton item={item} view={view} actions={actions} />,
+    };
+    return { item, row };
+  });
+  const rail = drawn.map(({ row }) => row);
   return (
     <section className="cn-card cn-ny-col cn-lamp-mark cn-read-marks">
       <h3>
@@ -145,21 +148,14 @@ function PrsColumn({
         </i>
       </h3>
       {prs.length === 0 && <p className="cn-empty">No pull request is waiting on you.</p>}
-      {rows.map((row, i) => (
+      {drawn.map(({ item, row }) => (
         <div key={row.key} className="cn-ny-item">
-          <PanelRows layout="stacked" words="subline" rows={[row]} rail={rows} />
-          {hand.sent({ kind: 'pr', number: prs[i]!.pr.number })}
+          <PanelRows layout="stacked" words="subline" rows={[row]} rail={rail} />
+          <SentLine item={item} view={view} />
         </div>
       ))}
       {open > 0 && (
-        <BareButton
-          usage={tabUsage('overview')}
-          className="cn-ny-all"
-          onClick={() => {
-            actions.selectGoal(null);
-            actions.openTab('overview');
-          }}
-        >
+        <BareButton usage={tabUsage('overview')} className="cn-ny-all" onClick={() => openOverview(actions)}>
           All {plural(open, 'open pull request')} →
         </BareButton>
       )}
@@ -168,14 +164,7 @@ function PrsColumn({
 }
 
 function askOpen(row: NeedRow, actions: CockpitActions): Destination | null {
-  const fix = row.check?.fix;
-  if (row.check !== undefined) {
-    const group = fix?.kind === 'config' || fix?.kind === 'goto' ? fix.group : null;
-    return {
-      usage: { counted: 'config.view' },
-      go: () => actions.openConfig({ configTab: 'values', configGroup: group }),
-    };
-  }
+  if (row.check !== undefined) return configDestination(row.check, actions);
   return row.opens === null ? null : openRow(row, actions);
 }
 
@@ -190,13 +179,10 @@ function AskCard({
   open: Destination | null;
   claude: ReactNode;
 }): JSX.Element {
-  const ref = askRef(row);
+  const ref = subjectRef(row);
   const why = row.note ?? row.check?.remedy;
-  const cls = ['cn-q', 'cn-ny-ask', `cn-t-${KIND_TONE[row.kind]}`, row.group === 'blocking' ? 'cn-parked' : '']
-    .filter((c) => c !== '')
-    .join(' ');
   return (
-    <div className={cls}>
+    <div className={rowClass(row, null, false, 'cn-ny-ask')}>
       <i className="cn-stripe" />
       <div className="cn-qin">
         <div className="cn-qkind">
@@ -229,7 +215,7 @@ function AskCard({
 function AskMeta({ row }: { row: NeedRow }): JSX.Element {
   return (
     <span className="cn-qmeta">
-      {row.agentId !== null && <span>{row.agentLabel ?? 'a run with no task on record'}</span>}
+      {row.agentId !== null && <span>{row.agentLabel ?? UNNAMED_RUN}</span>}
       {row.holding > 0 && <span className="cn-hold">{holdingLabel(row.holding)}</span>}
       {row.group === 'blocking' && <span className="cn-blk">Blocking</span>}
     </span>
@@ -238,20 +224,20 @@ function AskMeta({ row }: { row: NeedRow }): JSX.Element {
 
 function ClaudeButton({
   item,
-  listener,
-  folder,
+  view,
   actions,
 }: {
   item: ListenItem;
-  listener: Listener;
-  folder: string;
+  view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element | null {
+  const { listener, config } = view.state;
+  const folder = config.desktopFolder;
   if (listener.state === 'off') {
     if (!folder) return null;
     return (
       <DesktopLink
-        usage="goal.open"
+        usage="listen.open"
         control={false}
         className="cn-ny-claude"
         folder={folder}
@@ -266,7 +252,7 @@ function ClaudeButton({
     <AsyncButton
       size="small"
       className="cn-ny-claude"
-      usage={{ counted: item.kind === 'ask' ? 'escalation.send' : 'pr.send' }}
+      usage="listen.send"
       title={
         listener.state === 'busy'
           ? 'Hand this to your listening Claude chat — it queues behind the one the chat is on'
@@ -293,7 +279,7 @@ function OnItem({ item, asks }: { item: ListenItem | null; asks: readonly NeedRo
   if (item === null) return 'an item';
   if (item.kind === 'pr') return <Ref to={`pr:${item.number}`} />;
   const row = asks.find((r) => r.id === item.id);
-  const ref = row === undefined ? null : askRef(row);
+  const ref = row === undefined ? null : subjectRef(row);
   return ref === null ? 'an ask' : <Ref to={ref} />;
 }
 
@@ -303,7 +289,7 @@ function ListenerStatus({
   folder,
 }: {
   asks: readonly NeedRow[];
-  listener: Listener;
+  listener: ListenerView;
   folder: string;
 }): JSX.Element {
   if (listener.state !== 'off') {
@@ -327,11 +313,11 @@ function ListenerStatus({
       <span className="cn-ny-listen cn-ny-off">No Claude chat listening</span>
       {folder && (
         <DesktopLink
-          usage="fleet.open"
+          usage="listen.open"
           control={false}
           className="cn-ny-claude"
           folder={folder}
-          prompt={LISTEN_PROMPT}
+          prompt={listenPrompt()}
           label="Start listen loop"
           ready="in a new chat"
           explain="so the asks and pull requests you send from this page land in it."
@@ -340,9 +326,9 @@ function ListenerStatus({
       <Button
         size="small"
         ghost
-        usage="config.copy"
-        title={`Copy "${LISTEN_PROMPT}" to paste into a Claude chat already open`}
-        onClick={() => void navigator.clipboard?.writeText(LISTEN_PROMPT).catch(() => undefined)}
+        usage="listen.copy"
+        title={`Copy "${listenPrompt()}" to paste into a Claude chat already open`}
+        onClick={() => void navigator.clipboard?.writeText(listenPrompt()).catch(() => undefined)}
       >
         Copy
       </Button>

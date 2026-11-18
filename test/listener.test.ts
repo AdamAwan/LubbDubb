@@ -10,8 +10,15 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { McpDesktopServer } from '../src/mcp/desktop.js';
 import { buildApp } from '../src/server/app.js';
-import { askQueue, buildStateSnapshot } from '../src/server/stateSnapshot.js';
-import { LISTEN_GRACE_MS, LISTEN_WAIT_MS, Listener, type WaitResult } from '../src/listen/listener.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
+import { askQueue } from '../src/server/askReads.js';
+import {
+  LISTEN_GRACE_MS,
+  LISTEN_WAIT_MS,
+  Listener,
+  type ListenStanding,
+  type WaitResult,
+} from '../src/listen/listener.js';
 import { FakeListenClock } from '../src/listen/fakeListenClock.js';
 import { prOnYouReasons } from '../src/listen/prsOnYou.js';
 import type { ToolCallResult } from '../src/mcp/protocol.js';
@@ -21,7 +28,11 @@ import { desktopDeps } from './support/desktop.js';
 
 /* → docs/spec/44-needs-you.md */
 
-const NOBODY = { askIds: new Set<string>(), prsOnYou: new Set<number>() };
+const NOBODY: ListenStanding = () => false;
+
+function stands(askIds: string[], prs: number[]): ListenStanding {
+  return (item) => (item.kind === 'ask' ? askIds.includes(item.id) : prs.includes(item.number));
+}
 const ASK = { kind: 'ask', id: 'a1' } as const;
 const PR = { kind: 'pr', number: 212 } as const;
 
@@ -118,6 +129,21 @@ test('the grace running out tells the cockpit', async () => {
   assert.equal(changes, before + 1);
 });
 
+test('the listener tells the cockpit only when what it shows has changed', async () => {
+  const clock = new FakeListenClock();
+  const listener = new Listener(clock);
+  let changes = 0;
+  listener.on('changed', () => changes++);
+  void listener.wait();
+  assert.equal(changes, 1, 'off to listening');
+  void listener.wait();
+  assert.equal(changes, 1, 'a newer wait is still listening');
+  listener.send(PR);
+  assert.equal(changes, 2, 'busy on the item');
+  listener.send(PR);
+  assert.equal(changes, 2, 'a no-op send shows nothing new');
+});
+
 test('sending an item already queued or already on the chat is a no-op', async () => {
   const listener = new Listener(new FakeListenClock());
   listener.send(PR);
@@ -132,7 +158,7 @@ test('sending an item already queued or already on the chat is a no-op', async (
 test('sent entries drop when the ask no longer stands, the pull request is off the page, or after a day', async () => {
   const clock = new FakeListenClock();
   const listener = new Listener(clock);
-  const standing = { askIds: new Set(['a1']), prsOnYou: new Set([212]) };
+  const standing = stands(['a1'], [212]);
   listener.send(ASK);
   await listener.wait();
   clock.advance(1000);
@@ -147,11 +173,11 @@ test('sent entries drop when the ask no longer stands, the pull request is off t
   assert.equal(both[1]?.sentAt, new Date(clock.now() - 1000).toISOString(), 'stamped when it was sent');
 
   assert.deepEqual(
-    listener.view({ askIds: new Set(), prsOnYou: new Set([212]) }).sent.map((s) => s.item),
+    listener.view(stands([], [212])).sent.map((s) => s.item),
     [PR],
     'the settled ask is dropped',
   );
-  assert.deepEqual(listener.view({ ...standing, prsOnYou: new Set() }).sent, [], 'the pull request left the page');
+  assert.deepEqual(listener.view(stands(['a1'], [])).sent, [], 'the pull request left the page');
 
   listener.send(ASK);
   await listener.wait();
@@ -186,10 +212,10 @@ test('prOnYouReasons reads the spec table, in its order', () => {
         body: '  \n',
       }),
     ),
-    ['Your review', 'Comments', 'Needs a reviewer', 'No description'],
-    'assigned to you is "Your review", never also "Your call"',
+    ['review', 'comments', 'assign', 'describe'],
+    'assigned to you is a review, never also a call',
   );
-  assert.deepEqual(prOnYouReasons(openPr({ attention: { status: 'you', reasons: [] } })), ['Your call']);
+  assert.deepEqual(prOnYouReasons(openPr({ attention: { status: 'you', reasons: [] } })), ['call']);
   assert.deepEqual(prOnYouReasons(openPr({ assignAsk: [] })), [], 'an empty reviewer ask is no ask');
 });
 
@@ -295,6 +321,22 @@ test('POST /api/listen/send queues for ask_wait, refuses a malformed item, and t
   }
 });
 
+test('?sections=listener answers the listener alone, without the asks', async () => {
+  const sys = system(new FakeListenClock());
+  const { app } = await buildApp(sys);
+  try {
+    sys.listener.send(PR);
+    const res = await app.inject({ method: 'GET', url: '/api/state?sections=listener' });
+    assert.equal(res.statusCode, 200);
+    const body = res.json();
+    assert.equal(body.listener.queued, 1);
+    assert.equal(body.asks, undefined);
+  } finally {
+    await app.close();
+    sys.store.close();
+  }
+});
+
 test('a sent ask is kept while it stands and dropped once it is settled', async () => {
   const clock = new FakeListenClock();
   const sys = system(clock);
@@ -378,14 +420,14 @@ test('pr_read answers the record of an open pull request and refuses one that is
     assert.equal(read.json.title, 'Change 212');
     assert.equal(read.json.branch, 'issue/212');
     assert.equal(read.json.url, 'https://example.test/pull/212');
-    assert.equal(read.json.ci.status, 'failing');
-    assert.ok(read.json.ci.verdict, 'the CI verdict rides along');
+    assert.equal(read.json.ciStatus, 'failing');
+    assert.ok(read.json.ciVerdict, 'the CI verdict rides along');
     assert.equal(read.json.reviewThreads[0].path, 'src/a.ts');
     assert.equal(read.json.unresolvedComments[0].replies[0].body, 'Because');
     assert.ok(read.json.attention.status);
-    assert.ok(read.json.onYou.includes('No description'));
-    assert.ok(read.json.onYou.includes('Comments'));
-    assert.equal(read.json.goal, null);
+    assert.ok(read.json.onYou.includes('describe'));
+    assert.ok(read.json.onYou.includes('comments'));
+    assert.equal(read.json.goal.ref, 'issue:212', 'the goal off the branch, as every ask line reads it');
 
     const merged = await d.call('pr_read', { number: 5 });
     assert.ok(merged.isError);

@@ -641,7 +641,7 @@ tier, the group, `holding`, the rail's sort and the Focus order all live in `src
   Two orders rather than one because the spec gives them different jobs — the rail is cut by who is
   stopped, Focus mode by how much work is held and how far along it is — and both are the server's.
   The cockpit sorts by `focusRank` and decides nothing.
-- **`askQueue(system)`** (`src/server/stateSnapshot.ts`) is the queue as a one-at-a-time reader walks
+- **`askQueue(system)`** (`src/server/askReads.ts`) is the queue as a one-at-a-time reader walks
   it: standing rows only, in `focusRank` order. It is the same derivation `/api/state` ships, read off
   the same snapshot reads. Its reader is the desktop channel's `ask_next`, which hands Claude Code its
   head ([11](11-mcp-tools.md#the-next-ask-loop)); the plugin's notice board reads the `asks` section

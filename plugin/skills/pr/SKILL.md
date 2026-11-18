@@ -22,9 +22,10 @@ do.
 2. **Put it in front of them**, briefly:
    - **The title as a link** to `url`, then the branch and, where `goal` is set,
      the goal it delivers as a link (`goal.url`) with the part it is.
-   - **Why it is on them** — `onYou`, in those words, one line each, with the
-     fact behind it: who assigned it, the comment still unresolved, the people
-     `assignAsk` offers, the body that is empty.
+   - **Why it is on them** — `onYou`, one line each, with the fact behind it:
+     `review` (assigned to them — say who), `call` (it waits on their decision),
+     `comments` (the comment still unresolved), `assign` (it needs a reviewer —
+     the people `assignAsk` offers), `describe` (the body is empty).
    - **CI** — the verdict in a line: green, or the checks failing and whether
      the fleet is on them (`attention.reasons`).
    - **Review threads still open** — one line each: who, where (`path`,

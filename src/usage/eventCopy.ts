@@ -248,6 +248,22 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   },
   'handled.undo': { label: 'Undid a handled ask', blurb: 'Something the harness did without asking was put back' },
   'handled.accept': { label: 'Checked handled asks', blurb: 'A group the harness answered itself was marked checked' },
+  'listen.view': {
+    label: 'Opened Needs you',
+    blurb: 'The page of asks and pull requests waiting on the operator was reached',
+  },
+  'listen.send': {
+    label: 'Talked it through',
+    blurb: 'An ask or a pull request was handed to the listening Claude chat',
+  },
+  'listen.open': {
+    label: 'Opened a Claude chat',
+    blurb: 'A new chat was started from Needs you — the listen loop, or one ask or pull request',
+  },
+  'listen.copy': {
+    label: 'Copied the listen command',
+    blurb: 'The listen loop’s command was copied for a chat already open',
+  },
   'bot-pr.view': { label: 'Opened bot pull requests', blurb: 'The dependency-bot pull request tab was reached' },
   'bot-pr.create': { label: 'Asked for a risk read', blurb: 'An agent was sent to classify the bot pull requests' },
   'bot-pr.accept': { label: 'Watched a bot pull request', blurb: 'A failing bot pull request was handed to the fleet' },

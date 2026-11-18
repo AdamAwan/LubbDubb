@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { issueAddress, prAddress } from '../asks/lines.js';
-import type { AskInputs } from '../asks/queue.js';
-import { issueOrigin } from '../plans/planning.js';
+import { goalIssue, goalOfPr, issueAddress, prAddress } from '../asks/lines.js';
+import type { PrReadInputs } from '../asks/queue.js';
 import { prOnYouReasons } from '../listen/prsOnYou.js';
+import { prState } from '../pr/prHealth.js';
+import { knownPrs, prView, replyView } from './worldRead.js';
 import type { OpenPullRequest } from '../wire.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolSchema } from './schema.js';
@@ -30,17 +31,13 @@ export const askWait: DesktopToolFactory = (deps) => ({
   },
 });
 
-function deliversGoal(inputs: AskInputs, pr: OpenPullRequest): Record<string, unknown> | null {
+function deliversGoal(inputs: PrReadInputs, pr: OpenPullRequest): Record<string, unknown> | null {
+  const ref = goalOfPr(inputs, pr.number);
+  if (ref === null) return null;
+  const issue = goalIssue(inputs, ref);
   const part = (inputs.planParts ?? []).find((p) => p.prNumber === pr.number);
-  const plan = part === undefined ? undefined : (inputs.plans ?? []).find((p) => p.id === part.planId);
-  const ref = plan?.originRef ?? null;
-  const issue = inputs.world.issues.find((i) =>
-    ref === null ? i.linkedPrNumber === pr.number : issueOrigin(i.number) === ref,
-  );
-  const goalRef = ref ?? (issue === undefined ? null : issueOrigin(issue.number));
-  if (goalRef === null) return null;
   return {
-    ref: goalRef,
+    ref,
     title: issue?.title ?? null,
     url: issue === undefined ? null : (issueAddress(inputs, issue) ?? null),
     part: part === undefined ? null : { slug: part.slug, title: part.title },
@@ -52,24 +49,21 @@ const PR_READ_NEXT =
   'review threads still open. Where the talk turns on the diff, read it in this checkout or hand the read ' +
   'to a subagent. Act only on their word, through pr_assign, description_read and description_check.';
 
-function notOpen(inputs: AskInputs, n: number): string {
+function notOpen(inputs: PrReadInputs, n: number): string {
   const closed = (inputs.world.closedPullRequests ?? []).find((p) => p.number === n);
   return closed === undefined
-    ? `The harness holds no open pull request #${n}. Check the number; the last world reading does not list it.`
-    : `Pull request #${n} is ${closed.merged === true ? 'merged' : 'closed'}, not open — there is nothing on it to act on.`;
+    ? `The harness holds no open pull request #${n}. ${knownPrs(inputs.world)}`
+    : `Pull request #${n} is ${prState(closed)}, not open — there is nothing on it to act on.`;
 }
 
-function describePr(inputs: AskInputs, pr: OpenPullRequest): Record<string, unknown> {
+function describePr(inputs: PrReadInputs, pr: OpenPullRequest): Record<string, unknown> {
   return {
-    number: pr.number,
-    title: pr.title,
-    body: pr.body ?? null,
-    branch: pr.branch,
-    baseBranch: pr.baseBranch ?? null,
+    ...prView(pr, inputs.world),
     url: pr.url ?? prAddress(inputs, pr.number) ?? null,
+    body: pr.body ?? null,
     author: pr.author ?? null,
     observedAt: inputs.world.takenAt,
-    ci: { status: pr.ciStatus, checks: pr.ciChecks ?? [], verdict: pr.ciVerdict },
+    ciVerdict: pr.ciVerdict,
     reviewThreads: (pr.reviewThreads ?? []).map((t) => ({
       id: t.id,
       author: t.author,
@@ -77,14 +71,7 @@ function describePr(inputs: AskInputs, pr: OpenPullRequest): Record<string, unkn
       path: t.path ?? null,
       line: t.line ?? null,
       body: t.body,
-      replies: t.replies.map((r) => ({ author: r.author, body: r.body, ours: r.ours })),
-    })),
-    unresolvedComments: pr.unresolvedComments.map((c) => ({
-      id: c.id,
-      author: c.author,
-      body: c.body,
-      handled: c.handled,
-      replies: (c.replies ?? []).map((r) => ({ author: r.author, body: r.body, ours: r.ours })),
+      replies: t.replies.map(replyView),
     })),
     attention: pr.attention,
     onYou: prOnYouReasons(pr),
@@ -97,13 +84,14 @@ export const prRead: DesktopToolFactory = (deps) => ({
   description:
     'The harness’s record of one open pull request: title, body, branch, url, CI checks and the CI verdict, ' +
     'review threads with their replies, unresolved comments, `attention` with its reasons, why it is on the ' +
-    'operator (`onYou`), the reviewer ask (`assignAsk`), and the goal it delivers. Records nothing.',
+    'operator (`onYou`: review, call, comments, assign, describe), the reviewer ask (`assignAsk`), and the goal ' +
+    'it delivers. Records nothing.',
   inputSchema: toolSchema(z.object({ number: z.number().describe('The pull request number, e.g. 212.') })),
   handler: (args) => {
     const n = args.number;
     if (typeof n !== 'number' || !Number.isInteger(n) || n <= 0)
       return toolError('number must be the pull request number, e.g. 212.');
-    const { inputs } = deps.asks();
+    const inputs = deps.prInputs();
     const pr = inputs.world.pullRequests.find((p) => p.number === n);
     if (pr === undefined) return toolError(notOpen(inputs, n));
     return toolJson({ ...describePr(inputs, pr), next: PR_READ_NEXT });

@@ -219,12 +219,12 @@ test('a write on the desktop channel reaches the cockpit as the matching routeâ€
   assert.deepEqual(sent, [{ type: 'world:changed' }, { type: 'dirty', sections: ['plans', 'asks'] }]);
 });
 
-test('a change in the listen loop refreshes the asks, where the snapshot reads the listener', () => {
+test('a change in the listen loop refreshes its own section and not the asks', () => {
   const { system } = fakeSystem();
   const hub = new Hub(system);
   const { socket, sent } = fakeSocket();
   hub.add(socket);
 
   (system.listener as unknown as EventEmitter).emit('changed');
-  assert.deepEqual(sent, [{ type: 'dirty', sections: ['asks'] }]);
+  assert.deepEqual(sent, [{ type: 'dirty', sections: ['listener'] }]);
 });

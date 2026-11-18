@@ -34,10 +34,7 @@ import {
   tenantCommandViews,
 } from './stateEnvironmentViews.js';
 import { localRunView, localRunRefFacts, localRunTargetViews } from './stateLocalRunViews.js';
-import { buildAskQueue, type AskSnapshot } from '../asks/queue.js';
-import { askInputs, asksSection, descriptionFeedback, inbox, undescribedParts } from './stateAsks.js';
-import type { AskRow } from '../asks/askRow.js';
-import type { SetupReading } from '../setup/reading.js';
+import { askSections, descriptionFeedback, inbox, undescribedParts } from './stateAsks.js';
 import { watchSourceDeclarations } from '../environments/watchSource.js';
 
 // → docs/spec/16-http-api.md
@@ -52,6 +49,7 @@ export const STATE_SECTIONS: readonly StateSection[] = [
   'inbox',
   'activity',
   'asks',
+  'listener',
 ];
 
 const ALL_SECTIONS: ReadonlySet<StateSection> = new Set(STATE_SECTIONS);
@@ -75,32 +73,13 @@ export function buildStateSections(
   if (want.has('queue')) Object.assign(out, queueSection(r));
   if (want.has('inbox')) Object.assign(out, inboxSection(r));
   if (want.has('activity')) Object.assign(out, activitySection(r));
-  if (want.has('asks')) Object.assign(out, asksSection(system, askInputs(r, want, out), opts?.setup ?? null));
+  Object.assign(out, askSections(system, r, want, out, opts?.setup ?? null));
   return out;
-}
-
-/**
- * The operator's asks as Claude Code walks them: standing rows only, in the one-at-a-time order the
- * Focus overview walks. The same derivation `/api/state` ships as `asks`.
- * → docs/spec/17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code
- */
-export function askQueue(system: System, setup: SetupReading | null = system.setupReading.latest): AskRow[] {
-  return askSnapshot(system, setup).queue;
-}
-
-/** {@link askQueue} with the inputs it was derived from, which `ask_next`'s card reads the goal off. */
-export function askSnapshot(system: System, setup: SetupReading | null = system.setupReading.latest): AskSnapshot {
-  const r = snapshotReads(system, { setup });
-  const inputs = askInputs(r, new Set(['asks']), { refUrls: r.refUrls });
-  const queue = buildAskQueue(inputs, setup)
-    .filter((row) => row.standing)
-    .sort((a, b) => a.focusRank - b.focusRank);
-  return { queue, inputs };
 }
 
 export type Reads = IssueReadsOn & ReturnType<typeof prReads> & { stacks: () => ReturnType<typeof buildStacks> };
 
-function snapshotReads(system: System, opts: SnapshotOpts | undefined): Reads {
+export function snapshotReads(system: System, opts: SnapshotOpts | undefined): Reads {
   const base = baseReads(system, opts);
   const planned = { ...base, ...planReads(base) };
   const verdicts = { ...planned, ...verdictReads(planned) };

@@ -51,6 +51,7 @@ export function buildDesktop(
     issueContainerTypes: config.issueContainerTypes,
     agentModels: config.agentModels,
     asks: () => late.get().askSnapshot(),
+    prInputs: () => late.get().prInputs(),
     listener,
     cockpitUrl: apiUrl(config),
     proposals: () => late.get().proposals,

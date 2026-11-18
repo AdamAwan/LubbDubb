@@ -4,6 +4,7 @@ import { BareLink, LinkButton, type OpenUsage } from './button.js';
 import { CONTROL_CLASS, useInControlRow } from './controls.js';
 import { Icon } from './icons.js';
 import { flashClass, useAsyncAction } from './AsyncButton.js';
+import { classes } from './classes.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -49,14 +50,11 @@ export function DesktopLink({
     ),
   };
   return asControl ? (
-    <BareLink
-      className={[CONTROL_CLASS, flashClass(phase), className ?? ''].filter((c) => c !== '').join(' ')}
-      {...link}
-    />
+    <BareLink className={classes(CONTROL_CLASS, flashClass(phase), className)} {...link} />
   ) : (
     <LinkButton
       {...link}
-      className={[flashClass(phase), className ?? ''].filter((c) => c !== '').join(' ')}
+      className={classes(flashClass(phase), className)}
       ghost
       size={fullSize ? undefined : 'small'}
     />

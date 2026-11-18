@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { Hub, type ServerEvent } from '../src/server/hub.js';
 import { buildApp } from '../src/server/app.js';
-import { askQueue } from '../src/server/stateSnapshot.js';
+import { askQueue } from '../src/server/askReads.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';

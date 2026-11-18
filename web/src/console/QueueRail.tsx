@@ -15,6 +15,7 @@ import { askLine } from '../view/needLines.js';
 import { FoldToggle } from '../components/collapsible.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../view/askKinds.js';
 import { tabUsage } from '../cockpit/usage.js';
+import { classes } from '../components/classes.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -91,9 +92,20 @@ const URGENCY_ORDER: NeedUrgency[] = ['now', 'next', 'later'];
 const PR_ORIGIN = /^pr:(\d+)(?::|$)/;
 
 /**
- * What a row is about, in one token: its goal (`#12`) when it has one, else the
- * pull request it was raised on (`PR #142`). Null only for an ask with neither,
- * which is the one case a surface has nothing true to name.
+ * What a row is about, as a ref: its goal when it has one, else the pull request
+ * it was raised on. Null only for an ask with neither, which is the one case a
+ * surface has nothing true to name.
+ *
+ * @public shared with the Needs you page, which draws it as a `<Ref/>`
+ */
+export function subjectRef(row: NeedRow): string | null {
+  if (row.goalRef !== null) return row.goalRef;
+  const pr = row.prNumber ?? PR_ORIGIN.exec(row.originRef ?? '')?.[1];
+  return pr === undefined ? null : `pr:${pr}`;
+}
+
+/**
+ * {@link subjectRef} in one token — `#12`, or `PR #142` as the ask lines write it.
  *
  * Through `refLabel`, the one function that shortens a ref: this was written
  * three times over, and the fourth surface that wrote it printed a label with no
@@ -102,9 +114,10 @@ const PR_ORIGIN = /^pr:(\d+)(?::|$)/;
  * @public shared with the ask panel, which states the same subject in its header
  */
 export function subjectLabel(row: NeedRow): string | null {
-  if (row.goalRef !== null) return refLabel(row.goalRef);
-  const pr = PR_ORIGIN.exec(row.originRef ?? '');
-  return pr ? `PR #${pr[1]}` : null;
+  const ref = subjectRef(row);
+  if (ref === null) return null;
+  const pr = PR_ORIGIN.exec(ref);
+  return pr ? `PR #${pr[1]}` : refLabel(ref);
 }
 
 function subjectBeside(row: NeedRow): string | null {
@@ -112,7 +125,8 @@ function subjectBeside(row: NeedRow): string | null {
   return subject !== null && row.title.includes(subject) ? null : subject;
 }
 
-const UNNAMED_RUN = 'a run with no task on record';
+/** @public shared with the Needs you page */
+export const UNNAMED_RUN = 'a run with no task on record';
 
 /**
  * What an ask is holding, worded once. The rail row and the band the row opens
@@ -205,6 +219,20 @@ function Card({
   );
 }
 
+/**
+ * Where a setup check's row opens: the config page, on the group its fix names.
+ *
+ * @public shared with the Needs you page
+ */
+export function configDestination(check: SetupCheck, actions: CockpitActions): Destination {
+  const fix = check.fix;
+  const group = fix?.kind === 'config' || fix?.kind === 'goto' ? fix.group : null;
+  return {
+    usage: { counted: 'config.view' },
+    go: () => actions.openConfig({ configTab: 'values', configGroup: group }),
+  };
+}
+
 function ConfigRow({
   row,
   check,
@@ -218,14 +246,13 @@ function ConfigRow({
   current: boolean;
   actions: CockpitActions;
 }): JSX.Element {
-  const fix = check.fix;
-  const group = fix?.kind === 'config' ? fix.group : fix?.kind === 'goto' ? fix.group : undefined;
+  const open = configDestination(check, actions);
   return (
     <Card
       cls={cls}
       current={current}
-      onClick={() => actions.openConfig({ configTab: 'values', configGroup: group ?? null })}
-      usage={{ counted: 'config.view' }}
+      onClick={open.go}
+      usage={open.usage}
       foot={
         row.applied === undefined ? (
           <ConfigFix check={check} actions={actions} />
@@ -243,12 +270,15 @@ function ConfigRow({
   );
 }
 
-function rowClass(row: NeedRow, focus: string | null, current: boolean): string {
+/**
+ * An ask card's classes: its kind's tone, parked when it blocks, dimmed beside the goal in focus.
+ *
+ * @public shared with the Needs you page, which has no focus and adds its own class
+ */
+export function rowClass(row: NeedRow, focus: string | null, current: boolean, extra = ''): string {
   const parked = row.group === 'blocking';
   const dim = focus !== null && !current && row.kind !== 'recovery';
-  return ['cn-q', `cn-t-${KIND_TONE[row.kind]}`, parked ? 'cn-parked' : '', dim ? 'cn-dim' : '']
-    .filter((c) => c !== '')
-    .join(' ');
+  return classes('cn-q', extra, `cn-t-${KIND_TONE[row.kind]}`, parked && 'cn-parked', dim && 'cn-dim');
 }
 
 function ProviderRow({
@@ -392,11 +422,7 @@ function AssignGroupRow({
   );
 }
 
-/**
- * The rail's tiers over a list of rows: a heading per urgency, and the fold over
- * the asks that hold nothing. Shared with the Needs you page, which draws the
- * same tiers at full width. → docs/spec/44-needs-you.md#from-the-orchestrator
- */
+/** The rail's urgency headings and its fold, over any rows. → docs/spec/44-needs-you.md#from-the-orchestrator */
 export function RailTiers({
   rows,
   draw,

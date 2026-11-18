@@ -11,6 +11,7 @@ import { renderPanel } from './ConsoleRootPanels.js';
 
 import { Overview } from './Overview.js';
 import { NeedsYouPage } from './NeedsYouPage.js';
+import { needsYouInFront } from '../view/needsYouPage.js';
 import { FocusOverview } from './overviews/FocusOverview.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
@@ -76,7 +77,7 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
             that draws the creatures itself: the focus shape puts them on the floor
             of its own card without the banner, and both at once is the vivarium
             twice. → {@link PetFloor} */}
-        {view.state.pets !== null && !drawsOwnPets(view) && (
+        {view.state.pets !== null && !focusInFront(view) && (
           <Vivarium
             pets={view.state.pets}
             runningAgents={runningAgents(view.state.agents)}
@@ -133,14 +134,15 @@ function recoveryBand(view: CockpitView, actions: CockpitActions): JSX.Element |
   ) : null;
 }
 
-/** Whether the surface in front has absorbed the queue rail. → docs/spec/44-needs-you.md#where-it-sits */
-function railless(view: CockpitView): boolean {
-  if (view.selectedGoal !== null || view.selectedPr !== null) return false;
-  return view.tab === 'needs' || (view.tab === 'overview' && view.overviewShape === 'focus');
+/** The focus shape is in front, which draws the creatures on its own card. */
+function focusInFront(view: CockpitView): boolean {
+  if (view.tab !== 'overview' || view.selectedGoal !== null || view.selectedPr !== null) return false;
+  return view.overviewShape === 'focus';
 }
 
-function drawsOwnPets(view: CockpitView): boolean {
-  return railless(view) && view.tab === 'overview';
+/** Whether the surface in front has absorbed the queue rail. → docs/spec/44-needs-you.md#where-it-sits */
+function railless(view: CockpitView): boolean {
+  return needsYouInFront(view) || focusInFront(view);
 }
 
 function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): JSX.Element {

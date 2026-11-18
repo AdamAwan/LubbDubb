@@ -17,9 +17,10 @@ part of this page **only**: no other surface sends anything to it.
 
 - **The old overview and the rail are unchanged.** This page is a new tab; nothing about Cards, Focus mode or the queue rail moves. → [§](#where-it-sits) · _no test_
 - **Only this page sends to the listening chat.** `POST /api/listen/send` has one caller, `web/src/console/NeedsYouPage.tsx`; every other surface keeps its own buttons and its own deep links. → [§](#scope) · `test/needsYouPage.test.ts`
-- **Which pull requests are drawn is `prsOnYou`, one pure function.** A pull request is on the page when any one of its reasons holds, and a reason is read off fields the server already decided — never re-derived in the browser. → [§](#pull-requests-waiting-on-you) · `test/prsOnYou.test.ts`
+- **Which pull requests are on the page is `prOnYouReasons`, one pure function the server and the page share.** A pull request is on the page when any one of its reasons holds, and a reason is read off fields the server already decided — never re-derived in the browser. The page, the pruning of `sent` and `pr_read`'s `onYou` all read its keys. → [§](#pull-requests-waiting-on-you) · `test/prsOnYou.test.ts`
 - **The page reads `listener.state`; it never guesses.** `listening`, `busy` and `off` are the server's, off whether a wait is open. → [§](#is-a-chat-listening) · `test/needsYouPage.test.ts`
 - **A wait is bounded.** `ask_wait` returns by itself after `LISTEN_WAIT_MS` (10 minutes) with nothing, and the skill calls it again; a held call never outlives that bound. → [§](#the-wait) · `test/listener.test.ts`
+- **The listener tells the cockpit only when what it shows has changed**, and that is its own `listener` section — never a rebuild of the ask queue. → [§](#the-wait) · `test/listener.test.ts`
 - **An item is handed out once.** A sent item leaves the queue the moment one `ask_wait` returns it; a second waiter never receives it too. → [§](#the-wait) · `test/listener.test.ts`
 - **The listen loop decides nothing.** `/lubbdubb:listen` hands each item to the same reading the `next` skill does; the operator answers. → [§](#the-listen-skill) · _no test_
 
@@ -29,6 +30,8 @@ A `ConsoleTab`, `needs`, reached at `?tab=needs` and drawn by `web/src/console/N
 top bar names it **Needs you** with a `new` tag. It is not the default home: the overview stays the
 first tab until the operator decides otherwise.
 
+Whether the page is in front — its tab, with no goal or pull request opened over it — is one
+function, `needsYouInFront` (`web/src/view/needsYouPage.ts`), which both the shell and the top bar read.
 On this tab the shell draws no queue rail — the page _is_ the queue, at full width, and the rail
 beside it would be the same list twice. Everywhere else the rail is where it has always been.
 
@@ -58,19 +61,22 @@ different questions, and the operator asked for both.
 
 ## Pull requests waiting on you
 
-`prsOnYou` (`web/src/view/prsOnYou.ts`) over `world.pullRequests`. A pull request is drawn when any of
-these hold, and each that holds is a tag on its row:
+`prOnYouReasons` (`src/listen/prsOnYou.ts`) is the table, once: it answers a pull request's reasons as
+keys, in this order, and is re-exported as a runtime value from `src/wire.ts` so the page calls the same
+function the server does. A pull request is drawn when any of these hold, and each that holds is a tag
+on its row:
 
-| Reason             | Read off                                                              |
-| ------------------ | --------------------------------------------------------------------- |
-| `Your review`      | `attention.assignedToYou` is set                                      |
-| `Your call`        | `attention.status === 'you'` and not assigned to you                  |
-| `Comments`         | `unresolvedComments` is not empty — even while the fleet answers them |
-| `Needs a reviewer` | `assignAsk` is set and not empty                                      |
-| `No description`   | `body` is read and empty after trimming                               |
+| Key        | Tag                | Read off                                                              |
+| ---------- | ------------------ | --------------------------------------------------------------------- |
+| `review`   | `Your review`      | `attention.assignedToYou` is set                                      |
+| `call`     | `Your call`        | `attention.status === 'you'` and not assigned to you                  |
+| `comments` | `Comments`         | `unresolvedComments` is not empty — even while the fleet answers them |
+| `assign`   | `Needs a reviewer` | `assignAsk` is set and not empty                                      |
+| `describe` | `No description`   | `body` is read and empty after trimming                               |
 
-The server holds the same table as `prOnYouReasons` (`src/listen/prsOnYou.ts`), which is what drops a
-sent pull request's strip once it is off the page — a change to the table changes both.
+The page's `prsOnYou` (`web/src/view/prsOnYou.ts`) holds only what is the page's own: the tag words
+and tones, and the sort. The same keys drop a sent pull request's strip once it is off the page, and
+are `pr_read`'s `onYou`.
 
 Sorted by the first reason in that order, then newest first — by number, since a pull request
 carries no opened-at time. The row is `prRow`
@@ -93,7 +99,8 @@ sent — until it no longer stands (the ask settled, the pull request off the pa
 
 ## Is a chat listening
 
-`ListenerView` (`src/types/listen.ts`) on the snapshot as `listener`:
+`ListenerView` (`src/types/listen.ts`) on the snapshot as `listener`, a [section](16-http-api.md#sections)
+of its own:
 
 - **`listening`** — an `ask_wait` call is open, or one returned less than `LISTEN_GRACE_MS` (60
   seconds) ago. The grace covers the gap between one bounded wait and the next.
@@ -104,7 +111,12 @@ sent — until it no longer stands (the ask settled, the pull request off the pa
 The status draws on the heading row: a filled pill **Claude is listening**; **Claude is on #212 · 1
 queued**; or a dashed **No Claude chat listening** with **Start listen loop ↗** — a deep link opening
 a new chat with `/lubbdubb:listen` typed in — and **Copy**, which puts the same command on the
-clipboard for a chat already open.
+clipboard for a chat already open. The prompts are `listenPrompt`, `prPrompt` and `askOnlyPrompt` in
+`web/src/cockpit/desktopLink.ts`, beside every other skill prompt.
+
+The page's controls count under their own usage subject, `listen` ([34](34-usage-metrics.md)): the tab
+is `listen.view` at place `needs`, **Talk it through** is `listen.send`, the two deep links are
+`listen.open` and **Copy** is `listen.copy`.
 
 ## The wait
 
@@ -121,13 +133,19 @@ call answers the older one with `{ item: null, superseded: true }`. Returning an
 `POST /api/listen/send` (`{ item: ListenItem }`) appends to the queue and answers the open waiter if
 there is one. Sending an item already queued or already on the chat is a no-op. A sent entry is
 dropped when the ask no longer stands or the pull request is no longer on [the page](#pull-requests-waiting-on-you),
-or after a day. Those are read off the snapshot as it is built — the standing rows of `asks`, and
-`prOnYouReasons` over the open pull requests — so the pruning happens on read, and `sentAt` is when the
-operator pressed the button, not when the chat took the item. Sending an item again once the chat has
+or after a day. Those are read off the snapshot as it is built, and only for what is in `sent`: nothing
+at all when `sent` is empty, the standing rows of `asks` (the reply's own, or the queue built for the
+`listener` section alone) for a sent ask, and `prOnYouReasons` over that one open pull request for a sent
+one. So the pruning happens on read, and `sentAt` is when the operator pressed the button, not when the
+chat took the item. A section reply naming `asks` but not `listener` leaves a settled entry in place
+until the next `listener` read; nothing draws it, since its row has left the page. Sending an item again once the chat has
 moved off it is not a duplicate: it queues, and its `sent` entry moves to the top.
 
 The listener's changes — a wait opened or answered, a send, the grace running out — broadcast
-`dirty` for `asks`, so the page's status follows without polling. Its clock and timers are a seam
+`dirty` for `listener`, so the page's status follows without polling, and only when the view it would
+answer has changed from the last one it announced: a newer wait replacing an open one, or a send that is
+a no-op, is silent. The section is its own so that a wait opening every ten minutes rebuilds the
+listener and nothing else, never the ask queue. Its clock and timers are a seam
 (`ListenClock`); a test injects `FakeListenClock` as `listenClock`.
 
 `busy` has no timeout of its own: a chat closed while working an item inline reads `busy` until the
@@ -152,8 +170,12 @@ The operator can press Esc to stop the wait and talk to the chat; `/lubbdubb:lis
 ## The pull request skill
 
 `/lubbdubb:pr <n>` (`plugin/skills/pr/SKILL.md`), and the desktop tool it reads with, `pr_read`: the
-harness's record of one open pull request — title, body, branch, CI checks and verdict, review threads
-with their replies, `attention` with its reasons, `assignAsk`, and the goal it delivers. The skill puts
+harness's record of one open pull request — `world_read`'s view of it (`prView` in
+`src/mcp/worldRead.ts`), with the body, `ciVerdict`, review threads with their replies, `attention` with
+its reasons, `onYou` (the [keys](#pull-requests-waiting-on-you)), `assignAsk`, and the goal it delivers —
+the goal `goalOfPr` names, as every ask line reads it, with its issue and plan part. It reads its inputs
+off `prInputs` (`src/server/askReads.ts`): the open pull requests and the plans, with no ask queue
+built. A number that is not open is refused with what the harness does hold, as `world_read` refuses. The skill puts
 the pull request in front of the operator, reads the diff in the checkout or through a subagent where
 the conversation turns on it, and acts only on the operator's word through the tools that already
 exist (`pr_assign`, `description_read`, `description_check`).

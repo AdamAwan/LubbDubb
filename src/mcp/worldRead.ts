@@ -1,4 +1,4 @@
-import type { PullRequest, WorldSnapshot } from '../types.js';
+import type { PrThreadMessage, PullRequest, WorldSnapshot } from '../types.js';
 import { basePrOf, inheritedCiFailure, prHealth, prState } from '../pr/prHealth.js';
 
 // → docs/spec/11-mcp-tools.md
@@ -80,7 +80,12 @@ export function readWorldItem(
   }
 }
 
-function prView(pr: PullRequest, world: WorldSnapshot): Record<string, unknown> {
+/** One reply on a thread or comment, as every read hands it out. */
+export function replyView(r: PrThreadMessage): Record<string, unknown> {
+  return { id: r.id, author: r.author, body: r.body, ours: r.ours };
+}
+
+export function prView(pr: PullRequest, world: Pick<WorldSnapshot, 'pullRequests'>): Record<string, unknown> {
   const openPrs = world.pullRequests;
   const base = basePrOf(pr, openPrs);
   const inherited = inheritedCiFailure(pr, openPrs);
@@ -108,7 +113,7 @@ function prView(pr: PullRequest, world: WorldSnapshot): Record<string, unknown> 
       author: c.author,
       body: c.body,
       handled: c.handled,
-      replies: (c.replies ?? []).map((r) => ({ id: r.id, author: r.author, body: r.body, ours: r.ours })),
+      replies: (c.replies ?? []).map(replyView),
     })),
   };
 }
@@ -120,7 +125,7 @@ function suggest(label: string, refs: string[]): string {
   return `${label} the harness is tracking: ${shown.join(', ')}${more}.`;
 }
 
-function knownPrs(world: WorldSnapshot): string {
+export function knownPrs(world: Pick<WorldSnapshot, 'pullRequests' | 'closedPullRequests'>): string {
   const open = world.pullRequests.map((pr) => `#${pr.number}`);
   const closed = (world.closedPullRequests ?? []).map((pr) => `#${pr.number} (${prState(pr)})`);
   return suggest('PRs', [...open, ...closed]);
