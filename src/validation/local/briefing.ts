@@ -11,6 +11,7 @@ interface ValidationBrief {
   run: LocalRun;
   base: string | null;
   instruction: string;
+  setup: string;
   outputDir: string;
   browserKey: string | null;
 }
@@ -68,8 +69,10 @@ function environmentSection(brief: ValidationBrief): string {
   const url = said(brief.run.url);
   const lines = [
     `## The environment\n`,
-    `The harness is bringing this goal's code up in the machine's one dev environment. It is **not yours to ` +
-      `start, stop, restart or message** — it is shared with the operator, who is very likely watching it.\n`,
+    `The harness is bringing this goal's code up in the machine's one dev environment. Its **session** is not ` +
+      `yours to start, stop, restart or message — the operator is very likely watching it. Its **state** is ` +
+      `yours: it is a disposable dev stack restored from a snapshot on every bring-up, so whatever you change ` +
+      `in it the next bring-up undoes.\n`,
     `| | |\n| --- | --- |\n` +
       `| Application | ${url ?? '_no URL is configured — ask `local_run_read` what ports came up_'} |\n` +
       `| Checkout | \`${brief.run.dir}\` |\n` +
@@ -79,6 +82,8 @@ function environmentSection(brief: ValidationBrief): string {
   ];
   const instruction = said(brief.instruction);
   if (instruction !== null) lines.push(`### What the operator says about reaching it\n\n${instruction}\n`);
+  const setup = said(brief.setup);
+  if (setup !== null) lines.push(`### What the operator says about setting it up\n\n${setup}\n`);
   return lines.join('\n');
 }
 
@@ -111,18 +116,26 @@ function browserSection(browserKey: string | null, outputDir: string): string {
   );
 }
 
-function rulesSection(): string {
+function rulesSection(outputDir: string): string {
   return (
     `## How this run goes\n\n` +
     `1. **Write the plan first, before the environment is up.** A bring-up takes minutes and you are dispatched ` +
     `at the start of it, so the wait is free if you spend it reading the diff. Call \`local_validation_plan\` ` +
     `with a test plan for *these changes*: what behaviour to exercise, the exact steps, and what a pass looks ` +
     `like for each. It lands on the goal's page the moment you send it.\n` +
+    `Give it a set-up section: the flags, configuration and data the plan needs, and how you will create them — ` +
+    `the snapshot the environment comes up from will often not have them.\n` +
     `2. **Then wait for the environment.** Poll \`local_run_read\` until it says \`running\`, then open the ` +
     `application yourself.\n` +
-    `3. **Run the plan, one step at a time.** Batching unverified steps produces output you cannot trust — each ` +
+    `3. **Set up what the plan needs.** Turn the flag on, enable the module, create the records — by any means ` +
+    `the project offers: the application's UI and APIs, reads and writes straight against the local store, ` +
+    `the project's own scripts and skills, fixture files you upload. Keep a list of every change as you make ` +
+    `it. A set-up step that fails because of the change under test is a finding — that is \`failed\`, not ` +
+    `\`blocked\`.\n` +
+    `4. **Run the plan, one step at a time.** Batching unverified steps produces output you cannot trust — each ` +
     `step's result is what tells you whether the next one means anything.\n` +
-    `4. **Report once**, with \`local_validation_report\`.\n\n` +
+    `5. **Report once**, with \`local_validation_report\`, listing every state change you made under ` +
+    `\`setup\` — a pass is judged against the setup that produced it.\n\n` +
     `### What is not evidence\n\n` +
     `\`running\` means the session that brought the environment up did not fail. A port answering means ` +
     `something accepted a connection. **Neither says the application works**, and reporting a pass on the ` +
@@ -133,9 +146,11 @@ function rulesSection(): string {
     `nobody to ask.** Record that step as a blocked one in your report and carry on with the rest — a run that ` +
     `answers most of the plan and says plainly what it could not reach is worth far more than one that stops.\n\n` +
     `### And what you do not do\n\n` +
-    `- **Change nothing.** No commits, no pushes, no edits to the code. This checkout is read-only and the ` +
-    `environment is somebody else's. If the fix is obvious, say so in the finding — an agent is dispatched to ` +
-    `make it.\n` +
+    `- **Change no code.** No commits, no pushes, no edits to the checkout. It is read-only, and it is the ` +
+    `thing being validated. Set-up scripts and fixtures you write go in \`${outputDir}\`, never the ` +
+    `repository. If the fix is obvious, say so in the finding — an agent is dispatched to make it.\n` +
+    `- **Do not start, stop or restart the environment's session.** State changes go through the running ` +
+    `application or its store.\n` +
     `- **Do not work around a failure to make a step pass.** A workaround that skips the broken thing is the ` +
     `test not being run. If the block is the bug, that *is* the result.\n` +
     `- **Do not report \`passed\` for something you did not exercise.** \`blocked\` is a right answer.\n`
@@ -145,12 +160,12 @@ function rulesSection(): string {
 function toolsSection(): string {
   return (
     `## Your tools\n\n` +
-    `- \`local_validation_plan\` — record the test plan. Once, up front.\n` +
+    `- \`local_validation_plan\` — record the test plan and its set-up. Once, up front.\n` +
     `- \`local_run_read\` — what the environment is doing right now: status, URL, the ports it holds, and the ` +
     `tail of the session bringing it up. Read it rather than guessing, and read it again rather than ` +
     `remembering.\n` +
-    `- \`local_validation_report\` — \`passed\`, \`failed\` or \`blocked\`, with a summary and, for a failure, ` +
-    `the findings. This ends the run.\n`
+    `- \`local_validation_report\` — \`passed\`, \`failed\` or \`blocked\`, with a summary, every state ` +
+    `change you made, and, for a failure, the findings. This ends the run.\n`
   );
 }
 
@@ -162,7 +177,7 @@ export function localValidationBriefing(brief: ValidationBrief): string {
     checksSection(brief.checks),
     environmentSection(brief),
     browserSection(brief.browserKey, brief.outputDir),
-    rulesSection(),
+    rulesSection(brief.outputDir),
     toolsSection(),
   ]
     .filter((section) => section !== '')
@@ -195,6 +210,11 @@ export function localValidationFixBriefing(row: LocalValidation, run: LocalRun |
     );
   }
   if (row.plan !== null) lines.push(`### The plan it ran\n\n${row.plan}\n`);
+  if (row.setup.length > 0)
+    lines.push(
+      `### What it set up first\n\nThe environment's state was changed before the plan ran — reproduce against ` +
+        `the same:\n\n${row.setup.map((change) => `- ${change}`).join('\n')}\n`,
+    );
   lines.push(
     `## What you are being asked to do\n\n` +
       `Fix these on \`${row.ref}\`, which is the branch that was validated. Commit and push there.\n\n` +

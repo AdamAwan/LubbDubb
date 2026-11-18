@@ -33,8 +33,11 @@ const ReportSchema = strictObject(
       .min(1, 'summary is required — say what you did and what you saw'),
     findings: z.array(FindingSchema).default([]),
     visited: z.array(z.string().trim().min(1)).default([]),
+    setup: z
+      .array(z.string().trim().min(1, 'a setup entry says what you changed — an empty one says nothing'))
+      .default([]),
   },
-  'a report declares "result", "summary", "findings" and "visited" — which validation is decided by what you were dispatched to run',
+  'a report declares "result", "summary", "findings", "visited" and "setup" — which validation is decided by what you were dispatched to run',
 );
 
 type ParsedReport = z.infer<typeof ReportSchema>;
@@ -44,6 +47,7 @@ interface LocalValidationReport {
   summary: string;
   findings: LocalValidationFinding[];
   visited: string[];
+  setup: string[];
 }
 
 export function validateLocalValidationReport(
@@ -76,6 +80,7 @@ export function validateLocalValidationReport(
         screenshot: finding.screenshot ?? null,
       })),
       visited: data.visited,
+      setup: data.setup,
     },
   };
 }

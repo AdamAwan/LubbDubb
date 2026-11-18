@@ -80,6 +80,8 @@ export interface LocalValidation {
   summary: string | null;
   findings: LocalValidationFinding[];
   visited: string[];
+  /** Every change the agent made to the environment's state to set its plan up. */
+  setup: string[];
   screenshots: string[];
   note: string | null;
   /** Null until the agent reports, and on every row from before the column. */

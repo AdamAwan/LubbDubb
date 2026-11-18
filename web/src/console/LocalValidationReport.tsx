@@ -88,6 +88,8 @@ export function LocalValidationReport({
 
       {validation.findings.length > 0 && <Findings validation={validation} />}
 
+      {validation.setup.length > 0 && <SetUp setup={validation.setup} />}
+
       {validation.visited.length > 0 && <Visited visited={validation.visited} />}
 
       {/* Everything it saved, including the shots no finding pointed at: a picture
@@ -215,6 +217,19 @@ function Findings({ validation }: { validation: LocalValidationView }): JSX.Elem
           {shotFor(validation, finding)}
         </div>
       ))}
+    </div>
+  );
+}
+
+function SetUp({ setup }: { setup: LocalValidationView['setup'] }): JSX.Element {
+  return (
+    <div className="cn-sub cn-wrap">
+      {'Set up first · '}
+      <ul>
+        {setup.map((change, index) => (
+          <li key={index}>{change}</li>
+        ))}
+      </ul>
     </div>
   );
 }

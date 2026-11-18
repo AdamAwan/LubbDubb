@@ -58,6 +58,9 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   'localValidation.instruction': (next, deps) => {
     deps.running.localValidation = next.localValidation;
   },
+  'localValidation.setup': (next, deps) => {
+    deps.running.localValidation = next.localValidation;
+  },
   'localValidation.browser': (next, deps) => {
     deps.running.localValidation = next.localValidation;
     deps.checkBrowser(next.localValidation.browser);

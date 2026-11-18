@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS local_validations (
   summary      TEXT,
   findings     TEXT NOT NULL,       -- JSON array of LocalValidationFinding
   visited      TEXT NOT NULL,       -- JSON array of URLs the agent opened
+  setup        TEXT,                -- JSON array of state changes the agent made to set its plan up
   screenshots  TEXT NOT NULL,       -- JSON array of file names in the row's own output directory
   note         TEXT,                -- why it was abandoned, or what a blocked run could not reach
   recording_status TEXT             -- kept | not_offered | missing, written with the report

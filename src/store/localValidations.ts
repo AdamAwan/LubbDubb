@@ -6,9 +6,9 @@ import type { LocalValidation, LocalValidationFinding, LocalValidationStatus, Re
 
 // → docs/spec/14-persistence.md
 
-// No backfill for `recording_status`: null is *not known*, true of every row from before the column.
+// No backfill for `recording_status` or `setup`: null is *not known*, true of every row from before the column.
 export const LOCAL_VALIDATION_COLUMNS: ColumnMigrations = {
-  local_validations: { recording_status: 'TEXT' },
+  local_validations: { recording_status: 'TEXT', setup: 'TEXT' },
 };
 
 const OPEN: LocalValidationStatus[] = ['pending', 'dispatched'];
@@ -40,6 +40,7 @@ export class LocalValidationStore {
       summary: null,
       findings: [],
       visited: [],
+      setup: [],
       screenshots: [],
       note: null,
       recordingStatus: null,
@@ -47,8 +48,8 @@ export class LocalValidationStore {
     this.ctx
       .prep(
         `INSERT INTO local_validations (id, origin_ref, run_id, ref, commit_sha, status, requested_at,
-           dispatched_at, ended_at, task_id, fix_task_id, plan, summary, findings, visited, screenshots, note)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, NULL, NULL, NULL, NULL, '[]', '[]', '[]', NULL)`,
+           dispatched_at, ended_at, task_id, fix_task_id, plan, summary, findings, visited, setup, screenshots, note)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, NULL, NULL, NULL, NULL, '[]', '[]', '[]', '[]', NULL)`,
       )
       .run(row.id, row.originRef, row.runId, row.ref, row.commit, row.requestedAt);
     return row;
@@ -130,6 +131,7 @@ export class LocalValidationStore {
       summary: string;
       findings: LocalValidationFinding[];
       visited: string[];
+      setup: string[];
       screenshots: string[];
       note: string | null;
       recordingStatus: RecordingStatus | null;
@@ -137,7 +139,7 @@ export class LocalValidationStore {
   ): LocalValidation | null {
     const info = this.ctx
       .prep(
-        `UPDATE local_validations SET status = ?, summary = ?, findings = ?, visited = ?, screenshots = ?,
+        `UPDATE local_validations SET status = ?, summary = ?, findings = ?, visited = ?, setup = ?, screenshots = ?,
            note = ?, recording_status = ?, ended_at = ? WHERE id = ? AND status IN ${OPEN_SQL}`,
       )
       .run(
@@ -145,6 +147,7 @@ export class LocalValidationStore {
         result.summary,
         JSON.stringify(result.findings),
         JSON.stringify(result.visited),
+        JSON.stringify(result.setup),
         JSON.stringify(result.screenshots),
         result.note,
         result.recordingStatus,
@@ -180,6 +183,7 @@ interface Row {
   summary: string | null;
   findings: string | null;
   visited: string | null;
+  setup: string | null | undefined;
   screenshots: string | null;
   note: string | null;
   recording_status: string | null | undefined;
@@ -216,6 +220,7 @@ function toLocalValidation(row: Row): LocalValidation {
     summary: row.summary,
     findings: parseList<LocalValidationFinding>(row.findings),
     visited: parseList<string>(row.visited),
+    setup: parseList<string>(row.setup ?? null),
     screenshots: parseList<string>(row.screenshots),
     note: row.note,
     recordingStatus: toRecordingStatus(row.recording_status),

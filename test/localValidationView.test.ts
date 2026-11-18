@@ -37,6 +37,7 @@ function validation(over: Partial<LocalValidationView> = {}): LocalValidationVie
     summary: null,
     findings: [],
     visited: [],
+    setup: [],
     screenshots: [],
     note: null,
     recordingStatus: null,
