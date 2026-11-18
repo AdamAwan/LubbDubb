@@ -19,8 +19,9 @@ the change that needs it, following [Adding a slot](#adding-a-slot).
 - **The extensions passed to `buildSystem` must be exactly the ones `extensions` names, or it refuses to build, naming each path that is missing or extra.** It also refuses two with one name or one slot, however they were loaded, and checks before anything else is built. `buildSystem` cannot load (it is synchronous), so a caller that forgot to would otherwise run without the project's code. → [§](#loading) · `test/extensions.test.ts`
 - **A slot has at most one owner, and an extension may fill only slots in the book.** Two answers to one question, or an answer nobody asks for, is a misconfiguration that looks like it works. → [§](#loading) · `test/extensions.test.ts`
 - **`ExtensionHost.call` never throws.** A throw of any value (even one that cannot be turned into text), a rejection, a timeout or a wrong-shaped answer comes back as `{ ok: false, detail }` and is recorded on the error log; the caller decides what not-ok means. → [§](#calling-a-slot) · `test/extensions.test.ts`
+- **A slot's `progress` never throws into the slot, and a line after the call has settled is dropped.** A caller's listener that throws is recorded on the error log, and the slot carries on; a line from work the slot left running reaches nobody. → [§](#calling-a-slot) · `test/extensions.test.ts`
 - **Every slot in the book is described to project authors, and the starter they copy loads against it and type-checks against its slot types.** The `/lubbdubb:extension` skill is the only place a project learns a slot exists. → [§](#writing-an-extension) · `test/extensionSkill.test.ts`
-- **A slot's contract changes only with `EXTENSION_API_VERSION`.** An extension written against the old shape is then refused at boot instead of reading the new input wrongly. → [§](#adding-a-slot) · _no test_
+- **A slot's contract changes only with `EXTENSION_API_VERSION`.** An extension written against the old shape is then refused at boot instead of reading the new input wrongly. A new member of the context, which an existing extension simply never reads, is not such a change. → [§](#adding-a-slot) · _no test_
 
 ## When to use one
 
@@ -45,7 +46,7 @@ export default {
   apiVersion: 1,
   name: 'acme',
   slots: {
-    // one function per slot this project fills: (input, { repoRoot, signal }) => answer
+    // one function per slot this project fills: (input, { repoRoot, signal, progress }) => answer
     ensureTenant: async ({ environment }) => ({ tenant: await provisionFor(environment) }),
   },
 };
@@ -54,7 +55,8 @@ export default {
 - `apiVersion` must equal `EXTENSION_API_VERSION` (`src/extensions/contract.ts`), today `1`.
 - `name` is how the error log and the boot line name it. Unique across loaded extensions.
 - `slots` maps a slot name to a function. It may return a value or a promise. It gets the slot's
-  input and a context of `repoRoot` and an `AbortSignal` that fires at the slot's timeout.
+  input and a context of `repoRoot`, an `AbortSignal` that fires at the slot's timeout, and
+  `progress(line)`, which hands a line to whoever asked while the call runs.
 
 A `.ts` file works, because the harness runs under `tsx`; so does `.js`/`.mjs`. The module may import
 its own dependencies, resolved from its own location.
@@ -115,12 +117,20 @@ A desk asks a slot through `system.extensions` (`src/extensions/host.ts`):
 
 - `provider(slot)` — the name of the extension that fills it, or null. A feature with a built-in
   fallback checks this first and takes its old path when null.
-- `call(slot, input)` — `{ ok: true, value }` or `{ ok: false, detail }`. **It never throws.**
+- `call(slot, input, onProgress?)` — `{ ok: true, value }` or `{ ok: false, detail }`. **It never throws.**
+  `onProgress` receives each line the slot passes to its context's `progress`; a caller that shows
+  nothing while the call runs leaves it out, and the lines go nowhere.
 
 On every call the host races the function against the slot's `timeoutMs`, aborts the signal on any
 not-ok outcome (a timeout among them), and runs the slot's `check` over the answer. A throw, rejection, timeout or failed check
 is recorded through `errors.record` with source `runtime`, and the message names the extension and the
 slot. Asking a slot nobody fills is not-ok and records nothing: it is a question, not a failure.
+
+`progress` is the host's, not the caller's listener: it never throws into the slot. A listener that
+throws is recorded (source `runtime`, naming the extension and the slot) and the slot carries on, since
+a cockpit that failed to draw a line is no reason to fail a 40-minute reseed. Once the call has settled
+— answered, thrown or timed out — `progress` is closed and a later line is dropped silently: after a
+timeout the slot's own work may still be running, and the caller has already written its outcome.
 
 What not-ok _means_ is the calling feature's decision, written in its own spec. It is never "fall back
 to the built-in behaviour" by default: an operator who configured an extension expects it to answer,
@@ -186,8 +196,11 @@ A slot is a promise to every project that fills it. Make it in one change, with 
    (`test/extensionSkill.test.ts`) fails on either missing.
 
 Changing an existing slot's input or answer — anything an existing extension would read wrongly — bumps
-`EXTENSION_API_VERSION`, so old extensions are refused at boot with a message naming both versions
-rather than misreading their input. Removing a slot does the same thing for free: an extension that
+`EXTENSION_API_VERSION`. Adding a member to the context does not: an existing extension never reads it,
+and the bump would refuse every working extension at boot for nothing. (`progress` came this way, at
+`apiVersion` 1; an extension that must also load on a harness older than it calls `progress?.(…)`.) A
+bump refuses old extensions at boot with a message naming both versions, rather than letting them misread
+their input. Removing a slot does the same thing for free: an extension that
 fills it is refused, naming the slots that remain.
 
 ## What it is not

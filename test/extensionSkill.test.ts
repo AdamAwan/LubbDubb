@@ -22,7 +22,7 @@ type Contract = {
   slots: {
     [K in keyof ExtensionSlots]: (
       input: ExtensionSlots[K]['input'],
-      context: { repoRoot: string; signal: AbortSignal },
+      context: { repoRoot: string; signal: AbortSignal; progress: (line: string) => void },
     ) => Answer<ExtensionSlots[K]['output']> | Promise<Answer<ExtensionSlots[K]['output']>>;
   };
 };

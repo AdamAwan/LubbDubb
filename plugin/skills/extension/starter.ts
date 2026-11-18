@@ -7,6 +7,8 @@ interface SlotContext {
   repoRoot: string;
   /** Fires when the call times out or fails. Pass it to fetch() and child processes. */
   signal: AbortSignal;
+  /** Shows a line in the cockpit while the call runs, as a command's output is. */
+  progress: (line: string) => void;
 }
 
 const API = 'https://example.invalid';
@@ -35,7 +37,11 @@ export default {
     },
 
     // Optional, and destructive: wipe the tenant back to seed data. Answer nothing; throw to fail.
-    async reseedTenant(input: { environment: string; tenant: string }, { signal }: SlotContext): Promise<void> {
+    async reseedTenant(
+      input: { environment: string; tenant: string },
+      { signal, progress }: SlotContext,
+    ): Promise<void> {
+      progress(`reseeding ${input.tenant}`);
       const response = await fetch(`${API}/tenants/${encodeURIComponent(input.tenant)}/reseed`, {
         method: 'POST',
         signal,
