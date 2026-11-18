@@ -235,9 +235,10 @@ explain a missing video, because the harness reads that for itself:
   Playwright installs inside its own package, which this harness does not locate, so it says nothing
   there rather than guess. It checks
   only a browser that offers the recorder _and_ launches the bundled server — any with `{playwrightMcp}` as a whole argument, the
-  default among them: a block naming its own package names a revision this harness cannot know. A
-  bundled package it cannot read (no `bin`, no ffmpeg entry) is that same one `boot` error, naming
-  `npm ci`, never a crash.
+  default among them: a block naming its own package names a revision this harness cannot know. Before
+  any of that, any block with `{playwrightMcp}` — recorder or not — whose bundled package cannot be read
+  (no `bin`, no ffmpeg entry) gets one `boot` error naming `npm ci` instead, rather than the harness
+  failing to start.
 - **On each settled run**, a `recordingStatus` is written beside the report — `kept` where a video is
   there, `missing` where the agent was launched with the recorder (a server whose `--caps` include
   `devtools`) and none was written, `not_offered` otherwise (`recordingStatus`, `recorderOffered` in
