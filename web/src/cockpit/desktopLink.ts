@@ -12,9 +12,11 @@ export const SKILL_NAMES = [
   'feature',
   'file',
   'fleet',
+  'listen',
   'next',
   'order',
   'plan',
+  'pr',
   'run',
 ] as const;
 

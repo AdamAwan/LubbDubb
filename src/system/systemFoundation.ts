@@ -74,6 +74,7 @@ import type { ErrorLogEntry } from '../types.js';
 import type { Fleet } from './systemFleet.js';
 import type { BenchDesks, EnvironmentDesks, IntakeDesks, LessonDesks } from './systemDesks.js';
 import type { LocalRuns } from './systemLocalRuns.js';
+import type { ListenClock } from '../listen/listener.js';
 
 // → docs/spec/01-overview.md
 
@@ -111,6 +112,8 @@ export interface BuildOptions {
   upstream?: UpstreamIssues;
   poolTransport?: PoolTransport;
   bootedAt?: string;
+  /** The listen loop's clock and timers; real unless a test injects `FakeListenClock`. */
+  listenClock?: ListenClock;
   /** Overrides the harness's stuck-cycle threshold. Injected by tests; nothing else sets it. */
   stuckCycleAfterMs?: number;
 }

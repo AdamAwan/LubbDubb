@@ -1,0 +1,165 @@
+# 44 — The Needs you page
+
+**Partly built.** The server side is built: the listener (`src/listen/listener.ts`), the desktop
+tools `ask_wait` and `pr_read`, `POST /api/listen/send`, the snapshot's `listener`, and the `listen` and
+`pr` skills. The page itself — the `needs` tab, its two columns, the Claude button and the listener
+status — is **not yet built**; paths that do not exist yet are in italics.
+
+The overview answers _what is the fleet doing_. That stopped being the operator's question: what
+matters is **what is waiting on me** — the orchestrator's asks and the pull requests that need a
+person. And most of the time the operator does not want to answer an ask with a button; they want to
+**talk it through with Claude**, in the Claude desktop app, where the conversation can flow.
+
+So this is a new cockpit tab, **Needs you**, beside the overview rather than replacing it. The
+overview stays where it is, untouched, until this page has proved itself. The listen loop below is
+part of this page **only**: no other surface sends anything to it.
+
+## Invariants
+
+- **The old overview and the rail are unchanged.** This page is a new tab; nothing about Cards, Focus mode or the queue rail moves. → [§](#where-it-sits) · _no test_
+- **Only this page sends to the listening chat.** `POST /api/listen/send` has one caller, _web/src/console/NeedsYouPage.tsx_; every other surface keeps its own buttons and its own deep links. → [§](#scope) · _no test_
+- **Which pull requests are drawn is `prsOnYou`, one pure function.** A pull request is on the page when any one of its reasons holds, and a reason is read off fields the server already decided — never re-derived in the browser. → [§](#pull-requests-waiting-on-you) · _no test_
+- **The page reads `listener.state`; it never guesses.** `listening`, `busy` and `off` are the server's, off whether a wait is open. → [§](#is-a-chat-listening) · `test/listener.test.ts`
+- **A wait is bounded.** `ask_wait` returns by itself after `LISTEN_WAIT_MS` (10 minutes) with nothing, and the skill calls it again; a held call never outlives that bound. → [§](#the-wait) · `test/listener.test.ts`
+- **An item is handed out once.** A sent item leaves the queue the moment one `ask_wait` returns it; a second waiter never receives it too. → [§](#the-wait) · `test/listener.test.ts`
+- **The listen loop decides nothing.** `/lubbdubb:listen` hands each item to the same reading the `next` skill does; the operator answers. → [§](#the-listen-skill) · _no test_
+
+## Where it sits
+
+A `ConsoleTab`, `needs`, reached at `?tab=needs` and drawn by _web/src/console/NeedsYouPage.tsx_. The
+top bar names it **Needs you** with a `new` tag. It is not the default home: the overview stays the
+first tab until the operator decides otherwise.
+
+On this tab the shell draws no queue rail — the page _is_ the queue, at full width, and the rail
+beside it would be the same list twice. Everywhere else the rail is where it has always been.
+
+The page is, top to bottom:
+
+1. **The heading row**: `Needs you`, the counts (`7 asks · 6 pull requests`), and on the right the
+   [listener status](#is-a-chat-listening).
+2. **Two columns** — the asks, then the pull requests — side by side at 1100px and wider, stacked
+   below that.
+
+The fleet is one line on the top bar while this tab is open — `Fleet: 5 out · 3 free · 4 queued` —
+and pressing it opens the overview. Running agents and goals in flight are not on this page.
+
+## From the orchestrator
+
+The ask queue (`asks` on the snapshot, [17](17-cockpit.md#the-queue-rail--needs-you)) drawn at full
+width, in the rail's order and under the rail's tier headings — **Answer now**, **Yours to do**, and
+the **holding nothing** fold. Each row is the rail's row with room for its reason on the card rather
+than in a tooltip, and carries two controls: its kind's verb (`KIND_VERB`, which opens the ask where it
+is answered, as the rail's row does) and the [Claude button](#the-claude-button).
+
+The foot of the column is the **Handled for you** line, exactly as on the rail
+([43](43-handled-for-you.md#on-the-rail)).
+
+An ask about a pull request is drawn here **and** on that pull request's row: the two columns answer
+different questions, and the operator asked for both.
+
+## Pull requests waiting on you
+
+`prsOnYou` (_web/src/view/prsOnYou.ts_) over `world.pullRequests`. A pull request is drawn when any of
+these hold, and each that holds is a tag on its row:
+
+| Reason             | Read off                                                              |
+| ------------------ | --------------------------------------------------------------------- |
+| `Your review`      | `attention.assignedToYou` is set                                      |
+| `Your call`        | `attention.status === 'you'` and not assigned to you                  |
+| `Comments`         | `unresolvedComments` is not empty — even while the fleet answers them |
+| `Needs a reviewer` | `assignAsk` is set and not empty                                      |
+| `No description`   | `body` is read and empty after trimming                               |
+
+The server holds the same table as `prOnYouReasons` (`src/listen/prsOnYou.ts`), which is what drops a
+sent pull request's strip once it is off the page — a change to the table changes both.
+
+Sorted by the first reason in that order, then newest first. The row is `prRow`
+(`web/src/console/prRow.tsx`) with the tags as its chips and the [Claude button](#the-claude-button)
+as its action. The card's header counts the drawn rows against every open one, and its foot links to
+the full list.
+
+## The Claude button
+
+On every ask and every pull request row. What it does depends on the [listener](#is-a-chat-listening):
+
+| Listener    | Label              | Press                                                                                                           |
+| ----------- | ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `listening` | `Talk it through`  | `POST /api/listen/send` with the item                                                                           |
+| `busy`      | `Talk it through`  | the same; the item queues behind the one the chat is on                                                         |
+| `off`       | `Open in Claude ↗` | a new chat: `desktopDeepLink` with `/lubbdubb:next <id> only` for an ask, `/lubbdubb:pr <n>` for a pull request |
+
+An item in `listener.sent` draws a strip under its card — **In your Claude chat**, with when it was
+sent — until it no longer stands (the ask settled, the pull request off the page).
+
+## Is a chat listening
+
+`ListenerView` (`src/types/listen.ts`) on the snapshot as `listener`:
+
+- **`listening`** — an `ask_wait` call is open, or one returned less than `LISTEN_GRACE_MS` (60
+  seconds) ago. The grace covers the gap between one bounded wait and the next.
+- **`busy`** — the chat was handed an item and has not called `ask_wait` since. `on` names the item;
+  `queued` counts what is waiting behind it.
+- **`off`** — neither. A closed chat, a sleeping laptop and a restarted harness all land here.
+
+The status draws on the heading row: a filled pill **Claude is listening**; **Claude is on #212 · 1
+queued**; or a dashed **No Claude chat listening** with **Start listen loop ↗** — a deep link opening
+a new chat with `/lubbdubb:listen` typed in — and **Copy**, which puts the same command on the
+clipboard for a chat already open.
+
+## The wait
+
+`src/listen/listener.ts` holds the state, in memory: the open waiter, the queue of sent items, the
+item being worked and the sent list. Nothing is persisted — a restart drops the waiter, which the
+skill answers by waiting again, and drops the queue, which the page shows as `off` until it does.
+
+`ask_wait` is a desktop tool (`DESKTOP_TOOL_NAMES`, [11](11-mcp-tools.md#the-desktop-channel)). It
+returns at once with the head of the queue if there is one; otherwise it holds until an item is sent
+or `LISTEN_WAIT_MS` passes, and returns `{ item }` or `{ item: null }`. One waiter at a time: a new
+call answers the older one with `{ item: null, superseded: true }`. Returning an item marks the chat
+`busy` on it and records it in `sent`.
+
+`POST /api/listen/send` (`{ item: ListenItem }`) appends to the queue and answers the open waiter if
+there is one. Sending an item already queued or already on the chat is a no-op. A sent entry is
+dropped when the ask no longer stands or the pull request is no longer on [the page](#pull-requests-waiting-on-you),
+or after a day. Those are read off the snapshot as it is built — the standing rows of `asks`, and
+`prOnYouReasons` over the open pull requests — so the pruning happens on read, and `sentAt` is when the
+operator pressed the button, not when the chat took the item. Sending an item again once the chat has
+moved off it is not a duplicate: it queues, and its `sent` entry moves to the top.
+
+The listener's changes — a wait opened or answered, a send, the grace running out — broadcast
+`dirty` for `asks`, so the page's status follows without polling. Its clock and timers are a seam
+(`ListenClock`); a test injects `FakeListenClock` as `listenClock`.
+
+`busy` has no timeout of its own: a chat closed while working an item inline reads `busy` until the
+next `ask_wait` or a restart.
+
+## The listen skill
+
+`/lubbdubb:listen` (`plugin/skills/listen/SKILL.md`). The chat loops on `ask_wait`:
+
+1. Call `ask_wait`. `{ item: null }` → call it again, saying nothing; say "still waiting" at most
+   once per session. An error (the harness restarted) → call it again. `superseded: true` → another
+   wait took over, so this loop stops and says so in one line.
+2. An item → start a Claude Code **fork** for it, exactly as the `next` skill's side thread does
+   ([11](11-mcp-tools.md#the-next-ask-loop)): an ask runs as `/lubbdubb:next <id> only`, a pull request
+   as `/lubbdubb:pr <n>`. Then go back to step 1 at once — the fork holds the conversation, the main
+   chat keeps only its one-line outcome, so its context stays small.
+3. Where a fork cannot be started, work the item inline, then go back to step 1. While it does, the
+   page reads `busy`.
+
+The operator can press Esc to stop the wait and talk to the chat; `/lubbdubb:listen` starts it again.
+
+## The pull request skill
+
+`/lubbdubb:pr <n>` (`plugin/skills/pr/SKILL.md`), and the desktop tool it reads with, `pr_read`: the
+harness's record of one open pull request — title, body, branch, CI checks and verdict, review threads
+with their replies, `attention` with its reasons, `assignAsk`, and the goal it delivers. The skill puts
+the pull request in front of the operator, reads the diff in the checkout or through a subagent where
+the conversation turns on it, and acts only on the operator's word through the tools that already
+exist (`pr_assign`, `description_read`, `description_check`).
+
+## Scope
+
+The listen loop is new and not yet trusted, so it is wired to this page and nothing else. The goal
+page, the rail, Focus mode and the feature board keep their own deep links and never call
+`POST /api/listen/send`. Widening it is a change to this spec first.

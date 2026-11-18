@@ -31,6 +31,7 @@ function fakeSystem(): {
     localValidations: new EventEmitter(),
     remoteRuns: new EventEmitter(),
     desktop: new EventEmitter(),
+    listener: new EventEmitter(),
   } as unknown as System;
   return { system, agents, localRun, localRunWatch, errors, readying };
 }
@@ -216,4 +217,14 @@ test('a write on the desktop channel reaches the cockpit as the matching routeâ€
   (system.desktop as unknown as EventEmitter).emit('changed', { type: 'world:changed' });
   (system.desktop as unknown as EventEmitter).emit('changed', { type: 'dirty', sections: ['plans'] });
   assert.deepEqual(sent, [{ type: 'world:changed' }, { type: 'dirty', sections: ['plans', 'asks'] }]);
+});
+
+test('a change in the listen loop refreshes the asks, where the snapshot reads the listener', () => {
+  const { system } = fakeSystem();
+  const hub = new Hub(system);
+  const { socket, sent } = fakeSocket();
+  hub.add(socket);
+
+  (system.listener as unknown as EventEmitter).emit('changed');
+  assert.deepEqual(sent, [{ type: 'dirty', sections: ['asks'] }]);
 });

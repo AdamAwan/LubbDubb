@@ -1,4 +1,8 @@
-import type { AskInputs } from '../asks/queue.js';
+import { buildAskQueue, type AskInputs } from '../asks/queue.js';
+import { openHandledCount } from '../handled/handled.js';
+import { prOnYouReasons } from '../listen/prsOnYou.js';
+import type { SetupReading } from '../setup/reading.js';
+import type { System } from '../system/system.js';
 import type { Store } from '../store/store.js';
 import type { CockpitState, DescriptionFeedback, StateSection, UndescribedPart } from '../wire.js';
 import type { Reads } from './stateSnapshot.js';
@@ -68,4 +72,21 @@ export function askInputs(r: Reads, want: ReadonlySet<StateSection>, out: Partia
     if (!want.has(section)) Object.assign(inputs, read(r));
   }
   return inputs as AskInputs;
+}
+
+/** The queue, the handled count and the listener, which reads what still stands off the queue. */
+export function asksSection(
+  system: System,
+  inputs: AskInputs,
+  setup: SetupReading | null,
+): Pick<CockpitState, 'asks' | 'handledOpen' | 'listener'> {
+  const asks = buildAskQueue(inputs, setup);
+  return {
+    asks,
+    handledOpen: openHandledCount(system.store, Date.now()),
+    listener: system.listener.view({
+      askIds: new Set(asks.filter((row) => row.standing).map((row) => row.id)),
+      prsOnYou: new Set(inputs.world.pullRequests.filter((pr) => prOnYouReasons(pr).length > 0).map((pr) => pr.number)),
+    }),
+  };
 }

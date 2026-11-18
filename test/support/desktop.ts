@@ -37,6 +37,7 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     labelPrefix: system.config.labelPrefix,
     issueContainerTypes: system.config.issueContainerTypes,
     asks: () => askSnapshot(system),
+    listener: system.listener,
     cockpitUrl: 'http://127.0.0.1:4300',
     changed: () => {},
   };

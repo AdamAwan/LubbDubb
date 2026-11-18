@@ -330,6 +330,15 @@ _after_ value again and reopens it. Either is a **400** when the row is already 
 write fails, and changes nothing. All three broadcast `world:changed`. The snapshot's `handledOpen` is
 the count of open rows, which the rail draws.
 
+### `POST /api/listen/send`
+
+Hands one item to the Claude chat running `/lubbdubb:listen` ([44](44-needs-you.md#the-wait)). The body
+is `{ item: ListenItem }` — `{ kind: 'ask', id }` or `{ kind: 'pr', number }` — and anything else is a
+**400**. Answers `{ ok: true, sent }`: `sent: false` when the item is already queued or already the one
+the chat is on, which changes nothing. The item goes straight to an open `ask_wait`, or queues for the
+next one. The listener broadcasts `dirty` for `asks`, and the snapshot's `listener` reads it. Its one
+caller is the Needs you page.
+
 ### `GET /api/health`
 
 `HealthPayload`: `{ ok: true, runtime }`, where `runtime` is the runtime watch's
