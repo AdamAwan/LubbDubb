@@ -13,17 +13,16 @@ export interface BundledPlaywright {
   ffmpegRevision: string | null;
 }
 
-let bundled: BundledPlaywright | string | undefined;
+let bundled: BundledPlaywright | undefined;
 
 export function bundledPlaywright(): BundledPlaywright | string {
-  if (bundled === undefined) {
-    try {
-      bundled = readBundledPlaywright();
-    } catch (err) {
-      bundled = failure(err);
-    }
+  if (bundled !== undefined) return bundled;
+  try {
+    bundled = readBundledPlaywright();
+    return bundled;
+  } catch (err) {
+    return failure(err);
   }
-  return bundled;
 }
 
 function readBundledPlaywright(): BundledPlaywright {
@@ -31,7 +30,8 @@ function readBundledPlaywright(): BundledPlaywright {
   const { bin } = JSON.parse(readFileSync(mcpPackage, 'utf8')) as { bin?: string | Record<string, string> };
   const cli = typeof bin === 'string' ? bin : bin?.['playwright-mcp'];
   if (!cli) throw new Error(`No playwright-mcp bin in ${mcpPackage}`);
-  const core = dirname(createRequire(mcpPackage).resolve('playwright-core/package.json'));
+  const playwrightPackage = createRequire(mcpPackage).resolve('playwright/package.json');
+  const core = dirname(createRequire(playwrightPackage).resolve('playwright-core/package.json'));
   const browsersJson = join(core, 'browsers.json');
   const { browsers } = JSON.parse(readFileSync(browsersJson, 'utf8')) as {
     browsers: { name: string; revision: string }[];
