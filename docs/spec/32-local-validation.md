@@ -200,16 +200,26 @@ unrecorded run, which is what they had before. The remote run drives the same se
 on offer there too, and its briefing asks for one in the same words — `recordingInstructions`
 (`src/validation/recording.ts`) is the one copy ([36](36-remote-validation.md#the-runs-recording)).
 
-**The browser is pinned, and the pin carries an ffmpeg revision.** The default launches
-`@playwright/mcp@<PLAYWRIGHT_MCP_VERSION>`, never `@latest` (`src/validation/local/policy.ts`). Playwright
-writes video with its own ffmpeg build, installed per revision under the Playwright cache
-(`ffmpeg-<revision>`), and every `@playwright/mcp` release can bundle a Playwright that wants a new
-one — so under `@latest` an install done today stops counting the day upstream bumps, with nothing red.
-Moving the pin moves three constants together: `PLAYWRIGHT_MCP_VERSION`, the `PLAYWRIGHT_VERSION` it
-depends on (`npm view @playwright/mcp@<pin> dependencies.playwright`), and that Playwright's
-`FFMPEG_REVISION` (the `ffmpeg` entry of `playwright-core`'s `browsers.json`). The matching install is
-`npx -y playwright@<PLAYWRIGHT_VERSION> install ffmpeg`; a bare `npx playwright install ffmpeg` can
-fetch a different revision into a different folder, which does not count.
+**The browser is bundled, and its ffmpeg revision is derived, never kept by hand.** `@playwright/mcp`
+is an exact-pinned dependency in `package.json`, so `npm ci` installs it with the `playwright-core` it
+wants and the lockfile holds the version. The default launches its entry point from `node_modules` with
+the harness's own `node` (`process.execPath`) — no `npx`, no fetch at spawn, and no `@latest` possible.
+Playwright writes video with its own ffmpeg build, installed per revision under the Playwright cache
+(`ffmpeg-<revision>`), and every `@playwright/mcp` release can bundle a Playwright that wants a new one;
+`bundledPlaywright()` (`src/validation/local/policy.ts`) reads that revision off the installed
+`playwright-core`'s `browsers.json`, resolved from `@playwright/mcp`'s own directory. So bumping the one
+dependency moves the server, its Playwright and the revision together, with nothing to keep in step.
+
+**`npm ci` installs the matching ffmpeg.** The `postinstall` script (`scripts/installFfmpeg.ts`) runs the
+bundled `playwright-core`'s `install ffmpeg`, which can only fetch its own revision. A failed download —
+a proxy blocking the Playwright CDN — warns and lets the install succeed; `npm ci --ignore-scripts`
+skips it. Both are caught by the boot preflight below, which stays as the backstop.
+
+**`{playwrightMcp}` names the bundled server in an operator's own block.** It is substituted, beside
+`{outputDir}` and `{profileDir}`, with the bundled entry point's absolute path, so a project that needs
+its own flags writes `"command": "node", "args": ["{playwrightMcp}", "--timeout-navigation", "15000", …]`
+and names no package version — the version is the harness's, and moves with it. A block that names a
+package itself (`npx -y @playwright/mcp@…`) still works, but its ffmpeg is the operator's to keep.
 
 **Without that ffmpeg the recorder fails quietly.** `browser_start_video` errors, but
 `browser_stop_video` still answers with a `.webm` name and no file is written. So the agent is told a
@@ -217,13 +227,14 @@ start error means carry on, and that the stop answer's file name is no proof —
 explain a missing video, because the harness reads that for itself:
 
 - **At boot**, and only at boot, `ffmpegPreflight` (`src/validation/local/ffmpeg.ts`, called from `main.ts`) looks for
-  `ffmpeg-<FFMPEG_REVISION>` in the Playwright cache (a non-empty `PLAYWRIGHT_BROWSERS_PATH`, else the
+  `ffmpeg-<revision>` (the bundled Playwright's) in the Playwright cache (a non-empty `PLAYWRIGHT_BROWSERS_PATH`, else the
   platform's default, with an empty `XDG_CACHE_HOME` or `LOCALAPPDATA` read as unset) and records **one**
-  `boot` error naming the install command when it is missing. Under `PLAYWRIGHT_BROWSERS_PATH=0`
+  `boot` error naming the bundled install command (`node <playwright-core>/cli.js install ffmpeg`) when it is missing. Under `PLAYWRIGHT_BROWSERS_PATH=0`
   Playwright installs inside its own package, which this harness does not locate, so it says nothing
   there rather than guess. It checks
-  only a browser that offers the recorder _and_ launches the pinned package: an operator's own args
-  name a revision this harness cannot know.
+  only a browser that offers the recorder _and_ launches the bundled server — any whose args use
+  `{playwrightMcp}`, the default among them: a block naming its own package names a revision this
+  harness cannot know.
 - **On each settled run**, a `recordingStatus` is written beside the report — `kept` where a video is
   there, `missing` where the agent was launched with the recorder (a server whose `--caps` include
   `devtools`) and none was written, `not_offered` otherwise (`recordingStatus`, `recorderOffered` in
@@ -324,10 +335,10 @@ agent that crashed, was killed or spent its stall park leaves a row nobody will 
 
 Two live keys, deep-merged, project-layerable ([02](02-configuration.md)):
 
-| Key                           | Default                                                                          | What it is                                                                                                                    |
-| ----------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `localValidation.instruction` | `''`                                                                             | What a validating agent is told about reaching **this** environment: which URL is which, how to sign in, what to leave alone. |
-| `localValidation.browser`     | `npx -y @playwright/mcp@0.0.85 --output-dir … --user-data-dir … --caps devtools` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                            |
+| Key                           | Default                                                                 | What it is                                                                                                                    |
+| ----------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `localValidation.instruction` | `''`                                                                    | What a validating agent is told about reaching **this** environment: which URL is which, how to sign in, what to leave alone. |
+| `localValidation.browser`     | `node {playwrightMcp} --output-dir … --user-data-dir … --caps devtools` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                            |
 
 **The split with the prompt is the whole design.** The `local-validation` template says how to build
 a test plan and how to run one, which is the same job on every deployment; the instruction says how
