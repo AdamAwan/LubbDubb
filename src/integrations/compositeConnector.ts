@@ -10,6 +10,7 @@ import type {
   IssueImageSink,
   IssueKeyHit,
   IssueKeySink,
+  WorkItemReading,
   PrAssignInput,
   PrAssignSink,
   IssueCreateInput,
@@ -55,6 +56,7 @@ import {
   isIssueCreateCapable,
   isIssueImageCapable,
   isIssueKeySearchCapable,
+  isWorkItemReadCapable,
   isIssueReopenCapable,
   isLessonPrReadable,
   isIssueLabelCapable,
@@ -344,6 +346,13 @@ export class CompositeConnector
     if (!handler)
       throw new Error('no integration can attach images to issues (no issues provider is IssueImageCapable)');
     return handler.attachIssueImage(input);
+  }
+
+  /** One work item by number, for the lessons' parent check; null when it does not exist, and a failed read throws. */
+  async readWorkItem(number: number): Promise<WorkItemReading | null> {
+    const handler = this.integrations.find(isWorkItemReadCapable);
+    if (!handler) throw new Error('no integration can read a work item (no issues provider is WorkItemReadCapable)');
+    return handler.readWorkItem(number);
   }
 
   canSearchIssueKeys(): boolean {

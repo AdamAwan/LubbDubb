@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS lesson_drafts (
   summary     TEXT,
   reason      TEXT,
   pr_number   INTEGER,
-  ticket_ref  TEXT,
+  ticket_ref  TEXT,                 -- the ticket a filed lesson became, or the Task linked to a lesson pull request
   created_at  TEXT NOT NULL,
   settled_at  TEXT
 );

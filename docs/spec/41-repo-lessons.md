@@ -36,7 +36,9 @@ adopted or published.
 - **An `adopted` or `filed` group is never redrafted; a `declined`, `nothing` or `unanswered` one only once misses since it settled span `max(goals.length, minGoals)` goals.** Without the bar a declined lesson comes back on the next miss, and the operator's no is overruled by the pulse. → [§](#the-redraft-rule) · `test/lessonGroups.test.ts`
 - **A lesson edits the repository the fleet works on, never LubbDubb's own.** The lessons are about the code the agents were fixing, and that is where its engineers read. → [§](#where-a-lesson-lands) · _no test_
 - **Nothing about a lesson is injected into any agent's prompt, and nothing from the pool is dispatched on.** Blanket context is skimmed rather than read, and other fleets' prose is not knowledge about this repository. → [§](#why-the-claim-store-failed) · _no test_
-- **A lesson pull request cites the pull requests behind it as full URLs, never `#n` and never with a closing keyword.** On Azure DevOps `#n` links a work item, which would adopt the lesson into another goal. → [§](#the-outcome) · `test/repoLessons.test.ts`
+- **A lesson pull request cites the pull requests behind it as full URLs, never `#n` and never with a closing keyword.** On Azure DevOps `#n` links an existing goal's work item, which would adopt the lesson into that goal. The one work item it is linked to is its own Task, filed for it alone. → [§](#the-outcome) · `test/repoLessons.test.ts`
+- **With `lessons.parentWorkItem` set, a lesson pull request is linked to exactly one Task filed for it under that parent, with the lesson label and never the watch label; unset, none is filed. The parent is refused when it does not exist or carries the watch label, and a failure to file or link costs only the link.** Azure DevOps branch policy can demand a linked work item, and one filed for the lesson alone adopts it into no goal; the watch label would dispatch for it. → [§](#the-lessons-own-work-item) · `test/repoLessons.test.ts`
+- **A pull request on a `lesson/` branch is never parented to an issue in the work graph, whatever work item is linked to it.** A lesson that rooted in a goal would hand its merge to that goal's landings and be counted as that goal's work. → [§](#the-lessons-own-work-item) · `test/repoLessons.test.ts`
 - **One draft is out at a time, at most two lesson pull requests are open, and a group with an open pull request carrying its marker is not drafted.** Each open lesson is watched, so its CI and review are fleet work nobody has asked for yet. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
 - **Another fleet's lesson pull request for a group counts as a draft of this fleet's — open holds the group, merged ends it, closed waits for `minGoals` new goals — and is found by the group tag in its branch, never by author or label.** Fleets on one repository run under different authors and label prefixes, and the world each reads is filtered to its own author, so a check that reads the world sees none of the others and every fleet drafts the same lesson. → [§](#across-fleets) · `test/lessonCrossFleet.test.ts`
 - **A draft is not opened before the lesson pull requests have been read once, the desk never waits on that read, and `lesson_conclude` re-reads them before it opens one — refusing, and asking to be called again, when that read fails.** An unread repository is not an empty one; a pulse that waited on a 30-day listing would hold up every desk after it; and two fleets that drafted the same group in the same hour would otherwise both open. → [§](#across-fleets) · `test/lessonCrossFleet.test.ts`
@@ -75,12 +77,13 @@ how this design answers each by construction rather than by care:
 
 ## Configuration
 
-One key ([02](02-configuration.md)), declared in `src/lessons/policy.ts` and checked by
+Two keys ([02](02-configuration.md)), declared in `src/lessons/policy.ts` and checked by
 `validateLessons` (`src/config/configChecks.ts`):
 
-| Key                | Default | Meaning                                                                                                                      |
-| ------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `lessons.minGoals` | `2`     | Distinct goals a group must span inside the window before a lesson is drafted. `0` is off; anything else must be at least 2. |
+| Key                      | Default | Meaning                                                                                                                                                            |
+| ------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lessons.minGoals`       | `2`     | Distinct goals a group must span inside the window before a lesson is drafted. `0` is off; anything else must be at least 2.                                       |
+| `lessons.parentWorkItem` | `null`  | The Azure DevOps work item every lesson's own Task is filed under ([the lesson's own work item](#the-lessons-own-work-item)). Unset files none. Azure DevOps only. |
 
 **On by default**, though it opens pull requests on the operator's repository under the harness's
 name unasked, because a lesson nobody switched on is a lesson nobody gets. What keeps that safe
@@ -295,16 +298,57 @@ request or work item (`#n`, `!n`) is refused, for the citation rule below.
   `src/watchLabels.ts`, computed once on the foundation), then `seedPrWatch`, so CI and review on it are answered like any of the
   fleet's own pull requests; the draft goes `pr-open` with the pull request's number. A refused open
   says to push the branch and call again, never to open it by hand.
+  With `lessons.parentWorkItem` set, the pull request is then linked to a Task of its own
+  ([the lesson's own work item](#the-lessons-own-work-item)).
 - **`ticket`** — `ticketFiler` (`src/tickets/filing.ts`) with the lesson label, no watch label and
-  `searchKey: lesson:<groupKey>`, carried on `IssueCreateInput` rather than in a prompt; settles the
-  draft `filed`.
+  `searchKey: lesson:<groupKey>`, carried on `IssueCreateInput` rather than in a prompt — under
+  `lessons.parentWorkItem` when it is set; settles the draft `filed`.
 - **`nothing`** — settles the draft `nothing` with the reason.
 
 The body cites every pull request behind the group as a **full URL**, from the connector's ref URL —
-never `#n` and never with a closing keyword. On Azure DevOps `#n` links a work item, which would adopt
-the lesson pull request into another goal and hand its merge to that goal's landings. The body carries
+never `#n` and never with a closing keyword. On Azure DevOps `#n` links an existing goal's work item,
+which would adopt the lesson pull request into that goal and hand its merge to that goal's landings. The
+work item a lesson pull request _is_ linked to is one filed for it alone, below. The body carries
 the marker `<!-- lubbdubb:lesson:<groupKey> -->`, which is how an open lesson for a group is recognised
 in the fleet's own world; another fleet's is recognised by its branch ([across fleets](#across-fleets)).
+
+### The lesson's own work item
+
+Azure DevOps branch policy can require every pull request to have a linked work item, and a lesson
+pull request had none, so on such a repository it could not complete. **`lessons.parentWorkItem`** (a
+work item id, unset by default) is the switch. Unset, nothing here happens. Set, after `lesson_conclude`
+opens the pull request, `LessonOutcomeDesk` files a **Task** for the lesson through `ticketFiler` with
+everything on `IssueCreateInput`: type `Task`, the lesson label and **never the watch label**,
+`searchKey: lesson:<groupKey>` and `parent` — which the Azure provider sets with `setWorkItemParent`
+straight after `createWorkItem`; GitHub ignores it. The body is the agent's summary, the pull
+request's URL and the same evidence. The Task's ref is kept in the draft's `ticket_ref`, and the
+pull request is linked to it through `linkPrWorkItem`, which records the link so the work-item link desk
+does not link it again. The Tasks gather under one operator-chosen story — a tech-debt "LubbDubb
+lessons", say — rather than lying loose on the board.
+
+Why linking this one is safe, when citing `#n` is not: the Task belongs to no goal. It carries no
+watch label, so issue pickup never sees it as work, nothing dispatches for it, and on a deployment
+whose `workItemTag` is the watch tag it is not even in the world. Where it is in the world, the work
+graph still never parents a pull request on a `lesson/` branch to an issue (`prParents`,
+`src/graph/workGraph.ts`), so the lesson stays out of every goal, its draft settles from its own
+`pr:<n>` node as before, and the grouping leaves it out by branch, label and record as before.
+
+`LessonParent` (`src/lessons/lessonParent.ts`) reads the parent through the connector's `readWorkItem`
+— at boot, and before a Task is filed until it has been found fit once — and **refuses** one that does
+not exist or carries the watch label (the fleet would dispatch for the parent itself), recording the
+refusal through `errors.record`. A refused parent files nothing and the pull request opens unlinked, as
+before; a refusal or a failed read is read again on the next lesson, so fixing the parent needs no
+restart. Any failure to file or link is recorded and costs only the link: the pull request is already
+open, and a missing link is no worse than having none. A failed **parent** write costs only the
+hierarchy: the Task is still returned, recorded on the draft, linked and closed
+([15](15-integrations.md)). No Task is filed for a pull request whose draft was no longer
+`dispatched`. Config load refuses a non-integer id, and the key on any issues provider but Azure
+DevOps; it is a file-only key, not on the settings form.
+
+When the desk settles the draft it closes the Task to match — `completed` when the pull request
+merged, `not_planned` when it closed — so the parent's children read which lessons were adopted. A
+failed close is recorded and not retried. The existing caps bound the volume: one draft in flight and
+at most two lesson pull requests open means at most two open lesson Tasks at a time.
 
 ## The ruling: adopted or declined
 
@@ -329,7 +373,8 @@ desk, so below `graph` and `environments`. Each pulse it:
 
 - settles a `dispatched` draft whose task ended without `lesson_conclude` as `unanswered`;
 - settles a `pr-open` draft `adopted` when its pull request merged and `declined` when it closed,
-  from that pull request's own work-graph node (`store.graph.getWorkNode('pr:<n>')`). Settling reads
+  from that pull request's own work-graph node (`store.graph.getWorkNode('pr:<n>')`), and closes the
+  lesson's own Task if it has one ([the lesson's own work item](#the-lessons-own-work-item)). Settling reads
   only the unsettled rows (`store.lessons.unsettledDrafts()`, `status IN ('dispatched', 'pr-open')`),
   and the graph only for a `pr-open` one;
 - opens a draft for the top candidate when none is `pending` or `dispatched`, **fewer than 2 are

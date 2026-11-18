@@ -11,6 +11,7 @@ import type {
   IssueImageInput,
   IssueImageResult,
   IssueKeyHit,
+  WorkItemReading,
   IssueLabelInput,
   PrBaseInput,
   PrAssignInput,
@@ -304,6 +305,14 @@ export interface IssueCreateCapable {
 
 export function isIssueCreateCapable(x: Integration): x is Integration & IssueCreateCapable {
   return typeof (x as Partial<IssueCreateCapable>).createIssue === 'function';
+}
+
+export interface WorkItemReadCapable {
+  readWorkItem(number: number): Promise<WorkItemReading | null>;
+}
+
+export function isWorkItemReadCapable(x: Integration): x is Integration & WorkItemReadCapable {
+  return typeof (x as Partial<WorkItemReadCapable>).readWorkItem === 'function';
 }
 
 export interface IssueKeySearchCapable {

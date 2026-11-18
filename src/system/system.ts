@@ -130,6 +130,8 @@ export interface System {
   lessonReading: LessonDesks['lessonReading'];
   /** Every fleet's lesson pull requests, read in the background. → docs/spec/41-repo-lessons.md#across-fleets */
   lessonPrs: LessonDesks['lessonPrs'];
+  /** `lessons.parentWorkItem`, read once at boot and before a lesson's Task is filed. → docs/spec/41-repo-lessons.md#the-lessons-own-work-item */
+  lessonParent: LessonDesks['lessonParent'];
   validationReady: ValidationReadyDesk;
   remoteRuns: RemoteRunDesk;
   remoteIntents: EnvironmentDesks['remoteIntents'];

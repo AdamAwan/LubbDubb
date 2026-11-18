@@ -14,6 +14,8 @@ interface TicketFiling {
   relatedTo?: number;
   /** A key the item must be findable by — an app error group's; the provider carries it where its search can find it. */
   searchKey?: string;
+  /** The work item to file it under, where the tracker has a hierarchy. */
+  parent?: number;
 }
 
 export type TicketFiler = (input: TicketFiling) => Promise<string>;
@@ -28,6 +30,7 @@ export function ticketFiler(config: Config, sink: ActionSink): TicketFiler {
       assignee: ticketAssignee(config),
       relatedTo: input.relatedTo ?? null,
       ...(input.searchKey === undefined ? {} : { searchKey: input.searchKey }),
+      ...(input.parent === undefined ? {} : { parent: input.parent }),
     });
     if (!result.ok || !result.ref) throw new Error('the tracker accepted the item but did not say what it created');
     return result.ref;

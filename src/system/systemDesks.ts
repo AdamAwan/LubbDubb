@@ -30,6 +30,7 @@ import { appErrorView, CurrentAppErrors } from '../appErrors/current.js';
 import { AppErrorTriageDesk } from '../appErrors/triageDesk.js';
 import { LessonDesk } from '../lessons/lessonDesk.js';
 import { LessonOutcomeDesk } from '../lessons/outcomeDesk.js';
+import { LessonParent } from '../lessons/lessonParent.js';
 import { LessonPrReading } from '../lessons/lessonPrs.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
 import { CommandEnvironmentProber, type EnvironmentProber } from '../environments/prober.js';
@@ -230,7 +231,20 @@ export type LessonDesks = ReturnType<typeof buildLessonDesks>;
 export function buildLessonDesks(config: Config, base: Foundation) {
   const { store, sink, errors, connector, watchLabel, lessonReading } = base;
   const lessonPrs = new LessonPrReading({ source: connector, errors });
-  const lessons = new LessonDesk({ store, minGoals: config.lessons.minGoals, ...lessonReading, lessonPrs });
+  const lessons = new LessonDesk({
+    store,
+    minGoals: config.lessons.minGoals,
+    ...lessonReading,
+    lessonPrs,
+    sink,
+    errors,
+  });
+  const parent = new LessonParent({
+    number: config.lessons.parentWorkItem,
+    read: (n) => connector.readWorkItem(n),
+    watchLabel,
+    errors,
+  });
   const lessonOutcomes = new LessonOutcomeDesk({
     store,
     sink,
@@ -240,9 +254,10 @@ export function buildLessonDesks(config: Config, base: Foundation) {
     watchLabel,
     lessonLabel: lessonReading.lessonLabel,
     lessonPrs,
+    parent,
     errors,
   });
-  return { lessons, lessonOutcomes, lessonReading, lessonPrs };
+  return { lessons, lessonOutcomes, lessonReading, lessonPrs, lessonParent: parent };
 }
 
 /** The environment desks the composed system exposes. */

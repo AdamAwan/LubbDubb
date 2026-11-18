@@ -1,4 +1,6 @@
 import type { ReviewAreaRule } from '../config/config.js';
+import type { ErrorRecorder } from '../errorLog.js';
+import type { ActionSink } from '../sink/actionSink.js';
 import { prGoalIndex } from '../graph/prGoals.js';
 import type { Store } from '../store/store.js';
 import { isActiveTask } from '../tasks.js';
@@ -6,7 +8,7 @@ import type { LessonDraft, PullRequest, WorldSnapshot } from '../types.js';
 import { lessonBriefing, lessonMisses } from './evidence.js';
 import { prState } from '../pr/prHealth.js';
 import { lessonCandidates, LESSON_WINDOW_MS, type LessonGroupInputs } from './groups.js';
-import { isLessonBranch, lessonMarker } from './lessonOrigin.js';
+import { isLessonBranch, lessonMarker, lessonWorkItemNumber } from './lessonOrigin.js';
 import { othersLessonPrs, type LessonPrReading } from './lessonPrs.js';
 
 // → docs/spec/41-repo-lessons.md#the-record-and-the-desk
@@ -22,6 +24,9 @@ interface LessonDeskDeps {
   lessonLabel: string;
   /** Every fleet's lesson pull requests. */
   lessonPrs: LessonPrReading;
+  /** Closes a lesson pull request's own Task when the pull request settles; absent closes nothing. */
+  sink?: ActionSink;
+  errors?: ErrorRecorder;
   now?: () => number;
 }
 
@@ -51,8 +56,25 @@ export class LessonDesk {
         store.lessons.settle(draft.id, 'unanswered', ['dispatched']);
       if (draft.status !== 'pr-open' || draft.prNumber === null) continue;
       const settled = store.graph.getWorkNode(`pr:${String(draft.prNumber)}`)?.status;
-      if (settled === 'merged') store.lessons.settle(draft.id, 'adopted', ['pr-open']);
-      else if (settled === 'closed') store.lessons.settle(draft.id, 'declined', ['pr-open']);
+      if (settled === 'merged' && store.lessons.settle(draft.id, 'adopted', ['pr-open']))
+        void this.closeTask(draft, 'completed');
+      else if (settled === 'closed' && store.lessons.settle(draft.id, 'declined', ['pr-open']))
+        void this.closeTask(draft, 'not_planned');
+    }
+  }
+
+  /** The lesson's own Task follows its pull request, so the parent's children read which lessons were adopted. */
+  private async closeTask(draft: LessonDraft, reason: 'completed' | 'not_planned'): Promise<void> {
+    const { sink, errors } = this.deps;
+    const number = draft.ticketRef === null ? null : lessonWorkItemNumber(draft.ticketRef);
+    if (sink === undefined || number === null || !sink.canCloseIssue()) return;
+    try {
+      await sink.closeIssue({ number, reason });
+    } catch (err) {
+      errors?.record({
+        source: 'cycle',
+        message: `closing lesson work item #${String(number)} (${reason}) failed: ${(err as Error).message}`,
+      });
     }
   }
 
