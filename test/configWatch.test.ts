@@ -50,6 +50,7 @@ function fixture(initial: Record<string, unknown> = {}) {
     running,
     runtimeControl,
     dispatcher: { setCiPolicy: (ci: CiPolicy) => seen.push(ci) },
+    checkBrowser: () => {},
   });
   const errors = recorder();
   let changed = 0;

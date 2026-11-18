@@ -17,7 +17,7 @@ interface LiveConfigDeps {
   running: Config;
   runtimeControl: RuntimeControl;
   dispatcher: CiPolicyHolder;
-  checkBrowser?: (browser: ExtraMcpServer | null) => void;
+  checkBrowser: (browser: ExtraMcpServer | null) => void;
 }
 
 interface CiPolicyHolder {
@@ -60,7 +60,7 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   },
   'localValidation.browser': (next, deps) => {
     deps.running.localValidation = next.localValidation;
-    deps.checkBrowser?.(next.localValidation.browser);
+    deps.checkBrowser(next.localValidation.browser);
   },
   featureBoard: (next, deps) => {
     deps.running.featureBoard = next.featureBoard;
