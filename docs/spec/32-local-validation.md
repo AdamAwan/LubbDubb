@@ -203,7 +203,7 @@ on offer there too, and its briefing asks for one in the same words — `recordi
 **The browser is bundled, and its ffmpeg revision is derived, never kept by hand.** `@playwright/mcp`
 is an exact-pinned dependency in `package.json`, so `npm ci` installs it with the `playwright-core` it
 wants and the lockfile holds the version. The default launches its entry point from `node_modules` with
-the harness's own `node` (`process.execPath`) — no `npx`, no fetch at spawn, and no `@latest` possible.
+the harness's own `node` (`{node}`, which is `process.execPath`) — no `npx`, no fetch at spawn, and no `@latest` possible.
 Playwright writes video with its own ffmpeg build, installed per revision under the Playwright cache
 (`ffmpeg-<revision>`), and every `@playwright/mcp` release can bundle a Playwright that wants a new one;
 `bundledPlaywright()` (`src/validation/local/policy.ts`) reads that revision off the installed
@@ -216,8 +216,9 @@ a proxy blocking the Playwright CDN — warns and lets the install succeed; `npm
 skips it. Both are caught by the boot preflight below, which stays as the backstop.
 
 **`{playwrightMcp}` names the bundled server in an operator's own block.** It is substituted, beside
-`{outputDir}` and `{profileDir}`, with the bundled entry point's absolute path, so a project that needs
-its own flags writes `"command": "node", "args": ["{playwrightMcp}", "--timeout-navigation", "15000", …]`
+`{outputDir}` and `{profileDir}`, with the bundled entry point's absolute path, and `{node}` — substituted
+in `command` as well as `args` — with the harness's own `node`; so a project that needs its own flags
+writes `"command": "{node}", "args": ["{playwrightMcp}", "--timeout-navigation", "15000", …]`
 and names no package version — the version is the harness's, and moves with it. A block that names a
 package itself (`npx -y @playwright/mcp@…`) still works, but its ffmpeg is the operator's to keep.
 
@@ -335,10 +336,10 @@ agent that crashed, was killed or spent its stall park leaves a row nobody will 
 
 Two live keys, deep-merged, project-layerable ([02](02-configuration.md)):
 
-| Key                           | Default                                                                 | What it is                                                                                                                    |
-| ----------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `localValidation.instruction` | `''`                                                                    | What a validating agent is told about reaching **this** environment: which URL is which, how to sign in, what to leave alone. |
-| `localValidation.browser`     | `node {playwrightMcp} --output-dir … --user-data-dir … --caps devtools` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                            |
+| Key                           | Default                                                                   | What it is                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `localValidation.instruction` | `''`                                                                      | What a validating agent is told about reaching **this** environment: which URL is which, how to sign in, what to leave alone. |
+| `localValidation.browser`     | `{node} {playwrightMcp} --output-dir … --user-data-dir … --caps devtools` | The MCP server that gives it a browser, or `null` for none. A remote validation run drives it too.                            |
 
 **The split with the prompt is the whole design.** The `local-validation` template says how to build
 a test plan and how to run one, which is the same job on every deployment; the instruction says how

@@ -14,9 +14,9 @@ const { coreCli, ffmpegRevision: FFMPEG_REVISION, mcpCli } = bundledPlaywright()
 
 test('the default browser is the bundled @playwright/mcp, run by this node, and offers the recorder', () => {
   const server = DEFAULT_LOCAL_VALIDATION.browser as ExtraMcpServer;
-  assert.equal(server.command, process.execPath);
   assert.ok(!server.args.some((arg) => arg.includes('@playwright/mcp@')));
   const launched = substituteBrowserArgs(server, { outputDir: '/out', profileDir: '/profile' });
+  assert.equal(launched.command, process.execPath);
   assert.equal(launched.args[0], mcpCli);
   assert.ok(existsSync(mcpCli), 'the entry point is installed by npm ci');
   assert.ok(!launched.args.some((arg) => /\{\w+\}/.test(arg)), 'no token is left standing');
@@ -24,8 +24,12 @@ test('the default browser is the bundled @playwright/mcp, run by this node, and 
 });
 
 test('a project names the bundled server by token, beside its own flags', () => {
-  const own = browser(['{playwrightMcp}', '--timeout-navigation', '15000', '--caps', 'devtools']);
+  const own = {
+    ...browser(['{playwrightMcp}', '--timeout-navigation', '15000', '--caps', 'devtools']),
+    command: '{node}',
+  };
   const launched = substituteBrowserArgs(own, { outputDir: '/out', profileDir: '/profile' });
+  assert.equal(launched.command, process.execPath);
   assert.deepEqual(launched.args, [mcpCli, '--timeout-navigation', '15000', '--caps', 'devtools']);
 });
 
