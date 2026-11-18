@@ -7,7 +7,7 @@ import type { HandledPayload } from '../../wire.js';
 
 // → docs/spec/16-http-api.md, docs/spec/43-handled-for-you.md
 
-const IdParams = z.object({ id: integerParam('handled action id') });
+const HandledIdParams = z.object({ id: integerParam('handled action id') });
 const CheckBody = z.object({ ids: z.array(z.number().int().positive()).min(1) });
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
@@ -18,10 +18,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/handled/check',
     checked({ body: CheckBody }, ({ body }) => {
-      store.handled.setState(
-        body.ids.filter((id) => store.handled.get(id)?.state === 'open'),
-        'checked',
-      );
+      store.handled.check(body.ids);
       hub.broadcast({ type: 'world:changed' });
       return { ok: true };
     }),
@@ -30,7 +27,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   for (const direction of ['undo', 'redo'] as const)
     app.post(
       `/api/handled/:id/${direction}`,
-      checked({ params: IdParams }, async ({ params, reply }) => {
+      checked({ params: HandledIdParams }, async ({ params, reply }) => {
         const outcome = await revertHandled(handledContext(system.config, system), params.id, direction);
         if (!outcome.ok) return reply.code(400).send({ error: outcome.error });
         hub.broadcast({ type: 'world:changed' });

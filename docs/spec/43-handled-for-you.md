@@ -21,7 +21,7 @@ group checked.
 - **A kind is handled only if it has a working undo.** The test for a kind is how easy it is to put back, not how often it is right; a kind whose undo cannot be built stays an ask. Setting a parent Feature has none, so it is still asked. → [§](#undo) · `test/handledForYou.test.ts`
 - **Nothing that affects other people, or that cannot be fully put back, is handled.** Those stay asks on the rail exactly as before. → [§](#what-stays-an-ask) · _no test_
 - **An action is recorded only once its write landed, and a failed write leaves the ask standing.** A row on the page is a change that happened; a change that did not happen is still the operator's question. → [§](#the-record) · `test/handledForYou.test.ts`
-- **An undo or redo that fails changes nothing, including the row's state.** → [§](#undo) · `test/handledForYou.test.ts`
+- **An undo or redo that fails leaves the row's state as it was.** A profile write that fails part-way may already have removed the other model tags, as any pin does ([02](02-configuration.md#a-proposal-is-taken-without-asking-and-can-be-put-back)); the row still reads as before, so the operator can press again. → [§](#undo) · `test/handledForYou.test.ts`
 - **A kind handled "until stuck" raises the ordinary ask once its own fix has failed; it never retries forever.** → [§](#until-stuck) · _no test_
 
 ## The list
@@ -56,7 +56,7 @@ the operator's own click uses — `applyProfilePin` for the profile, `settlePlac
 path — so the appraisal is answered exactly as if the operator had pressed. Only the fleet's
 appraiser is handled this way: an operator who appraises a goal themselves is already looking at it.
 
-A failure is recorded on the error log and leaves the ask on the rail.
+A failure is recorded on the error log and leaves the ask on the rail. So does an issue missing from the stored world: without its current tag there is no _before_ to put back.
 
 ### What stays an ask
 

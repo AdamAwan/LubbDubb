@@ -50,7 +50,6 @@ interface McpBridgeServerOptions {
   remoteListings?: McpToolDeps['remoteListings'];
   localRun?: McpToolDeps['localRun'];
   investigateLabel?: McpToolDeps['investigateLabel'];
-  lowerProfile?: McpToolDeps['lowerProfile'];
   handleAppraisal?: McpToolDeps['handleAppraisal'];
   discussions?: McpToolDeps['discussions'];
   lessons?: McpToolDeps['lessons'];
@@ -229,7 +228,6 @@ export class McpBridgeServer {
         remoteListings: this.opts.remoteListings,
         localRun: this.opts.localRun,
         investigateLabel: this.opts.investigateLabel,
-        lowerProfile: this.opts.lowerProfile,
         handleAppraisal: this.opts.handleAppraisal,
         discussions: this.opts.discussions,
         lessons: this.opts.lessons,

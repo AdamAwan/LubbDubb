@@ -953,9 +953,9 @@ context field are gone.
 ### The second arm: an unanswered profile proposal (issue #342)
 
 The appraiser also proposes which model profile the goal's work should run on, and a proposal that
-**is deeper than what is already standing** holds the funnel until a human answers it — a cheaper one
-is written as the tag by the harness and holds nothing
-([02](02-configuration.md#a-cheaper-proposal-is-taken-without-asking)). Same predicate,
+**differs from what is already standing** holds the funnel until it is answered — and from a `workable`
+appraisal the harness answers it itself straight after the verdict, with an undo
+([02](02-configuration.md#a-proposal-is-taken-without-asking-and-can-be-put-back)). Same predicate,
 same two call sites, and the same safety argument as above pointed at a second question:
 
 - **An absent proposal holds nothing**, exactly as silence does for the verdict — a crashed, killed or

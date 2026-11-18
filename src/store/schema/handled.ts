@@ -12,4 +12,5 @@ CREATE TABLE IF NOT EXISTS handled_actions (
   created_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS handled_actions_created ON handled_actions (created_at);
+CREATE INDEX IF NOT EXISTS handled_actions_open ON handled_actions (created_at) WHERE state = 'open';
 `;

@@ -142,13 +142,12 @@ function recordedNote(
     ? 'Recorded. The issue proceeds exactly as it would have — this verdict schedules nothing ' +
         'itself, it only stops the appraisal being asked again for this version of the ticket.' +
         (parsed.parent !== null || parsed.areaPath !== null
-          ? ' Your placement suggestions are held for a human to confirm. They hold nothing up and ' +
-            'they disappear on their own if the item turns out to already have one, so there is ' +
-            'nothing further for you to do about them.'
+          ? ' A board you proposed is applied, and the operator can put it back; a parent is held for ' +
+            'a human to confirm. Neither holds anything up, so there is nothing further for you to do about them.'
           : '') +
         (result.profileHeld === true
-          ? ' Your profile is deeper than what is set for this issue, so nothing is dispatched for it ' +
-            'until a human confirms which to use. That is one click and it is not a rejection.'
+          ? ' Your profile differs from what is set for this issue, so the harness applies it for the ' +
+            'operator, who can put the old one back. There is nothing further for you to do.'
           : '')
     : 'Recorded. Nothing is dispatched for this issue while the verdict stands. It ends by ' +
         'itself the moment the ticket is rewritten — your list is posted on it, with how to get ' +
@@ -158,7 +157,7 @@ function recordedNote(
 
 const LABEL_DEADLINE_MS = 30_000;
 
-async function beforeVerdict(
+async function withinDeadline(
   deps: McpToolDeps,
   originRef: string | null,
   what: string,
@@ -172,7 +171,7 @@ async function beforeVerdict(
   } catch (err) {
     deps.errors?.record({
       source: 'provider',
-      message: `${what} for #${issueNumber} did not land before the verdict`,
+      message: `${what} for #${issueNumber} did not land in time`,
       detail: err instanceof Error ? err.message : String(err),
     });
   }
@@ -189,11 +188,7 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, task, ok }) => {
     handler: async (args) => {
       const parsed = validateGoalAppraisal(args, names, areas.paths);
       if (!parsed.ok) return toolError(`Appraisal rejected: ${parsed.error}`);
-      if (parsed.investigate) await beforeVerdict(deps, task.originRef, 'Investigate label', deps.investigateLabel);
-      const { lowerProfile } = deps;
-      const profile = parsed.profile;
-      if (parsed.verdict === 'workable' && profile !== null && lowerProfile !== undefined)
-        await beforeVerdict(deps, task.originRef, 'Cheaper profile', (n) => lowerProfile(n, profile));
+      if (parsed.investigate) await withinDeadline(deps, task.originRef, 'Investigate label', deps.investigateLabel);
       const result = deps.agents.recordAppraisal(agent.id, parsed.verdict, parsed.summary, parsed.profile, {
         missing: parsed.missing,
         parent: parsed.parent,
@@ -201,7 +196,7 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, task, ok }) => {
       });
       if (!result.ok) return toolError(result.error);
       if (parsed.verdict === 'workable')
-        await beforeVerdict(deps, task.originRef, 'Handling the appraisal', deps.handleAppraisal);
+        await withinDeadline(deps, task.originRef, 'Handling the appraisal', deps.handleAppraisal);
       return ok({
         appraised: true,
         issue: result.issueOrigin,

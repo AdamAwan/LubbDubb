@@ -36,14 +36,14 @@ export class HandledStore {
     before: string | null;
     after: string;
     reason: string;
-  }): number {
-    const result = this.ctx
+  }): HandledAction {
+    const row = this.ctx
       .prep(
         `INSERT INTO handled_actions (kind, issue_number, before_value, after_value, reason, state, created_at)
-         VALUES (?, ?, ?, ?, ?, 'open', ?)`,
+         VALUES (?, ?, ?, ?, ?, 'open', ?) RETURNING *`,
       )
-      .run(input.kind, input.issueNumber, input.before, input.after, input.reason, this.ctx.now());
-    return Number(result.lastInsertRowid);
+      .get(input.kind, input.issueNumber, input.before, input.after, input.reason, this.ctx.now()) as HandledRow;
+    return fromRow(row);
   }
 
   get(id: number): HandledAction | null {
@@ -65,8 +65,16 @@ export class HandledStore {
     return row.n;
   }
 
-  setState(ids: readonly number[], state: HandledState): void {
-    const stmt = this.ctx.prep(`UPDATE handled_actions SET state = ? WHERE id = ?`);
-    for (const id of ids) stmt.run(state, id);
+  setState(id: number, state: HandledState): void {
+    this.ctx.prep(`UPDATE handled_actions SET state = ? WHERE id = ?`).run(state, id);
+  }
+
+  /** Marks the open ones among `ids` checked, in one statement. */
+  check(ids: readonly number[]): void {
+    this.ctx
+      .prep(
+        `UPDATE handled_actions SET state = 'checked' WHERE state = 'open' AND id IN (SELECT value FROM json_each(?))`,
+      )
+      .run(JSON.stringify(ids));
   }
 }

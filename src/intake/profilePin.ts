@@ -1,4 +1,4 @@
-import { profileRank, type AgentModels } from '../agents/modelPolicy.js';
+import type { AgentModels } from '../agents/modelPolicy.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
 import { inIssueOriginFamily, issueOriginHead, issueOriginRole, parseIssueOrigin } from '../issueOrigins.js';
@@ -63,7 +63,7 @@ export async function applyProfilePin(
   return { ok: true, profile: wanted, answered };
 }
 
-// → docs/spec/02-configuration.md#a-cheaper-proposal-is-taken-without-asking
+// → docs/spec/02-configuration.md#pinning-one-goal-to-a-profile
 
 export function standingProfile(
   labels: string[] | undefined,
@@ -71,15 +71,6 @@ export function standingProfile(
   models: AgentModels | undefined,
 ): string | null {
   return resolveModelTag(labels, labelPrefix, models).profile ?? models?.default ?? null;
-}
-
-export async function lowerProfilePin(ctx: ProfilePinContext, issueNumber: number, proposed: string): Promise<boolean> {
-  const issue = ctx.store.world.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
-  const standing = standingProfile(issue?.labels, ctx.labelPrefix, ctx.agentModels);
-  const from = profileRank(ctx.agentModels, standing);
-  const to = profileRank(ctx.agentModels, proposed);
-  if (from === null || to === null || to >= from) return false;
-  return (await applyProfilePin(ctx, issueNumber, proposed)).ok;
 }
 
 // → docs/spec/02-configuration.md#pinning-one-goal-to-a-profile

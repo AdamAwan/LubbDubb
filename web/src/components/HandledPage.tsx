@@ -44,6 +44,29 @@ function Row({ action, now, reload }: { action: HandledAction; now: number; relo
   );
 }
 
+function CheckButton({
+  open,
+  reload,
+  primary,
+  children,
+}: {
+  open: HandledAction[];
+  reload: () => void;
+  primary?: boolean;
+  children: string;
+}): JSX.Element {
+  return (
+    <AsyncButton
+      usage="handled.accept"
+      size="small"
+      {...(primary ? { tone: 'primary' as const, className: 'hf-all' } : { ghost: true })}
+      onClick={() => api.checkHandled(open.map((a) => a.id)).then(reload)}
+    >
+      {children}
+    </AsyncButton>
+  );
+}
+
 function Group({
   label,
   actions,
@@ -56,6 +79,7 @@ function Group({
   reload: () => void;
 }): JSX.Element {
   const open = actions.filter((a) => a.state === 'open');
+  const visible = actions.filter((a) => a.state !== 'checked');
   return (
     <section className="hf-group">
       <div className="hf-ghead">
@@ -64,23 +88,16 @@ function Group({
         {open.length === 0 ? (
           <span className="hf-checked">checked</span>
         ) : (
-          <AsyncButton
-            usage="handled.accept"
-            size="small"
-            ghost
-            onClick={() => api.checkHandled(open.map((a) => a.id)).then(reload)}
-          >
+          <CheckButton open={open} reload={reload}>
             Mark checked
-          </AsyncButton>
+          </CheckButton>
         )}
       </div>
-      {open.length > 0 || actions.some((a) => a.state === 'undone') ? (
+      {visible.length > 0 ? (
         <ul className="hf-rows">
-          {actions
-            .filter((a) => a.state !== 'checked')
-            .map((a) => (
-              <Row key={a.id} action={a} now={now} reload={reload} />
-            ))}
+          {visible.map((a) => (
+            <Row key={a.id} action={a} now={now} reload={reload} />
+          ))}
         </ul>
       ) : null}
     </section>
@@ -96,15 +113,15 @@ export function HandledPage({ now }: { now: number }): JSX.Element {
   const open = all.filter((a) => a.state === 'open');
   const undone = all.filter((a) => a.state === 'undone').length;
   return (
-    <div className="hf">
-      <div className="hf-head">
+    <div className="bp hf">
+      <div className="bp-head">
         <h2>Handled for you</h2>
-        <p className="hf-blurb">
+        <p className="bp-blurb">
           Small asks the harness answered itself in the last 24 hours. Undo anything that looks wrong, then mark the
           group checked.
         </p>
       </div>
-      <div className="hf-strip">
+      <div className="bp-strip">
         <span>
           <b>{open.length}</b> to check
         </span>
@@ -112,15 +129,9 @@ export function HandledPage({ now }: { now: number }): JSX.Element {
           <b>{undone}</b> undone
         </span>
         {open.length > 0 && (
-          <AsyncButton
-            usage="handled.accept"
-            tone="primary"
-            size="small"
-            className="hf-all"
-            onClick={() => api.checkHandled(open.map((a) => a.id)).then(reload)}
-          >
+          <CheckButton open={open} reload={reload} primary>
             Looks good, mark all checked
-          </AsyncButton>
+          </CheckButton>
         )}
       </div>
       {all.length === 0 ? (
