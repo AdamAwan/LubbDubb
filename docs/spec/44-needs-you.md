@@ -15,11 +15,11 @@ part of this page **only**: no other surface sends anything to it.
 ## Invariants
 
 - **The old overview and the rail are unchanged.** This page is a new tab; nothing about Cards, Focus mode or the queue rail moves. → [§](#where-it-sits) · _no test_
-- **Only this page sends to the listening chat.** `POST /api/listen/send` has one caller, `web/src/console/NeedsYouPage.tsx`; every other surface keeps its own buttons and its own deep links. → [§](#scope) · _test/needsYouPage.test.ts_
-- **Which pull requests are drawn is `prsOnYou`, one pure function.** A pull request is on the page when any one of its reasons holds, and a reason is read off fields the server already decided — never re-derived in the browser. → [§](#pull-requests-waiting-on-you) · _test/prsOnYou.test.ts_
-- **The page reads `listener.state`; it never guesses.** `listening`, `busy` and `off` are the server's, off whether a wait is open. → [§](#is-a-chat-listening) · _test/listener.test.ts_
-- **A wait is bounded.** `ask_wait` returns by itself after `LISTEN_WAIT_MS` (10 minutes) with nothing, and the skill calls it again; a held call never outlives that bound. → [§](#the-wait) · _test/listener.test.ts_
-- **An item is handed out once.** A sent item leaves the queue the moment one `ask_wait` returns it; a second waiter never receives it too. → [§](#the-wait) · _test/listener.test.ts_
+- **Only this page sends to the listening chat.** `POST /api/listen/send` has one caller, _web/src/console/NeedsYouPage.tsx_; every other surface keeps its own buttons and its own deep links. → [§](#scope) · _no test_
+- **Which pull requests are drawn is `prsOnYou`, one pure function.** A pull request is on the page when any one of its reasons holds, and a reason is read off fields the server already decided — never re-derived in the browser. → [§](#pull-requests-waiting-on-you) · _no test_
+- **The page reads `listener.state`; it never guesses.** `listening`, `busy` and `off` are the server's, off whether a wait is open. → [§](#is-a-chat-listening) · _no test_
+- **A wait is bounded.** `ask_wait` returns by itself after `LISTEN_WAIT_MS` (10 minutes) with nothing, and the skill calls it again; a held call never outlives that bound. → [§](#the-wait) · _no test_
+- **An item is handed out once.** A sent item leaves the queue the moment one `ask_wait` returns it; a second waiter never receives it too. → [§](#the-wait) · _no test_
 - **The listen loop decides nothing.** `/lubbdubb:listen` hands each item to the same reading the `next` skill does; the operator answers. → [§](#the-listen-skill) · _no test_
 
 ## Where it sits
