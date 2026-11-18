@@ -146,8 +146,10 @@ dispatch would be minutes stale. `local_run_read` answers those.
 A local snapshot rarely holds what a change needs: a flag left off, a module not enabled for the
 tenant, no records of the right shape. Forbidden to touch the environment, the agent could only
 report `blocked` — no step run and no evidence either way, on the **normal** case for any feature
-behind a flag. And the environment is a disposable dev stack restored from a snapshot on every
-bring-up, so a write to it costs nothing the next bring-up does not undo.
+behind a flag. And the environment is the machine's own dev stack, typically restored from a
+snapshot on every bring-up. The briefing does **not** tell the agent its writes are undone — that is
+the operator's fact to state, in `localValidation.setup`, since a stack that keeps its database
+would make the claim false.
 
 So the line is drawn between **state** and **code**:
 

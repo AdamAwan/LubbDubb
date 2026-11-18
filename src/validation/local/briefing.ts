@@ -71,8 +71,7 @@ function environmentSection(brief: ValidationBrief): string {
     `## The environment\n`,
     `The harness is bringing this goal's code up in the machine's one dev environment. Its **session** is not ` +
       `yours to start, stop, restart or message — the operator is very likely watching it. Its **state** is ` +
-      `yours: it is a disposable dev stack restored from a snapshot on every bring-up, so whatever you change ` +
-      `in it the next bring-up undoes.\n`,
+      `yours to set up for your plan.\n`,
     `| | |\n| --- | --- |\n` +
       `| Application | ${url ?? '_no URL is configured — ask `local_run_read` what ports came up_'} |\n` +
       `| Checkout | \`${brief.run.dir}\` |\n` +
@@ -123,8 +122,8 @@ function rulesSection(outputDir: string): string {
     `at the start of it, so the wait is free if you spend it reading the diff. Call \`local_validation_plan\` ` +
     `with a test plan for *these changes*: what behaviour to exercise, the exact steps, and what a pass looks ` +
     `like for each. It lands on the goal's page the moment you send it.\n` +
-    `Give it a set-up section: the flags, configuration and data the plan needs, and how you will create them — ` +
-    `the snapshot the environment comes up from will often not have them.\n` +
+    `Pass \`setup\` with it: the flags, configuration and data the plan needs, and how you will create them — ` +
+    `the environment will often come up without them.\n` +
     `2. **Then wait for the environment.** Poll \`local_run_read\` until it says \`running\`, then open the ` +
     `application yourself.\n` +
     `3. **Set up what the plan needs.** Turn the flag on, enable the module, create the records — by any means ` +

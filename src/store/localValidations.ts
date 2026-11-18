@@ -6,7 +6,7 @@ import type { LocalValidation, LocalValidationFinding, LocalValidationStatus, Re
 
 // → docs/spec/14-persistence.md
 
-// No backfill for `recording_status` or `setup`: null is *not known*, true of every row from before the column.
+// No backfill: `recording_status` null is *not known*, and `setup` null reads as no changes — both true of every row from before the column.
 export const LOCAL_VALIDATION_COLUMNS: ColumnMigrations = {
   local_validations: { recording_status: 'TEXT', setup: 'TEXT' },
 };
@@ -183,7 +183,7 @@ interface Row {
   summary: string | null;
   findings: string | null;
   visited: string | null;
-  setup: string | null | undefined;
+  setup: string | null;
   screenshots: string | null;
   note: string | null;
   recording_status: string | null | undefined;
@@ -220,7 +220,7 @@ function toLocalValidation(row: Row): LocalValidation {
     summary: row.summary,
     findings: parseList<LocalValidationFinding>(row.findings),
     visited: parseList<string>(row.visited),
-    setup: parseList<string>(row.setup ?? null),
+    setup: parseList<string>(row.setup),
     screenshots: parseList<string>(row.screenshots),
     note: row.note,
     recordingStatus: toRecordingStatus(row.recording_status),
