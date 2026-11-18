@@ -2,9 +2,8 @@ import { z } from 'zod';
 import { reviewTargetPr } from '../../review/prReview.js';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
-import type { PrReviewVerdict } from '../../types.js';
 import type { McpToolDeps, ToolFactory } from './context.js';
-import type { PrReview } from '../../types.js';
+import type { PrReview, PrReviewVerdict } from '../../types.js';
 
 // → docs/spec/11-mcp-tools.md
 

@@ -74,7 +74,7 @@ class ExtensionReviewRouter implements ReviewRouter {
       modes,
       allowSkip: this.policy.allowSkip,
     });
-    const base = { prNumber: pr.number, agentId: null, skipped: false };
+    const base = routeBase(pr.number);
     if (!answer.ok) return this.fallback(pr.number, answer.detail);
     const reason = answer.value.reason.trim();
     if ('skip' in answer.value && answer.value.skip === true) {
@@ -97,13 +97,15 @@ class ExtensionReviewRouter implements ReviewRouter {
 
   private fallback(prNumber: number, why: string): PrReviewRouteInput {
     return {
-      prNumber,
-      agentId: null,
-      skipped: false,
+      ...routeBase(prNumber),
       mode: defaultReviewMode(this.policy) ?? '',
       reason: `The project's extension did not choose (${why}), so the review runs the default mode.`,
     };
   }
+}
+
+function routeBase(prNumber: number): Pick<PrReviewRouteInput, 'prNumber' | 'agentId' | 'skipped'> {
+  return { prNumber, agentId: null, skipped: false };
 }
 
 class ConfigReviewPublisher implements ReviewPublisher {
@@ -157,9 +159,7 @@ class ExtensionReviewPublisher implements ReviewPublisher {
       findings: [...review.findings],
     });
     if (!answer.ok || answer.value.thread === null) return;
-    const current = this.store.prReviews.listPrReviews().find((r) => r.prNumber === review.prNumber);
-    if (current?.reviewedAt !== review.reviewedAt) return;
-    this.store.prReviews.recordPrReviewPublished(review.prNumber, answer.value.thread.trim());
+    this.store.prReviews.recordPrReviewPublished(review.prNumber, answer.value.thread.trim(), review.reviewedAt);
   }
 }
 
@@ -261,7 +261,7 @@ export class ReviewRouteDesk {
 /** The review's seams for this deployment: the reviewed-elsewhere prober, the router and its desk, the publisher. */
 export function buildReviewSeams(
   config: { review: PrReviewPolicy; defaultBranch: string; repoRoot: string },
-  deps: { host: ReviewHost; store: Store; errors: ErrorRecorder; prober?: ReviewProber },
+  deps: SeamDeps & { prober?: ReviewProber },
 ) {
   const reviewRouter = new RoutedReviewRouter(config.review, deps);
   return {
