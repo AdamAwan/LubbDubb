@@ -143,8 +143,8 @@ Each slot is a row here, and links the spec of the feature that asks it.
 
 | Slot              | Asked by                                                                                                                                             | Input                                                                            | Answer                                         | Timeout   |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- | --------- |
-| `ensureTenant`    | The tenant press, for an environment with `validate.tenantExtension` ([36](36-remote-validation.md#a-tenant-from-the-projects-extension))            | `{ environment, tenant: string \| null }`                                        | `{ tenant }`, a non-blank one-line name        | 1 hour    |
-| `reseedTenant`    | The same press, after `ensureTenant`; optional                                                                                                       | `{ environment, tenant }`                                                        | nothing (`undefined`); a throw is a failure    | 1 hour    |
+| `ensureTenant`    | The tenant press, for an environment with `validate.tenantExtension` ([36](36-remote-validation.md#a-tenant-from-the-projects-extension))            | `{ environment, tenant: string \| null }`                                        | `{ tenant }`, a non-blank one-line name        | ¹         |
+| `reseedTenant`    | The same press, after `ensureTenant`; optional                                                                                                       | `{ environment, tenant }`                                                        | nothing (`undefined`); a throw is a failure    | ¹         |
 | `deployedCommits` | The environment probe, for an environment with `atExtension` ([24](24-environments.md#from-the-projects-extension))                                  | `{ environment }`                                                                | `{ commits }`, at least one, each one token    | 30 s      |
 | `appErrors`       | The errors read, for an environment with `errors.extension` ([39](39-app-errors.md#from-the-projects-extension))                                     | `{ environment, since }`                                                         | the errors command's report, as a value        | 1 min     |
 | `appErrorDetail`  | `app_error_detail`, same environments; optional                                                                                                      | `{ environment, fingerprint, since }`                                            | `{ text }`, non-blank                          | 1 min     |
@@ -152,6 +152,11 @@ Each slot is a row here, and links the spec of the feature that asks it.
 | `watchExposure`   | The exposure probe, same environments, where `watch.exposure` is declared                                                                            | `{ environment, commits }`                                                       | `{ share }`, 0 to 1                            | 30 s      |
 | `routeReview`     | The review's route desk, with `review.routeExtension` ([07](07-pull-requests.md#the-review-from-the-projects-extension))                             | `{ pr: { number, title, branch, base, author, body }, modes, allowSkip }`        | `{ mode, reason }` or `{ skip: true, reason }` | 2 minutes |
 | `publishReview`   | `review_report`, once, after a review is recorded, with `review.publishExtension` ([07](07-pull-requests.md#the-review-from-the-projects-extension)) | `{ pr, headSha, mode, verdict, summary, findings }`                              | `{ thread }`, a one-line thread id or null     | 5 minutes |
+
+¹ `remoteValidation.tenantTimeoutMs`, default one hour — the kill of the `ensureTenant` and `reseed`
+commands these slots replace, so one key bounds the tenant work whichever answers it. `EXTENSION_SLOTS`
+carries the default; `buildExtensionHost` hands the host `extensionSlotBook(...)` with the configured
+value. Every other timeout is fixed in the book.
 
 ## Adding a slot
 

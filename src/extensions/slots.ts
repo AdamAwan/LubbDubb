@@ -3,10 +3,10 @@ import { ERRORS_COMMAND_TIMEOUT_MS } from '../appErrors/command.js';
 import { READING_TIMEOUT_MS } from '../environments/prober.js';
 import type { WatchSourceLanguage } from '../types.js';
 import type { WatchQueryKind, WatchRow } from '../environments/watchResult.js';
+import { DEFAULT_REMOTE_VALIDATION } from '../config/config.js';
 
 // → docs/spec/42-extensions.md#the-slots
 
-const TENANT_SLOT_TIMEOUT_MS = 60 * 60 * 1000;
 const ROUTE_REVIEW_TIMEOUT_MS = 2 * 60 * 1000;
 const PUBLISH_REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -63,7 +63,7 @@ export type ExtensionSlots = {
 
 export const EXTENSION_SLOTS: SlotBook<ExtensionSlots> = {
   ensureTenant: {
-    timeoutMs: TENANT_SLOT_TIMEOUT_MS,
+    timeoutMs: DEFAULT_REMOTE_VALIDATION.tenantTimeoutMs,
     check: (value) => {
       if (typeof value !== 'object' || value === null) return 'it must answer { tenant: "<name>" }';
       const { tenant } = value as { tenant?: unknown };
@@ -73,7 +73,7 @@ export const EXTENSION_SLOTS: SlotBook<ExtensionSlots> = {
     },
   },
   reseedTenant: {
-    timeoutMs: TENANT_SLOT_TIMEOUT_MS,
+    timeoutMs: DEFAULT_REMOTE_VALIDATION.tenantTimeoutMs,
     check: (value) => (value === undefined ? null : 'it must answer nothing — a throw is how it says it failed'),
   },
   deployedCommits: { timeoutMs: READING_TIMEOUT_MS, check: deployedCommitsRefusal },
@@ -133,6 +133,15 @@ export const EXTENSION_SLOTS: SlotBook<ExtensionSlots> = {
     },
   },
 };
+
+export function extensionSlotBook(tenantTimeoutMs: number): SlotBook<ExtensionSlots> {
+  const { ensureTenant, reseedTenant } = EXTENSION_SLOTS;
+  return {
+    ...EXTENSION_SLOTS,
+    ensureTenant: { ...ensureTenant, timeoutMs: tenantTimeoutMs },
+    reseedTenant: { ...reseedTenant, timeoutMs: tenantTimeoutMs },
+  };
+}
 
 function deployedCommitsRefusal(value: unknown): string | null {
   const commits = (value as { commits?: unknown } | null)?.commits;
