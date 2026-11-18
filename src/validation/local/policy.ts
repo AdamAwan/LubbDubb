@@ -1,24 +1,64 @@
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { failure } from '../../primitives.js';
 import type { ExtraMcpServer } from '../../types.js';
 
 // → docs/spec/32-local-validation.md
 
-export const PLAYWRIGHT_MCP_VERSION = '0.0.85';
-export const PLAYWRIGHT_VERSION = '1.66.0-alpha-2026-11-09';
-export const FFMPEG_REVISION = '1013';
+interface BundledPlaywright {
+  mcpCli: string;
+  coreCli: string;
+  ffmpegRevision: string;
+}
+
+let bundled: BundledPlaywright | string | undefined;
+
+export function bundledPlaywright(): BundledPlaywright | string {
+  if (bundled === undefined) {
+    try {
+      bundled = readBundledPlaywright();
+    } catch (err) {
+      bundled = failure(err);
+    }
+  }
+  return bundled;
+}
+
+function readBundledPlaywright(): BundledPlaywright {
+  const mcpPackage = fileURLToPath(import.meta.resolve('@playwright/mcp/package.json'));
+  const { bin } = JSON.parse(readFileSync(mcpPackage, 'utf8')) as { bin?: string | Record<string, string> };
+  const cli = typeof bin === 'string' ? bin : bin?.['playwright-mcp'];
+  if (!cli) throw new Error(`No playwright-mcp bin in ${mcpPackage}`);
+  const core = dirname(createRequire(mcpPackage).resolve('playwright-core/package.json'));
+  const browsersJson = join(core, 'browsers.json');
+  const { browsers } = JSON.parse(readFileSync(browsersJson, 'utf8')) as {
+    browsers: { name: string; revision: string }[];
+  };
+  const ffmpeg = browsers.find((browser) => browser.name === 'ffmpeg');
+  if (ffmpeg === undefined) throw new Error(`No ffmpeg entry in ${browsersJson}`);
+  return {
+    mcpCli: join(dirname(mcpPackage), cli),
+    coreCli: join(core, 'cli.js'),
+    ffmpegRevision: ffmpeg.revision,
+  };
+}
 
 export interface LocalValidationPolicy {
   instruction: string;
   browser: ExtraMcpServer | null;
 }
 
+export const PLAYWRIGHT_MCP_TOKEN = '{playwrightMcp}';
+
 export const DEFAULT_LOCAL_VALIDATION: LocalValidationPolicy = {
   instruction: '',
   browser: {
     key: 'browser',
-    command: 'npx',
+    command: '{node}',
     args: [
-      '-y',
-      `@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}`,
+      PLAYWRIGHT_MCP_TOKEN,
       '--output-dir',
       '{outputDir}',
       '--user-data-dir',
@@ -29,14 +69,23 @@ export const DEFAULT_LOCAL_VALIDATION: LocalValidationPolicy = {
   },
 };
 
-const TOKENS = ['outputDir', 'profileDir'] as const;
-
 export function substituteBrowserArgs(
   server: ExtraMcpServer,
   paths: { outputDir: string; profileDir: string },
 ): ExtraMcpServer {
-  return {
-    ...server,
-    args: server.args.map((arg) => TOKENS.reduce((acc, token) => acc.split(`{${token}}`).join(paths[token]), arg)),
+  const values: Record<string, () => string | undefined> = {
+    outputDir: () => paths.outputDir,
+    profileDir: () => paths.profileDir,
+    node: () => process.execPath,
+    playwrightMcp: () => {
+      const found = bundledPlaywright();
+      return typeof found === 'string' ? undefined : found.mcpCli;
+    },
   };
+  const render = (text: string): string =>
+    text.replace(
+      /\{(\w+)\}/g,
+      (whole, name: string) => (Object.hasOwn(values, name) ? values[name]!() : undefined) ?? whole,
+    );
+  return { ...server, command: render(server.command), args: server.args.map(render) };
 }

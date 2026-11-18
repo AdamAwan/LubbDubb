@@ -10,6 +10,7 @@
   },
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || exit 0",
+    "postinstall": "node --import tsx scripts/installFfmpeg.ts || exit 0",
     "build": "node --import tsx scripts/tsc.ts -p tsconfig.json",
     "dev": "node --import tsx --watch src/server/main.ts",
     "start": "npm run web:build && node --import tsx src/server/main.ts",
@@ -41,6 +42,7 @@
     "@octokit/plugin-retry": "^8.1.1",
     "@octokit/plugin-throttling": "^11.0.5",
     "@octokit/rest": "^22.0.1",
+    "@playwright/mcp": "0.0.85",
     "better-sqlite3": "^13.0.3",
     "fastify": "^5.12.5",
     "nanoid": "^5.1.16",
