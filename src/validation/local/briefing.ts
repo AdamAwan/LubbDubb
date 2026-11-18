@@ -130,8 +130,8 @@ function rulesSection(outputDir: string): string {
     `3. **Set up what the plan needs.** Turn the flag on, enable the module, create the records — by any means ` +
     `the project offers: the application's UI and APIs, reads and writes straight against the local store, ` +
     `the project's own scripts and skills, fixture files you upload. Keep a list of every change as you make ` +
-    `it, and of any state the plan relies on that was already there when you arrived. A set-up step that fails because of the change under test is a finding — that is \`failed\`, not ` +
-    `\`blocked\`.\n` +
+    `it, and of any state the plan relies on that was already there when you arrived. A set-up step that ` +
+    `fails because of the change under test is a finding — that is \`failed\`, not \`blocked\`.\n` +
     `4. **Run the plan, one step at a time.** Batching unverified steps produces output you cannot trust — each ` +
     `step's result is what tells you whether the next one means anything.\n` +
     `5. **Report once**, with \`local_validation_report\`, listing every state change you made under ` +
@@ -147,8 +147,9 @@ function rulesSection(outputDir: string): string {
     `answers most of the plan and says plainly what it could not reach is worth far more than one that stops.\n\n` +
     `### And what you do not do\n\n` +
     `- **Change no code.** No commits, no pushes, no edits to the checkout. It is read-only, and it is the ` +
-    `thing being validated. Set-up scripts and fixtures you write go in \`${join(outputDir, 'setup')}\`, never the ` +
-    `repository — nor loose in the directory above, where they would be shown as evidence. If the fix is obvious, say so in the finding — an agent is dispatched to make it.\n` +
+    `thing being validated. Set-up scripts and fixtures you write go in \`${join(outputDir, 'setup')}\` — ` +
+    `never the repository, nor loose in the directory above, where they would be shown as evidence. If the ` +
+    `fix is obvious, say so in the finding — an agent is dispatched to make it.\n` +
     `- **Do not start, stop or restart the environment's session.** State changes go through the running ` +
     `application or its store.\n` +
     `- **Do not work around a failure to make a step pass.** A workaround that skips the broken thing is the ` +

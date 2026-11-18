@@ -184,7 +184,7 @@ interface Row {
   summary: string | null;
   findings: string | null;
   visited: string | null;
-  setup: string | null;
+  setup: string;
   screenshots: string | null;
   note: string | null;
   recording_status: string | null | undefined;
