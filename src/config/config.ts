@@ -142,7 +142,7 @@ export interface Config {
 
 interface RemoteValidationPolicy {
   /**
-   * The kill for `ensureTenant` and `reseed`. Its own default because 30 seconds kills every tenant
+   * The kill for `ensureTenant` and `reseed`, commands or extension slots. Its own default because 30 seconds kills every tenant
    * command this design has, always.
    */
   tenantTimeoutMs: number;

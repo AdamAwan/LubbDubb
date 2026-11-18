@@ -19,8 +19,10 @@ the change that needs it, following [Adding a slot](#adding-a-slot).
 - **The extensions passed to `buildSystem` must be exactly the ones `extensions` names, or it refuses to build, naming each path that is missing or extra.** It also refuses two with one name or one slot, however they were loaded, and checks before anything else is built. `buildSystem` cannot load (it is synchronous), so a caller that forgot to would otherwise run without the project's code. → [§](#loading) · `test/extensions.test.ts`
 - **A slot has at most one owner, and an extension may fill only slots in the book.** Two answers to one question, or an answer nobody asks for, is a misconfiguration that looks like it works. → [§](#loading) · `test/extensions.test.ts`
 - **`ExtensionHost.call` never throws.** A throw of any value (even one that cannot be turned into text), a rejection, a timeout or a wrong-shaped answer comes back as `{ ok: false, detail }` and is recorded on the error log; the caller decides what not-ok means. → [§](#calling-a-slot) · `test/extensions.test.ts`
+- **A slot's `progress` never throws into the slot, and a line after the call has settled is dropped.** A caller's listener that throws is recorded on the error log, and the slot carries on; a line from work the slot left running reaches nobody. → [§](#calling-a-slot) · `test/extensions.test.ts`
 - **Every slot in the book is described to project authors, and the starter they copy loads against it and type-checks against its slot types.** The `/lubbdubb:extension` skill is the only place a project learns a slot exists. → [§](#writing-an-extension) · `test/extensionSkill.test.ts`
-- **A slot's contract changes only with `EXTENSION_API_VERSION`.** An extension written against the old shape is then refused at boot instead of reading the new input wrongly. → [§](#adding-a-slot) · _no test_
+- **A throw from code an extension started — a stream, timer or event handler, or a promise nobody awaited — is contained, recorded and attributed to it, never a harness crash; a throw from anywhere else still crashes it.** While the slot's call is open it fails that call; after, it is recorded on its own. → [§](#handlers-that-outlive-the-call) · `test/extensions.test.ts`
+- **A slot's contract changes only with `EXTENSION_API_VERSION`.** An extension written against the old shape is then refused at boot instead of reading the new input wrongly. A new member of the context, which an existing extension simply never reads, is not such a change. → [§](#adding-a-slot) · _no test_
 
 ## When to use one
 
@@ -45,7 +47,7 @@ export default {
   apiVersion: 1,
   name: 'acme',
   slots: {
-    // one function per slot this project fills: (input, { repoRoot, signal }) => answer
+    // one function per slot this project fills: (input, { repoRoot, signal, progress }) => answer
     ensureTenant: async ({ environment }) => ({ tenant: await provisionFor(environment) }),
   },
 };
@@ -54,7 +56,8 @@ export default {
 - `apiVersion` must equal `EXTENSION_API_VERSION` (`src/extensions/contract.ts`), today `1`.
 - `name` is how the error log and the boot line name it. Unique across loaded extensions.
 - `slots` maps a slot name to a function. It may return a value or a promise. It gets the slot's
-  input and a context of `repoRoot` and an `AbortSignal` that fires at the slot's timeout.
+  input and a context of `repoRoot`, an `AbortSignal` that fires at the slot's timeout, and
+  `progress(line)`, which hands a line to whoever asked while the call runs.
 
 A `.ts` file works, because the harness runs under `tsx`; so does `.js`/`.mjs`. The module may import
 its own dependencies, resolved from its own location.
@@ -115,12 +118,60 @@ A desk asks a slot through `system.extensions` (`src/extensions/host.ts`):
 
 - `provider(slot)` — the name of the extension that fills it, or null. A feature with a built-in
   fallback checks this first and takes its old path when null.
-- `call(slot, input)` — `{ ok: true, value }` or `{ ok: false, detail }`. **It never throws.**
+- `call(slot, input, onProgress?)` — `{ ok: true, value }` or `{ ok: false, detail }`. **It never throws.**
+  `onProgress` receives each line the slot passes to its context's `progress`; a caller that shows
+  nothing while the call runs leaves it out, and the lines go nowhere.
 
 On every call the host races the function against the slot's `timeoutMs`, aborts the signal on any
 not-ok outcome (a timeout among them), and runs the slot's `check` over the answer. A throw, rejection, timeout or failed check
 is recorded through `errors.record` with source `runtime`, and the message names the extension and the
 slot. Asking a slot nobody fills is not-ok and records nothing: it is a question, not a failure.
+
+`progress` is the host's, not the caller's listener: it never throws into the slot. A listener that
+throws is recorded (source `runtime`, naming the extension and the slot) and the slot carries on, since
+a cockpit that failed to draw a line is no reason to fail a 40-minute reseed. A blank line is dropped at the host, so no caller sees one. Once the call has settled
+— answered, thrown or timed out — `progress` is closed and a later line is dropped silently: after a
+timeout the slot's own work may still be running, and the caller has already written its outcome.
+
+### Handlers that outlive the call
+
+`call`'s `try` covers only the slot function and the promise it returns. A handler the slot registers —
+a child process's `data` or `exit`, a stream's `error`, a timer — runs later, on its own stack, and a
+throw from it is an uncaught exception: by default the end of the harness. That is what NXG's
+`reseedTenant` did, writing output that arrived after the slot gave up to a file it had closed.
+
+So `call` runs the slot inside an `AsyncLocalStorage` scope naming the extension and the slot. Node
+carries that scope into everything the slot starts — callbacks of handles, timers and promises created
+inside it — and keeps it current while `uncaughtException` listeners run for a throw from one of them
+(including an unhandled rejection, which Node raises the same way). `main.ts` registers one listener,
+right after `buildSystem`, that asks `system.extensions.contain(err)`:
+
+- **Inside a scope whose call is still open**, the error fails that call — the race in `call` rejects
+  with it — so it is recorded once, as the slot's failure, and the signal is aborted. A second throw
+  before the call closes is recorded on its own, as `threw again during its "<slot>" slot`.
+- **Inside a scope whose call has ended**, it is recorded as `extension "<name>" threw after its
+"<slot>" slot ended: …`, source `runtime`.
+- **Outside any scope**, `contain` answers false and the listener does what Node would have done: prints
+  the error and exits with code 1. A harness bug still crashes the harness; registering the listener
+  must not turn every uncaught exception into a log line. If `contain` itself throws, the listener
+  prints that too and treats the original as uncontained.
+
+Why continuing is sound here, against Node's general advice not to resume after an uncaught exception:
+the throw unwound only the extension's own handler and the internals of the emitter that called it,
+which the extension owns — the harness's state was not on that stack. The extension's own state may be
+broken, and that is its failure, recorded under its name. Harness code the host calls from inside a
+slot — the caller's `progress` listener, `errors.record` — runs under `AsyncLocalStorage.exit`, so
+nothing it schedules carries the extension's scope. The one way a harness error could be
+misattributed is a resource the harness shares that was first created inside a slot's scope (a pooled
+socket, say); an extension gets no harness object, so there is none it can create, and a misattributed
+throw would still be recorded with its stack, not lost. The scope also stays with a resource the
+extension creates on one call and caches for later ones (a client, a long-lived child): a throw from it
+during a later call is recorded against the call that created it, and the later call ends at its
+timeout rather than at the throw. Owning such a resource's handlers is the extension's job.
+
+Containment does not stop the work. A child process the slot started keeps running, and on Windows
+aborting the direct child leaves its own children running; the [guide](#writing-an-extension) tells
+authors to kill the whole tree on abort and to catch inside every handler.
 
 What not-ok _means_ is the calling feature's decision, written in its own spec. It is never "fall back
 to the built-in behaviour" by default: an operator who configured an extension expects it to answer,
@@ -143,8 +194,8 @@ Each slot is a row here, and links the spec of the feature that asks it.
 
 | Slot              | Asked by                                                                                                                                             | Input                                                                            | Answer                                         | Timeout   |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- | --------- |
-| `ensureTenant`    | The tenant press, for an environment with `validate.tenantExtension` ([36](36-remote-validation.md#a-tenant-from-the-projects-extension))            | `{ environment, tenant: string \| null }`                                        | `{ tenant }`, a non-blank one-line name        | 1 hour    |
-| `reseedTenant`    | The same press, after `ensureTenant`; optional                                                                                                       | `{ environment, tenant }`                                                        | nothing (`undefined`); a throw is a failure    | 1 hour    |
+| `ensureTenant`    | The tenant press, for an environment with `validate.tenantExtension` ([36](36-remote-validation.md#a-tenant-from-the-projects-extension))            | `{ environment, tenant: string \| null }`                                        | `{ tenant }`, a non-blank one-line name        | ¹         |
+| `reseedTenant`    | The same press, after `ensureTenant`; optional                                                                                                       | `{ environment, tenant }`                                                        | nothing (`undefined`); a throw is a failure    | ¹         |
 | `deployedCommits` | The environment probe, for an environment with `atExtension` ([24](24-environments.md#from-the-projects-extension))                                  | `{ environment }`                                                                | `{ commits }`, at least one, each one token    | 30 s      |
 | `appErrors`       | The errors read, for an environment with `errors.extension` ([39](39-app-errors.md#from-the-projects-extension))                                     | `{ environment, since }`                                                         | the errors command's report, as a value        | 1 min     |
 | `appErrorDetail`  | `app_error_detail`, same environments; optional                                                                                                      | `{ environment, fingerprint, since }`                                            | `{ text }`, non-blank                          | 1 min     |
@@ -152,6 +203,11 @@ Each slot is a row here, and links the spec of the feature that asks it.
 | `watchExposure`   | The exposure probe, same environments, where `watch.exposure` is declared                                                                            | `{ environment, commits }`                                                       | `{ share }`, 0 to 1                            | 30 s      |
 | `routeReview`     | The review's route desk, with `review.routeExtension` ([07](07-pull-requests.md#the-review-from-the-projects-extension))                             | `{ pr: { number, title, branch, base, author, body }, modes, allowSkip }`        | `{ mode, reason }` or `{ skip: true, reason }` | 2 minutes |
 | `publishReview`   | `review_report`, once, after a review is recorded, with `review.publishExtension` ([07](07-pull-requests.md#the-review-from-the-projects-extension)) | `{ pr, headSha, mode, verdict, summary, findings }`                              | `{ thread }`, a one-line thread id or null     | 5 minutes |
+
+¹ `remoteValidation.tenantTimeoutMs`, default one hour — the kill of the `ensureTenant` and `reseed`
+commands these slots replace, so one key bounds the tenant work whichever answers it. A slot's
+`timeoutMs` in the book is a number or a function of the config, resolved on each call against the
+config the host was built with — so, like the commands' kill, a change takes a restart. Every other timeout is fixed in the book.
 
 ## Adding a slot
 
@@ -181,8 +237,11 @@ A slot is a promise to every project that fills it. Make it in one change, with 
    (`test/extensionSkill.test.ts`) fails on either missing.
 
 Changing an existing slot's input or answer — anything an existing extension would read wrongly — bumps
-`EXTENSION_API_VERSION`, so old extensions are refused at boot with a message naming both versions
-rather than misreading their input. Removing a slot does the same thing for free: an extension that
+`EXTENSION_API_VERSION`. Adding a member to the context does not: an existing extension never reads it,
+and the bump would refuse every working extension at boot for nothing. (`progress` came this way, at
+`apiVersion` 1; an extension that must also load on a harness older than it calls `progress?.(…)`.) A
+bump refuses old extensions at boot with a message naming both versions, rather than letting them misread
+their input. Removing a slot does the same thing for free: an extension that
 fills it is refused, naming the slots that remain.
 
 ## What it is not

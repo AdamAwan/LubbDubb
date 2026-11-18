@@ -230,6 +230,11 @@ function linesOf(text: string): string[] {
     .filter((line) => line.trim() !== '');
 }
 
+export function appendTail(lines: string[], text: string): void {
+  lines.push(...linesOf(text).slice(-TAIL_LINES));
+  if (lines.length > TAIL_LINES) lines.splice(0, lines.length - TAIL_LINES);
+}
+
 export function readTail(dir: string): TenantTail {
   const current = join(dir, OUTPUT_FILE);
   let lines = linesOf(tailOf(current));

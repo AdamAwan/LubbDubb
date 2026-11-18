@@ -99,6 +99,15 @@ async function main(): Promise<void> {
   const config = loadDeploymentConfig();
   const extensions = await loadExtensions({ paths: config.extensions, book: EXTENSION_SLOTS });
   const system = buildSystem(config, { extensions });
+  process.on('uncaughtException', (err) => {
+    try {
+      if (system.extensions.contain(err)) return;
+    } catch (containing) {
+      console.error('[lubbdubb] containing an extension fault failed:', containing);
+    }
+    console.error('[lubbdubb] fatal:', err);
+    process.exit(1);
+  });
   announceExtensions(system);
   system.runtimeHealth.start();
 

@@ -62,7 +62,10 @@ async function refusalOf(source: string): Promise<string> {
 async function host(source: string) {
   const extensions = await loadExtensions({ paths: [extensionFile(source)], book: BOOK });
   const { recorded, errors } = recorder();
-  return { recorded, host: new ExtensionHost({ book: BOOK, extensions, repoRoot: '/repo', errors }) };
+  return {
+    recorded,
+    host: new ExtensionHost({ book: BOOK, extensions, config: { repoRoot: '/repo' } as never, errors }),
+  };
 }
 
 test('no extensions configured loads nothing, and the system builds exactly as before', async () => {
@@ -212,7 +215,7 @@ test('a host built directly still refuses two owners of one slot', async () => {
   ];
   const { errors } = recorder();
   assert.throws(
-    () => new ExtensionHost({ book: BOOK, extensions, repoRoot: '/repo', errors }),
+    () => new ExtensionHost({ book: BOOK, extensions, config: { repoRoot: '/repo' } as never, errors }),
     /"a" .* and "b" .* both fill the "greet" slot/,
   );
 });
@@ -269,4 +272,98 @@ test('a timed-out slot sees its signal aborted', async () => {
   } finally {
     delete holder.__extAborted;
   }
+});
+
+test('a slot’s progress lines reach the caller while it runs, and none after it has answered', async () => {
+  const { host: h, recorded } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
+    greet: ({ who }, { progress }) => {
+      progress('signing in');
+      progress('waiting on ' + who);
+      setTimeout(() => progress('too late'), 0);
+      return 'done';
+    },
+  } };`);
+  const lines: string[] = [];
+  assert.deepEqual(await h.call('greet', { who: 'sam' }, (line) => lines.push(line)), { ok: true, value: 'done' });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(lines, ['signing in', 'waiting on sam']);
+  assert.deepEqual(recorded, []);
+});
+
+test('a progress listener that throws is recorded, and the slot carries on to its answer', async () => {
+  const { host: h, recorded } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
+    greet: (_, { progress }) => { progress('one'); return 'still here'; },
+  } };`);
+  const result = await h.call('greet', { who: 'sam' }, () => {
+    throw new Error('the cockpit fell over');
+  });
+  assert.deepEqual(result, { ok: true, value: 'still here' });
+  assert.equal(recorded.length, 1);
+  assert.match(recorded[0]!.message, /extension "acme" on the "greet" slot was not shown: the cockpit fell over/);
+});
+
+test('a slot that reports progress with no listener answers as before', async () => {
+  const { host: h } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
+    greet: (_, { progress }) => { progress('nobody hears this'); return 'ok'; },
+  } };`);
+  assert.deepEqual(await h.call('greet', { who: 'sam' }), { ok: true, value: 'ok' });
+});
+
+test('a throw from a handler an extension left behind is contained and recorded, and fails its slot while open', async () => {
+  const faults: boolean[] = [];
+  const holder = globalThis as { __extFault?: (message: string) => void };
+  const { recorded, host: h } = await host(`export default { apiVersion: 1, name: 'nxg', slots: {
+    greet: () => { setTimeout(() => globalThis.__extFault('written after the slot gave up'), 10); return 'hi'; },
+    count: () => { setTimeout(() => globalThis.__extFault('stream handler threw'), 10); return new Promise(() => {}); },
+  } };`);
+  holder.__extFault = (message) => faults.push(h.contain(new Error(message)));
+  try {
+    assert.equal(h.contain(new Error('the harness’s own')), false, 'a throw outside any slot is not claimed');
+
+    const open = await h.call('count', null);
+    assert.deepEqual(open, { ok: false, detail: 'extension "nxg" failed the "count" slot: stream handler threw' });
+
+    assert.deepEqual(await h.call('greet', { who: 'x' }), { ok: true, value: 'hi' });
+    await new Promise((done) => setTimeout(done, 50));
+  } finally {
+    delete holder.__extFault;
+  }
+
+  assert.deepEqual(faults, [true, true]);
+  assert.deepEqual(
+    recorded.map((r) => r.message),
+    [
+      'extension "nxg" failed the "count" slot: stream handler threw',
+      'extension "nxg" threw after its "greet" slot ended: written after the slot gave up',
+    ],
+  );
+});
+
+test('a second throw while the slot is still open is recorded on its own, not lost', async () => {
+  const holder = globalThis as { __extFault?: (message: string) => void };
+  const { recorded, host: h } = await host(`export default { apiVersion: 1, name: 'nxg', slots: {
+    count: () => new Promise(() => { globalThis.__extFault('first'); globalThis.__extFault('second'); }),
+  } };`);
+  holder.__extFault = (message) => assert.equal(h.contain(new Error(message)), true);
+  try {
+    assert.deepEqual(await h.call('count', null), {
+      ok: false,
+      detail: 'extension "nxg" failed the "count" slot: first',
+    });
+  } finally {
+    delete holder.__extFault;
+  }
+  assert.deepEqual(
+    recorded.map((r) => r.message),
+    ['extension "nxg" threw again during its "count" slot: second', 'extension "nxg" failed the "count" slot: first'],
+  );
+});
+
+test('a blank progress line is dropped at the host', async () => {
+  const { host: h } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
+    greet: (_, { progress }) => { progress(''); progress(' \\r\\n'); progress('real'); return 'ok'; },
+  } };`);
+  const lines: string[] = [];
+  await h.call('greet', { who: 'sam' }, (line) => lines.push(line));
+  assert.deepEqual(lines, ['real']);
 });

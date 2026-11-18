@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Config } from '../config/config.js';
 import { withDeadline } from '../primitives.js';
@@ -19,14 +20,22 @@ interface Bound {
   run: SlotImplementation;
 }
 
+interface Scope {
+  slot: string;
+  bound: Bound;
+  open: boolean;
+  fault: ((err: unknown) => void) | null;
+}
+
 export class ExtensionHost<S extends SlotMap> {
   private readonly bound = new Map<string, Bound>();
+  private readonly scope = new AsyncLocalStorage<Scope>();
 
   constructor(
     private readonly opts: {
       book: SlotBook<S>;
       extensions: readonly LoadedExtension[];
-      repoRoot: string;
+      config: Config;
       errors: ErrorRecorder;
     },
   ) {
@@ -44,23 +53,76 @@ export class ExtensionHost<S extends SlotMap> {
     return this.bound.get(slot)?.extension ?? null;
   }
 
-  async call<K extends keyof S & string>(slot: K, input: S[K]['input']): Promise<SlotResult<S[K]['output']>> {
+  async call<K extends keyof S & string>(
+    slot: K,
+    input: S[K]['input'],
+    onProgress?: (line: string) => void,
+  ): Promise<SlotResult<S[K]['output']>> {
     const bound = this.bound.get(slot);
     if (!bound) return { ok: false, detail: `no extension fills the "${slot}" slot` };
     const definition = this.opts.book[slot];
+    const timeoutMs =
+      typeof definition.timeoutMs === 'number' ? definition.timeoutMs : definition.timeoutMs(this.opts.config);
     const controller = new AbortController();
+    let fault: (err: unknown) => void = () => {};
+    const faulted = new Promise<never>((_, reject) => {
+      fault = reject;
+    });
+    const scope: Scope = { slot, bound, open: true, fault };
+    const progress = (line: string): void => {
+      const text = String(line);
+      if (!scope.open || onProgress === undefined || text.trim() === '') return;
+      try {
+        this.scope.exit(() => onProgress(text));
+      } catch (err) {
+        this.record({
+          source: 'runtime',
+          message: `a progress line from extension "${bound.extension}" on the "${slot}" slot was not shown: ${thrownText(err)}`,
+          detail: thrownStack(err),
+        });
+      }
+    };
+    const running = this.scope.run(scope, () =>
+      Promise.resolve().then(() =>
+        bound.run(input, { repoRoot: this.opts.config.repoRoot, signal: controller.signal, progress }),
+      ),
+    );
     try {
       const value = await withDeadline(
-        Promise.resolve().then(() => bound.run(input, { repoRoot: this.opts.repoRoot, signal: controller.signal })),
-        definition.timeoutMs,
-        `it did not answer within ${definition.timeoutMs} ms`,
+        Promise.race([running, faulted]),
+        timeoutMs,
+        `it did not answer within ${timeoutMs} ms`,
       );
       const refused = definition.check(value);
       if (refused !== null) return this.failed(slot, bound, controller, `it answered with the wrong shape: ${refused}`);
       return { ok: true, value: value as S[K]['output'] };
     } catch (err) {
       return this.failed(slot, bound, controller, thrownText(err), thrownStack(err));
+    } finally {
+      scope.open = false;
     }
+  }
+
+  contain(err: unknown): boolean {
+    const scope = this.scope.getStore();
+    if (scope === undefined) return false;
+    if (scope.open && scope.fault !== null) {
+      const fault = scope.fault;
+      scope.fault = null;
+      fault(err);
+      return true;
+    }
+    const when = scope.open ? `again during its "${scope.slot}" slot` : `after its "${scope.slot}" slot ended`;
+    this.record({
+      source: 'runtime',
+      message: `extension "${scope.bound.extension}" threw ${when}: ${thrownText(err)}`,
+      detail: thrownStack(err),
+    });
+    return true;
+  }
+
+  private record(entry: Parameters<ErrorRecorder['record']>[0]): void {
+    this.scope.exit(() => this.opts.errors.record(entry));
   }
 
   private failed(
@@ -72,7 +134,7 @@ export class ExtensionHost<S extends SlotMap> {
   ): SlotResult<never> {
     controller.abort();
     const detail = `extension "${bound.extension}" failed the "${slot}" slot: ${why}`;
-    this.opts.errors.record({ source: 'runtime', message: detail, detail: stack });
+    this.record({ source: 'runtime', message: detail, detail: stack });
     return { ok: false, detail };
   }
 }
@@ -97,5 +159,10 @@ export function buildExtensionHost(
   loaded: readonly LoadedExtension[] | undefined,
   errors: ErrorRecorder,
 ): ExtensionHost<ExtensionSlots> {
-  return new ExtensionHost({ book: EXTENSION_SLOTS, extensions: loaded ?? [], repoRoot: config.repoRoot, errors });
+  return new ExtensionHost({
+    book: EXTENSION_SLOTS,
+    extensions: loaded ?? [],
+    config,
+    errors,
+  });
 }

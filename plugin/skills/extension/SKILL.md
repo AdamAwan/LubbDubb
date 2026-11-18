@@ -43,8 +43,19 @@ Today's slots, `apiVersion` **1**:
   pattern delete invented ones within the hour.
 - `reseedTenant` is **optional**, and it **destroys** what is in the tenant. Filling it makes the cockpit's
   control a confirm-twice "Reseed". Leaving it out gives a harmless "Provision".
-- The tenant slots time out after **one hour**. The context's `signal` fires when the call times out or fails.
-  Pass it to `fetch` and child processes so the work actually stops.
+- The tenant slots time out at the operator's `remoteValidation.tenantTimeoutMs`, **one hour** unless
+  they set it — the same kill as the `ensureTenant` and `reseed` commands. A rebuild that runs near
+  that needs the key raised, not a detached job. The context's `signal` fires when the call times out or fails.
+  Pass it to `fetch`, and on abort **kill a child process's whole tree**, not only the child:
+  `taskkill /PID <pid> /T /F` on Windows, and on POSIX spawn with `detached: true` and
+  `process.kill(-child.pid, 'SIGKILL')`. Killing the direct child alone (which is what passing
+  `signal` to `spawn` does) leaves its own children — a tool PowerShell started, say — still running
+  against the tenant.
+- A long tenant slot should **say what it is doing**: call the context's `progress("<line>")` at each
+  step, and above all when it waits on the operator (a browser sign-in to answer). Each line shows in
+  the tenant panel's output while the call runs, as a command's output does, and a slot quiet for five
+  minutes reads _Nothing printed for …_ there. A line after the slot has answered is dropped. On a
+  LubbDubb older than `progress`, the context has none: call `progress?.(…)` if it must load there.
 - The reading slots (`deployedCommits` to `watchExposure`) replace a shell command, and
   keep its contract: the same answers, read the same way. They time out after **30
   seconds** (`appErrors` and `appErrorDetail` after one minute). **Throw when you do
@@ -72,12 +83,18 @@ Start from [`starter.ts`](starter.ts) beside this skill. Copy it to, say,
 `tools/lubbdubb.extension.ts` and delete the slots you do not fill.
 
 - The default export carries only `apiVersion`, `name` and `slots`. Any other key refuses boot.
-- Each slot is `(input, { repoRoot, signal }) => answer`, and may be `async`.
+- Each slot is `(input, { repoRoot, signal, progress }) => answer`, and may be `async`.
 - `.ts`, `.js` and `.mjs` all work. Imports resolve from the file's own folder, so
   it can use the project's own dependencies.
 - It runs **inside the LubbDubb process**, with its permissions. Keep the work on
   the slot's input. Throw rather than `process.exit`, and leave no timers or
   listeners behind.
+- **Never let a stream or event handler throw.** A `data`, `close` or `exit` handler runs
+  outside the slot's own call, often after the slot has already given up: output arriving
+  then, written to a file you closed, throws where your `try` cannot catch it. Catch inside
+  the handler, and stop writing once the signal has fired. LubbDubb contains such a throw
+  (records it and fails the slot if it is still running) rather than crashing, but the work
+  it belonged to is left half-done.
 
 ### Turning it on
 
@@ -112,11 +129,11 @@ Start from [`starter.ts`](starter.ts) beside this skill. Copy it to, say,
 ### Testing it
 
 - **Unit-test each slot as a plain function**, in the project's own test runner:
-  call it with a sample input and `{ repoRoot, signal: new AbortController().signal }`,
+  call it with a sample input and `{ repoRoot, signal: new AbortController().signal, progress: console.log }`,
   then check the answer's shape against the table above.
 - Then boot LubbDubb against a non-production environment and make it ask the slot.
-  For tenants, press prepare on a goal's sheet; the tenant panel shows what was asked
-  and what came back. For reviews, open a pull request with `review.enabled` on; the
+  For tenants, press prepare on a goal's sheet; the tenant panel shows what was asked,
+  each `progress` line, and what came back. For reviews, open a pull request with `review.enabled` on; the
   route's reason and the review row show what your code answered. For readings, opt in one
   non-production environment and let the pulse ask: the environment's deployed commit, its
   errors read and its watch readings show what came back, or `unknown` with your slot's

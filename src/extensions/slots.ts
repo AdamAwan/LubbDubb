@@ -1,4 +1,5 @@
 import type { SlotBook } from './contract.js';
+import type { Config } from '../config/config.js';
 import { ERRORS_COMMAND_TIMEOUT_MS } from '../appErrors/command.js';
 import { READING_TIMEOUT_MS } from '../environments/prober.js';
 import type { WatchSourceLanguage } from '../types.js';
@@ -6,9 +7,9 @@ import type { WatchQueryKind, WatchRow } from '../environments/watchResult.js';
 
 // → docs/spec/42-extensions.md#the-slots
 
-const TENANT_SLOT_TIMEOUT_MS = 60 * 60 * 1000;
 const ROUTE_REVIEW_TIMEOUT_MS = 2 * 60 * 1000;
 const PUBLISH_REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
+const TENANT_TIMEOUT = (config: Config): number => config.remoteValidation.tenantTimeoutMs;
 
 interface ReviewedPr {
   number: number;
@@ -63,7 +64,7 @@ export type ExtensionSlots = {
 
 export const EXTENSION_SLOTS: SlotBook<ExtensionSlots> = {
   ensureTenant: {
-    timeoutMs: TENANT_SLOT_TIMEOUT_MS,
+    timeoutMs: TENANT_TIMEOUT,
     check: (value) => {
       if (typeof value !== 'object' || value === null) return 'it must answer { tenant: "<name>" }';
       const { tenant } = value as { tenant?: unknown };
@@ -73,7 +74,7 @@ export const EXTENSION_SLOTS: SlotBook<ExtensionSlots> = {
     },
   },
   reseedTenant: {
-    timeoutMs: TENANT_SLOT_TIMEOUT_MS,
+    timeoutMs: TENANT_TIMEOUT,
     check: (value) => (value === undefined ? null : 'it must answer nothing — a throw is how it says it failed'),
   },
   deployedCommits: { timeoutMs: READING_TIMEOUT_MS, check: deployedCommitsRefusal },
