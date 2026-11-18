@@ -1,7 +1,9 @@
 # 43 — Handled for you
 
-**Not yet built.** Everything below describes the intended behaviour; the identifiers are in italics
-until they exist.
+`src/handled/`. **Partly built.** Running: the record, the page, the rail line, and two kinds,
+`profile` and the board half of `placement`. The other kinds on [the list](#the-list) are **not yet
+built** and stay asks until they land; each says so below, and identifiers that do not exist yet are
+in italics.
 
 Most of what reaches the queue rail ([17](17-cockpit.md#the-queue-rail--needs-you)) is a small call
 the harness gets right nearly every time, and that costs almost nothing to put back when it is wrong:
@@ -15,27 +17,28 @@ group checked.
 
 ## Invariants
 
-- **Which kinds are handled is a fixed list in code (_`AUTO_KINDS`_), never an agent's judgement.** An agent asked "is this safe to undo?" will sometimes be wrong, and wrong in silence. The agent judges only how confident it is _within_ a kind the list allows. → [§](#the-list) · _no test_
-- **A kind is on the list only if it has a working undo.** The test for a kind is how easy it is to put back, not how often it is right; a kind whose undo cannot be built stays an ask. → [§](#undo) · _no test_
-- **Nothing that affects other people, or that cannot be fully put back, is handled.** Those stay asks on the rail exactly as today. → [§](#what-stays-an-ask) · _no test_
-- **Every handled action is recorded before it is reported, and an action with no record is not taken.** An action nobody can see is an action nobody can undo. → [§](#the-record) · _no test_
+- **Which kinds are handled is fixed in code, never an agent's judgement.** An agent asked "is this safe to undo?" will sometimes be wrong, and wrong in silence. The agent proposes a value; the code decides whether proposing it is enough. → [§](#the-list) · `test/handledForYou.test.ts`
+- **A kind is handled only if it has a working undo.** The test for a kind is how easy it is to put back, not how often it is right; a kind whose undo cannot be built stays an ask. Setting a parent Feature has none, so it is still asked. → [§](#undo) · `test/handledForYou.test.ts`
+- **Nothing that affects other people, or that cannot be fully put back, is handled.** Those stay asks on the rail exactly as before. → [§](#what-stays-an-ask) · _no test_
+- **An action is recorded only once its write landed, and a failed write leaves the ask standing.** A row on the page is a change that happened; a change that did not happen is still the operator's question. → [§](#the-record) · `test/handledForYou.test.ts`
+- **An undo or redo that fails changes nothing, including the row's state.** → [§](#undo) · `test/handledForYou.test.ts`
 - **A kind handled "until stuck" raises the ordinary ask once its own fix has failed; it never retries forever.** → [§](#until-stuck) · _no test_
 
 ## The list
 
 **Handled.** The harness acts and records it.
 
-| Kind (`src/asks/kinds.ts`) | What the harness does                                |
-| -------------------------- | ---------------------------------------------------- |
-| `placement`                | Moves the task to the board it judged right          |
-| `profile`                  | Sets the goal's profile                              |
-| `config_gap`               | Fills the missing setting with its default           |
-| `limit`                    | Restarts the parked work when the usage limit resets |
-| `upgrade`                  | Applies the harness update ([21](21-self-update.md)) |
-| `project_pull`             | Turns the project's auto-pull back on                |
+| Kind (`src/asks/kinds.ts`) | What the harness does                                                   | Built                                     |
+| -------------------------- | ----------------------------------------------------------------------- | ----------------------------------------- |
+| `profile`                  | Pins the profile a `workable` appraisal proposed                        | yes                                       |
+| `placement`                | Moves the item to the board (area path) a `workable` appraisal proposed | yes — the area path; a parent stays asked |
+| `config_gap`               | Fills the missing setting with its default                              | not yet                                   |
+| `limit`                    | Restarts the parked work when the usage limit resets                    | not yet                                   |
+| `upgrade`                  | Applies the harness update ([21](21-self-update.md))                    | not yet                                   |
+| `project_pull`             | Turns the project's auto-pull back on                                   | not yet                                   |
 
 **Handled until stuck.** The harness tries its own fix; if the problem is still there afterwards, the
-ordinary ask is raised.
+ordinary ask is raised. Not yet built.
 
 | Kind          | What the harness does                                    |
 | ------------- | -------------------------------------------------------- |
@@ -44,52 +47,59 @@ ordinary ask is raised.
 
 Every other kind stays an ask.
 
+### Where the built kinds are handled
+
+The `appraise_issue` tool awaits the `handleAppraisal` seam after it records a `workable` verdict
+(`src/mcp/tools/appraiseIssue.ts`). `handleAppraisal` (`src/handled/handled.ts`) reads the stored
+appraisal and the world, and for each proposal still unanswered writes it through the same function
+the operator's own click uses — `applyProfilePin` for the profile, `settlePlacement` for the area
+path — so the appraisal is answered exactly as if the operator had pressed. Only the fleet's
+appraiser is handled this way: an operator who appraises a goal themselves is already looking at it.
+
+A failure is recorded on the error log and leaves the ask on the rail.
+
 ### What stays an ask
 
 Kept because the action reaches other people: `assign`, `assigned`, `merge`, `reply`, `bot_pr`. Kept
 because it needs the operator's judgement or is hard to put back: `questions`, `describe`,
 `description_note`, `description_wrong`, `unwatched`, `plan`, `shortfall`, `intake`, `findings`,
 `permission`, `escalation`, `recovery`, `config`, `burn`, `supply`, `bench`, `close_out`, `validate`,
-`validation_plan`, `watch`, `watch_reading`.
+`validation_plan`, `watch`, `watch_reading`. The parent half of `placement` stays an ask too.
 
 Moving a kind onto the list is a code change with its undo and its test, never a setting.
 
 ## Until stuck
 
-A `dispatch` or `fleet_stall` gets **two** attempts at the harness's own fix. If the condition is
-still there after the second, the ask is raised as it is today, and the handled row for the attempts
-says so: _"tried twice, now in Needs you"_.
+Not yet built. A `dispatch` or `fleet_stall` gets **two** attempts at the harness's own fix. If the
+condition is still there after the second, the ask is raised as it is today, and the handled row for
+the attempts says so.
 
 ## The record
 
-Each handled action writes one row to _`handled_actions`_ ([14](14-persistence.md)): the kind, the
-subject it acted on, the before and after values, the reason in one line, the confidence (or `rule`
-for a kind with no judgement in it), and its state — _`open`_, _`checked`_ or _`undone`_.
+Each handled action writes one row to `handled_actions` ([14](14-persistence.md#handled-actions)):
+the kind, the issue it acted on, the value before and after, a one-line reason, and its state —
+`open`, `checked` or `undone`.
 
-Confidence below **80%** still acts, because every kind on the list is cheap to undo, but the row is
-flagged so it stands out on the page.
+The appraisal gives no confidence figure, so none is recorded. A kind that comes to carry one can
+flag its low-confidence rows on the page.
 
 ## Undo
 
-Each kind on the list carries an undo that restores the recorded _before_ value: the old board, the
-old profile, the setting unset, the job parked again, the previous build, auto-pull off. An undo that
-cannot complete — the subject has since moved on — says so on the row and changes nothing.
-
-An undone row stays on the page, struck through, with a redo.
+Each kind carries an undo that writes the recorded _before_ value back through the same function that
+wrote the _after_: the old area path, the old profile pin (or none). An undone row stays on the page,
+struck through, with **Redo**. Undo, redo and check are routes
+([16](16-http-api.md#get-apihandled--post-apihandledcheck--post-apihandledidundoredo)).
 
 ## The page
 
-One page, opened from the rail. It shows the open rows, grouped by kind, newest first within a
-group. Each row is one line: the subject as a reference, what changed, the reason and the
-confidence, and **Undo**. Each group has **Mark checked**; the header has **Looks good, mark all
-checked**, the count still to check, the count undone, and a link to what still needs the operator.
-
-A checked group folds to its title. Checked and undone rows stay in the record; the page shows the
-last 24 hours by default.
+The `handled` tab of the cockpit, opened from the rail rather than the top bar. It shows the last 24
+hours, grouped by kind. Each row is one line: the issue as a reference, `before → after`, the reason
+and when, and **Undo**. Each group has **Mark checked**; the header has **Looks good, mark all
+checked**, the count still to check and the count undone. A checked group folds to its title.
 
 ## On the rail
 
 One line at the foot of the queue rail, under the asks: **Handled for you**, with the count of open
-rows. It is drawn quietly — no kind colour, a dashed outline — so it never reads as an ask. At zero
-the count is gone and the line stays. It is not an ask row and does not enter `buildAskQueue`
-(`src/asks/queue.ts`) or `ask_next`.
+rows (`handledOpen` on the state snapshot). It is drawn quietly — no kind colour, a dashed outline —
+so it never reads as an ask. At zero the count is gone and the line stays. It is not an ask row and
+does not enter `buildAskQueue` (`src/asks/queue.ts`) or `ask_next`.

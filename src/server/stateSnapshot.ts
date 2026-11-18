@@ -34,6 +34,7 @@ import {
 } from './stateEnvironmentViews.js';
 import { localRunView, localRunRefFacts, localRunTargetViews } from './stateLocalRunViews.js';
 import { buildAskQueue, type AskSnapshot } from '../asks/queue.js';
+import { openHandledCount } from '../handled/handled.js';
 import { askInputs, descriptionFeedback, inbox, undescribedParts } from './stateAsks.js';
 import type { AskRow } from '../asks/askRow.js';
 import type { SetupReading } from '../setup/reading.js';
@@ -74,7 +75,10 @@ export function buildStateSections(
   if (want.has('queue')) Object.assign(out, queueSection(r));
   if (want.has('inbox')) Object.assign(out, inboxSection(r));
   if (want.has('activity')) Object.assign(out, activitySection(r));
-  if (want.has('asks')) out.asks = buildAskQueue(askInputs(r, want, out), opts?.setup ?? null);
+  if (want.has('asks')) {
+    out.asks = buildAskQueue(askInputs(r, want, out), opts?.setup ?? null);
+    out.handledOpen = openHandledCount(system.store, Date.now());
+  }
   return out;
 }
 

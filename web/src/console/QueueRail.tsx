@@ -14,6 +14,7 @@ import { assignGroupLine, groupAsks, type AssignAsk } from '../view/askGroups.js
 import { askLine } from '../view/needLines.js';
 import { FoldToggle } from '../components/collapsible.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../view/askKinds.js';
+import { tabUsage } from '../cockpit/usage.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -466,6 +467,27 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
           ))
         )}
       </div>
+      <HandledLine view={view} actions={actions} />
     </>
+  );
+}
+
+// → docs/spec/43-handled-for-you.md#on-the-rail
+function HandledLine({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const open = view.state.handledOpen;
+  const here = view.goalPage === null && view.tab === 'handled';
+  return (
+    <BareButton
+      usage={tabUsage('handled')}
+      className={`cn-handled${here ? ' cn-on' : ''}`}
+      onClick={() => {
+        actions.selectGoal(null);
+        actions.openTab('handled');
+      }}
+    >
+      <span className="cn-handled-mark">✓</span>
+      <span>Handled for you</span>
+      {open > 0 && <i className="cn-count">{open}</i>}
+    </BareButton>
   );
 }

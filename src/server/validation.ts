@@ -55,7 +55,7 @@ function refusalMessage(error: z.ZodError): string {
   return error.issues.map((issue) => issue.message).join('; ');
 }
 
-function integerParam(label: string): z.ZodType<number, string> {
+export function integerParam(label: string): z.ZodType<number, string> {
   return z
     .string()
     .refine((raw) => Number.isInteger(Number(raw)), { message: `invalid ${label}` })

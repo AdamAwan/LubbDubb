@@ -42,7 +42,8 @@ export type ConsolePanel =
   | { ask: string }
   | null;
 
-export type ConsoleTab = 'overview' | 'tickets' | 'features' | 'bots' | 'errors' | 'insights' | 'pets' | 'config';
+export type ConsoleTab =
+  'overview' | 'tickets' | 'features' | 'bots' | 'handled' | 'errors' | 'insights' | 'pets' | 'config';
 
 export type InsightsView =
   'economics' | 'allowance' | 'reliability' | 'throughput' | 'causes' | 'trend' | 'mcp' | 'usage';

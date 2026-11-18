@@ -51,6 +51,7 @@ interface McpBridgeServerOptions {
   localRun?: McpToolDeps['localRun'];
   investigateLabel?: McpToolDeps['investigateLabel'];
   lowerProfile?: McpToolDeps['lowerProfile'];
+  handleAppraisal?: McpToolDeps['handleAppraisal'];
   discussions?: McpToolDeps['discussions'];
   lessons?: McpToolDeps['lessons'];
   repoRoot?: string;
@@ -229,6 +230,7 @@ export class McpBridgeServer {
         localRun: this.opts.localRun,
         investigateLabel: this.opts.investigateLabel,
         lowerProfile: this.opts.lowerProfile,
+        handleAppraisal: this.opts.handleAppraisal,
         discussions: this.opts.discussions,
         lessons: this.opts.lessons,
         repoRoot: this.opts.repoRoot,

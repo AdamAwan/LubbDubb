@@ -28,6 +28,7 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
   tickets: 'Tickets',
   features: 'Features',
   bots: 'Bot PRs',
+  handled: 'Handled for you',
   errors: 'Errors',
   insights: 'Insights',
   pets: 'Pets',

@@ -12,6 +12,7 @@ export type * from './wire/insights.js';
 export type * from './wire/appErrors.js';
 export type * from './wire/settings.js';
 export type * from './wire/pets.js';
+export type * from './wire/handled.js';
 
 export type { SetupCheck, SetupFix } from './setup/reading.js';
 export type {
@@ -26,6 +27,8 @@ export type {
   BotPrRiskLevel,
   BotPrRiskStanding,
   BugFiling,
+  HandledAction,
+  HandledKind,
   CheckDecline,
   CiCheck,
   DescriptionFindingKind,

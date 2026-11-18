@@ -129,7 +129,17 @@ export const FEATURE_SORTS: readonly FeatureSort[] = ['wants-you', 'moved', 'don
 export type FeaturePrFilter = 'open' | 'done' | 'all';
 const FEATURE_PRS: readonly FeaturePrFilter[] = ['open', 'done', 'all'];
 
-const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'features', 'bots', 'errors', 'insights', 'pets', 'config'];
+const TABS: readonly ConsoleTab[] = [
+  'overview',
+  'tickets',
+  'features',
+  'bots',
+  'handled',
+  'errors',
+  'insights',
+  'pets',
+  'config',
+];
 
 const HOME_TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'features'];
 

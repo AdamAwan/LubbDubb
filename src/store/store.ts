@@ -9,6 +9,7 @@ import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PauseStore } from './pauses.js';
+import { HandledStore } from './handled.js';
 import { EjectionStore, EJECTION_COLUMNS } from './ejections.js';
 import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
@@ -176,6 +177,7 @@ export class Store {
   readonly schedules: JobScheduleStore;
   readonly priority: PriorityStore;
   readonly pauses: PauseStore;
+  readonly handled: HandledStore;
   readonly ejections: EjectionStore;
   readonly profileOverrides: ProfileOverrideStore;
   readonly remedies: RemedyStore;
@@ -246,6 +248,7 @@ export class Store {
     this.schedules = new JobScheduleStore(ctx);
     this.priority = new PriorityStore(ctx);
     this.pauses = new PauseStore(ctx);
+    this.handled = new HandledStore(ctx);
     this.ejections = new EjectionStore(ctx);
     this.profileOverrides = new ProfileOverrideStore(ctx);
     this.pool = new PoolStore(ctx);

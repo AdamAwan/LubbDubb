@@ -207,6 +207,8 @@ export interface McpToolDeps {
    * the proposal agrees on record and holds nothing. → docs/spec/02-configuration.md#a-cheaper-proposal-is-taken-without-asking
    */
   lowerProfile?: (issueNumber: number, profile: string) => Promise<boolean>;
+  /** Answers the appraisal's profile and board asks for the operator. → docs/spec/43-handled-for-you.md */
+  handleAppraisal?: (issueNumber: number) => Promise<unknown>;
   /** → docs/spec/40-discussions.md#what-fleet-agents-write */
   discussions?: {
     files: Pick<DiscussionFiles, 'enabled' | 'add'>;

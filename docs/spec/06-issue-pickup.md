@@ -1007,6 +1007,12 @@ tracker makes the row disappear on the next world read — no timer, no world ev
 nothing to remember. It is `appraisalHold`'s fingerprint arm pointed at a different fact, and a lookup
 against current state for the same reason.
 
+**A proposed area path is applied by the harness, not asked.** After a `workable` appraisal,
+`handleAppraisal` (`src/handled/handled.ts`) writes the proposed area path through `settlePlacement`
+and records it on Handled for you with the old path, so the operator can put it back
+([43](43-handled-for-you.md)). The question below is what is left when that write fails. The parent
+question is still asked: there is no undo for setting a parent.
+
 ### The parent question is the fact; the area path question is the proposal
 
 Condition 3 used to cover both, and for the parent that made the commonest reading of a board

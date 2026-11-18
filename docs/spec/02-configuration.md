@@ -1122,8 +1122,10 @@ Naming the operator's profiles directly, rather than an abstract difficulty scal
 would be lost, since an operator who splits `deep` into two knows what the two are for and a fixed
 vocabulary cannot be told.
 
-**A proposal deeper than what is already standing holds the funnel** until a human answers it
-(a cheaper one is applied without asking — [below](#a-cheaper-proposal-is-taken-without-asking)),
+**A proposal deeper than what is already standing holds the funnel** until it is answered
+(a cheaper one is applied without asking — [below](#a-cheaper-proposal-is-taken-without-asking); a
+deeper one from a `workable` appraisal is now answered by the harness too, and shown afterwards with
+an undo — [43](43-handled-for-you.md)),
 as a second arm on `appraisalHold` — see [06](06-issue-pickup.md). Blocking rather than informing, for the
 reason the `unclear` arm blocks: informing is what the cockpit already does for every verdict, and the
 dispatch the gate exists to price correctly would happen anyway. What makes it safe is what makes the
@@ -1155,8 +1157,11 @@ standing profile's — the ticket's tag, else `default` — is applied by the ha
 the operator's included — folds each label that lands onto the stored world and tickets, so `recordAppraisal` then reads the proposal as agreement and stores it
 already answered — the gate itself is untouched.
 
-- **The person is kept for the direction that costs money.** A deeper or equal-rank proposal, or one
-  measured against nothing (no tag and no `default`, so no rank to compare), holds exactly as above.
+- **A deeper proposal is answered after the verdict, not before.** It still reads as divergent when
+  the verdict is recorded; `handleAppraisal` (`src/handled/handled.ts`) then pins it and records it on
+  Handled for you, where the operator can put the old profile back
+  ([43](43-handled-for-you.md)). If that write fails the proposal stays divergent and holds exactly as
+  above.
 - **It fails safe.** `applyProfilePin` removes the other model tags before adding the wanted one, so
   a write that fails part-way leaves no stray cheaper tag behind; the standing profile is still in the
   world, the proposal reads as divergent, and it waits for the operator as it did before.

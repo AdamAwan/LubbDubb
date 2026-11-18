@@ -200,6 +200,8 @@ export const appraiseIssue: ToolFactory = ({ deps, agent, task, ok }) => {
         areaPath: parsed.areaPath,
       });
       if (!result.ok) return toolError(result.error);
+      if (parsed.verdict === 'workable')
+        await beforeVerdict(deps, task.originRef, 'Handling the appraisal', deps.handleAppraisal);
       return ok({
         appraised: true,
         issue: result.issueOrigin,

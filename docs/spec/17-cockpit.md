@@ -623,8 +623,8 @@ the merge, it is pure, and **it runs on the server**: `/api/state` ships its out
 cockpit draws that list.
 
 Under the asks, the rail's foot carries **Handled for you**: the small asks the harness answered
-itself, with their undo. It is not an ask and is not in this list ([43](43-handled-for-you.md), not
-yet built).
+itself, with their undo, opening the `handled` tab. It is not an ask and is not in this list
+([43](43-handled-for-you.md#on-the-rail)).
 
 ### One list for the cockpit and for Claude Code
 
