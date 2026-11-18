@@ -10,7 +10,7 @@ import {
   type SlotMap,
   type SlotResult,
 } from './contract.js';
-import { extensionSlotBook, type ExtensionSlots } from './slots.js';
+import { EXTENSION_SLOTS, type ExtensionSlots } from './slots.js';
 
 // → docs/spec/42-extensions.md#calling-a-slot
 
@@ -26,7 +26,7 @@ export class ExtensionHost<S extends SlotMap> {
     private readonly opts: {
       book: SlotBook<S>;
       extensions: readonly LoadedExtension[];
-      repoRoot: string;
+      config: Config;
       errors: ErrorRecorder;
     },
   ) {
@@ -52,6 +52,8 @@ export class ExtensionHost<S extends SlotMap> {
     const bound = this.bound.get(slot);
     if (!bound) return { ok: false, detail: `no extension fills the "${slot}" slot` };
     const definition = this.opts.book[slot];
+    const timeoutMs =
+      typeof definition.timeoutMs === 'number' ? definition.timeoutMs : definition.timeoutMs(this.opts.config);
     const controller = new AbortController();
     let open = true;
     const progress = (line: string): void => {
@@ -69,10 +71,10 @@ export class ExtensionHost<S extends SlotMap> {
     try {
       const value = await withDeadline(
         Promise.resolve().then(() =>
-          bound.run(input, { repoRoot: this.opts.repoRoot, signal: controller.signal, progress }),
+          bound.run(input, { repoRoot: this.opts.config.repoRoot, signal: controller.signal, progress }),
         ),
-        definition.timeoutMs,
-        `it did not answer within ${definition.timeoutMs} ms`,
+        timeoutMs,
+        `it did not answer within ${timeoutMs} ms`,
       ).finally(() => {
         open = false;
       });
@@ -119,9 +121,9 @@ export function buildExtensionHost(
   errors: ErrorRecorder,
 ): ExtensionHost<ExtensionSlots> {
   return new ExtensionHost({
-    book: extensionSlotBook(config.remoteValidation.tenantTimeoutMs),
+    book: EXTENSION_SLOTS,
     extensions: loaded ?? [],
-    repoRoot: config.repoRoot,
+    config,
     errors,
   });
 }

@@ -62,7 +62,10 @@ async function refusalOf(source: string): Promise<string> {
 async function host(source: string) {
   const extensions = await loadExtensions({ paths: [extensionFile(source)], book: BOOK });
   const { recorded, errors } = recorder();
-  return { recorded, host: new ExtensionHost({ book: BOOK, extensions, repoRoot: '/repo', errors }) };
+  return {
+    recorded,
+    host: new ExtensionHost({ book: BOOK, extensions, config: { repoRoot: '/repo' } as never, errors }),
+  };
 }
 
 test('no extensions configured loads nothing, and the system builds exactly as before', async () => {
@@ -212,7 +215,7 @@ test('a host built directly still refuses two owners of one slot', async () => {
   ];
   const { errors } = recorder();
   assert.throws(
-    () => new ExtensionHost({ book: BOOK, extensions, repoRoot: '/repo', errors }),
+    () => new ExtensionHost({ book: BOOK, extensions, config: { repoRoot: '/repo' } as never, errors }),
     /"a" .* and "b" .* both fill the "greet" slot/,
   );
 });

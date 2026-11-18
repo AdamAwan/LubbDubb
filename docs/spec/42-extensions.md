@@ -164,9 +164,9 @@ Each slot is a row here, and links the spec of the feature that asks it.
 | `publishReview`   | `review_report`, once, after a review is recorded, with `review.publishExtension` ([07](07-pull-requests.md#the-review-from-the-projects-extension)) | `{ pr, headSha, mode, verdict, summary, findings }`                              | `{ thread }`, a one-line thread id or null     | 5 minutes |
 
 ¹ `remoteValidation.tenantTimeoutMs`, default one hour — the kill of the `ensureTenant` and `reseed`
-commands these slots replace, so one key bounds the tenant work whichever answers it. `EXTENSION_SLOTS`
-carries the default; `buildExtensionHost` hands the host `extensionSlotBook(...)` with the configured
-value. Every other timeout is fixed in the book.
+commands these slots replace, so one key bounds the tenant work whichever answers it. A slot's
+`timeoutMs` in the book is a number or a function of the config; the host reads it on each call, so the
+book stays one table. Every other timeout is fixed in the book.
 
 ## Adding a slot
 

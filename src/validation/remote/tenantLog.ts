@@ -231,7 +231,7 @@ function linesOf(text: string): string[] {
 }
 
 export function appendTail(lines: string[], text: string): void {
-  lines.push(...linesOf(text));
+  lines.push(...linesOf(text).slice(-TAIL_LINES));
   if (lines.length > TAIL_LINES) lines.splice(0, lines.length - TAIL_LINES);
 }
 

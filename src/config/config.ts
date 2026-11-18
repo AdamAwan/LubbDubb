@@ -170,7 +170,7 @@ interface RemoteValidationPolicy {
   tenants?: Readonly<Record<string, string>>;
 }
 
-export const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = {
+const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = {
   tenantTimeoutMs: 60 * 60 * 1000,
   scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
   captureLinkBase: null,

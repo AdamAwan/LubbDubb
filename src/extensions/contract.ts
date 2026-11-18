@@ -1,3 +1,5 @@
+import type { Config } from '../config/config.js';
+
 // → docs/spec/42-extensions.md
 
 export const EXTENSION_API_VERSION = 1;
@@ -18,7 +20,7 @@ interface SlotContext {
 export type SlotImplementation = (input: unknown, context: SlotContext) => unknown;
 
 interface SlotDefinition {
-  timeoutMs: number;
+  timeoutMs: number | ((config: Config) => number);
   /** A refusal in the operator's words, or null where the value is the shape the slot promised. */
   check: (value: unknown) => string | null;
 }

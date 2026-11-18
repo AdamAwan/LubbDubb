@@ -230,9 +230,7 @@ test('the detail query is the extension’s where it fills appErrorDetail, and n
     const repoRoot = gitRepo();
     writeFileSync(join(repoRoot, 'ext.mjs'), source);
     const loaded = await loadExtensions({ paths: [join(repoRoot, 'ext.mjs')], book: EXTENSION_SLOTS });
-    const host = buildExtensionHost({ repoRoot, remoteValidation: { tenantTimeoutMs: 60_000 } } as never, loaded, {
-      record: () => {},
-    } as never);
+    const host = buildExtensionHost({ repoRoot } as never, loaded, { record: () => {} } as never);
     const commands = new FakeAppErrorDetailRunner({ staging: 'from the command' });
     return new RoutedAppErrorDetail(
       [ERRORS_EXT, { ...ERRORS_CMD, errors: { list: './e.sh {since}', detail: './d.sh' } }],

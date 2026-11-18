@@ -53,7 +53,7 @@ export class ExtensionTenantKeeper implements TenantKeeper {
     const answer = await this.host.call(
       'ensureTenant',
       { environment: request.environment, tenant: request.tenant },
-      (line) => this.print(run, line),
+      run.print,
     );
     return this.done(run, answer.ok ? { tenant: answer.value.tenant.trim(), detail: null } : failed(answer.detail));
   }
@@ -64,7 +64,7 @@ export class ExtensionTenantKeeper implements TenantKeeper {
     const answer = await this.host.call(
       'reseedTenant',
       { environment: request.environment, tenant: request.tenant },
-      (line) => this.print(run, line),
+      run.print,
     );
     return this.done(run, answer.ok ? { tenant: request.tenant, detail: null } : failed(answer.detail));
   }
@@ -84,15 +84,18 @@ export class ExtensionTenantKeeper implements TenantKeeper {
     this.launches += 1;
     const startedAt = new Date(this.now()).toISOString();
     const id = `extension-${startedAt}-${String(this.launches)}`;
-    const run: Launched = { id, lines: [`asked ${request.command}`], lastOutputAt: null };
+    const run: Launched = {
+      id,
+      lines: [`asked ${request.command}`],
+      lastOutputAt: null,
+      print: (line) => {
+        appendTail(run.lines, line);
+        run.lastOutputAt = new Date(this.now()).toISOString();
+      },
+    };
     this.latest.set(request.environment, run);
     launched?.({ id, pid: null, startedAt });
     return run;
-  }
-
-  private print(run: Launched, line: string): void {
-    appendTail(run.lines, line);
-    run.lastOutputAt = new Date(this.now()).toISOString();
   }
 
   private done(run: Launched, outcome: TenantOutcome): TenantOutcome {
@@ -110,6 +113,7 @@ interface Launched {
   id: string;
   lines: string[];
   lastOutputAt: string | null;
+  print: (line: string) => void;
 }
 
 function failed(detail: string): TenantOutcome {
