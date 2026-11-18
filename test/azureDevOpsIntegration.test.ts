@@ -1241,6 +1241,43 @@ test('a related item is linked as a second write the caller never has to remembe
   assert.equal(recorded.createdWorkItems[0]!.description, 'The symptom.');
 });
 
+test('a parent files the item under it as a second write, and an absent one files it loose', async () => {
+  const { api, recorded } = fakeApi({ createdWorkItemId: 314 });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+  const base = { body: 'x', labels: ['ld-lesson'], type: 'Task', assignee: null, relatedTo: null };
+  await issues.createIssue({ ...base, title: 'A lesson', parent: 500 });
+  await issues.createIssue({ ...base, title: 'A ticket' });
+  assert.deepEqual(recorded.parentSets, [{ id: 314, parentId: 500 }]);
+});
+
+test('a parent that fails costs only the hierarchy: the item is still returned, and the failure recorded', async () => {
+  const { api } = fakeApi({ createdWorkItemId: 314 });
+  api.setWorkItemParent = async () => {
+    throw new Error('TF401019: no such parent');
+  };
+  const recorded: string[] = [];
+  const errors = { record: (e: { message: string }) => (recorded.push(e.message), e) } as never;
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, errors });
+  const res = await issues.createIssue({
+    title: 'A lesson',
+    body: 'x',
+    labels: [],
+    type: 'Task',
+    assignee: null,
+    relatedTo: null,
+    parent: 500,
+  });
+  assert.deepEqual(res, { ok: true, ref: 'issue:314' });
+  assert.match(recorded.join(), /work item 314 was created but filing it under #500 failed/);
+});
+
+test('readWorkItem reads one work item’s tags, and a missing one is null', async () => {
+  const { api } = fakeApi({ workItems: [workItem({ id: 500, tags: ['Tech-Debt'] })] });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+  assert.deepEqual(await issues.readWorkItem(500), { number: 500, labels: ['Tech-Debt'] });
+  assert.equal(await issues.readWorkItem(501), null);
+});
+
 test('a relation that fails does not cost the item, and says which one exists', async () => {
   const { api } = fakeApi({ createdWorkItemId: 314, relateThrows: 'TF401232: work item 12 does not exist' });
   const issues = new AzureDevOpsWorkItemsIntegration({ api });

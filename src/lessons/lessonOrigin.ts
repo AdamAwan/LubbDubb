@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { issueOriginNumber } from '../issueOrigins.js';
 
 // → docs/spec/41-repo-lessons.md#drafting-a-lesson
 
@@ -47,4 +48,10 @@ export function lessonSearchKey(groupKey: string): string {
 export function lessonPrsForGroup<T extends { branch: string }>(prs: readonly T[], groupKey: string): T[] {
   const tag = lessonGroupTag(groupKey);
   return prs.filter((pr) => lessonBranchTag(pr.branch) === tag);
+}
+
+/** The number of a lesson's work item from the ref the tracker filed it under; null when it names none. */
+export function lessonWorkItemNumber(ref: string): number | null {
+  const number = issueOriginNumber('root', ref) ?? Number(ref);
+  return Number.isInteger(number) && number > 0 ? number : null;
 }

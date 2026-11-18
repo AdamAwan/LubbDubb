@@ -15,6 +15,7 @@ import { issueOrigin, planOrigin } from '../plans/planning.js';
 import { basePrOf, prState } from '../pr/prHealth.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { jobBranch } from '../jobs/naming.js';
+import { isLessonBranch } from '../lessons/lessonOrigin.js';
 
 // → docs/spec/14-persistence.md#the-work-graph
 
@@ -99,9 +100,10 @@ function prParents(
     if (owner !== undefined && !prParent.has(pr.number)) prParent.set(pr.number, owner);
   }
 
+  const adoptable = allPrs.filter((pr) => !isLessonBranch(pr.branch));
   for (const issue of input.world.issues) {
     const branch = issueBranch(issue.number);
-    for (const pr of allPrs) {
+    for (const pr of adoptable) {
       const mine = pr.branch === branch || issue.linkedPrNumber === pr.number;
       if (mine && !prParent.has(pr.number)) prParent.set(pr.number, issueOrigin(issue.number));
     }

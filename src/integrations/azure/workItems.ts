@@ -7,6 +7,7 @@ import type {
   IssueImageInput,
   IssueImageResult,
   IssueKeyHit,
+  WorkItemReading,
   IssueLabelInput,
   SendResult,
   WorkItemAreaPathInput,
@@ -32,6 +33,7 @@ import type {
   WorkItemLinkCapable,
   AreaPathCapable,
   WorkItemPlacementCapable,
+  WorkItemReadCapable,
   WorkItemStateCapable,
   WorldSlice,
 } from '../integration.js';
@@ -75,6 +77,7 @@ export class AzureDevOpsWorkItemsIntegration
     IssueCommentReadable,
     IssueImageCapable,
     IssueKeySearchCapable,
+    WorkItemReadCapable,
     IssueReopenCapable,
     TicketHistoryCapable
 {
@@ -296,17 +299,36 @@ export class AzureDevOpsWorkItemsIntegration
       assignedTo: input.assignee,
     });
     const ref = issueOriginRef('root', created.id);
-    if (input.relatedTo !== null) {
+    const { parent, relatedTo } = input;
+    if (parent !== undefined) await this.fileUnder(created.id, parent);
+    if (relatedTo !== null) {
       try {
-        await this.opts.api.relateWorkItem(created.id, input.relatedTo);
+        await this.opts.api.relateWorkItem(created.id, relatedTo);
       } catch (err) {
         throw new Error(
-          `work item ${created.id} was created but linking it to #${input.relatedTo} failed: ${(err as Error).message}`,
+          `work item ${created.id} was created but linking it to #${relatedTo} failed: ${(err as Error).message}`,
           { cause: err },
         );
       }
     }
     return { ok: true, ref };
+  }
+
+  /** A parent that fails costs only the hierarchy: the item exists and its ref is what the caller links and closes. */
+  private async fileUnder(id: number, parent: number): Promise<void> {
+    try {
+      await this.opts.api.setWorkItemParent(id, parent);
+    } catch (err) {
+      this.opts.errors?.record({
+        source: 'provider',
+        message: `work item ${id} was created but filing it under #${parent} failed: ${(err as Error).message}`,
+      });
+    }
+  }
+
+  async readWorkItem(number: number): Promise<WorkItemReading | null> {
+    const [w] = await this.opts.api.getWorkItems([number]);
+    return w === undefined ? null : { number: w.id, labels: this.inHarnessCasing(w.tags) };
   }
 
   async findIssuesByKeys(keys: readonly string[]): Promise<Map<string, IssueKeyHit[]>> {

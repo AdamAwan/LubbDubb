@@ -37,6 +37,7 @@ export interface LessonDraft {
   summary: string | null;
   reason: string | null;
   prNumber: number | null;
+  /** The ticket a filed lesson became, or the Task linked to a lesson pull request. */
   ticketRef: string | null;
   createdAt: string;
   settledAt: string | null;

@@ -1,11 +1,19 @@
 import type { ErrorRecorder } from '../errorLog.js';
+import { linkPrWorkItem } from '../pr/prWorkItemDesk.js';
 import { seedPrWatch } from '../pr/prWatchDesk.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { TicketFiler } from '../tickets/filing.js';
 import type { LessonDraft, LessonFix, LessonOutcome, Task } from '../types.js';
-import { lessonPrBody, lessonTicketBody, type RefUrl } from './evidence.js';
-import { lessonBranch, lessonDraftId, lessonPrsForGroup, lessonSearchKey } from './lessonOrigin.js';
+import { lessonPrBody, lessonTaskBody, lessonTicketBody, type RefUrl } from './evidence.js';
+import {
+  lessonBranch,
+  lessonDraftId,
+  lessonPrsForGroup,
+  lessonSearchKey,
+  lessonWorkItemNumber,
+} from './lessonOrigin.js';
+import type { LessonParent } from './lessonParent.js';
 import { othersLessonPrs, type LessonPrReading } from './lessonPrs.js';
 
 // → docs/spec/41-repo-lessons.md#the-outcome
@@ -34,6 +42,8 @@ interface LessonOutcomeDeps {
   lessonLabel: string;
   /** Every fleet's lesson pull requests, read fresh before one is opened. */
   lessonPrs: LessonPrReading;
+  /** `lessons.parentWorkItem`, checked: what a lesson's own Task is filed under; absent or unset files none. */
+  parent?: LessonParent;
   errors?: ErrorRecorder;
 }
 
@@ -169,10 +179,46 @@ export class LessonOutcomeDesk {
       });
     }
     await seedPrWatch({ prNumber, branch }, { sink, store, watchLabel: this.deps.watchLabel, errors });
+    if (recorded) await this.fileTask(draft, prNumber, input);
     return { ok: true, outcome: 'pull_request', prNumber, branch };
   }
 
+  /** The lesson's own Task under the configured parent, linked to its pull request; a failure costs only the link. */
+  private async fileTask(draft: LessonDraft, prNumber: number, input: LessonConcludeInput & { fix: LessonFix }) {
+    const parent = (await this.deps.parent?.resolve()) ?? null;
+    if (parent === null) return;
+    const { store, sink, errors, refUrl } = this.deps;
+    let ref: string;
+    try {
+      ref = await this.deps.filing({
+        title: input.title,
+        body: lessonTaskBody(draft, input, refUrl(`pr:${String(prNumber)}`), refUrl),
+        labels: [this.deps.lessonLabel],
+        type: 'Task',
+        searchKey: lessonSearchKey(draft.groupKey),
+        parent,
+      });
+    } catch (err) {
+      errors?.record({
+        source: 'cycle',
+        message: `filing the work item for lesson PR ${String(prNumber)} failed: ${(err as Error).message}`,
+      });
+      return;
+    }
+    store.lessons.recordWorkItem(draft.id, ref);
+    const workItemNumber = lessonWorkItemNumber(ref);
+    if (workItemNumber === null) {
+      errors?.record({
+        source: 'cycle',
+        message: `lesson work item ${ref} names no number to link PR ${String(prNumber)} to`,
+      });
+      return;
+    }
+    await linkPrWorkItem({ prNumber, workItemNumber }, { sink, store, ...(errors ? { errors } : {}) });
+  }
+
   private async fileTicket(draft: LessonDraft, input: LessonConcludeInput & { fix: LessonFix }): Promise<Concluded> {
+    const parent = (await this.deps.parent?.resolve()) ?? null;
     let ticketRef: string;
     try {
       ticketRef = await this.deps.filing({
@@ -180,6 +226,7 @@ export class LessonOutcomeDesk {
         body: lessonTicketBody(draft, input, this.deps.refUrl),
         labels: [this.deps.lessonLabel],
         searchKey: lessonSearchKey(draft.groupKey),
+        ...(parent === null ? {} : { parent }),
       });
     } catch (err) {
       this.deps.errors?.record({ source: 'agent', message: `filing lesson ticket failed: ${(err as Error).message}` });

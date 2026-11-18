@@ -114,6 +114,11 @@ export interface IssueCreateInput {
    * → docs/spec/15-integrations.md, docs/spec/39-app-errors.md#the-key-on-the-ticket
    */
   searchKey?: string;
+  /**
+   * The work item to file this one under, where the tracker has a hierarchy (Azure DevOps). A provider
+   * without one ignores it. Absent for most filings. → docs/spec/41-repo-lessons.md#the-lessons-own-work-item
+   */
+  parent?: number;
 }
 
 export interface IssueCloseInput {
@@ -174,6 +179,12 @@ export interface IssueKeyHit {
 export interface IssueKeySink {
   canSearchIssueKeys(): boolean;
   findIssuesByKeys(keys: readonly string[]): Promise<Map<string, IssueKeyHit[]>>;
+}
+
+/** One work item as read by its number, for a check that it is fit to file under. */
+export interface WorkItemReading {
+  number: number;
+  labels: string[];
 }
 
 export interface PrAssignInput {

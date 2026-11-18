@@ -199,6 +199,10 @@ and the key lines for GitHub and the fake alike, so the fake cannot drift from w
 `bodyCarriesKey` is the whole-key match both read hits back through. A provider imports nothing from a
 feature module: the key is an opaque string to it.
 
+**Reading one work item by number** is `readWorkItem` on the composite connector, called only by the
+repo lessons' parent check ([41](41-repo-lessons.md#the-lessons-own-work-item)). Azure DevOps answers it
+from `getWorkItems`, with the item's tags as labels; a missing item is null, and a read that fails throws.
+
 ### Reopening a ticket
 
 `IssueReopenCapable.reopenIssue(number)` is the inverse of a close, and reaches callers on `ActionSink`
@@ -307,13 +311,17 @@ answers the parts it has:
 | `assignee`  | `assignees: [login]` on the create                        | `System.AssignedTo` on the create                                                                                                      |
 | `type`      | **dropped** — a GitHub issue is not created _as_ anything | the create's URL segment (`$User Story`)                                                                                               |
 | `relatedTo` | appended to the body as `Related to #<n>`                 | a second write: a `System.LinkTypes.Related` relation                                                                                  |
+| `parent`    | **dropped** — optional; only a lesson's Task sets it      | a second write: `setWorkItemParent`, before any `relatedTo` ([41](41-repo-lessons.md#the-lessons-own-work-item))                       |
 
 Two of those rows are the whole point. Labels and the assignee ride on the **create** rather than on
 follow-up writes, because an item that exists for a moment untagged is one the pickup gate can miss
 and a filing nobody is assigned. And `relatedTo` is one field rather than a caller's second call: on
 Azure a bug is only correct with two writes, and a caller that could forget the second is exactly what
 this replaced. A relation that fails does **not** cost the item — it exists and the operator asked for
-it — so the throw carries the id of what was created.
+it — so the throw carries the id of what was created. A `parent` that fails costs even less: it is
+recorded through `errors.record` and the item's ref is still returned, because the one caller (a
+lesson's Task) links and later closes the item by that ref, and a throw would leave an orphan Task
+nothing ever closes.
 
 `ref` on the result is `issue:<n>`, the harness's own vocabulary rather than a provider id: that is
 what a filing row stores, what `link_ticket` speaks and what the cockpit resolves to a URL, so the one

@@ -143,13 +143,24 @@ export function validateFleetStall(merged: Config): void {
 }
 
 export function validateLessons(merged: Config): void {
-  const minGoals = merged.lessons.minGoals;
-  if (Number.isInteger(minGoals) && (minGoals === 0 || minGoals >= 2)) return;
-  throw new Error(
-    `lessons.minGoals: must be 0, which turns repo lessons off, or a whole number of at least 2 — the distinct ` +
-      `goals a repeated miss must span before a lesson is drafted. One goal is one miss, not a pattern. ` +
-      `Got ${JSON.stringify(minGoals)}.`,
-  );
+  const { minGoals, parentWorkItem } = merged.lessons;
+  if (!Number.isInteger(minGoals) || !(minGoals === 0 || minGoals >= 2))
+    throw new Error(
+      `lessons.minGoals: must be 0, which turns repo lessons off, or a whole number of at least 2 — the distinct ` +
+        `goals a repeated miss must span before a lesson is drafted. One goal is one miss, not a pattern. ` +
+        `Got ${JSON.stringify(minGoals)}.`,
+    );
+  if (parentWorkItem === null) return;
+  if (!Number.isInteger(parentWorkItem) || parentWorkItem < 1)
+    throw new Error(
+      `lessons.parentWorkItem: must be a work item id — the story every lesson's own Task is filed under — or ` +
+        `null for none. Got ${JSON.stringify(parentWorkItem)}.`,
+    );
+  if (merged.integrations.issues !== 'azure')
+    throw new Error(
+      `lessons.parentWorkItem: only Azure DevOps links a work item to a lesson pull request; with ` +
+        `integrations.issues "${merged.integrations.issues}" leave it unset.`,
+    );
 }
 
 export function validateExtensions(merged: Config): void {

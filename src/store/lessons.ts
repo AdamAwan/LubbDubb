@@ -78,6 +78,11 @@ export class LessonStore {
     return info.changes > 0;
   }
 
+  /** The lesson pull request's own work item, kept in `ticket_ref` so the desk can close it when the pull request settles. */
+  recordWorkItem(id: string, ref: string): void {
+    this.ctx.prep(`UPDATE lesson_drafts SET ticket_ref=? WHERE id=?`).run(ref, id);
+  }
+
   /** Settles a draft out of one of `from`; false when it was not in one. */
   settle(
     id: string,

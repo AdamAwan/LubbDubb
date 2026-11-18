@@ -13,6 +13,7 @@ import { resolveOpenPr } from '../src/mcp/openPr.js';
 import { toolsForRule } from '../src/mcp/names.js';
 import { LessonOutcomeDesk } from '../src/lessons/outcomeDesk.js';
 import { LessonPrReading } from '../src/lessons/lessonPrs.js';
+import { LessonParent } from '../src/lessons/lessonParent.js';
 import { lessonPrBody, type RefUrl } from '../src/lessons/evidence.js';
 import { lessonBranch, lessonMarker } from '../src/lessons/lessonOrigin.js';
 import { isHarnessBranch } from '../src/pr/prOwnership.js';
@@ -20,6 +21,7 @@ import { ticketFiler } from '../src/tickets/filing.js';
 import { githubRefUrl } from '../src/integrations/github/refUrl.js';
 import { azureRefUrl } from '../src/integrations/azure/refUrl.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
+import type { ErrorRecorder } from '../src/errorLog.js';
 import type { LessonDraft, PullRequest, Task, WorldSnapshot } from '../src/types.js';
 
 // → docs/spec/41-repo-lessons.md
@@ -62,7 +64,7 @@ function build(minGoals: number, backend = new FakePtyBackend()): { system: Syst
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),
       heartbeatIntervalMs: 999_999,
-      lessons: { minGoals },
+      lessons: { minGoals, parentWorkItem: null },
     }),
     { backend, sink, worktrees: new FakeWorktreeManager(), errorMirror: () => {} },
   );
@@ -440,5 +442,221 @@ test('both providers cite every pull request as a full URL, never #n and never w
     assert.doesNotMatch(body, /#\d/);
     assert.doesNotMatch(body, /\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\s+(#|https?:)/i);
     assert.ok(body.endsWith(lessonMarker('review/convention/src/api')));
+  }
+});
+
+function parentOf(read: () => Promise<{ number: number; labels: string[] } | null>, errors?: string[]): LessonParent {
+  return new LessonParent({
+    number: 500,
+    read,
+    watchLabel: 'ld-watch',
+    ...(errors ? { errors: recorderInto(errors) } : {}),
+  });
+}
+
+function recorderInto(errors: string[]): ErrorRecorder {
+  return {
+    record: (input) => {
+      errors.push(input.message);
+      return { id: String(errors.length), createdAt: new Date().toISOString(), ...input, detail: input.detail ?? null };
+    },
+  };
+}
+
+function deskWith(system: System, parent: LessonParent): LessonOutcomeDesk {
+  return new LessonOutcomeDesk({
+    store: system.store,
+    sink: system.sink,
+    filing: ticketFiler(system.config, system.sink),
+    refUrl: AZURE,
+    defaultBranch: 'main',
+    watchLabel: 'ld-watch',
+    lessonLabel: 'ld-lesson',
+    lessonPrs: new LessonPrReading({ source: { listLessonPullRequests: async () => [] } }),
+    parent,
+  });
+}
+
+const CONCLUDE_PR = {
+  outcome: 'pull_request',
+  fix: 'guard',
+  title: 'Enforce no-floating in lint',
+  summary: 'Added the rule.',
+  reason: 'Documented and still missed.',
+};
+
+test('with a parent set, a lesson PR gets one Task of its own under it: lesson label, never the watch label, linked', async () => {
+  const { system, calls } = build(2);
+  try {
+    const { task, draft } = await dispatched(system);
+    const desk = deskWith(
+      system,
+      parentOf(async () => ({ number: 500, labels: ['tech-debt'] })),
+    );
+    const result = await concludeTool(system, task, desk).handler(CONCLUDE_PR);
+    assert.equal(result.isError, undefined, JSON.stringify(result));
+    const filed = calls.filter((c) => c.method === 'createIssue').map((c) => c.input);
+    assert.equal(filed.length, 1);
+    assert.deepEqual(
+      filed[0]!.labels,
+      ['ld-lesson'],
+      'the lesson label and not the watch label: nothing dispatches for it',
+    );
+    assert.equal(filed[0]!.type, 'Task');
+    assert.equal(filed[0]!.parent, 500);
+    assert.equal(filed[0]!.searchKey, 'lesson:ci/missed_gate/lint');
+    assert.ok(String(filed[0]!.body).includes(AZURE('pr:77')!), 'the Task names its pull request');
+    assert.doesNotMatch(String(filed[0]!.body), /#\d/);
+    const links = calls.filter((c) => c.method === 'linkWorkItem').map((c) => c.input);
+    assert.deepEqual(links, [{ number: 88, prNumber: 77 }]);
+    assert.ok(system.store.workItemLinks.linkedWorkItemPrs().has(77), 'the link desk does not link it again');
+    const after = system.store.lessons.getDraft(draft.id)!;
+    assert.equal(after.status, 'pr-open');
+    assert.equal(after.ticketRef, '88');
+  } finally {
+    system.store.close();
+  }
+});
+
+test('an unset, missing or watch-labelled parent files no Task, and the PR still opens', async () => {
+  const cases: { name: string; make: (errors: string[]) => LessonParent; refused: RegExp | null }[] = [
+    {
+      name: 'unset',
+      make: () => new LessonParent({ number: null, read: async () => null, watchLabel: 'ld-watch' }),
+      refused: null,
+    },
+    { name: 'missing', make: (errors) => parentOf(async () => null, errors), refused: /no work item #500/ },
+    {
+      name: 'watched',
+      make: (errors) => parentOf(async () => ({ number: 500, labels: ['LD-WATCH'] }), errors),
+      refused: /watch label/,
+    },
+    {
+      name: 'unreadable',
+      make: (errors) =>
+        parentOf(async () => {
+          throw new Error('offline');
+        }, errors),
+      refused: /reading lessons\.parentWorkItem #500 failed/,
+    },
+  ];
+  for (const c of cases) {
+    const { system, calls } = build(2);
+    const errors: string[] = [];
+    try {
+      const { task } = await dispatched(system);
+      const result = await concludeTool(system, task, deskWith(system, c.make(errors))).handler(CONCLUDE_PR);
+      assert.equal(result.isError, undefined, c.name);
+      assert.ok(
+        calls.some((x) => x.method === 'createPullRequest'),
+        c.name,
+      );
+      assert.ok(!calls.some((x) => x.method === 'createIssue' || x.method === 'linkWorkItem'), c.name);
+      if (c.refused)
+        assert.ok(
+          errors.some((e) => c.refused!.test(e)),
+          `${c.name}: ${errors.join('; ')}`,
+        );
+    } finally {
+      system.store.close();
+    }
+  }
+});
+
+test('the parent is read once when fit, and again after a failed read', async () => {
+  let reads = 0;
+  let fail = true;
+  const parent = parentOf(async () => {
+    reads += 1;
+    if (fail) throw new Error('offline');
+    return { number: 500, labels: [] };
+  });
+  assert.equal(await parent.resolve(), null);
+  fail = false;
+  assert.equal(await parent.resolve(), 500);
+  assert.equal(await parent.resolve(), 500);
+  assert.equal(reads, 2);
+});
+
+test('a lesson ticket goes under the parent too', async () => {
+  const { system, calls } = build(2);
+  try {
+    const { task } = await dispatched(system);
+    const desk = deskWith(
+      system,
+      parentOf(async () => ({ number: 500, labels: [] })),
+    );
+    const result = await concludeTool(system, task, desk).handler({
+      outcome: 'ticket',
+      fix: 'code',
+      title: 'Merge the two lint configs',
+      summary: 'Two configs drift.',
+      reason: 'Touches every package.',
+    });
+    assert.equal(result.isError, undefined, JSON.stringify(result));
+    const filed = calls.find((c) => c.method === 'createIssue')!.input;
+    assert.equal(filed.parent, 500);
+    assert.deepEqual(filed.labels, ['ld-lesson']);
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a lesson PR’s Task closes completed when it merges and not planned when it closes', async () => {
+  const { system, calls } = build(2);
+  try {
+    const merged = prOpen(system, 'ci/missed_gate/a', 'a', 77);
+    const closed = prOpen(system, 'ci/missed_gate/b', 'b', 78);
+    system.store.lessons.recordWorkItem(merged.id, 'issue:88');
+    system.store.lessons.recordWorkItem(closed.id, 'issue:89');
+    const settled = world({
+      closedPullRequests: [
+        pr(77, { branch: lessonBranch(merged.id, merged.groupKey), merged: true, state: 'merged' }),
+        pr(78, { branch: lessonBranch(closed.id, closed.groupKey), state: 'closed' }),
+      ],
+    });
+    system.graph.record(settled);
+    system.lessons.run(settled);
+    await delay(5);
+    assert.equal(system.store.lessons.getDraft(merged.id)!.status, 'adopted');
+    assert.equal(system.store.lessons.getDraft(closed.id)!.status, 'declined');
+    const closes = calls.filter((c) => c.method === 'closeIssue').map((c) => c.input);
+    assert.deepEqual(closes, [
+      { number: 88, reason: 'completed' },
+      { number: 89, reason: 'not_planned' },
+    ]);
+    system.lessons.run(settled);
+    await delay(5);
+    assert.equal(calls.filter((c) => c.method === 'closeIssue').length, 2, 'closed once');
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a Task linked to a lesson PR roots it in no goal, so it settles from its own pr node', () => {
+  const { system } = build(2);
+  try {
+    const draft = prOpen(system, 'ci/missed_gate/a', 'a', 77);
+    const branch = lessonBranch(draft.id, draft.groupKey);
+    const task = {
+      id: 'issue_88',
+      number: 88,
+      title: 'Lesson',
+      body: '',
+      labels: ['ld-lesson'],
+      state: 'open' as const,
+    };
+    system.graph.record(world({ pullRequests: [pr(77, { branch })], issues: [{ ...task, linkedPrNumber: 77 }] }));
+    assert.equal(system.store.graph.getWorkNode('pr:77')!.parentRef, null);
+    const merged = world({
+      closedPullRequests: [pr(77, { branch, merged: true, state: 'merged' })],
+      issues: [{ ...task, linkedPrNumber: 77 }],
+    });
+    system.graph.record(merged);
+    system.lessons.run(merged);
+    assert.equal(system.store.graph.getWorkNode('pr:77')!.parentRef, null);
+    assert.equal(system.store.lessons.getDraft(draft.id)!.status, 'adopted');
+  } finally {
+    system.store.close();
   }
 });

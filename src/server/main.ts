@@ -113,6 +113,7 @@ async function main(): Promise<void> {
     exists: existsSync,
   });
   if (ffmpeg !== null) system.errors.record({ source: 'boot', message: ffmpeg });
+  void system.lessonParent.resolve();
 
   const mcpReady = await system.mcp.listen();
 

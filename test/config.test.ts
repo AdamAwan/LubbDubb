@@ -639,10 +639,19 @@ test('a closed state the fleet also picks up from is refused at load', () => {
 
 test('repo lessons are on at two goals by default, and lessons.minGoals is 0 or at least 2', () => {
   assert.equal(loadConfig().lessons.minGoals, 2);
-  assert.equal(loadConfig({ lessons: { minGoals: 0 } }).lessons.minGoals, 0);
-  assert.equal(loadConfig({ lessons: { minGoals: 2 } }).lessons.minGoals, 2);
-  assert.equal(loadConfig({ lessons: { minGoals: 5 } }).lessons.minGoals, 5);
+  const lessons = (minGoals: number) => ({ lessons: { minGoals, parentWorkItem: null } });
+  assert.equal(loadConfig(lessons(0)).lessons.minGoals, 0);
+  assert.equal(loadConfig(lessons(2)).lessons.minGoals, 2);
+  assert.equal(loadConfig(lessons(5)).lessons.minGoals, 5);
   for (const minGoals of [1, -1, 2.5, Number.NaN]) {
-    assert.throws(() => loadConfig({ lessons: { minGoals } }), /lessons\.minGoals: must be 0/, String(minGoals));
+    assert.throws(() => loadConfig(lessons(minGoals)), /lessons\.minGoals: must be 0/, String(minGoals));
   }
+});
+
+test('lessons.parentWorkItem is unset by default, a work item id, and only for Azure DevOps', () => {
+  assert.equal(loadConfig().lessons.parentWorkItem, null);
+  const parent = (parentWorkItem: number) => ({ lessons: { minGoals: 2, parentWorkItem } });
+  for (const bad of [0, -3, 1.5, Number.NaN])
+    assert.throws(() => loadConfig(parent(bad)), /lessons\.parentWorkItem: must be a work item id/, String(bad));
+  assert.throws(() => loadConfig(parent(42)), /only Azure DevOps/, 'the fake tracker has no hierarchy to file under');
 });

@@ -118,7 +118,7 @@ function build(): System {
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),
       heartbeatIntervalMs: 999_999,
-      lessons: { minGoals: 2 },
+      lessons: { minGoals: 2, parentWorkItem: null },
     }),
     { backend: new FakePtyBackend(), worktrees: new FakeWorktreeManager(), errorMirror: () => {} },
   );

@@ -65,9 +65,22 @@ export function lessonTicketBody(
   refUrl: RefUrl,
 ): string {
   const why = said.reason.trim();
-  return [said.summary.trim(), why === '' ? '' : `Why a ticket: ${why}`, lessonEvidence(draft, said.fix, refUrl)]
-    .filter((part) => part !== '')
-    .join('\n\n');
+  return lessonBody(said.summary, why === '' ? '' : `Why a ticket: ${why}`, lessonEvidence(draft, said.fix, refUrl));
+}
+
+/** The lesson's own work item: what the change is, the pull request it is in, then the evidence. */
+export function lessonTaskBody(
+  draft: LessonDraft,
+  said: { fix: LessonFix; summary: string },
+  prUrl: string | null,
+  refUrl: RefUrl,
+): string {
+  const where = prUrl === null ? '' : `The lesson pull request: ${prUrl}`;
+  return lessonBody(said.summary, where, lessonEvidence(draft, said.fix, refUrl));
+}
+
+function lessonBody(summary: string, middle: string, evidence: string): string {
+  return [summary.trim(), middle, evidence].filter((part) => part !== '').join('\n\n');
 }
 
 function lessonEvidence(draft: LessonDraft, fix: LessonFix, refUrl: RefUrl): string {
