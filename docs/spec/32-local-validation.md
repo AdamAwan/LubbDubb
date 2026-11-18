@@ -156,17 +156,20 @@ So the line is drawn between **state** and **code**:
 - **The state is the agent's.** Once `running`, it may change the environment's flags,
   configuration and data by any means the project offers — the application's UI and APIs, reads and
   writes straight against the local store, the project's own scripts and skills, fixture files it
-  writes into its output directory and uploads.
+  writes and uploads.
 - **The code is fixed.** The checkout stays read-only, nothing is committed or pushed, and set-up
-  scripts and fixtures go in the output directory, never the repository. A workaround that skips the
+  scripts and fixtures go in the output directory's `setup/` subdirectory, never the repository — and
+  never loose in the output directory itself, whose top-level media files the desk reads as the run's
+  screenshots and recording. A workaround that skips the
   broken behaviour is still the test not being run.
 - **The session is the operator's.** The agent never starts, stops or restarts the environment, nor
   types into the session bringing it up; state changes go through the running application or its
   store.
 - **It is planned and reported.** `local_validation_plan` takes a `setup` section (what the plan
   needs and how it will be created), recorded under a `## Set-up` heading in the row's `plan`;
-  `local_validation_report` takes `setup`, the list of every change made, stored on the row, drawn on
-  the card and handed to the fix agent — a pass is judged against the setup that produced it.
+  `local_validation_report` takes `setup`, the list of every change made — and of any state the plan
+  relied on that was already there — stored on the row (`NOT NULL DEFAULT '[]'`), drawn on the card
+  and handed to the fix agent; a pass is judged against the setup that produced it.
 - **A set-up step that fails because of the change under test is a finding** — `failed`, not
   `blocked`.
 

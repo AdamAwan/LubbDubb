@@ -224,7 +224,7 @@ function Findings({ validation }: { validation: LocalValidationView }): JSX.Elem
 function SetUp({ setup }: { setup: LocalValidationView['setup'] }): JSX.Element {
   return (
     <div className="cn-sub cn-wrap">
-      {'Set up first · '}
+      Set up first:
       <ul>
         {setup.map((change, index) => (
           <li key={index}>{change}</li>
