@@ -24,7 +24,6 @@ import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from '../mcp/ser
 import type { McpDesktopServer } from '../mcp/desktop.js';
 import { buildDesktop } from './systemDesktop.js';
 import { ValidationReadyDesk } from '../validation/readyDesk.js';
-import { CommandReviewProber } from '../review/reviewedElsewhere.js';
 import type { WatchDryRunner } from '../environments/watchDryRun.js';
 import type { WatchAsks } from '../environments/watchAsks.js';
 import { StateQueryDesk } from '../validation/remote/stateQueries.js';
@@ -281,6 +280,7 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
     profiles: orderedProfiles(config.agentModels),
     reviewModes: reviewModeNames(config.review),
     reviewAllowSkip: config.review.allowSkip,
+    reviewPublisher: base.reviewPublisher,
     checkSets: config.validation.checkSets,
     autoUseAgentDescriptions: config.autoUseAgentDescriptions,
     repoRoot: config.repoRoot,
@@ -380,10 +380,8 @@ function buildHarness(
     prWatch: intake.prWatch,
     prWorkItems: intake.prWorkItems,
     review: config.review,
-    reviewProber:
-      config.review.reviewedElsewhere === null
-        ? undefined
-        : (opts.reviewProber ?? new CommandReviewProber(config.repoRoot)),
+    reviewProber: base.reviewProber,
+    reviewRoutes: base.reviewRoutes,
     schedules: bench.schedules,
     botPrRisks: bench.botPrRisks,
     updates: config.selfUpdate.enabled ? bench.updates : undefined,

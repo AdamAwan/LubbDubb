@@ -10,12 +10,20 @@ The contract is [42 § Adding a slot](../../../docs/spec/42-extensions.md#adding
 how-to. The worked example is the tenant slots: `src/extensions/slots.ts`,
 `src/validation/remote/extensionTenants.ts`, `test/extensionTenants.test.ts`, and
 [36 § A tenant from the project's extension](../../../docs/spec/36-remote-validation.md#a-tenant-from-the-projects-extension).
+A second example, for a feature with no existing seam interface, is the review slots:
+`src/review/extensionReview.ts`, `test/extensionReview.test.ts`, and
+[07 § The review from the project's extension](../../../docs/spec/07-pull-requests.md#the-review-from-the-projects-extension).
 
 ## 1. Find the seam
 
 Find the interface the feature already calls through (for tenants, `TenantKeeper` in
 `src/validation/remote/tenants.ts`) and its config-driven implementation (`CommandTenantKeeper`). The slot
 becomes a **second implementation of that interface**. Keep `if (extension)` branches out of the desk.
+
+If the feature has no seam yet (the review called the dispatcher and a config switch directly), write
+the interface first, with its config implementation doing exactly what the old code did. One key per
+independent part: the review has two slots and two keys, `review.routeExtension` and
+`review.publishExtension`, each with its own routed object.
 
 ## 2. Declare the slot in `src/extensions/slots.ts`
 
@@ -48,6 +56,14 @@ write down what a restart now means. Tenants answer "not knowable": `follow` ret
   `checkLoadedExtensions`, refuse to build if the key is opted in and no loaded extension fills the slot.
   Test that with `opts.extensions`' `slots.has(slot)`.
 
+- **A pulse desk that asks a slot must not await it.** A slot can take minutes and the pulse must
+  not. Fire the call, keep an in-flight set so the next pulse does not ask again, and have the test
+  wait for the store row (`ReviewRouteDesk`). Declare the desk `readWorld: false` unless it really
+  needs a fresh world: `test/pulsePipeline.test.ts` pins the list of world-reading passes.
+- **Decide whether a lost call is asked again.** An idempotent question (a route) is re-asked after a
+  restart. One with a side effect outside the harness (a post) is asked once, so it cannot happen twice.
+  Write the answer down in the feature's spec.
+
 ## 5. Surfaces
 
 Run `grep -rn "<old field>" src web/src` to find every reader of the old config fields: cockpit views,
@@ -69,6 +85,7 @@ existing tests and operators read it.
   - opted in with no extension, which refuses to build
   - config conflicts, which are refused
   - a restart
+  - an answer arriving after the row it belongs to has changed
 - Do not edit existing tests. Their passing unchanged is the proof the old path still works.
 
 ## 7. Specs and check

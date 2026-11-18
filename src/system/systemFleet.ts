@@ -206,7 +206,7 @@ export function buildFleet(
 
 function buildDispatch(
   config: Config,
-  { runtimeControl, watchLabel }: Foundation,
+  { runtimeControl, watchLabel, reviewRouter, reviewPublisher }: Foundation,
   prompts: PromptTemplates,
   reviewCharters: Channels['reviewCharters'],
 ) {
@@ -235,6 +235,8 @@ function buildDispatch(
     prRefStyle: prRefStyle(config.integrations.sourceControl),
     review: config.review,
     reviewCharters,
+    reviewRouter,
+    reviewPublisher,
     watchNote: watchNote(config.environments),
     watchPlanNote: watchPlanNote(config.environments),
     instrumentationNote: instrumentationNote(config.environments),

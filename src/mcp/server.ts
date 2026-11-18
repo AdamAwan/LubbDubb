@@ -32,6 +32,7 @@ interface McpBridgeServerOptions {
   profiles?: { name: string; description: string }[];
   reviewModes?: string[];
   reviewAllowSkip?: boolean;
+  reviewPublisher?: McpToolDeps['reviewPublisher'];
   checkSets?: boolean;
   autoUseAgentDescriptions?: boolean;
   areaPaths?: () => AreaPathTree | null;
@@ -209,6 +210,7 @@ export class McpBridgeServer {
         profiles: this.opts.profiles,
         reviewModes: this.opts.reviewModes,
         reviewAllowSkip: this.opts.reviewAllowSkip,
+        reviewPublisher: this.opts.reviewPublisher,
         checkSets: this.opts.checkSets,
         autoUseAgentDescriptions: this.opts.autoUseAgentDescriptions,
         areaPaths: this.opts.areaPaths,

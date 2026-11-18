@@ -15,6 +15,7 @@ Every PR predicate lives in `src/pr/prHealth.ts`, pure and unit-tested (`test/pr
 - **Whether a review reply is the fleet's is a row in `pr_replies_sent`, keyed on thread and comment ref, never the reply's author; every uncertainty leaves the thread unanswered.** On a single-operator deployment the operator's own follow-up otherwise reads as handled and is never dispatched for. → [§](#attribution-is-a-record-never-an-identity) · `test/prReplyAttribution.test.ts`
 - **An operator's thread reopen is spent by the fleet's next reply into that thread and by nothing else.** Left standing it dispatches every pulse; spent by anything else it drops the operator's ask. → [§](#reopening-a-thread) · `test/agentPrReply.test.ts`
 - **With `review.blocking` on, a pull request with no review row is not merge-ready, and unknown is never clear.** The gate asks whether a review happened, not whether it liked the diff, so findings never wedge a PR. → [§](#the-merge-gate) · `test/prReview.test.ts`
+- **Without `review.routeExtension` or `review.publishExtension` the review routes and publishes exactly as before, even with an extension loaded that fills `routeReview` or `publishReview`.** An operator who never opts in is never affected. → [§](#the-review-from-the-projects-extension) · `test/extensionReview.test.ts`
 - **The harness tags its own pull request for watching exactly once, recorded in `pr_watch_seeds`, and an operator's watch toggle writes a row too.** A seeder re-deriving from the world would re-tag a runaway agent's PR the operator just un-watched. → [§](#watching) · `test/prWatch.test.ts`
 
 ## `prState(pr)`
@@ -1907,6 +1908,8 @@ key ([02](02-configuration.md#the-project-layer)), so all of it is committed onc
 | `review.modes`                   | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.                                                                                                                                      |
 | `review.defaultMode`             | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                                                                                                                                                    |
 | `review.routingCharterFile`      | `null`   | The prose that decides between the modes, read by the triage.                                                                                                                                                                             |
+| `review.routeExtension`          | `false`  | The project's extension chooses the mode instead of the triage agent. → [The review from the project's extension](#the-review-from-the-projects-extension)                                                                                |
+| `review.publishExtension`        | `false`  | The project's extension publishes the findings instead of `review.publish`. → [The review from the project's extension](#the-review-from-the-projects-extension)                                                                          |
 
 ```json
 {
@@ -2019,6 +2022,58 @@ declared the stamp arm is not consulted at all — which is every deployment fro
 stamp is a statement an operator's own tooling wrote under a key they declared, which is a different
 thing from the identity inference `pr_replies_sent` exists to end; and it gates a mark's tint and
 nothing else — never `reviewSatisfied`, never a merge.
+
+### The review from the project's extension
+
+**Built**, in `src/review/extensionReview.ts`. Two parts of the review are the project's business
+rather than LubbDubb's — _how a pull request is routed_ and _where its findings go_ — and each can be
+handed to the project's own code through a slot of [42](42-extensions.md#the-slots). Everything else
+stays here: `enabled`, `blocking`, `allowSkip`, `reviewedElsewhere`, the modes with their charters
+and profiles, `defaultMode`, `machineAuthors`, the stamp keys, the reviewer agent, `review_report`, the
+merge gate, the review mark and the attempt ledger.
+
+- **Opt-in per part, one key each.** `review.routeExtension: true` and `review.publishExtension: true`.
+  Without the key a deployment routes and publishes as before, even when a loaded extension fills
+  the slot. `RoutedReviewRouter` and `RoutedReviewPublisher` pick the implementation once, from that
+  key, and answer everything shown about it — whether the triage agent is dispatched, and the note in
+  the reviewer's prompt — so what runs and what is said cannot disagree.
+- **Refused beside what it replaces.** `routeExtension` with `routingCharterFile`, or with nothing to
+  choose (fewer than two modes and `allowSkip` off); `publishExtension` with a `review.publish` other
+  than `'none'`. Either key with no loaded extension filling its slot refuses to build, beside the
+  other extension checks in `buildFoundation`.
+
+**`routeReview`** stands in for rule `pr-review-triage`, which then dispatches nothing. A pulse desk
+(`ReviewRouteDesk`, after `reviewedElsewhere`) asks it for every pull request a review is due for that
+has no route, and does not wait on the answer — a pull request already being asked is not asked
+again. It is handed `{ pr: { number, title, branch, base, author, body }, modes, allowSkip }` — the
+metadata the triage agent reads, never the diff — and answers `{ mode, reason }` or
+`{ skip: true, reason }`. The answer is written as an ordinary route row with no agent, so the review
+waits for it, and the Decision log and the mark read it, exactly as they read the triage's.
+
+- **Not-ok fails open, as the triage does.** A throw, a timeout, a wrong shape, a mode the project has
+  not declared or a skip it does not allow writes a route to `defaultMode` whose reason names why
+  (`The project's extension did not choose (…)`), and it is recorded on the error log. The review
+  is never held for want of a route.
+- **A restart asks again.** The call runs inside the harness, so a restart ends it with nothing
+  written; the next pulse finds the pull request still unrouted and asks the new process's extension.
+  The question is idempotent, so asking twice costs nothing.
+
+**`publishReview`** stands in for `review.publish`. It is asked **once**, straight after
+`review_report` records a review, with `{ pr, headSha, mode, verdict, summary, findings }`, and answers
+`{ thread }` — the id of the thread it published into, or null. A thread id is written to
+`pr_reviews.published_thread`, so a resolution there reads as
+[addressed](#what-the-publication-is-recorded-as) on the same terms as one the harness posted. The
+reviewer's prompt tells it not to comment: its report is handed to the project's code.
+
+- **Not-ok leaves the review recorded and unpublished.** The verdict stands and the merge gate reads it;
+  nothing is written to `published_thread`, which reads as _not published_, and the host records the
+  failure. It never falls back to the reviewer posting.
+- **It stamps only the review it was asked about.** A review recorded again while the call was out
+  clears `published_thread` for findings the extension never saw, so a late answer is not written onto it.
+- **A restart drops it, and nothing asks again.** A publication in flight when the process ends is lost,
+  and the review reads as unpublished. Asking again would risk posting the same findings twice, which
+  is worse than an unpublished review the operator can still read on the pull request's row.
+- Its timeout is the slot's, five minutes; `routeReview`'s is two.
 
 ### The charters
 
