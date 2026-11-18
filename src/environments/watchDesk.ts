@@ -12,6 +12,7 @@ import { landedCommits } from './landings.js';
 import { resolveWatchSource } from './watchSource.js';
 import { watchHold } from '../validation/watchAuthoring.js';
 import { openWatchAsks, type WatchAsks } from './watchAsks.js';
+import { exposureCommand } from './readingExtensions.js';
 
 // → docs/spec/24-environments.md
 
@@ -196,7 +197,7 @@ export class WatchDesk {
     if (exposure === undefined) return window;
     const reading = await this.deps.observer.exposure({
       environment: environment.name,
-      command: exposure.command,
+      command: exposureCommand(environment),
       commits,
     });
     const shortfall = exposureShortfall(environment.name, reading, exposureFloor(environment));

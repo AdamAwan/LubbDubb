@@ -57,6 +57,11 @@ export function parseAppErrorReport(stdout: string): AppErrorReport {
   } catch (err) {
     return unreadableErrors(`the errors command did not answer with JSON: ${(err as Error).message}`);
   }
+  return readAppErrorReport(json);
+}
+
+/** An errors report already parsed — an extension's answer, or the command's JSON. */
+export function readAppErrorReport(json: unknown): AppErrorReport {
   const listed = readEnvelope(json);
   if (typeof listed === 'string') return unreadableErrors(listed);
   const { groups, query, queryLink, refused: envelopeRefused } = listed;

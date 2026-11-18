@@ -25,6 +25,7 @@ know — and everything from the declaration onwards is a scripted pass with no 
 - **`unknown` never folds to `clean` — including a measure whose baseline was never taken.** A failed observation and a quiet release fail identically, and only one is about the work. → [§](#the-verdict) · `test/watchVerdict.test.ts`
 - **A window opens only for an arrival confirmed within two probe intervals, and the arrival is stamped either way.** Without it the first pulse after the feature ships opens a watch on every goal that ever arrived. → [§](#only-for-an-arrival-the-harness-watched) · `test/watchDesk.test.ts`
 - **Below the exposure floor every check reads `unknown` and no query is run.** A reading of tenants still on the old build is not evidence about the change, either way. → [§](#exposure) · `test/watchExposure.test.ts`
+- **Without `watch.extension`, every reading and exposure runs its command exactly as before, extension loaded or not; with it, an extension's answer is held to the same contract — `{since}` refused, id echo checked — and a failure is `unknown`, never `clean`.** → [§](#from-the-projects-extension) · `test/extensionReadings.test.ts`
 - **The window pass runs below the arrival pass, and inside it the order is open, settle, read, file.** Above the arrival pass the whole feature runs one pulse late for ever, with nothing red. → [§](#the-window) · _no test_
 - **A watch reading is never a `WorldEvent`.** `deliveryHold` expires a delivery verdict on any world event for the goal, so a reading would un-park the goal it just reported on. → [§](#a-reading-is-never-a-worldevent) · `test/watchFinding.test.ts`
 
@@ -727,6 +728,42 @@ come back empty. A wrapper that has stopped honouring `LUBBDUBB_WATCH_QUERY` the
 first reading either way.
 
 A reading is killed after 30 seconds, and the kill answers nothing.
+
+### From the project's extension
+
+**Built**, in `src/environments/extensionObserver.ts`. `"watch": { "extension": true, … }` hands an
+environment's readings and its exposure to the project's extension, through the `watchReading` and
+`watchExposure` slots of [42](42-extensions.md#the-slots). Only what answers changes: windows,
+verdicts, the bench row and the cockpit are the same.
+
+- **Opt-in per environment.** `RoutedEnvironmentObserver` is the one object that picks, per environment;
+  the window's reading, the exposure probe and the dry run all ask through it. An environment without
+  the key keeps its commands even when an extension fills the slots.
+- **Sources stay.** Each keeps its name, `language` and `runBy`; a `harness` source declares no
+  `observe`, and the extension answers it. `operator` sources are untouched — the harness still asks a
+  person. With no `sources`, the key stands for one `kql` source named `logs`, as `observe` alone does,
+  and `watch.queryUrl` stays its link. `resolveWatchSource` answers such a source with
+  `the "watchReading" slot` in place of its `observe`, so every reader of a source (the dry run, the
+  step capabilities, the authoring prompt) sees it as harness-read.
+- **`watchReading`** is handed the request a command gets in its variables, as data: `environment`,
+  `source`, `language`, `checkId`, `kind`, `since`, `until`, `commits` (null at the dry run) and the
+  `query` — **prepared exactly as for a command**: a query without `{since}` is refused before the slot
+  is asked, `{since}` and `{until}` are substituted, and a `kql` query carries the id projection. It
+  answers a list of rows, which are read by `readWatchRows` — `parseWatchResult` without its text step, the command's own contract: **each row
+  must carry `lubbdubbWatchId`**, a measure is one row with a numeric `value`. A typed input does not
+  prove the query was run, so the echo is kept.
+- **`watchExposure`** is handed `{ environment, commits }` and answers `{ share }`, 0 to 1. It is asked
+  only where `watch.exposure` is declared, which with the key carries `atLeast` and `waitMs` and no
+  `command`.
+- **One owner.** The key beside `watch.observe`, any source's `observe`, or `exposure.command` refuses
+  boot. The key with no loaded extension filling `watchReading` — or `watchExposure`, where exposure is
+  declared — refuses to build.
+- **Not-ok is `unknown`**: a failed, timed-out (30 seconds) or wrong-shaped reading is `unknown` with
+  the slot's words, never `clean`; a failed exposure is _could not tell_, which holds the window unread
+  as any exposure shortfall does. Recorded on the error log; never a fallback to a command.
+- **`describe` stays a command.** It answers the author, not a reading, so the key does not cover it; an
+  environment with no shell to run drops it and relies on `schema`.
+- **A restart means nothing here.** Each call is one question and one answer; the next pass asks again.
 
 ### How an author learns the schema
 

@@ -13,6 +13,13 @@ how-to. The worked example is the tenant slots: `src/extensions/slots.ts`,
 A second example, for a feature with no existing seam interface, is the review slots:
 `src/review/extensionReview.ts`, `test/extensionReview.test.ts`, and
 [07 § The review from the project's extension](../../../docs/spec/07-pull-requests.md#the-review-from-the-projects-extension).
+A third, for slots that replace a **shell command with an output contract**, one opt-in per environment,
+is the reading slots (`deployedCommits`, `appErrors`, `appErrorDetail`, `watchReading`,
+`watchExposure`): `src/environments/readingExtensions.ts`, `extensionProber.ts`, `extensionObserver.ts`,
+`src/appErrors/extensionReader.ts`, `test/extensionReadings.test.ts`, and the "From the project's
+extension" sections of [24](../../../docs/spec/24-environments.md#from-the-projects-extension),
+[29](../../../docs/spec/29-post-deploy-watch.md#from-the-projects-extension) and
+[39](../../../docs/spec/39-app-errors.md#from-the-projects-extension).
 
 ## 1. Find the seam
 
@@ -37,6 +44,14 @@ Write an `Extension<Thing>` class that calls `host.call(slot, input)`, typing th
 `Pick<ExtensionHost<ExtensionSlots>, 'provider' | 'call'>`. `call` never throws. Map
 `{ ok: false, detail }` to the seam's failure value, never to the old behaviour.
 
+If the slot replaces a command whose output has a contract, **read the extension's answer with that
+contract's own parser**, not a second copy of it. Split the parser into a text step and a value step and
+call the value step (`readAppErrorReport`, `readWatchRows`). Keep any guard the command had that a typed
+input does not make redundant: the watch still checks the id echo.
+
+If the reading is three-valued (reached / absent / unknown, ok / unknown), not-ok is the **unknown**
+arm, never a definite answer.
+
 The extension runs in-process, so a restart kills it. If the old implementation outlived restarts,
 write down what a restart now means. Tenants answer "not knowable": `follow` returns null.
 
@@ -52,9 +67,17 @@ write down what a restart now means. Tenants answer "not knowable": `follow` ret
   wrapping `opts.<thing>` so test fakes keep working. Route on one key only, and make the label method
   part of the seam, so every implementation, fakes included, answers it. The cockpit asks the desk
   (`system.remoteRuns.tenantSteps`), never the config.
+- **Per environment, route with `routeByEnvironment`** (`src/environments/readingExtensions.ts`): one
+  predicate per key, shared by the router and by every label helper (`atCommand`, `errorsListCommand`,
+  `exposureCommand`). Where a desk passes a command string down a seam, the extension's environments pass
+  a slot label instead. Routing and label must read the **same** predicate, or a command implementation
+  would run the label as a shell line. Build each router once and hand it to every desk that asks.
+- **An optional slot** (like `errors.detail` before it) answers "is there one?" from
+  `host.provider(slot)`, in the routed object (`RoutedAppErrorDetail.command`), not from config alone.
 - **Boot check.** In `buildFoundation` (`src/system/systemFoundation.ts`), beside
   `checkLoadedExtensions`, refuse to build if the key is opted in and no loaded extension fills the slot.
-  Test that with `opts.extensions`' `slots.has(slot)`.
+  Test that with `opts.extensions`' `slots.has(slot)`. Several keys that each need a slot are one table
+  (`READING_OPT_INS` / `checkReadingExtensions`), not one function per key.
 
 - **A pulse desk that asks a slot must not await it.** A slot can take minutes and the pulse must
   not. Fire the call, keep an in-flight set so the next pulse does not ask again, and have the test

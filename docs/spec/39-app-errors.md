@@ -26,6 +26,7 @@ them. Two things are **not yet built**, and each section that names them says so
 - **An `errors.list` with no `{since}` is refused at boot.** An unbounded query counts old errors as new on every read. → [§](#configuring-an-environment) · `test/appErrorsDesk.test.ts`
 - **A fingerprint reaches the detail command only through `LUBBDUBB_ERROR_FINGERPRINT`, never its text, and a `{fingerprint}` placeholder is refused.** It comes from the telemetry, so in a command's text it is whatever a shell makes of it. → [§](#configuring-an-environment) · `test/appErrorQuery.test.ts`
 - **`message` and `stack` go into no briefing, filed bug, pool document or prompt; a model sees one only through `app_error_detail`, which is recorded.** A message carries user data. → [§](#the-output-contract) · `test/appErrorTriage.test.ts`
+- **Without `errors.extension`, the errors read and the detail query run their commands exactly as before, extension loaded or not; with it, an extension that fails is `unknown`, never "no errors".** → [§](#from-the-projects-extension) · `test/extensionReadings.test.ts`
 - **`ok_at` moves only on an `ok` read, so the next `{since}` reaches back over a failed one.** A read that failed for a day would otherwise skip that day. → [§](#what-is-stored-and-for-how-long) · `test/appErrorsDesk.test.ts`
 - **An undecided window is no link, never a smaller window or zero candidates.** Read as "no candidates" it says the deploy shipped nothing and points the operator at the wrong deploy. → [§](#the-window) · `test/appErrorsLink.test.ts`
 - **The key is carried by the ticket as `searchKey` on `IssueCreateInput`, never by a prompt or a template token.** A bug filed without it is invisible to every other fleet, with nothing red. → [§](#the-key-on-the-ticket) · `test/appErrorTracker.test.ts`
@@ -79,6 +80,31 @@ fingerprint reaches the command **only through the environment**, never through 
 Four top-level keys tune it ([02](02-configuration.md)): `appErrorIntervalMs` (default 15 minutes),
 `appErrorMinCount` (default 2), `appErrorIgnore` (default empty) and `appErrorTriagePerDay` (default
 20; [agent triage](#agent-triage)).
+
+### From the project's extension
+
+**Built**, in `src/appErrors/extensionReader.ts`. `"errors": { "extension": true }` in place of `list`
+and `detail` hands an environment's errors to the project's extension, through the `appErrors` and
+`appErrorDetail` slots of [42](42-extensions.md#the-slots). Only what answers changes: `{since}`,
+grouping, states, links, triage and the cockpit are the same.
+
+- **Opt-in per environment.** `RoutedAppErrorReader` picks the list per environment, and
+  `RoutedAppErrorDetail` the detail query; an environment without the key keeps its commands even when
+  an extension fills the slots.
+- **`appErrors`** is handed `{ environment, since }` and answers what the command would print, as a
+  value: the list of groups, or `{ groups, query?, queryLink? }`. It is read by `readAppErrorReport` — `parseAppErrorReport` without its text step —
+  the [output contract](#the-output-contract) below, refusals and caps included.
+- **`appErrorDetail` is optional**, as `errors.detail` is. Handed `{ environment, fingerprint, since }`, it
+  answers `{ text }`, capped as the command's output is. Whether an environment has a detail query —
+  what the triage brief says and what `app_error_detail` runs — is one answer, `RoutedAppErrorDetail.command`:
+  `errors.detail`, or the slot where the extension fills it, or none.
+- **One owner.** The key beside `list` or `detail` refuses boot. The key with no loaded extension
+  filling `appErrors` refuses to build.
+- **Not-ok is `unknown`**, as a failed command is: the read is `unknown` with the slot's words, `ok_at`
+  does not move, and the next read reaches back over it. A failed detail is the detail query failing.
+  Recorded on the error log; never a fallback to a command. Each times out after a minute, the
+  command's kill.
+- **A restart means nothing here.** Each call is one question and one answer; the next read asks again.
 
 ## The output contract
 

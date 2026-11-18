@@ -12,6 +12,7 @@ import type { EnvironmentProber } from './prober.js';
 import { allGoalReach } from './reach.js';
 import { stuckGoals, stuckSaid } from './stuck.js';
 import type { WatchDesk } from './watchDesk.js';
+import { atCommand } from './readingExtensions.js';
 
 // → docs/spec/24-environments.md
 
@@ -159,7 +160,7 @@ export class EnvironmentDesk {
     if (pending.length === 0 && !this.headDue(environment)) return;
     this.headAskedAt.set(environment.name, this.now());
     try {
-      const head = await this.deps.prober.at(environment.name, environment.at);
+      const head = await this.deps.prober.at(environment.name, atCommand(environment));
       if (head.commits !== null) store.environments.recordEnvironmentHead(environment.name, head.commits.join(' '));
       const detail = head.detail;
       const held =

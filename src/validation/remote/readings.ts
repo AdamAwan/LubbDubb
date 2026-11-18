@@ -13,6 +13,7 @@ import { validationGoalDir } from '../resources.js';
 import { handsBackAScreen, stepArea, stepDriven, stepScript } from '../steps.js';
 import { remoteValidationRunDir } from './origin.js';
 import { foldCapture, foldRowOutcome, parseRunReport, type RowOutcome, type RunReport } from './report.js';
+import { atCommand } from '../../environments/readingExtensions.js';
 
 // → docs/spec/36-remote-validation.md#the-report-is-the-only-source-of-row-outcomes
 
@@ -439,7 +440,7 @@ export class RemoteReadingDesk {
 
   private async deployedSha(environment: EnvironmentConfig): Promise<string | null> {
     try {
-      const head = await this.deps.prober.at(environment.name, environment.at);
+      const head = await this.deps.prober.at(environment.name, atCommand(environment));
       return head.commits?.[0] ?? null;
     } catch (err) {
       this.deps.errors?.record({

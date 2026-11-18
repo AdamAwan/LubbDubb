@@ -1,4 +1,8 @@
 import type { SlotBook } from './contract.js';
+import { ERRORS_COMMAND_TIMEOUT_MS } from '../appErrors/command.js';
+import { READING_TIMEOUT_MS } from '../environments/prober.js';
+import type { WatchSourceLanguage } from '../types.js';
+import type { WatchQueryKind, WatchRow } from '../environments/watchResult.js';
 
 // → docs/spec/42-extensions.md#the-slots
 
@@ -19,6 +23,27 @@ interface ReviewedPr {
 export type ExtensionSlots = {
   ensureTenant: { input: { environment: string; tenant: string | null }; output: { tenant: string } };
   reseedTenant: { input: { environment: string; tenant: string }; output: undefined };
+  deployedCommits: { input: { environment: string }; output: { commits: string[] } };
+  appErrors: { input: { environment: string; since: string }; output: unknown };
+  appErrorDetail: {
+    input: { environment: string; fingerprint: string; since: string };
+    output: { text: string };
+  };
+  watchReading: {
+    input: {
+      environment: string;
+      source: string;
+      language: WatchSourceLanguage;
+      checkId: string;
+      query: string;
+      kind: WatchQueryKind;
+      since: string;
+      until: string;
+      commits: string[] | null;
+    };
+    output: WatchRow[];
+  };
+  watchExposure: { input: { environment: string; commits: string[] }; output: { share: number } };
   routeReview: {
     input: { pr: ReviewedPr; modes: string[]; allowSkip: boolean };
     output: { mode: string; reason: string } | { skip: true; reason: string };
@@ -51,6 +76,39 @@ export const EXTENSION_SLOTS: SlotBook<ExtensionSlots> = {
     timeoutMs: TENANT_SLOT_TIMEOUT_MS,
     check: (value) => (value === undefined ? null : 'it must answer nothing — a throw is how it says it failed'),
   },
+  deployedCommits: { timeoutMs: READING_TIMEOUT_MS, check: deployedCommitsRefusal },
+  appErrors: {
+    timeoutMs: ERRORS_COMMAND_TIMEOUT_MS,
+    check: (value) =>
+      typeof value === 'object' && value !== null
+        ? null
+        : 'it must answer the error groups as a list, or { groups, query?, queryLink? }',
+  },
+  appErrorDetail: {
+    timeoutMs: ERRORS_COMMAND_TIMEOUT_MS,
+    check: (value) => {
+      const text = (value as { text?: unknown } | null)?.text;
+      return typeof text === 'string' && text.trim() !== ''
+        ? null
+        : 'it must answer { text: "<what the telemetry holds on this group>" } — nothing to say is a throw';
+    },
+  },
+  watchReading: {
+    timeoutMs: READING_TIMEOUT_MS,
+    check: (value) =>
+      Array.isArray(value) && value.every((row) => typeof row === 'object' && row !== null && !Array.isArray(row))
+        ? null
+        : 'it must answer a list of rows, each an object',
+  },
+  watchExposure: {
+    timeoutMs: READING_TIMEOUT_MS,
+    check: (value) => {
+      const share = (value as { share?: unknown } | null)?.share;
+      return typeof share === 'number' && Number.isFinite(share) && share >= 0 && share <= 1
+        ? null
+        : 'it must answer { share }, a number from 0 to 1';
+    },
+  },
   routeReview: {
     timeoutMs: ROUTE_REVIEW_TIMEOUT_MS,
     check: (value) => {
@@ -75,3 +133,12 @@ export const EXTENSION_SLOTS: SlotBook<ExtensionSlots> = {
     },
   },
 };
+
+function deployedCommitsRefusal(value: unknown): string | null {
+  const commits = (value as { commits?: unknown } | null)?.commits;
+  if (!Array.isArray(commits) || commits.length === 0)
+    return 'it must answer { commits: ["<sha>", …] } naming at least one commit — not knowing is a throw';
+  if (!commits.every((c) => typeof c === 'string' && c.trim() !== '' && !/\s/.test(c)))
+    return 'each entry of "commits" must be one commit, a non-blank token with no spaces';
+  return null;
+}

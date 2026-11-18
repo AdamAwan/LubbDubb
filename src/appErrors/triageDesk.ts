@@ -44,6 +44,8 @@ interface AppErrorTriageDeskDeps {
   view: () => AppErrorsPayload;
   /** What the linker already holds for a commit. */
   knownChangedFiles: (sha: string) => string[] | null;
+  /** The detail query an environment has, or null; absent, its declared `errors.detail`. */
+  detailQuery?: (environment: string) => string | null;
   errors?: ErrorRecorder;
   now?: () => number;
 }
@@ -64,6 +66,11 @@ export class AppErrorTriageDesk {
 
   constructor(private readonly deps: AppErrorTriageDeskDeps) {
     this.now = deps.now ?? (() => Date.now());
+  }
+
+  private detailCommand(environment: EnvironmentConfig): string | null {
+    const { detailQuery } = this.deps;
+    return detailQuery === undefined ? (environment.errors?.detail ?? null) : detailQuery(environment.name);
   }
 
   /** @public called by the pulse, directly below `appErrorTracker`. Starts the assembly it owes and does not wait. */
@@ -176,7 +183,7 @@ export class AppErrorTriageDesk {
       subjects: entries.map(triageSubject),
       briefing: triageBriefing(entries, {
         readings: store.appErrors.listReads(),
-        detailQueries: new Set(this.deps.environments.filter((e) => e.errors?.detail !== undefined).map((e) => e.name)),
+        detailQueries: new Set(this.deps.environments.filter((e) => this.detailCommand(e) !== null).map((e) => e.name)),
       }),
     });
   }

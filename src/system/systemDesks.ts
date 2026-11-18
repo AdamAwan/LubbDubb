@@ -23,7 +23,7 @@ import { RunwayDesk } from '../supply/runwayDesk.js';
 import { BranchReapDesk } from '../pr/branchReapDesk.js';
 import { EnvironmentDesk } from '../environments/environmentDesk.js';
 import { AppErrorDesk } from '../appErrors/desk.js';
-import { CommandAppErrorReader } from '../appErrors/reader.js';
+import { CommandAppErrorReader, type AppErrorReader } from '../appErrors/reader.js';
 import { AppErrorLinker } from '../appErrors/linker.js';
 import { AppErrorTrackerDesk } from '../appErrors/tracker.js';
 import { appErrorView, CurrentAppErrors } from '../appErrors/current.js';
@@ -32,7 +32,10 @@ import { LessonDesk } from '../lessons/lessonDesk.js';
 import { LessonOutcomeDesk } from '../lessons/outcomeDesk.js';
 import { LessonPrReading } from '../lessons/lessonPrs.js';
 import { CommandEnvironmentHealthProber } from '../environments/healthProber.js';
-import { CommandEnvironmentProber } from '../environments/prober.js';
+import { CommandEnvironmentProber, type EnvironmentProber } from '../environments/prober.js';
+import { ExtensionEnvironmentProber, RoutedEnvironmentProber } from '../environments/extensionProber.js';
+import { ExtensionEnvironmentObserver, RoutedEnvironmentObserver } from '../environments/extensionObserver.js';
+import { ExtensionAppErrorReader, RoutedAppErrorReader } from '../appErrors/extensionReader.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from '../environments/observer.js';
 import { WatchDryRun } from '../environments/watchDryRun.js';
 import { CommandStateReader } from '../validation/remote/stateReader.js';
@@ -127,13 +130,18 @@ export function buildEnvironmentDesks(
   base: Foundation,
   proposals: Pick<ProposalDesk, 'accept'>,
 ) {
-  const { store, sink, errors, gitObserver } = base;
-  const environmentObserver = opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot);
+  const { store, sink, errors, gitObserver, extensions } = base;
+  const environmentObserver = new RoutedEnvironmentObserver(
+    config.environments,
+    opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot),
+    new ExtensionEnvironmentObserver(extensions),
+  );
+  const prober = environmentProber(config, opts, base);
   const watchAsks = new WatchAsks({ store, environments: config.environments, errors });
   const environments = new EnvironmentDesk({
     store,
     environments: config.environments,
-    prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    prober,
     healthProber: opts.environmentHealthProber ?? new CommandEnvironmentHealthProber(config.repoRoot),
     git: gitObserver,
     sink,
@@ -154,7 +162,7 @@ export function buildEnvironmentDesks(
   const appErrors = new AppErrorDesk({
     store,
     environments: config.environments,
-    reader: opts.appErrorReader ?? new CommandAppErrorReader(config.repoRoot),
+    reader: appErrorReader(config, opts, base),
     intervalMs: config.appErrorIntervalMs,
     errors,
   });
@@ -176,6 +184,7 @@ export function buildEnvironmentDesks(
     current: appErrorPayloads,
     view: () => appErrorView(store, config, Date.now()),
     knownChangedFiles: linker.knownChangedFiles,
+    detailQuery: (environment) => base.appErrorDetails.command(environment),
     errors,
   });
 
@@ -193,8 +202,26 @@ export function buildEnvironmentDesks(
     watchAsks,
     appErrorPayloads,
     appErrorTriage,
-    ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
+    ...buildRemoteValidationDesks(config, opts, base, { observer: environmentObserver, prober }, proposals),
   };
+}
+
+/** The `at` prober every desk asks, routed per environment between its command and the extension. */
+function environmentProber(config: Config, opts: BuildOptions, base: Foundation): EnvironmentProber {
+  return new RoutedEnvironmentProber(
+    config.environments,
+    opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    new ExtensionEnvironmentProber(base.extensions),
+  );
+}
+
+/** The errors reader, routed per environment between `errors.list` and the extension. */
+function appErrorReader(config: Config, opts: BuildOptions, base: Foundation): AppErrorReader {
+  return new RoutedAppErrorReader(
+    config.environments,
+    opts.appErrorReader ?? new CommandAppErrorReader(config.repoRoot),
+    new ExtensionAppErrorReader(base.extensions),
+  );
 }
 
 export type LessonDesks = ReturnType<typeof buildLessonDesks>;
@@ -239,7 +266,7 @@ function buildRemoteValidationDesks(
   config: Config,
   opts: BuildOptions,
   base: Foundation,
-  environmentObserver: EnvironmentObserver,
+  readings: { observer: EnvironmentObserver; prober: EnvironmentProber },
   proposals: Pick<ProposalDesk, 'accept'>,
 ) {
   const { store, sink, errors, gitObserver, extensions } = base;
@@ -265,7 +292,7 @@ function buildRemoteValidationDesks(
     store,
     environments: config.environments,
     desk: remoteValidation,
-    prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    prober: readings.prober,
     git: gitObserver,
     tenants: new RoutedTenantKeeper(
       config.environments,
@@ -300,7 +327,7 @@ function buildRemoteValidationDesks(
   const remoteReadings = new RemoteReadingDesk({
     store,
     environments: config.environments,
-    prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    prober: readings.prober,
     validationRoot: config.validationRoot,
     errors,
   });

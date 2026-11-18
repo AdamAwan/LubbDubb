@@ -2,19 +2,29 @@ import type { EnvironmentGate, RemoteRowKind } from '../types.js';
 import { QUERY_URL_TOKENS } from './watchQueryUrl.js';
 import { SINCE_TOKEN } from '../appErrors/report.js';
 import { FINGERPRINT_TOKEN } from '../appErrors/detailCommand.js';
+import { validateAt, validateErrorsExtension, validateWatchExtension } from './readingPolicy.js';
 import { WATCH_SOURCE_LANGUAGES, WATCH_SOURCE_RUNNERS, type WatchSourceConfig } from './watchSource.js';
 
 // → docs/spec/24-environments.md
 
 export interface EnvironmentConfig {
   name: string;
-  at: string;
+  at?: string;
+  /** The project's extension says which commit this environment is at. → docs/spec/24-environments.md#from-the-projects-extension */
+  atExtension?: true;
   group?: string;
   health?: string;
   arrival?: EnvironmentArrival;
   watch?: EnvironmentWatch;
   validate?: EnvironmentValidate;
-  errors?: { list: string; detail?: string };
+  errors?: EnvironmentErrors;
+}
+
+interface EnvironmentErrors {
+  list?: string;
+  detail?: string;
+  /** The project's extension lists the error groups and answers the detail. → docs/spec/39-app-errors.md#from-the-projects-extension */
+  extension?: true;
 }
 
 const REMOTE_ROW_KINDS: readonly RemoteRowKind[] = ['check', 'state'];
@@ -50,6 +60,8 @@ interface EnvironmentValidateBrowser {
 
 interface EnvironmentWatch {
   observe?: string;
+  /** The project's extension answers this environment's readings and exposure. → docs/spec/29-post-deploy-watch.md#from-the-projects-extension */
+  extension?: true;
   sources?: Record<string, WatchSourceConfig>;
   schema?: string;
   describe?: string;
@@ -61,7 +73,7 @@ interface EnvironmentWatch {
 }
 
 interface EnvironmentWatchExposure {
-  command: string;
+  command?: string;
   atLeast?: number;
   waitMs?: number;
 }
@@ -122,11 +134,7 @@ export function validateEnvironments(environments: EnvironmentConfig[]): void {
         `${where} ("${env.name}"): "command" is no longer read. An environment now names the commit it is *at* — ` +
           'replace it with "at", a command printing the deployed commit, and the harness answers every landing from it.',
       );
-    if (typeof env.at !== 'string' || env.at.trim() === '')
-      throw new Error(
-        `${where} ("${env.name}"): "at" must be a non-empty command printing the commit this environment is at. ` +
-          'An empty one names nothing, which leaves every goal unanswered forever.',
-      );
+    validateAt(env, `${where} ("${env.name}")`);
     if (env.health !== undefined && (typeof env.health !== 'string' || env.health.trim() === ''))
       throw new Error(
         `${where} ("${env.name}"): "health" must be a non-empty command printing a {"state": …} report, ` +
@@ -183,6 +191,10 @@ function validateErrors(errors: EnvironmentConfig['errors'], where: string): voi
   if (errors === undefined) return;
   if (typeof errors !== 'object' || errors === null || Array.isArray(errors))
     throw new Error(`${where}: "errors" must be an object — {"list": "./scripts/errors.sh {since}"}.`);
+  if (errors.extension !== undefined) {
+    validateErrorsExtension(errors, where);
+    return;
+  }
   if (typeof errors.list !== 'string' || errors.list.trim() === '')
     throw new Error(
       `${where}: "errors.list" must be a non-empty command printing a JSON list of error groups, or "errors" ` +
@@ -274,14 +286,16 @@ function validateWatch(env: EnvironmentConfig, where: string): void {
     );
   validateWatchQueryUrl(watch.queryUrl, where);
   if (watch.holds !== undefined) validateWatchHolds(watch.holds, where);
-  if (watch.exposure !== undefined) validateWatchExposure(watch.exposure, where);
+  if (watch.exposure !== undefined) validateWatchExposure(watch.exposure, where, watch.extension === true);
 }
 
 function validateWatchAnswers(watch: EnvironmentWatch, where: string): void {
+  if (watch.extension !== undefined) validateWatchExtension(watch, where);
   if (watch.sources !== undefined) {
     validateWatchSources(watch, where);
     return;
   }
+  if (watch.extension === true) return;
   if (typeof watch.observe !== 'string' || watch.observe.trim() === '')
     throw new Error(
       `${where}: "watch.observe" must be a non-empty command that answers a declared query, or "watch.sources" ` +
@@ -310,10 +324,11 @@ function validateWatchSources(watch: EnvironmentWatch, where: string): void {
       `${where}: "watch.sources" is empty. It reads as a watch and can answer nothing — name a source, or drop ` +
         'the "watch" block.',
     );
-  for (const name of names) validateWatchSource(name, sources[name]!, `${where} "watch.sources.${name}"`);
+  for (const name of names)
+    validateWatchSource(name, sources[name]!, `${where} "watch.sources.${name}"`, watch.extension === true);
 }
 
-function validateWatchSource(name: string, source: WatchSourceConfig, where: string): void {
+function validateWatchSource(name: string, source: WatchSourceConfig, where: string, extension: boolean): void {
   if (name.trim() === '' || /\s/.test(name))
     throw new Error(`${where}: a source name must be a non-empty word — it is what a check names.`);
   if (typeof source !== 'object' || source === null || Array.isArray(source))
@@ -325,7 +340,7 @@ function validateWatchSource(name: string, source: WatchSourceConfig, where: str
     );
   if (!WATCH_SOURCE_RUNNERS.includes(source.runBy))
     throw new Error(`${where}: "runBy" must be ${WATCH_SOURCE_RUNNERS.join(' or ')} — who can put a query to it.`);
-  if (source.runBy === 'harness' && (typeof source.observe !== 'string' || source.observe.trim() === ''))
+  if (!extension && source.runBy === 'harness' && (typeof source.observe !== 'string' || source.observe.trim() === ''))
     throw new Error(
       `${where}: a source the harness runs needs a non-empty "observe" command. Without one every check that ` +
         'names it is unanswerable forever.',
@@ -338,10 +353,10 @@ function validateWatchSource(name: string, source: WatchSourceConfig, where: str
   validateWatchQueryUrl(source.queryUrl, where, 'queryUrl');
 }
 
-function validateWatchExposure(exposure: EnvironmentWatchExposure, where: string): void {
+function validateWatchExposure(exposure: EnvironmentWatchExposure, where: string, extension: boolean): void {
   if (typeof exposure !== 'object' || exposure === null || Array.isArray(exposure))
     throw new Error(`${where}: "watch.exposure" must be an object — {"command": "...", "atLeast": 0.9}.`);
-  if (typeof exposure.command !== 'string' || exposure.command.trim() === '')
+  if (!extension && (typeof exposure.command !== 'string' || exposure.command.trim() === ''))
     throw new Error(
       `${where}: "watch.exposure.command" must be a non-empty command that says what share of traffic runs a ` +
         'build carrying the commits in LUBBDUBB_WATCH_COMMITS.',

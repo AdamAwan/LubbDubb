@@ -41,6 +41,7 @@ at a moment somebody chooses, whether the product still works with this change i
 - **With no environment naming a gate, `openedGoals` returns null, never an empty set.** An empty set withholds every bench row on every deployment and looks exactly like the feature working. → [§](#opens) · `test/environments.test.ts`
 - **An arrival is announced only if the harness watched it happen, and is stamped either way.** Drop either half and a rename, a new environment or a new build comments on every ticket that ever shipped. → [§](#announcing-an-arrival) · `test/environments.test.ts`
 - **An arrival is never written as a `WorldEvent`.** `deliveryHold` expires a delivery verdict on any world event for the goal, so one would un-park the goal it announced and hand the work back to the fleet. → [§](#every-part-every-environment) · _no test_
+- **Without `atExtension`, an environment's head comes from its `at` command exactly as before, extension loaded or not; with it, an extension that cannot answer is a probe that did not answer — every landing `unknown`, the head untouched — never `absent`.** → [§](#from-the-projects-extension) · `test/extensionReadings.test.ts`
 - **`ValidationReadyDesk` runs above `DeliveryCloseOutDesk` in the pulse.** Below it, the close-out is asked for on the very pulse the delivery lands, beside the checks it should wait for. → [§](#the-bench-asks-for-one-thing-at-a-time) · `test/pulsePipeline.test.ts`
 
 ## What it is not
@@ -127,6 +128,32 @@ environment only when it is in _every_ commit named. The laggard governs, which 
 
 A probe is killed after 30 seconds and the kill answers nothing: a probe that hung is a probe that
 said nothing.
+
+### From the project's extension
+
+**Built**, in `src/environments/extensionProber.ts`. `"atExtension": true` in place of `at` hands
+"which commit is this environment at" to the project's extension, through the `deployedCommits` slot of
+[42](42-extensions.md#the-slots). Only what answers changes: the head record, the clone's verdicts, the
+interval and everything downstream are the same.
+
+- **Opt-in per environment.** An environment without the key keeps `CommandEnvironmentProber` even
+  when an extension fills the slot. `RoutedEnvironmentProber` is the one object that picks, per
+  environment, and every desk that asks for a head (the environment desk, the remote-run and
+  remote-reading desks) asks through it. The command a desk hands it is `atCommand`
+  (`src/environments/readingExtensions.ts`): `at`, or `the "deployedCommits" slot` in its place.
+- **The slot is asked `{ environment }` and answers `{ commits }`**: at least one, each one token —
+  the several-services rule above holds unchanged. Nothing about a commit is passed in, for the reason
+  `at` passes nothing.
+- **One owner.** `at` beside `atExtension` refuses boot, as does `atExtension` that is not `true`; with
+  neither, the old refusal stands in its old words. The key with no loaded extension filling
+  `deployedCommits` refuses to build (`checkReadingExtensions`, beside the other extension checks in
+  `buildFoundation`).
+- **Not-ok is the probe not answering**: a throw, a timeout (30 seconds, as the command's kill) or a
+  wrong-shaped answer leaves every landing `unknown` with the slot's own words as its detail, records
+  it on the error log, and leaves the head as it was. It never falls back to a command, and is never
+  `absent`.
+- **A restart means nothing here.** A call is one question and one answer; nothing outlives it, so a
+  restart loses at most the call in flight, and the next probe asks again.
 
 ### The head
 

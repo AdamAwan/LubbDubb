@@ -12,7 +12,10 @@ export interface EnvironmentProber {
   at(environment: string, command: string): Promise<EnvironmentHead>;
 }
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+/** How long a reading may take before it answers nothing: a command's kill, an extension slot's timeout. */
+export const READING_TIMEOUT_MS = 30_000;
+
+const DEFAULT_TIMEOUT_MS = READING_TIMEOUT_MS;
 
 export class CommandEnvironmentProber implements EnvironmentProber {
   constructor(

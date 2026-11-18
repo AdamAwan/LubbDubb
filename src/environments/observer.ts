@@ -8,6 +8,7 @@ import {
   type WatchResult,
 } from './watchResult.js';
 import { firstLine } from '../primitives.js';
+import { READING_TIMEOUT_MS } from './prober.js';
 import type { WatchSourceLanguage } from '../types.js';
 import { commitsVariable, parseExposure, unexposed, type ExposureReading, type ExposureRequest } from './exposure.js';
 
@@ -49,7 +50,7 @@ export interface EnvironmentObserver {
   exposure(request: ExposureRequest): Promise<ExposureReading>;
 }
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = READING_TIMEOUT_MS;
 
 export class CommandEnvironmentObserver implements EnvironmentObserver {
   constructor(

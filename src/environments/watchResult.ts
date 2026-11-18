@@ -5,7 +5,7 @@ import { carriesSince, missingSinceRefusal, withPeriod } from '../validation/wat
 
 export type WatchQueryKind = 'signal' | 'presence' | 'measure';
 
-type WatchRow = Record<string, string | number | boolean | null>;
+export type WatchRow = Record<string, string | number | boolean | null>;
 
 export const WATCH_ID_COLUMN = 'lubbdubbWatchId';
 
@@ -75,6 +75,7 @@ export function parseOperatorAnswer(answer: string, kind: WatchQueryKind): Watch
 }
 
 interface ContractWords {
+  unechoed: string;
   empty: string;
   notJson: string;
   notList: string;
@@ -82,6 +83,7 @@ interface ContractWords {
 }
 
 const OBSERVATION_SAID: ContractWords = {
+  unechoed: 'the command answered without the query it was given',
   empty: 'the observation exited 0 and printed nothing',
   notJson: 'the observation did not answer with JSON',
   notList: 'the observation answered with something other than a list of rows',
@@ -89,10 +91,18 @@ const OBSERVATION_SAID: ContractWords = {
 };
 
 const ANSWER_SAID: ContractWords = {
+  unechoed: 'the command answered without the query it was given',
   empty: 'the answer was empty',
   notJson: 'the answer was not JSON rows, or one number for a measure',
   notList: 'the answer was something other than a list of rows',
   notRows: 'the answer was a list of something other than rows',
+};
+
+const EXTENSION_SAID: ContractWords = {
+  ...OBSERVATION_SAID,
+  unechoed: 'the extension answered without the query it was given',
+  notList: 'the extension answered with something other than a list of rows',
+  notRows: 'the extension answered with a list of something other than rows',
 };
 
 function parseRows(stdout: string, kind: WatchQueryKind, echo: string | null, said: ContractWords): WatchResult {
@@ -104,13 +114,21 @@ function parseRows(stdout: string, kind: WatchQueryKind, echo: string | null, sa
   } catch (err) {
     return unanswered(`${said.notJson}: ${(err as Error).message}`);
   }
+  return readRows(json, kind, echo, said);
+}
+
+/** An extension's answer, already a value, held to the command's contract — id echo included. */
+export function readWatchRows(json: unknown, checkId: string, kind: WatchQueryKind): WatchResult {
+  return readRows(json, kind, checkId, EXTENSION_SAID);
+}
+
+function readRows(json: unknown, kind: WatchQueryKind, echo: string | null, said: ContractWords): WatchResult {
   if (!Array.isArray(json)) return unanswered(said.notList);
   const rows: WatchRow[] = [];
   for (const entry of json) {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return unanswered(said.notRows);
     const row = entry as WatchRow;
-    if (echo !== null && row[WATCH_ID_COLUMN] !== echo)
-      return unanswered('the command answered without the query it was given');
+    if (echo !== null && row[WATCH_ID_COLUMN] !== echo) return unanswered(said.unechoed);
     rows.push(row);
   }
   if (kind !== 'measure') return { rows, value: null, verdict: 'answered', detail: null };
