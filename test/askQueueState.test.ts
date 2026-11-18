@@ -122,7 +122,17 @@ test('askQueue is the same list, standing rows only, in the order a one-at-a-tim
 });
 
 test('a dirty that names a section feeding the queue names the queue too, and the frequent fleet ones do not', () => {
-  const emitters = ['harness', 'agents', 'escalations', 'errors', 'localRun', 'localRunWatch', 'readying', 'desktop'];
+  const emitters = [
+    'harness',
+    'agents',
+    'escalations',
+    'errors',
+    'localRun',
+    'localRunWatch',
+    'readying',
+    'desktop',
+    'listener',
+  ];
   const fake = Object.fromEntries(emitters.map((name) => [name, new EventEmitter()]));
   const hub = new Hub({
     ...fake,

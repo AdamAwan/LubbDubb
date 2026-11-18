@@ -114,6 +114,7 @@ export class Hub {
     localRun.on('changed', refetchLocalRun);
     localRunWatch.on('changed', refetchLocalRun);
     system.desktop.on('changed', (change) => this.broadcast(change));
+    system.listener.on('changed', () => this.broadcast({ type: 'dirty', sections: ['asks'] }));
     system.localValidations.on('changed', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
     system.remoteRuns.on('tenantSettled', () => this.broadcast({ type: 'dirty', sections: ['goals', 'harness'] }));
   }

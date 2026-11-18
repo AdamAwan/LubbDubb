@@ -23,6 +23,7 @@ import { wireBlocks } from '../escalation/blocked.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from '../mcp/server.js';
 import type { McpDesktopServer } from '../mcp/desktop.js';
 import { buildDesktop } from './systemDesktop.js';
+import { Listener } from '../listen/listener.js';
 import { ValidationReadyDesk } from '../validation/readyDesk.js';
 import type { WatchDryRunner } from '../environments/watchDryRun.js';
 import type { WatchAsks } from '../environments/watchAsks.js';
@@ -164,6 +165,8 @@ export interface System {
   attachments: AttachmentFiles;
   mcp: McpBridgeServer;
   desktop: McpDesktopServer;
+  /** Whether a Claude chat is running the listen loop, and what the Needs you page sent it. → docs/spec/44-needs-you.md#the-wait */
+  listener: Listener;
   plugin: ReturnType<typeof buildPluginDesk>;
   /** The project's extensions and the slots they fill. → docs/spec/42-extensions.md */
   extensions: ReturnType<typeof buildExtensionHost>;
@@ -183,7 +186,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const late = lateBinding();
   const base = buildFoundation(config, opts);
   const runtime = buildAgentRuntime(config, opts, base);
-  const channels = buildChannels(config, base, late);
+  const listener = new Listener(opts.listenClock);
+  const channels = buildChannels(config, base, late, listener);
   const crew = buildAgentManager(config, base, runtime, channels, late);
   const fleet = buildFleet(config, opts, base, runtime, channels, crew);
   const intake = buildIntakeDesks(config, opts, base, channels);
@@ -241,6 +245,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     attachments: runtime.attachments,
     mcp: channels.mcp,
     desktop: channels.desktop,
+    listener,
     plugin: buildPluginDesk(config, opts, base.errors),
     extensions: base.extensions,
     ...foundationParts(base),
@@ -274,7 +279,7 @@ interface HarnessPhases {
 
 export type Channels = ReturnType<typeof buildChannels>;
 
-function buildChannels(config: Config, base: Foundation, late: LateBinding) {
+function buildChannels(config: Config, base: Foundation, late: LateBinding, listener: Listener) {
   const { store, errors, sink, areaPaths, watchLabel } = base;
   const mcp: McpBridgeServer = new McpBridgeServer({
     store,
@@ -335,7 +340,7 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
     }),
   );
 
-  const desktop = buildDesktop(config, base, prompts, late);
+  const desktop = buildDesktop(config, base, prompts, late, listener);
   return { mcp, prompts, reviewCharters, desktop };
 }
 

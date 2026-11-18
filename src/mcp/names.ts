@@ -276,6 +276,8 @@ export const DESKTOP_TOOL_NAMES = [
   'pr_assign',
   'ask_next',
   'ask_skip',
+  'ask_wait',
+  'pr_read',
 ] as const;
 
 export type DesktopToolName = (typeof DESKTOP_TOOL_NAMES)[number];
