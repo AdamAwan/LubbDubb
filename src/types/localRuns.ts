@@ -45,7 +45,12 @@ export interface LocalRunReadings {
   freshness: LocalRunFreshness | null;
 }
 
-export type LocalValidationStatus = 'pending' | 'dispatched' | 'passed' | 'failed' | 'blocked' | 'abandoned';
+export type LocalValidationStatus =
+  'pending' | 'dispatched' | 'passed' | 'failed' | 'blocked' | 'skipped' | 'abandoned';
+
+export type LocalValidationResult = Extract<LocalValidationStatus, 'passed' | 'failed' | 'blocked' | 'skipped'>;
+
+export type LocalValidationRequester = 'operator' | 'auto';
 
 export interface LocalValidationFinding {
   title: string;
@@ -71,11 +76,13 @@ export interface LocalValidation {
   ref: string;
   commit: string | null;
   status: LocalValidationStatus;
+  requestedBy: LocalValidationRequester;
   requestedAt: string;
   dispatchedAt: string | null;
   endedAt: string | null;
   taskId: string | null;
   fixTaskId: string | null;
+  fixTicketRef: string | null;
   plan: string | null;
   summary: string | null;
   findings: LocalValidationFinding[];

@@ -62,6 +62,7 @@ type PromptId =
   | 'blueprint-ticket-body'
   | 'brief-ticket-body'
   | 'app-error-ticket-body'
+  | 'local-validation-ticket-body'
   | 'app-error-triage'
   | 'repo-lesson'
   | 'bot-pr-risk'

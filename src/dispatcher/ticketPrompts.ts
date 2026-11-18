@@ -221,6 +221,20 @@ export const TICKET_PROMPTS = {
       'Placeholders: {title} {environment} {state} {count} {firstSeen} {lastSeen} {operation} {version} ' +
       '{frames} {link}.',
   },
+  'local-validation-ticket-body': {
+    placeholders: ['number', 'title', 'summary', 'findings', 'commit'],
+    template:
+      'A local validation of #{number} ({title}) failed after it merged. The harness brought the integration ' +
+      'branch up at {commit}, an agent drove it, and this is what it found.\n\n' +
+      '{summary}\n\n' +
+      '## Findings\n\n{findings}',
+    doc:
+      'The **body** of the bug the harness files when a local validation that ran on the integration ' +
+      'branch \u2014 a goal validated after it merged \u2014 reports failed (docs/spec/32-local-validation.md). ' +
+      'Not a prompt: it is written straight into the tracker, so an override is house style for how such a ' +
+      'bug reads. The harness adds the watch label and the relation to the goal itself, so an override ' +
+      'cannot drop either. Placeholders: {number} {title} {summary} {findings} {commit}.',
+  },
   'app-error-triage': {
     placeholders: ['count'],
     template:

@@ -1,6 +1,13 @@
 import { join } from 'node:path';
 import { recordingInstructions } from '../recording.js';
-import type { LocalRun, LocalValidation, Plan, PlanPart, ValidationCheck } from '../../types.js';
+import type {
+  LocalRun,
+  LocalValidation,
+  LocalValidationFinding,
+  Plan,
+  PlanPart,
+  ValidationCheck,
+} from '../../types.js';
 
 // → docs/spec/32-local-validation.md
 
@@ -15,6 +22,8 @@ interface ValidationBrief {
   setup: string;
   outputDir: string;
   browserKey: string | null;
+  auto: boolean;
+  merges: string[];
 }
 
 function said(value: string | null | undefined): string | null {
@@ -165,8 +174,25 @@ function toolsSection(): string {
     `- \`local_run_read\` — what the environment is doing right now: status, URL, the ports it holds, and the ` +
     `tail of the session bringing it up. Read it rather than guessing, and read it again rather than ` +
     `remembering.\n` +
-    `- \`local_validation_report\` — \`passed\`, \`failed\` or \`blocked\`, with a summary, every state ` +
+    `- \`local_validation_report\` — \`passed\`, \`failed\` or \`blocked\` (or \`skipped\`, only where told), with a summary, every state ` +
     `change you made, and, for a failure, the findings. This ends the run.\n`
+  );
+}
+
+function autoSection(auto: boolean, merges: string[]): string {
+  if (!auto) return '';
+  const diff =
+    merges.length === 0
+      ? `Read the diff before anything else.`
+      : `This goal has already merged, so the checkout is the integration branch and its own diff is in ` +
+        `the merge commits: ${merges.map((sha) => `\`${sha}\``).join(', ')} — read them with \`git show\` ` +
+        `before anything else. A failure here dispatches no fix, so say in the summary what to fix.`;
+  return (
+    `## Nobody asked for this one\n\n` +
+    `The harness started this validation on its own, because the goal's work is finished. ${diff} ` +
+    `If it changes nothing a user could see or do — a refactor, tests, build or internal tooling, a ` +
+    `change only another service would notice — report \`skipped\` straight away with one sentence ` +
+    `saying why, and do not drive the application. If any of it reaches a user, run the plan as usual.\n`
   );
 }
 
@@ -180,6 +206,7 @@ export function localValidationBriefing(brief: ValidationBrief): string {
     browserSection(brief.browserKey, brief.outputDir),
     rulesSection(brief.outputDir),
     toolsSection(),
+    autoSection(brief.auto, brief.merges),
   ]
     .filter((section) => section !== '')
     .join('\n');
@@ -191,6 +218,15 @@ const SEVERITY_WORD: Record<string, string> = {
   nit: 'Nit',
 };
 
+export function findingItem(finding: LocalValidationFinding, index: number): string {
+  const where = finding.url === null ? '' : `\n\n  Found on: ${finding.url}`;
+  const shot =
+    finding.screenshot === null
+      ? ''
+      : `\n\n  Screenshot: \`${finding.screenshot}\` (in the goal's validation directory)`;
+  return `${String(index + 1)}. **${SEVERITY_WORD[finding.severity] ?? finding.severity} — ${finding.title}**\n\n  ${finding.detail.replace(/\n/g, '\n  ')}${where}${shot}`;
+}
+
 export function localValidationFixBriefing(row: LocalValidation, run: LocalRun | null): string {
   const lines = [
     `\n\n---\n`,
@@ -200,16 +236,7 @@ export function localValidationFixBriefing(row: LocalValidation, run: LocalRun |
     `> ${quote(row.summary ?? '(no summary was recorded)')}\n`,
     `### The findings\n`,
   ];
-  for (const [index, finding] of row.findings.entries()) {
-    const where = finding.url === null ? '' : `\n\n  Found on: ${finding.url}`;
-    const shot =
-      finding.screenshot === null
-        ? ''
-        : `\n\n  Screenshot: \`${finding.screenshot}\` (in the goal's validation directory)`;
-    lines.push(
-      `${String(index + 1)}. **${SEVERITY_WORD[finding.severity] ?? finding.severity} — ${finding.title}**\n\n  ${finding.detail.replace(/\n/g, '\n  ')}${where}${shot}\n`,
-    );
-  }
+  for (const [index, finding] of row.findings.entries()) lines.push(`${findingItem(finding, index)}\n`);
   if (row.plan !== null) lines.push(`### The plan it ran\n\n${row.plan}\n`);
   if (row.setup.length > 0)
     lines.push(

@@ -1,4 +1,5 @@
 import type {
+  GoalLanding,
   BotPrOutcome,
   BotPrRisk,
   FeatureSummary,
@@ -85,6 +86,8 @@ export interface DispatchContext {
   watchTickAnswers?: PlanCaveatAnswer[];
   localRun?: LocalRun | null;
   localValidations?: LocalValidation[];
+  /** Merge commits per goal, read for a local validation running on the integration branch. */
+  goalLandings?: GoalLanding[];
   remoteRuns?: RemoteRunBrief[];
   /** The one risk run waiting for its agent, if there is one. → 37-bot-prs.md#the-risk-summary */
   botPrRiskRun?: PendingBotPrRiskRun | null;

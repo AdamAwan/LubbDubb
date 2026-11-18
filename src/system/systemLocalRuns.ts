@@ -2,11 +2,17 @@ import type { Config } from '../config/config.js';
 import { fetchRemote } from '../git/gitCli.js';
 import { openPrForIssue } from '../dispatcher/issuePickup.js';
 import { LocalRunner } from '../localRun/runner.js';
+import { localRunConfigured } from '../localRun/policy.js';
 import { LocalValidationDesk } from '../validation/local/desk.js';
+import { LocalValidationAutoPress } from '../validation/local/auto.js';
+import { LocalValidationTicketDesk } from '../validation/local/ticket.js';
+import { trackerCoordinates } from '../mcp/findings.js';
+import type { TicketFiler } from '../tickets/filing.js';
+import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import { LocalRunWatch } from '../localRun/watch.js';
 import { CommandPortLister } from '../localRun/ports.js';
 import { FakePortLister } from '../localRun/fakePortLister.js';
-import { localRunChoices } from '../localRun/ref.js';
+import { localRunChoices, type LocalRunChoices } from '../localRun/ref.js';
 import { bySlug, partBase, planIssueNumber } from '../plans/parts.js';
 import type { BuildOptions, Foundation, AgentRuntime } from './systemFoundation.js';
 
@@ -14,9 +20,29 @@ import type { BuildOptions, Foundation, AgentRuntime } from './systemFoundation.
 
 export type LocalRuns = ReturnType<typeof buildLocalRuns>;
 
-export function buildLocalRuns(config: Config, opts: BuildOptions, base: Foundation, runtime: AgentRuntime) {
+interface LocalRunNeighbours {
+  pulse: { localCycles: { request(): void } };
+  bench: { filing: TicketFiler };
+  channels: { prompts: PromptTemplates };
+}
+
+export function buildLocalRuns(
+  config: Config,
+  opts: BuildOptions,
+  base: Foundation,
+  runtime: AgentRuntime,
+  { pulse, bench, channels }: LocalRunNeighbours,
+) {
   const { store, worktrees, gitObserver, errors } = base;
   const { agentSetup, reapTree, realTransport } = runtime;
+  const choicesFor = (originRef: string): LocalRunChoices => {
+    const plan = store.plans.getPlanByOrigin(originRef);
+    const number = planIssueNumber(originRef);
+    const world = store.world.getWorldBaseline();
+    const issue = number === null ? undefined : world?.issues.find((i) => i.number === number);
+    const own = issue ? (openPrForIssue(issue, world?.pullRequests ?? [])?.branch ?? null) : null;
+    return localRunChoices(plan ? store.plans.listPlanParts(plan.id) : [], own);
+  };
   const localRun = new LocalRunner({
     store,
     worktrees,
@@ -26,14 +52,7 @@ export function buildLocalRuns(config: Config, opts: BuildOptions, base: Foundat
     claudeArgs: config.claudeArgs,
     permissionMode: config.agentPermissionMode,
     defaultBranch: config.defaultBranch,
-    choicesFor: (originRef) => {
-      const plan = store.plans.getPlanByOrigin(originRef);
-      const number = planIssueNumber(originRef);
-      const world = store.world.getWorldBaseline();
-      const issue = number === null ? undefined : world?.issues.find((i) => i.number === number);
-      const own = issue ? (openPrForIssue(issue, world?.pullRequests ?? [])?.branch ?? null) : null;
-      return localRunChoices(plan ? store.plans.listPlanParts(plan.id) : [], own);
-    },
+    choicesFor,
     reap: reapTree,
     errors,
   });
@@ -63,5 +82,26 @@ export function buildLocalRuns(config: Config, opts: BuildOptions, base: Foundat
   localRun.on('changed', () => {
     localValidations.sweep();
   });
-  return { localRun, localRunWatch, localValidations };
+  const localValidationAuto = new LocalValidationAutoPress({
+    store,
+    on: () => config.localValidation.auto,
+    configured: () => localRunConfigured(config.localRun),
+    start: (originRef, at) => localRun.start(originRef, at),
+    request: (input) => localValidations.request(input),
+    tipOf: (ref) => worktrees.previewCommit(ref),
+    choicesFor,
+    cycle: () => pulse.localCycles.request(),
+    errors,
+  });
+  const localValidationTickets = new LocalValidationTicketDesk({
+    store,
+    filing: bench.filing,
+    canFile: () => trackerCoordinates(config) !== null,
+    prompts: channels.prompts,
+    watchLabel: base.watchLabel,
+    defaultBranch: config.defaultBranch,
+    errors,
+    changed: () => localValidations.emit('changed'),
+  });
+  return { localRun, localRunWatch, localValidations, localValidationAuto, localValidationTickets };
 }

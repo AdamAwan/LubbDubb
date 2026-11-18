@@ -14,6 +14,7 @@ export const STATUS_WORD: Record<LocalValidationStatus, string> = {
   passed: 'passed',
   failed: 'failed',
   blocked: 'blocked',
+  skipped: 'skipped',
   abandoned: 'called off',
 };
 
@@ -44,6 +45,7 @@ export function localValidationTone(status: LocalValidationStatus): LocalValidat
     case 'failed':
       return 'bad';
     case 'blocked':
+    case 'skipped':
     case 'abandoned':
       return 'off';
   }

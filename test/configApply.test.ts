@@ -22,7 +22,9 @@ test('a live browser change is checked as boot checks it', () => {
   const checked: unknown[] = [];
   const { live } = harness({}, (browser) => checked.push(browser));
   const browser = { key: 'browser', command: '{node}', args: ['{playwrightMcp}'] };
-  live.apply(loadConfig({ maxConcurrentAgents: 3, localValidation: { instruction: '', setup: '', browser } }));
+  live.apply(
+    loadConfig({ maxConcurrentAgents: 3, localValidation: { auto: false, instruction: '', setup: '', browser } }),
+  );
   assert.deepEqual(checked, [browser]);
 });
 

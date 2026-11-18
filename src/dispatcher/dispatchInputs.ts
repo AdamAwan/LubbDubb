@@ -40,6 +40,10 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings, watched 
   const botHeads = pulse.world.pullRequests
     .filter((pr) => pr.botAuthored === true && pr.headSha)
     .map((pr) => ({ prNumber: pr.number, headSha: pr.headSha! }));
+  const localValidations = [
+    ...store.localValidations.listOpenLocalValidations(),
+    ...store.localValidations.listLocalValidationsAwaitingFix(),
+  ];
   return {
     ...pulse,
     openEscalations: store.escalations.listOpenEscalations(),
@@ -60,10 +64,8 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings, watched 
     botPrRiskRun: store.botPrRisks.pendingRun(),
     appErrorTriageRun: store.appErrorTriage.pendingRun(),
     lessonDraft: store.lessons.pendingDraft(),
-    localValidations: [
-      ...store.localValidations.listOpenLocalValidations(),
-      ...store.localValidations.listLocalValidationsAwaitingFix(),
-    ],
+    localValidations,
+    goalLandings: localValidations.length === 0 ? [] : store.environments.listGoalLandings(),
     featureSummaryKeys:
       featureStandings.length === 0
         ? []

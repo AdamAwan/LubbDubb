@@ -58,6 +58,7 @@ import { RuntimeControl } from '../runtimeControl.js';
 import { PetKeeper } from '../pets/keeper.js';
 import { LocalRunner } from '../localRun/runner.js';
 import { LocalValidationDesk } from '../validation/local/desk.js';
+import type { LocalValidationAutoPress } from '../validation/local/auto.js';
 import { LocalRunWatch } from '../localRun/watch.js';
 import { LiveConfig } from '../config/configApply.js';
 import { ErrorLog } from '../errorLog.js';
@@ -154,6 +155,7 @@ export interface System {
   fleetStall: FleetStallWatch;
   localRun: LocalRunner;
   localValidations: LocalValidationDesk;
+  localValidationAuto: LocalValidationAutoPress;
   localRunWatch: LocalRunWatch;
   liveConfig: LiveConfig;
   issuePickup: IssuePickupPolicy;
@@ -193,7 +195,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   };
   const harness = buildHarness(config, opts, { base, channels, fleet, intake, envs, lessons, bench, late });
   const pulse = wirePulse(config, base, fleet, harness);
-  const local = buildLocalRuns(config, opts, base, runtime);
+  const local = buildLocalRuns(config, opts, base, runtime, { pulse, bench, channels });
   const system: System = {
     config,
     setupReading: { latest: null },
@@ -229,6 +231,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     localRun: local.localRun,
     localRunWatch: local.localRunWatch,
     localValidations: local.localValidations,
+    localValidationAuto: local.localValidationAuto,
     liveConfig: fleet.liveConfig,
     configFile: opts.configFile ?? configFilePath(),
     projectConfigFile: opts.projectConfigFile ?? projectConfigFilePath(config.repoRoot),
@@ -390,11 +393,9 @@ function buildHarness(
     graph: bench.graph,
     tickets: bench.tickets,
     localRun: { noteAlive: () => late.get().localRun.noteAlive() },
-    localValidations: {
-      sweep: () => {
-        late.get().localValidations.sweep();
-      },
-    },
+    localValidations: { sweep: () => late.get().localValidations.sweep() },
+    localValidationAuto: { run: (world) => late.get().localValidationAuto.run(world) },
+    localValidationTickets: { run: () => late.get().localValidationTickets.run() },
     goalIntake: () => discussionIntake(base.discussions),
     remoteRuns: reads.remoteRuns,
     landings: fleet.landings,

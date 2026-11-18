@@ -44,6 +44,7 @@ function readBundledPlaywright(): BundledPlaywright {
 }
 
 export interface LocalValidationPolicy {
+  auto: boolean;
   instruction: string;
   setup: string;
   browser: ExtraMcpServer | null;
@@ -52,6 +53,7 @@ export interface LocalValidationPolicy {
 const PLAYWRIGHT_MCP_TOKEN = '{playwrightMcp}';
 
 export const DEFAULT_LOCAL_VALIDATION: LocalValidationPolicy = {
+  auto: false,
   instruction: '',
   setup: '',
   browser: {

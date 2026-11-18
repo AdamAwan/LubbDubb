@@ -3,13 +3,30 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
-import type { LocalRun, LocalValidation, LocalValidationFinding, Task } from '../../types.js';
+import type {
+  LocalRun,
+  LocalValidation,
+  LocalValidationFinding,
+  LocalValidationRequester,
+  LocalValidationResult,
+  Task,
+} from '../../types.js';
 import { mediaKind } from '../media.js';
 import { recordingStatus } from '../recording.js';
 import { localValidationOriginParts, localValidationOutputDir } from './origin.js';
 import { localValidationIsOpen, validationRunStale } from './stale.js';
 
 // → docs/spec/32-local-validation.md
+
+const UNDISPATCHED_AFTER_MS = 15 * 60 * 1000;
+
+function undispatched(row: LocalValidation): boolean {
+  return (
+    row.status === 'pending' &&
+    row.requestedBy === 'auto' &&
+    Date.now() - Date.parse(row.requestedAt) >= UNDISPATCHED_AFTER_MS
+  );
+}
 
 interface DeskEvents {
   changed: [];
@@ -38,12 +55,13 @@ export class LocalValidationDesk extends EventEmitter {
     return localValidationOutputDir(this.deps.validationRoot, row.originRef, row.id);
   }
 
-  request(input: { originRef: string; run: LocalRun }): LocalValidation {
+  request(input: { originRef: string; run: LocalRun; requestedBy?: LocalValidationRequester }): LocalValidation {
     const row = this.deps.store.localValidations.createLocalValidation({
       originRef: input.originRef,
       runId: input.run.id,
       ref: input.run.ref,
       commit: input.run.commit,
+      requestedBy: input.requestedBy,
     });
     try {
       mkdirSync(this.outputDir(row), { recursive: true });
@@ -86,7 +104,7 @@ export class LocalValidationDesk extends EventEmitter {
   report(
     task: Task,
     result: {
-      status: 'passed' | 'failed' | 'blocked';
+      status: LocalValidationResult;
       summary: string;
       findings: LocalValidationFinding[];
       visited: string[];
@@ -96,7 +114,15 @@ export class LocalValidationDesk extends EventEmitter {
     const target = this.resolve(task);
     if (!target.ok) return target;
     const { row } = target;
-    if (result.status !== 'blocked') {
+    if (result.status === 'skipped' && row.requestedBy !== 'auto')
+      return {
+        ok: false,
+        error:
+          'Nothing was recorded: a person asked for this validation, so it is theirs to call off, not yours to skip. ' +
+          'Run the plan, or report "blocked" if there is nothing a user could see to drive.',
+      };
+    const ran = result.status === 'passed' || result.status === 'failed';
+    if (ran) {
       const stale = validationRunStale(row, this.deps.store.localRuns.liveLocalRun());
       if (stale !== null)
         return {
@@ -118,7 +144,7 @@ export class LocalValidationDesk extends EventEmitter {
       recordingStatus: recordingStatus(
         task,
         media === null ? null : media.some((name) => mediaKind(name) === 'video'),
-        result.status === 'blocked',
+        !ran,
       ),
     });
     if (written === null)
@@ -137,6 +163,16 @@ export class LocalValidationDesk extends EventEmitter {
         const stale = validationRunStale(row, live);
         if (stale !== null) {
           if (this.deps.store.localValidations.abandonLocalValidation(row.id, stale) !== null) this.emit('changed');
+          continue;
+        }
+        if (undispatched(row)) {
+          if (
+            this.deps.store.localValidations.abandonLocalValidation(
+              row.id,
+              'started automatically, and never dispatched — the goal is not one the fleet will work on now',
+            ) !== null
+          )
+            this.emit('changed');
           continue;
         }
         if (row.status !== 'dispatched' || row.taskId === null) continue;
