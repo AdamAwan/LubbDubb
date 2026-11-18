@@ -5,6 +5,7 @@ import type { Store } from '../store/store.js';
 import { GROUP_RETENTION_DAYS, mergeGroup, readSince, retainedDays, spreadCounts } from './groups.js';
 import type { AppErrorReader } from './reader.js';
 import { errorsCommand } from './report.js';
+import { errorsListCommand } from '../environments/readingExtensions.js';
 
 // → docs/spec/39-app-errors.md#the-desk
 
@@ -47,8 +48,8 @@ export class AppErrorDesk {
   }
 
   private async read(environment: EnvironmentConfig, now: number): Promise<boolean> {
-    const list = environment.errors?.list;
-    if (list === undefined) return false;
+    const list = errorsListCommand(environment);
+    if (list === null) return false;
     const { store, errors } = this.deps;
     const standing = store.appErrors.getRead(environment.name);
     if (standing !== null && Date.parse(standing.readAt) > now - this.deps.intervalMs) return false;

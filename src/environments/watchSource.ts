@@ -9,6 +9,9 @@ export const WATCH_SOURCE_RUNNERS: readonly WatchSourceRunner[] = ['harness', 'o
 /** The name `watch.observe` alone stands for. */
 const SHORTHAND_SOURCE = 'logs';
 
+/** What answers a harness-run source on an environment with `watch.extension`, in place of its `observe`. */
+const WATCH_READING_SLOT = 'the "watchReading" slot';
+
 export interface WatchSourceConfig {
   language: WatchSourceLanguage;
   runBy: WatchSourceRunner;
@@ -18,6 +21,7 @@ export interface WatchSourceConfig {
 
 interface WatchSourcesConfig {
   observe?: string;
+  extension?: true;
   queryUrl?: string;
   sources?: Record<string, WatchSourceConfig>;
 }
@@ -33,13 +37,13 @@ export interface WatchSource extends WatchSourceConfig {
 export function watchSources(watch: WatchSourcesConfig | undefined): WatchSource[] {
   if (watch === undefined) return [];
   if (watch.sources !== undefined) return Object.entries(watch.sources).map(([name, s]) => ({ ...s, name }));
-  if (watch.observe === undefined) return [];
+  if (watch.observe === undefined && watch.extension !== true) return [];
   return [
     {
       name: SHORTHAND_SOURCE,
       language: 'kql',
       runBy: 'harness',
-      observe: watch.observe,
+      ...(watch.observe === undefined ? {} : { observe: watch.observe }),
       ...(watch.queryUrl === undefined ? {} : { queryUrl: watch.queryUrl }),
     },
   ];
@@ -51,7 +55,9 @@ export function watchSourceDeclarations(watch: WatchSourcesConfig | undefined): 
 
 /** Some source on this environment is one the harness can put a query to itself. */
 export function harnessReadable(watch: WatchSourcesConfig | undefined): boolean {
-  return watchSources(watch).some((s) => s.runBy === 'harness' && (s.observe ?? '').trim() !== '');
+  return watchSources(watch).some(
+    (s) => s.runBy === 'harness' && (watch?.extension === true || (s.observe ?? '').trim() !== ''),
+  );
 }
 
 /** A language whose aggregation the harness cannot see, so it can take no signal. */
@@ -94,7 +100,7 @@ export function resolveWatchSource(
         'and asks a person for the reading instead',
       operator: source,
     };
-  const observe = source.observe ?? '';
+  const observe = environment.watch?.extension === true ? WATCH_READING_SLOT : (source.observe ?? '');
   if (observe.trim() === '')
     return {
       source: null,

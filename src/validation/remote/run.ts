@@ -19,6 +19,7 @@ import {
   type TenantKeeper,
   type TenantSteps,
 } from './tenants.js';
+import { atCommand } from '../../environments/readingExtensions.js';
 
 // → docs/spec/36-remote-validation.md#the-press
 
@@ -431,7 +432,7 @@ export class RemoteRunDesk extends EventEmitter {
     goalRef: string,
     environment: EnvironmentConfig,
   ): Promise<{ deployedSha: string | null; abandon: string | null }> {
-    const head = await this.deps.prober.at(environment.name, environment.at);
+    const head = await this.deps.prober.at(environment.name, atCommand(environment));
     const deployed = head.commits ?? [];
     if (deployed.length === 0)
       return {
@@ -526,7 +527,7 @@ export class RemoteRunDesk extends EventEmitter {
   }
 
   private async deployedSha(environment: EnvironmentConfig): Promise<string | null> {
-    const head = await this.deps.prober.at(environment.name, environment.at);
+    const head = await this.deps.prober.at(environment.name, atCommand(environment));
     return head.commits?.[0] ?? null;
   }
 }

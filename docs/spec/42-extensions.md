@@ -140,10 +140,15 @@ is what lets the harness change underneath without breaking projects.
 
 Each slot is a row here, and links the spec of the feature that asks it.
 
-| Slot           | Asked by                                                                                                                                  | Input                                     | Answer                                      | Timeout |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------- | ------- |
-| `ensureTenant` | The tenant press, for an environment with `validate.tenantExtension` ([36](36-remote-validation.md#a-tenant-from-the-projects-extension)) | `{ environment, tenant: string \| null }` | `{ tenant }`, a non-blank one-line name     | 1 hour  |
-| `reseedTenant` | The same press, after `ensureTenant`; optional                                                                                            | `{ environment, tenant }`                 | nothing (`undefined`); a throw is a failure | 1 hour  |
+| Slot              | Asked by                                                                                                                                  | Input                                                                            | Answer                                         | Timeout |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- | ------- |
+| `ensureTenant`    | The tenant press, for an environment with `validate.tenantExtension` ([36](36-remote-validation.md#a-tenant-from-the-projects-extension)) | `{ environment, tenant: string \| null }`                                        | `{ tenant }`, a non-blank one-line name        | 1 hour  |
+| `reseedTenant`    | The same press, after `ensureTenant`; optional                                                                                            | `{ environment, tenant }`                                                        | nothing (`undefined`); a throw is a failure    | 1 hour  |
+| `deployedCommits` | The environment probe, for an environment with `atExtension` ([24](24-environments.md#from-the-projects-extension))                       | `{ environment }`                                                                | `{ commits }`, at least one, each one token    | 30 s    |
+| `appErrors`       | The errors read, for an environment with `errors.extension` ([39](39-app-errors.md#from-the-projects-extension))                          | `{ environment, since }`                                                         | the errors command's report, as a value        | 1 min   |
+| `appErrorDetail`  | `app_error_detail`, same environments; optional                                                                                           | `{ environment, fingerprint, since }`                                            | `{ text }`, non-blank                          | 1 min   |
+| `watchReading`    | A watch reading or dry run, for an environment with `watch.extension` ([29](29-post-deploy-watch.md#from-the-projects-extension))         | `{ environment, source, language, checkId, query, kind, since, until, commits }` | a list of rows, each echoing `lubbdubbWatchId` | 30 s    |
+| `watchExposure`   | The exposure probe, same environments, where `watch.exposure` is declared                                                                 | `{ environment, commits }`                                                       | `{ share }`, 0 to 1                            | 30 s    |
 
 ## Adding a slot
 

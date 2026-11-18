@@ -42,5 +42,68 @@ export default {
       });
       if (!response.ok) throw new Error(`the reseed answered ${response.status}`);
     },
+
+    // Which commit an environment with "atExtension": true is running. Several services: one commit each.
+    // Not knowing is a throw, never an empty list.
+    async deployedCommits(input: { environment: string }, { signal }: SlotContext): Promise<{ commits: string[] }> {
+      const response = await fetch(`${API}/environments/${encodeURIComponent(input.environment)}/version`, { signal });
+      if (!response.ok) throw new Error(`the version API answered ${response.status}`);
+      const { commit } = (await response.json()) as { commit: string };
+      return { commits: [commit] };
+    },
+
+    // The error groups since `since`, for an environment with "errors": { "extension": true }. Return the
+    // same report the errors command prints: a list of groups, or { groups, query?, queryLink? }.
+    async appErrors(input: { environment: string; since: string }, { signal }: SlotContext): Promise<unknown> {
+      const url = `${API}/environments/${encodeURIComponent(input.environment)}/errors?since=${input.since}`;
+      const response = await fetch(url, { signal });
+      if (!response.ok) throw new Error(`the errors API answered ${response.status}`);
+      return (await response.json()) as unknown;
+    },
+
+    // Optional: more on one error group, for the triage agent. Answer { text }; throw to fail.
+    async appErrorDetail(
+      input: { environment: string; fingerprint: string; since: string },
+      { signal }: SlotContext,
+    ): Promise<{ text: string }> {
+      const url = `${API}/errors/${encodeURIComponent(input.fingerprint)}?since=${input.since}`;
+      const response = await fetch(url, { signal });
+      if (!response.ok) throw new Error(`the errors API answered ${response.status}`);
+      return { text: await response.text() };
+    },
+
+    // Run one watch query, for an environment with "watch": { "extension": true }. `query` is ready to run.
+    // Answer rows, and put `checkId` in each row's "lubbdubbWatchId" (a kql query already projects it).
+    async watchReading(
+      input: {
+        environment: string;
+        source: string;
+        language: 'kql' | 'sql' | 'promql' | 'other';
+        checkId: string;
+        query: string;
+        kind: 'signal' | 'presence' | 'measure';
+        since: string;
+        until: string;
+        commits: string[] | null;
+      },
+      { signal }: SlotContext,
+    ): Promise<Record<string, string | number | boolean | null>[]> {
+      const response = await fetch(`${API}/query`, { method: 'POST', body: JSON.stringify(input), signal });
+      if (!response.ok) throw new Error(`the query API answered ${response.status}`);
+      const rows = (await response.json()) as Record<string, string | number | boolean | null>[];
+      return rows.map((row) => ({ ...row, lubbdubbWatchId: input.checkId }));
+    },
+
+    // The share of traffic (0 to 1) on a build carrying every one of `commits`, where "watch.exposure" is declared.
+    async watchExposure(
+      input: { environment: string; commits: string[] },
+      { signal }: SlotContext,
+    ): Promise<{ share: number }> {
+      const url = `${API}/environments/${encodeURIComponent(input.environment)}/exposure`;
+      const response = await fetch(url, { method: 'POST', body: JSON.stringify(input.commits), signal });
+      if (!response.ok) throw new Error(`the exposure API answered ${response.status}`);
+      const { share } = (await response.json()) as { share: number };
+      return { share };
+    },
   },
 };

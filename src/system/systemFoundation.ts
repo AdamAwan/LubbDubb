@@ -46,8 +46,11 @@ import { RemoteReadingDesk } from '../validation/remote/readings.js';
 import { RemoteListingDesk } from '../validation/remote/listing.js';
 import type { TenantKeeper } from '../validation/remote/tenants.js';
 import type { LoadedExtension } from '../extensions/contract.js';
-import { buildExtensionHost, checkLoadedExtensions } from '../extensions/host.js';
+import { buildExtensionHost, checkLoadedExtensions, type ExtensionHost } from '../extensions/host.js';
+import type { ExtensionSlots } from '../extensions/slots.js';
 import { checkTenantExtension } from '../validation/remote/extensionTenants.js';
+import { checkReadingExtensions } from '../environments/readingExtensions.js';
+import { ExtensionAppErrorDetailRunner, RoutedAppErrorDetail } from '../appErrors/extensionReader.js';
 import { ClaudePluginCli, PluginDesk, type PluginCli } from '../plugin/desk.js';
 import { installRoot } from '../selfUpdate/buildStanding.js';
 import { PERMISSION_PROMPT_TOOL } from '../mcp/names.js';
@@ -209,15 +212,31 @@ function realClone(opts: BuildOptions): boolean {
   return [opts.worktrees, opts.gitObserver, opts.backend, opts.streamSpawner].every((o) => o === undefined);
 }
 
+/** The detail query, routed per environment between `errors.detail` and the extension. */
+function appErrorDetails(
+  config: Config,
+  opts: BuildOptions,
+  extensions: ExtensionHost<ExtensionSlots>,
+): RoutedAppErrorDetail {
+  return new RoutedAppErrorDetail(
+    config.environments,
+    extensions,
+    opts.appErrorDetailRunner ?? new CommandAppErrorDetailRunner(config.repoRoot),
+    new ExtensionAppErrorDetailRunner(extensions),
+  );
+}
+
 export function buildFoundation(config: Config, opts: BuildOptions) {
   checkLoadedExtensions(config, opts.extensions);
   checkTenantExtension(config.environments, opts.extensions);
+  checkReadingExtensions(config.environments, opts.extensions);
   const reads = new SlowReadTally(opts.readClock);
   const store = new Store(config.dbPath, systemClock, reads);
   store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
   store.surfaceReach.pruneSurfaceReach(true);
   const now = (): string => new Date().toISOString();
   const errors = new ErrorLog(store, opts.errorMirror);
+  const extensions = buildExtensionHost(config, opts.extensions, errors);
   const runtimeHealth = new RuntimeHealthWatch({ errors, reads, sampler: opts.loopDelaySampler });
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
   const connector = new CompositeConnector(integrations, now, {
@@ -261,7 +280,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     store,
     now,
     errors,
-    extensions: buildExtensionHost(config, opts.extensions, errors),
+    extensions,
     runtimeHealth,
     connector,
     sink: recordIssueComments(opts.sink ?? connector, (issue, ref) =>
@@ -275,7 +294,7 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     cloneUpkeep,
     retention,
     recordingRetention,
-    appErrorDetails: opts.appErrorDetailRunner ?? new CommandAppErrorDetailRunner(config.repoRoot),
+    appErrorDetails: appErrorDetails(config, opts, extensions),
     watchLabel: watchLabelFor(config.labelPrefix),
     lessonReading: { reviewAreas: config.reviewAreas, lessonLabel: lessonLabelFor(config.labelPrefix) },
     discussions,

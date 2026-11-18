@@ -115,8 +115,7 @@ export function buildAgentManager(
     watchHintRequired: watchHintRequired(config.environments),
     errors,
     appErrorDetail: {
-      command: (environment: string): string | null =>
-        config.environments.find((e) => e.name === environment)?.errors?.detail ?? null,
+      command: (environment: string): string | null => base.appErrorDetails.command(environment),
       runner: base.appErrorDetails,
     },
   });
