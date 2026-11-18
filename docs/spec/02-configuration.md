@@ -1123,8 +1123,9 @@ Naming the operator's profiles directly, rather than an abstract difficulty scal
 would be lost, since an operator who splits `deep` into two knows what the two are for and a fixed
 vocabulary cannot be told.
 
-**A proposal deeper than what is already standing holds the funnel** until a human answers it
-(a cheaper one is applied without asking — [below](#a-cheaper-proposal-is-taken-without-asking)),
+**A proposal that differs from what is already standing holds the funnel** until it is answered
+(from a `workable` appraisal the harness answers it itself, straight after the verdict, and shows it
+with an undo — [below](#a-proposal-is-taken-without-asking-and-can-be-put-back)),
 as a second arm on `appraisalHold` — see [06](06-issue-pickup.md). Blocking rather than informing, for the
 reason the `unclear` arm blocks: informing is what the cockpit already does for every verdict, and the
 dispatch the gate exists to price correctly would happen anyway. What makes it safe is what makes the
@@ -1147,23 +1148,23 @@ first arm safe:
   allows. Three things end it: the operator answering, the ticket being rewritten (a new fingerprint,
   so a re-appraisal proposes against the current text), and `clearAppraisal`.
 
-#### A cheaper proposal is taken without asking
+#### A proposal is taken without asking, and can be put back
 
-The gate asks only about proposals that would **spend more**. A proposal whose `rank` is below the
-standing profile's — the ticket's tag, else `default` — is applied by the harness itself: the
-`appraise_issue` handler awaits the `lowerProfile` seam (`lowerProfilePin`, `src/intake/profilePin.ts`)
-**before** recording the verdict. It writes the tag through `applyProfilePin`, which — for every pin,
-the operator's included — folds each label that lands onto the stored world and tickets, so `recordAppraisal` then reads the proposal as agreement and stores it
-already answered — the gate itself is untouched.
+After a `workable` verdict is recorded, the `appraise_issue` handler awaits the `handleAppraisal`
+seam (`src/handled/handled.ts`), which pins a still-divergent proposal — cheaper or deeper — through
+`applyProfilePin`, the same function the operator's click uses, and records it on Handled for you
+with the profile that stood before ([43](43-handled-for-you.md)). The gate itself is untouched: the
+proposal is divergent for the moment between the verdict and the pin, and answered after it.
 
-- **The person is kept for the direction that costs money.** A deeper or equal-rank proposal, or one
-  measured against nothing (no tag and no `default`, so no rank to compare), holds exactly as above.
+- **Spend can rise without a click, and the record is what makes that acceptable.** Every pin is on
+  the Handled for you page with an undo that writes the old tag back. It used to be that only cheaper
+  proposals were taken and deeper ones waited; the operator chose to have both taken and reviewed
+  afterwards.
 - **It fails safe.** `applyProfilePin` removes the other model tags before adding the wanted one, so
-  a write that fails part-way leaves no stray cheaper tag behind; the standing profile is still in the
-  world, the proposal reads as divergent, and it waits for the operator as it did before.
+  a write that fails part-way leaves no stray tag behind; the proposal stays divergent, no row is
+  recorded, and it waits for the operator as before.
 - **Only with `workable`.** An `unclear` verdict carries no proposal to apply.
-- The appraisal row keeps the proposal, so the tag can always be traced to it; what the row does not
-  record is whether the tag was lowered by the harness or already stood there.
+- **Only the fleet's appraiser.** An operator appraising a goal themselves is already looking at it.
 
 The tag therefore holds the **resolved answer**, not an operator override sitting beside an inferred
 one — which is what collapses the precedence chain to one lookup at dispatch. Who decided is still

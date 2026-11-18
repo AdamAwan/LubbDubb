@@ -243,6 +243,8 @@ export interface CockpitState {
    * → docs/spec/17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code
    */
   asks: AskRow[];
+  /** How many small asks the harness answered itself that the operator has not checked yet. → docs/spec/43-handled-for-you.md */
+  handledOpen: number;
 }
 
 export interface EjectionView extends Ejection {

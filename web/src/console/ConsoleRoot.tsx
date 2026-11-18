@@ -22,6 +22,7 @@ import { PetsPage } from '../components/PetsPage.js';
 import { Vivarium, openPets } from './Vivarium.js';
 import { InsightsPage } from '../components/InsightsPage.js';
 import { BotPrsPage } from '../components/BotPrsPage.js';
+import { HandledPage } from '../components/HandledPage.js';
 import { AppErrorsPage } from '../components/AppErrorsPage.js';
 import { Ref } from '../components/refs.js';
 import { PluginBand } from './PluginBand.js';
@@ -200,6 +201,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       );
     case 'bots':
       return <BotPrsPage now={view.now} />;
+    case 'handled':
+      return <HandledPage now={view.now} />;
     case 'errors':
       return <AppErrorsPage view={view} actions={actions} />;
     case 'features':

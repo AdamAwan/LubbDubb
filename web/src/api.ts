@@ -28,6 +28,8 @@ import type {
   AgentTranscript,
   CiPolicyPayload,
   BotPrsPayload,
+  HandledAction,
+  HandledPayload,
   AppErrorsPayload,
   AppErrorDetail,
   AppErrorPressPayload,
@@ -183,6 +185,10 @@ export const api = {
     post<ConfigPreviewPayload>('/api/config/preview', edits),
   saveRawConfig: (edits: { text: string; baseline: string }) => post<ConfigSavePayload>('/api/config/raw', edits),
   getCiPolicy: () => authFetch('/api/ci-policy').then((r) => json<CiPolicyPayload>(r)),
+  getHandled: () => authFetch('/api/handled').then((r) => json<HandledPayload>(r)),
+  checkHandled: (ids: number[]) => post<{ ok: true }>('/api/handled/check', { ids }),
+  revertHandled: (id: number, direction: 'undo' | 'redo') =>
+    post<{ ok: true; action: HandledAction }>(`/api/handled/${id}/${direction}`),
   getBotPrs: () => authFetch('/api/bot-prs').then((r) => json<BotPrsPayload>(r)),
   getAppErrors: () => authFetch('/api/app-errors').then((r) => json<AppErrorsPayload>(r)),
   getAppErrorDetail: (environment: string, fingerprint: string) =>

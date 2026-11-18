@@ -321,6 +321,15 @@ Before the first cycle there is no baseline, and the route ships an **empty** wo
 this removes (boot while the provider throttles → the boot cycle fails → no baseline → every `dirty`
 refetches → each fan-out fails → recording the error broadcasts another `dirty`, unbounded).
 
+### `GET /api/handled` · `POST /api/handled/check` · `POST /api/handled/:id/undo|redo`
+
+The small asks the harness answered itself ([43](43-handled-for-you.md)). `GET` answers
+`{ actions }`, the last 24 hours, newest first. `check` takes `{ ids }` and marks the open ones
+checked. `undo` writes the recorded _before_ value back and marks the row `undone`; `redo` writes the
+_after_ value again and reopens it. Either is a **400** when the row is already in that state or the
+write fails, and changes nothing. All three broadcast `world:changed`. The snapshot's `handledOpen` is
+the count of open rows, which the rail draws.
+
 ### `GET /api/health`
 
 `HealthPayload`: `{ ok: true, runtime }`, where `runtime` is the runtime watch's

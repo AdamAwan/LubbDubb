@@ -11,6 +11,8 @@ export type {
   AllowanceProjection,
   AllowanceReading,
   BugFiling,
+  HandledAction,
+  HandledKind,
   CiCheck,
   CiHealth,
   CiPolicyDescription,

@@ -37,7 +37,7 @@ import { configuredRemoteRunBriefs } from '../validation/remote/briefing.js';
 import { UpdateDesk } from '../selfUpdate/updateDesk.js';
 import type { McpToolDeps } from '../mcp/tools/context.js';
 import { applyInvestigateLabel, issueWatchContext } from '../issueWatch.js';
-import { lowerProfilePin } from '../intake/profilePin.js';
+import { appraisalHandler } from '../handled/handled.js';
 import { PermissionDesk } from '../agents/permissionDesk.js';
 import { RecoveryDesk } from '../agents/recoveryDesk.js';
 import { EjectionDesk } from '../ejection/desk.js';
@@ -318,12 +318,7 @@ function buildChannels(config: Config, base: Foundation, late: LateBinding) {
         issueNumber,
         'after the goal appraisal asked for an investigation',
       ),
-    lowerProfile: (issueNumber: number, profile: string): Promise<boolean> =>
-      lowerProfilePin(
-        { store, sink, errors, labelPrefix: config.labelPrefix, agentModels: config.agentModels },
-        issueNumber,
-        profile,
-      ),
+    handleAppraisal: appraisalHandler(config, base),
     stepCapabilities: (): McpToolDeps['stepCapabilities'] => stepCapabilities(config.environments),
     discussions: fleetDiscussions(base.discussions, store, config.issueContainerTypes),
     lessons: () => late.get().lessonOutcomes,

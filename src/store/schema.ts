@@ -60,6 +60,7 @@ import { APP_ERRORS_SCHEMA } from './schema/appErrors.js';
 import { APP_ERROR_TICKETS_SCHEMA } from './schema/appErrorTickets.js';
 import { APP_ERROR_TRIAGE_SCHEMA } from './schema/appErrorTriage.js';
 import { LESSONS_SCHEMA } from './schema/lessons.js';
+import { HANDLED_SCHEMA } from './schema/handled.js';
 
 export const SCHEMA =
   TASKS_SCHEMA +
@@ -121,4 +122,5 @@ export const SCHEMA =
   APP_ERRORS_SCHEMA +
   APP_ERROR_TICKETS_SCHEMA +
   APP_ERROR_TRIAGE_SCHEMA +
-  LESSONS_SCHEMA;
+  LESSONS_SCHEMA +
+  HANDLED_SCHEMA;

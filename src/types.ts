@@ -24,3 +24,4 @@ export type * from './types/localRuns.js';
 export type * from './types/pool.js';
 export type * from './types/discussions.js';
 export type * from './types/lessons.js';
+export type * from './types/handled.js';

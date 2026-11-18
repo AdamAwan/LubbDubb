@@ -242,6 +242,12 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'pr-assignee.expand': { label: 'Searched for an assignee', blurb: 'Looked past the shortlist for someone else' },
   'pr-assignee.accept': { label: 'Assigned a pull request', blurb: 'Someone was put on it' },
   'pr-assignee.reject': { label: 'Left it unassigned', blurb: 'The assign ask was declined' },
+  'handled.view': {
+    label: 'Opened Handled for you',
+    blurb: 'The page of asks the harness answered itself was reached',
+  },
+  'handled.undo': { label: 'Undid a handled ask', blurb: 'Something the harness did without asking was put back' },
+  'handled.accept': { label: 'Checked handled asks', blurb: 'A group the harness answered itself was marked checked' },
   'bot-pr.view': { label: 'Opened bot pull requests', blurb: 'The dependency-bot pull request tab was reached' },
   'bot-pr.create': { label: 'Asked for a risk read', blurb: 'An agent was sent to classify the bot pull requests' },
   'bot-pr.accept': { label: 'Watched a bot pull request', blurb: 'A failing bot pull request was handed to the fleet' },

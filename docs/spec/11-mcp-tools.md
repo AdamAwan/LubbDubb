@@ -597,9 +597,9 @@ identity structural as everywhere else — no issue argument, the origin resolve
   required with `workable` when any profile is configured, because an optional field is one most
   agents omit and an omitted proposal is indistinguishable from "the default is right" — which the
   harness would then act on, at the default's price, having asked. It is dropped rather than refused
-  with `unclear`: a goal nobody can start from has no work to size. A proposal cheaper than what is
-  standing is pinned by the handler before the verdict is recorded (the `lowerProfile` seam); one that
-  is deeper holds the funnel until a human answers, and the tool's own reply says so.
+  with `unclear`: a goal nobody can start from has no work to size. A proposal that differs from what is
+  standing is pinned by the handler after the verdict is recorded (the `handleAppraisal` seam), and
+  recorded with an undo for the operator ([43](43-handled-for-you.md)); the tool's own reply says so.
   → [02](02-configuration.md#the-gate-the-appraiser-proposes-a-human-confirms)
 
 - **`investigate` is honoured only with `workable`** and dropped otherwise: true when the ticket reports

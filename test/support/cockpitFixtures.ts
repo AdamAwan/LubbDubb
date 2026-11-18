@@ -4688,6 +4688,7 @@ export function buildFixtureState(): AppState {
       'pr:412:ci': 'https://github.com/example/inkwell-books/pull/412/checks',
     },
     asks: [],
+    handledOpen: 3,
     dispatchRules: {
       'pr-ci-failing': {
         kind: 'rule',
