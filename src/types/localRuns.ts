@@ -47,6 +47,8 @@ export interface LocalRunReadings {
 
 export type LocalValidationStatus = 'pending' | 'dispatched' | 'passed' | 'failed' | 'blocked' | 'abandoned';
 
+export type LocalValidationRequester = 'operator' | 'auto';
+
 export interface LocalValidationFinding {
   title: string;
   detail: string;
@@ -71,6 +73,7 @@ export interface LocalValidation {
   ref: string;
   commit: string | null;
   status: LocalValidationStatus;
+  requestedBy: LocalValidationRequester;
   requestedAt: string;
   dispatchedAt: string | null;
   endedAt: string | null;

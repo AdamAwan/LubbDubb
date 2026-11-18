@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { Store } from '../../store/store.js';
 import { isActiveTask } from '../../tasks.js';
-import type { LocalRun, LocalValidation, LocalValidationFinding, Task } from '../../types.js';
+import type { LocalRun, LocalValidation, LocalValidationFinding, LocalValidationRequester, Task } from '../../types.js';
 import { mediaKind } from '../media.js';
 import { recordingStatus } from '../recording.js';
 import { localValidationOriginParts, localValidationOutputDir } from './origin.js';
@@ -38,12 +38,13 @@ export class LocalValidationDesk extends EventEmitter {
     return localValidationOutputDir(this.deps.validationRoot, row.originRef, row.id);
   }
 
-  request(input: { originRef: string; run: LocalRun }): LocalValidation {
+  request(input: { originRef: string; run: LocalRun; requestedBy?: LocalValidationRequester }): LocalValidation {
     const row = this.deps.store.localValidations.createLocalValidation({
       originRef: input.originRef,
       runId: input.run.id,
       ref: input.run.ref,
       commit: input.run.commit,
+      requestedBy: input.requestedBy,
     });
     try {
       mkdirSync(this.outputDir(row), { recursive: true });

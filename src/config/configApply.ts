@@ -55,6 +55,9 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   'localRun.url': (next, deps) => {
     deps.running.localRun = next.localRun;
   },
+  'localValidation.auto': (next, deps) => {
+    deps.running.localValidation = next.localValidation;
+  },
   'localValidation.instruction': (next, deps) => {
     deps.running.localValidation = next.localValidation;
   },

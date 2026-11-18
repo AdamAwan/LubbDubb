@@ -2,14 +2,24 @@ import { randomUUID } from 'node:crypto';
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 import { toRecordingStatus } from './rows/recording.js';
-import type { LocalValidation, LocalValidationFinding, LocalValidationStatus, RecordingStatus } from '../types.js';
+import type {
+  LocalValidation,
+  LocalValidationFinding,
+  LocalValidationRequester,
+  LocalValidationStatus,
+  RecordingStatus,
+} from '../types.js';
 
 // → docs/spec/14-persistence.md
 
 // No backfill for `recording_status`: null is *not known*, true of every row from before the column.
-// `setup` defaults to '[]', which every row from before it truly made.
+// `setup` defaults to '[]', and `requested_by` to 'operator', which every row from before them truly was.
 export const LOCAL_VALIDATION_COLUMNS: ColumnMigrations = {
-  local_validations: { recording_status: 'TEXT', setup: "TEXT NOT NULL DEFAULT '[]'" },
+  local_validations: {
+    recording_status: 'TEXT',
+    setup: "TEXT NOT NULL DEFAULT '[]'",
+    requested_by: "TEXT NOT NULL DEFAULT 'operator'",
+  },
 };
 
 const OPEN: LocalValidationStatus[] = ['pending', 'dispatched'];
@@ -23,6 +33,7 @@ export class LocalValidationStore {
     runId: string;
     ref: string;
     commit: string | null;
+    requestedBy?: LocalValidationRequester;
   }): LocalValidation {
     const now = this.ctx.now();
     const row: LocalValidation = {
@@ -32,6 +43,7 @@ export class LocalValidationStore {
       ref: input.ref,
       commit: input.commit,
       status: 'pending',
+      requestedBy: input.requestedBy ?? 'operator',
       requestedAt: now,
       dispatchedAt: null,
       endedAt: null,
@@ -48,11 +60,11 @@ export class LocalValidationStore {
     };
     this.ctx
       .prep(
-        `INSERT INTO local_validations (id, origin_ref, run_id, ref, commit_sha, status, requested_at,
+        `INSERT INTO local_validations (id, origin_ref, run_id, ref, commit_sha, status, requested_by, requested_at,
            dispatched_at, ended_at, task_id, fix_task_id, plan, summary, findings, visited, setup, screenshots, note)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, NULL, NULL, NULL, NULL, NULL, NULL, '[]', '[]', '[]', '[]', NULL)`,
+         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, '[]', '[]', '[]', '[]', NULL)`,
       )
-      .run(row.id, row.originRef, row.runId, row.ref, row.commit, row.requestedAt);
+      .run(row.id, row.originRef, row.runId, row.ref, row.commit, row.requestedBy, row.requestedAt);
     return row;
   }
 
@@ -175,6 +187,7 @@ interface Row {
   ref: string;
   commit_sha: string | null;
   status: string;
+  requested_by: string;
   requested_at: string;
   dispatched_at: string | null;
   ended_at: string | null;
@@ -212,6 +225,7 @@ function toLocalValidation(row: Row): LocalValidation {
     status: STATUSES.includes(row.status as LocalValidationStatus)
       ? (row.status as LocalValidationStatus)
       : 'abandoned',
+    requestedBy: row.requested_by === 'auto' ? 'auto' : 'operator',
     requestedAt: row.requested_at,
     dispatchedAt: row.dispatched_at,
     endedAt: row.ended_at,

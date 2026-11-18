@@ -65,6 +65,7 @@ import { Harness } from '../harness.js';
 import { RuntimeControl } from '../runtimeControl.js';
 import { LocalRunner } from '../localRun/runner.js';
 import { LocalValidationDesk } from '../validation/local/desk.js';
+import type { LocalValidationAutoPress } from '../validation/local/auto.js';
 import { LocalRunWatch } from '../localRun/watch.js';
 import type { PortLister } from '../localRun/ports.js';
 import { ErrorLog } from '../errorLog.js';
@@ -135,6 +136,7 @@ interface Late {
   localRun: LocalRunner;
   localRunWatch: LocalRunWatch;
   localValidations: LocalValidationDesk;
+  localValidationAuto: LocalValidationAutoPress;
   prAssign: PrAssignDesk;
   askSnapshot(): AskSnapshot;
 }
@@ -179,6 +181,7 @@ export function lateParts({ fleet, envs, lessons, bench, harness, local, intake,
     localRun: local.localRun,
     localRunWatch: local.localRunWatch,
     localValidations: local.localValidations,
+    localValidationAuto: local.localValidationAuto,
     prAssign: intake.prAssign,
     askSnapshot: asks,
   };

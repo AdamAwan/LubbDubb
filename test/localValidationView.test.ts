@@ -28,6 +28,7 @@ function validation(over: Partial<LocalValidationView> = {}): LocalValidationVie
     ref: 'issue/12',
     commit: 'a'.repeat(40),
     status: 'dispatched',
+    requestedBy: 'operator',
     requestedAt: NOW,
     dispatchedAt: NOW,
     endedAt: null,

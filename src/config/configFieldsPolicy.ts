@@ -178,6 +178,12 @@ export const POLICY_FIELDS: readonly ConfigField[] = [
     why: 'Where the application lands once it is up, drawn as a link beside the run.',
   },
   {
+    path: 'localValidation.auto',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Validate a goal on your machine without a press, once its work is delivered and CI is green on the commit it would run. Never takes the environment from a run you started, and validates each commit once. Off means only the Run it here button starts one.',
+  },
+  {
     path: 'localValidation.instruction',
     type: 'text',
     access: 'plain',

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS local_validations (
   ref          TEXT NOT NULL,       -- the branch that run had out; what a fix is dispatched onto
   commit_sha   TEXT,                -- named for local_runs' reason: COMMIT is a keyword
   status       TEXT NOT NULL,
+  requested_by TEXT NOT NULL DEFAULT 'operator', -- operator | auto
   requested_at TEXT NOT NULL,
   dispatched_at TEXT,               -- when an agent actually spawned, not when one was proposed
   ended_at     TEXT,

@@ -1,0 +1,204 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { buildSystem, type System } from '../src/system/system.js';
+import { loadConfig } from '../src/config/config.js';
+import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
+import { issueBranch } from '../src/dispatcher/issuePickup.js';
+import type { CiStatus, Issue, PullRequest, WorldSnapshot } from '../src/types.js';
+
+const HEAD = 'c'.repeat(40);
+const NEXT = 'd'.repeat(40);
+
+function build(auto = true): { system: System; worktrees: FakeWorktreeManager } {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-lva-'));
+  const worktrees = new FakeWorktreeManager();
+  const system = buildSystem(
+    loadConfig({
+      auth: { enabled: false } as never,
+      labelPrefix: '',
+      dbPath: ':memory:',
+      agentMode: 'raw',
+      deskRoot: join(dir, 'desk'),
+      worktreeRoot: join(dir, 'wt'),
+      localRunRoot: join(dir, 'local-run'),
+      validationRoot: join(dir, 'validation'),
+      heartbeatIntervalMs: 999_999,
+      localRun: { instruction: 'npm run dev' } as never,
+      localValidation: { auto } as never,
+    }),
+    { worktrees, backend: new FakePtyBackend(), gitObserver: new FakeGitObserver(), errorMirror: () => {} },
+  );
+  return { system, worktrees };
+}
+
+function issue(number: number): Issue {
+  return {
+    id: `i${number}`,
+    number,
+    title: `Goal ${number}`,
+    body: '',
+    labels: [],
+    state: 'open',
+    linkedPrNumber: null,
+  };
+}
+
+function pr(number: number, ciStatus: CiStatus, headSha = HEAD): PullRequest {
+  return {
+    id: `pr${number}`,
+    number,
+    title: `PR ${number}`,
+    branch: issueBranch(number),
+    ciStatus,
+    headSha,
+    unresolvedComments: [],
+  };
+}
+
+function world(system: System, ...goals: { n: number; ci: CiStatus; head?: string }[]): WorldSnapshot {
+  const snapshot: WorldSnapshot = {
+    takenAt: '2026-01-01T00:00:00.000Z',
+    issues: goals.map((g) => issue(g.n)),
+    pullRequests: goals.map((g) => pr(g.n, g.ci, g.head)),
+  };
+  system.store.world.setWorldBaseline(snapshot);
+  return snapshot;
+}
+
+async function press(system: System, snapshot: WorldSnapshot): Promise<void> {
+  system.store.world.setWorldBaseline(snapshot);
+  await system.localValidationAuto.run(snapshot);
+  await system.localValidationAuto.settled();
+}
+
+function deliver(system: System, n: number): void {
+  system.store.verdicts.recordDelivery({ originRef: `issue:${String(n)}`, summary: 'done', by: 'assessor' });
+}
+
+test('a delivered goal with green CI on the commit it would run is validated without a press', async () => {
+  const { system, worktrees } = build();
+  try {
+    const snapshot = world(system, { n: 12, ci: 'passing' });
+    worktrees.setPreviewCommit(issueBranch(12), HEAD);
+    deliver(system, 12);
+
+    await press(system, snapshot);
+
+    const row = system.store.localValidations.latestLocalValidation('issue:12');
+    assert.equal(row?.status, 'pending');
+    assert.equal(row?.requestedBy, 'auto');
+    assert.equal(row?.commit, HEAD);
+    assert.equal(system.store.localRuns.liveLocalRun()?.originRef, 'issue:12');
+  } finally {
+    system.store.close();
+  }
+});
+
+test('nothing is pressed while off, undelivered, CI not green, or the checkout has not caught up', async () => {
+  const cases: { name: string; auto?: boolean; ci?: CiStatus; delivered?: boolean; tip?: string }[] = [
+    { name: 'off', auto: false },
+    { name: 'undelivered', delivered: false },
+    { name: 'ci pending', ci: 'pending' },
+    { name: 'checkout behind', tip: NEXT },
+  ];
+  for (const c of cases) {
+    const { system, worktrees } = build(c.auto ?? true);
+    try {
+      const snapshot = world(system, { n: 12, ci: c.ci ?? 'passing' });
+      worktrees.setPreviewCommit(issueBranch(12), c.tip ?? HEAD);
+      if (c.delivered !== false) deliver(system, 12);
+      await press(system, snapshot);
+      assert.equal(system.store.localValidations.latestLocalValidation('issue:12'), null, c.name);
+      assert.equal(system.store.localRuns.liveLocalRun(), null, c.name);
+    } finally {
+      system.store.close();
+    }
+  }
+});
+
+test('an environment the operator started is never taken', async () => {
+  const { system, worktrees } = build();
+  try {
+    const snapshot = world(system, { n: 12, ci: 'passing' });
+    worktrees.setPreviewCommit(issueBranch(12), HEAD);
+    deliver(system, 12);
+    const mine = await system.localRun.start('issue:7');
+    assert.ok(mine.ok);
+
+    await press(system, snapshot);
+
+    assert.equal(system.store.localValidations.latestLocalValidation('issue:12'), null);
+    assert.equal(system.store.localRuns.liveLocalRun()?.originRef, 'issue:7');
+  } finally {
+    system.store.close();
+  }
+});
+
+test('each commit is validated once, and a settled auto run hands its environment to the next goal', async () => {
+  const { system, worktrees } = build();
+  try {
+    let snapshot = world(system, { n: 12, ci: 'passing' }, { n: 13, ci: 'passing' });
+    worktrees.setPreviewCommit(issueBranch(12), HEAD).setPreviewCommit(issueBranch(13), HEAD);
+    deliver(system, 12);
+    deliver(system, 13);
+
+    await press(system, snapshot);
+    const first = system.store.localValidations.latestLocalValidation('issue:12');
+    assert.equal(first?.requestedBy, 'auto');
+
+    await press(system, snapshot);
+    assert.equal(system.store.localValidations.latestLocalValidation('issue:13'), null, 'one at a time');
+
+    system.store.localValidations.abandonLocalValidation(first.id, 'called off from the cockpit');
+    await press(system, snapshot);
+    assert.equal(system.store.localValidations.latestLocalValidation('issue:13')?.requestedBy, 'auto');
+    assert.equal(system.store.localRuns.liveLocalRun()?.originRef, 'issue:13');
+
+    const thirteen = system.store.localValidations.latestLocalValidation('issue:13');
+    assert.ok(thirteen);
+    system.store.localValidations.abandonLocalValidation(thirteen.id, 'done');
+    await press(system, snapshot);
+    assert.equal(
+      system.store.localValidations.latestLocalValidation('issue:12')?.id,
+      first.id,
+      'a commit already validated is not run again',
+    );
+
+    snapshot = world(system, { n: 12, ci: 'passing', head: NEXT }, { n: 13, ci: 'passing' });
+    worktrees.setPreviewCommit(issueBranch(12), NEXT);
+    await press(system, snapshot);
+    const again = system.store.localValidations.latestLocalValidation('issue:12');
+    assert.notEqual(again?.id, first.id, 'a new commit is');
+    assert.equal(again?.commit, NEXT);
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a press runs a cycle of its own, which dispatches the validator', async () => {
+  const { system, worktrees } = build();
+  try {
+    const snapshot = world(system, { n: 12, ci: 'passing' });
+    worktrees.setPreviewCommit(issueBranch(12), HEAD);
+    deliver(system, 12);
+
+    await press(system, snapshot);
+
+    const deadline = Date.now() + 5_000;
+    while (
+      system.store.localValidations.latestLocalValidation('issue:12')?.status === 'pending' &&
+      Date.now() < deadline
+    )
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    const row = system.store.localValidations.latestLocalValidation('issue:12');
+    assert.equal(row?.requestedBy, 'auto');
+    assert.equal(row?.status, 'dispatched');
+  } finally {
+    system.store.close();
+  }
+});
