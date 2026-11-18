@@ -8,6 +8,7 @@ export const SKILL_NAMES = [
   'describe',
   'discuss',
   'eject',
+  'extension',
   'feature',
   'file',
   'fleet',

@@ -18,6 +18,7 @@ the change that needs it, following [Adding a slot](#adding-a-slot).
 - **The extensions passed to `buildSystem` must be exactly the ones `extensions` names, or it refuses to build, naming each path that is missing or extra.** It also refuses two with one name or one slot, however they were loaded, and checks before anything else is built. `buildSystem` cannot load (it is synchronous), so a caller that forgot to would otherwise run without the project's code. → [§](#loading) · `test/extensions.test.ts`
 - **A slot has at most one owner, and an extension may fill only slots in the book.** Two answers to one question, or an answer nobody asks for, is a misconfiguration that looks like it works. → [§](#loading) · `test/extensions.test.ts`
 - **`ExtensionHost.call` never throws.** A throw of any value (even one that cannot be turned into text), a rejection, a timeout or a wrong-shaped answer comes back as `{ ok: false, detail }` and is recorded on the error log; the caller decides what not-ok means. → [§](#calling-a-slot) · `test/extensions.test.ts`
+- **Every slot in the book is described to project authors, and the starter they copy loads against it and type-checks against its slot types.** The `/lubbdubb:extension` skill is the only place a project learns a slot exists. → [§](#writing-an-extension) · `test/extensionSkill.test.ts`
 - **A slot's contract changes only with `EXTENSION_API_VERSION`.** An extension written against the old shape is then refused at boot instead of reading the new input wrongly. → [§](#adding-a-slot) · _no test_
 
 ## When to use one
@@ -96,6 +97,17 @@ words rather than in the `the extension at <path>` form.
 There is no warning-and-skip path. Every case above is a project behaviour that would be missing
 while the harness looked healthy. Each loaded extension is announced on the console at boot.
 
+## Writing an extension
+
+The project's own developers write the extension, usually with an agent in the project's checkout,
+not LubbDubb's. So the guide to writing one ships in [the plugin](11-mcp-tools.md#the-plugin) every
+operator's Claude Code already has: `/lubbdubb:extension` (`plugin/skills/extension/SKILL.md`), with a
+`starter.ts` beside it that fills every slot. It holds the slots table in an author's terms, the
+config to turn one on, how to test it, and each boot refusal with its fix.
+
+Because the skill is a copy of the contract in another form, `test/extensionSkill.test.ts` holds it
+and the starter to the book. A slot the skill does not describe is one no project can find.
+
 ## Calling a slot
 
 A desk asks a slot through `system.extensions` (`src/extensions/host.ts`):
@@ -156,6 +168,9 @@ A slot is a promise to every project that fills it. Make it in one change, with 
 7. **Test both paths** at the `buildSystem` seam: with an extension filling the slot (a temp `.mjs`
    file, as `test/extensions.test.ts` does) and without.
 8. **Add a row to [The slots](#the-slots)** and update the calling feature's spec.
+9. **Teach it to project authors**: a row in the `/lubbdubb:extension` skill's slots table, and the
+   slot in its `starter.ts` ([Writing an extension](#writing-an-extension)). `npm test`
+   (`test/extensionSkill.test.ts`) fails on either missing.
 
 Changing an existing slot's input or answer — anything an existing extension would read wrongly — bumps
 `EXTENSION_API_VERSION`, so old extensions are refused at boot with a message naming both versions
