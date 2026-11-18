@@ -1968,8 +1968,10 @@ it is launched is the same question in both places, and an operator who has conf
 what they mean; a `remoteValidation.browser` beside it would be a second answer to that question, and
 the deployment where the two disagree is the one nobody notices.
 
-What differs is the directories, and both are substituted at dispatch by `substituteBrowserArgs` (with
-`{playwrightMcp}`, the bundled server, which is the same in both — [32](32-local-validation.md#the-recording)):
+What differs is the directories, and both are substituted at dispatch by `substituteBrowserArgs` — in
+`command` as well as `args`, beside `{node}` and `{playwrightMcp}` (the harness's own `node` and the bundled
+server), which are the same in both ([32](32-local-validation.md#the-recording)). Any other `{name}` is left
+as written:
 
 | Token          | Here                                                               | Why                                                                                        |
 | -------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |

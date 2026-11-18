@@ -198,7 +198,7 @@ test('the browser server is given this validation’s own directories', () => {
   });
   assert.ok(filled.args.includes('/srv/validation/issue-12/local/lv1'));
   assert.ok(filled.args.includes('/srv/validation/.browser-profile'));
-  assert.ok(!filled.args.some((a) => a.includes('{')), 'no token is left standing');
+  assert.ok(![filled.command, ...filled.args].some((a) => a.includes('{')), 'no token is left standing');
 });
 
 test('an extra server rides the harness’s own launch, and its grant is added rather than substituted', () => {

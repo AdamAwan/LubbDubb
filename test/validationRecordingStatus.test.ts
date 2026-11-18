@@ -31,6 +31,8 @@ test('a project names the bundled server by token, beside its own flags', () => 
   const launched = substituteBrowserArgs(own, { outputDir: '/out', profileDir: '/profile' });
   assert.equal(launched.command, process.execPath);
   assert.deepEqual(launched.args, [mcpCli, '--timeout-navigation', '15000', '--caps', 'devtools']);
+  const unknown = substituteBrowserArgs(browser(['{toString}', '{nope}']), { outputDir: '/o', profileDir: '/p' });
+  assert.deepEqual(unknown.args, ['{toString}', '{nope}'], 'only the browser tokens are substituted');
 });
 
 test('the ffmpeg revision is read off the bundled Playwright, not kept by hand', () => {
