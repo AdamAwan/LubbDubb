@@ -26,6 +26,7 @@ export function validatePool(merged: Config): void {
 }
 
 export function validateReview(merged: Config): void {
+  validateReviewExtension(merged);
   const named = merged.review.defaultMode;
   if (named === null) return;
   const modes = Object.keys(merged.review.modes);
@@ -34,6 +35,34 @@ export function validateReview(merged: Config): void {
       `Refusing to start: review.defaultMode is "${named}", which is not one of review.modes ` +
         `(${modes.join(', ') || 'none declared'}). It names the mode a review falls back to when the triage ` +
         `cannot answer, so a name with nothing behind it is only reached on the day something else went wrong.`,
+    );
+  }
+}
+
+function validateReviewExtension(merged: Config): void {
+  const review = merged.review;
+  for (const key of ['routeExtension', 'publishExtension'] as const) {
+    if (typeof review[key] !== 'boolean')
+      throw new Error(
+        `Refusing to start: review.${key} must be true or false, and it is ${JSON.stringify(review[key])}.`,
+      );
+  }
+  if (review.routeExtension && (review.routingCharterFile ?? '').trim() !== '') {
+    throw new Error(
+      'Refusing to start: review.routeExtension and review.routingCharterFile both choose how a pull request is ' +
+        "reviewed — the extension's routeReview slot replaces the triage agent and its charter. Drop routingCharterFile.",
+    );
+  }
+  if (review.routeExtension && Object.keys(review.modes).length < 2 && !review.allowSkip) {
+    throw new Error(
+      'Refusing to start: review.routeExtension is set, but there is nothing to choose — declare two or more ' +
+        'review.modes, or turn on review.allowSkip.',
+    );
+  }
+  if (review.publishExtension && review.publish !== 'none') {
+    throw new Error(
+      `Refusing to start: review.publishExtension and review.publish ("${review.publish}") both decide where the ` +
+        'findings go — the extension\'s publishReview slot replaces review.publish. Set review.publish to "none".',
     );
   }
 }

@@ -42,5 +42,43 @@ export default {
       });
       if (!response.ok) throw new Error(`the reseed answered ${response.status}`);
     },
+
+    // Choose how thoroughly the fleet reviews a pull request. Answer one of `modes`, or skip where allowed.
+    routeReview(input: {
+      pr: { number: number; title: string; branch: string; base: string; author: string | null; body: string | null };
+      modes: string[];
+      allowSkip: boolean;
+    }): { mode: string; reason: string } | { skip: true; reason: string } {
+      const [thorough, light] = [input.modes[0], input.modes.at(-1)];
+      if (input.allowSkip && /lockfile|bump/i.test(input.pr.title))
+        return { skip: true, reason: 'no behaviour changes' };
+      if (thorough === undefined || light === undefined) throw new Error('this project declares no review modes');
+      if (/auth|migration/i.test(`${input.pr.title} ${input.pr.branch}`))
+        return { mode: thorough, reason: 'touches auth or data' };
+      return { mode: light, reason: 'an ordinary change' };
+    },
+
+    // Publish a recorded review where this team reads it. Answer the thread you posted into, or null.
+    async publishReview(
+      input: {
+        pr: number;
+        headSha: string | null;
+        mode: string | null;
+        verdict: 'clear' | 'findings';
+        summary: string;
+        findings: string[];
+      },
+      { signal }: SlotContext,
+    ): Promise<{ thread: string | null }> {
+      if (input.verdict === 'clear') return { thread: null };
+      const response = await fetch(`${API}/pulls/${input.pr}/threads`, {
+        method: 'POST',
+        body: JSON.stringify({ summary: input.summary, findings: input.findings }),
+        signal,
+      });
+      if (!response.ok) throw new Error(`the review API answered ${response.status}`);
+      const { id } = (await response.json()) as { id: string };
+      return { thread: id };
+    },
   },
 };

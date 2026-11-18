@@ -3,7 +3,8 @@ import { reviewTargetPr } from '../../review/prReview.js';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { PrReviewVerdict } from '../../types.js';
-import type { ToolFactory } from './context.js';
+import type { McpToolDeps, ToolFactory } from './context.js';
+import type { PrReview } from '../../types.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -66,6 +67,7 @@ export const reviewReport: ToolFactory = ({ deps, agent, task, ok }) => ({
       findings,
       agentId: agent.id,
     });
+    publishRecorded(deps, review);
     return ok({
       recorded: review.verdict,
       pullRequest: prNumber,
@@ -80,3 +82,7 @@ export const reviewReport: ToolFactory = ({ deps, agent, task, ok }) => ({
     });
   },
 });
+
+function publishRecorded(deps: McpToolDeps, review: PrReview): void {
+  if (deps.reviewPublisher !== undefined) void deps.reviewPublisher.publish(review);
+}

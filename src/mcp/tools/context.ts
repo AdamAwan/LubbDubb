@@ -1,3 +1,4 @@
+import type { ReviewPublisher } from '../../review/extensionReview.js';
 import type { Store } from '../../store/store.js';
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { PermissionDesk } from '../../agents/permissionDesk.js';
@@ -144,6 +145,8 @@ export interface McpToolDeps {
   areaPaths?: () => AreaPathTree | null;
   reviewModes?: string[];
   reviewAllowSkip?: boolean;
+  /** Where a recorded review goes next: `review.publish`'s note only, or the project's `publishReview` slot. */
+  reviewPublisher?: Pick<ReviewPublisher, 'publish'>;
   /**
    * `validation.checkSets`. The fence on the authoring tools: absent is **off**, because the two rules
    * that brief an agent to call them are off there too, and a tool that stays callable with nothing

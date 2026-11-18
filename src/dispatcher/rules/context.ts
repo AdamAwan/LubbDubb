@@ -1,3 +1,4 @@
+import type { ReviewPublisher, ReviewRouter } from '../../review/extensionReview.js';
 import type { DispatchContext } from '../dispatcher.js';
 import type { AdmissionId, DispatchRuleId } from '../rules.js';
 import type { CooldownPolicy } from '../dispatchCooldown.js';
@@ -109,6 +110,8 @@ export interface StageContext {
   ci: CiPolicy;
   review: PrReviewPolicy;
   reviewCharters: PrReviewCharters;
+  reviewRouter: Pick<ReviewRouter, 'dispatchesTriage'>;
+  reviewPublisher: Pick<ReviewPublisher, 'note'>;
   prReviews: ReadonlyMap<number, PrReview>;
   prReviewRoutes: ReadonlyMap<number, PrReviewRoute>;
   prSplits: ReadonlyMap<number, PrSplitVerdict>;

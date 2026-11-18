@@ -7,6 +7,7 @@ import type { AreaPathDirectory } from '../intake/areaPaths.js';
 import type { SpendBurnDesk } from '../insights/spendBurnDesk.js';
 import type { PrReviewPolicy } from '../review/policy.js';
 import { askReviewedElsewhere, type ReviewProber } from '../review/reviewedElsewhere.js';
+import type { ReviewRouteDesk } from '../review/extensionReview.js';
 import { awaitingReview } from '../pr/prHealth.js';
 import { isActiveTask } from '../tasks.js';
 import { runsToRecord, type CompletionSignals } from '../runs/runs.js';
@@ -43,6 +44,7 @@ export interface PulseDeps {
   errors: ErrorRecorder;
   review: PrReviewPolicy;
   reviewProber?: ReviewProber;
+  reviewRoutes?: ReviewRouteDesk;
   plans?: PlanReconciler;
   prWatch?: PrWatchDesk;
   prWorkItems?: PrWorkItemDesk;
@@ -179,6 +181,7 @@ const ENTRIES = [
   ...phase('afterOrigins', [{ id: 'issueRuns', readWorld: false, run: (d, at) => recordIssueRuns(d, at) }]),
   ...phase('afterReviews', [
     { id: 'reviewedElsewhere', readWorld: true, run: (d, at) => askReviewedElsewhere(d, at) },
+    { id: 'reviewRoutes', readWorld: false, run: (d, at) => void d.reviewRoutes?.run(at) },
     { id: 'localValidations', readWorld: false, run: (d) => d.localValidations?.sweep() },
   ]),
   ...phase('afterExecute', [{ id: 'tickets', readWorld: true, run: (d) => d.tickets?.run() }]),

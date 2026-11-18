@@ -7,8 +7,9 @@ An **extension** is a project's own code that LubbDubb loads at boot and calls a
 **slots**. It is how a behaviour that only one project needs lives _in that project_, while LubbDubb
 keeps the orchestration around it: when to ask, the locks, the record, the cockpit.
 
-**Built**: the loader, the host, the `extensions` key, and the two tenant slots
-([36](36-remote-validation.md#a-tenant-from-the-projects-extension)). Each further slot is added by
+**Built**: the loader, the host, the `extensions` key, the two tenant slots
+([36](36-remote-validation.md#a-tenant-from-the-projects-extension)) and the two review slots
+([07](07-pull-requests.md#the-review-from-the-projects-extension)). Each further slot is added by
 the change that needs it, following [Adding a slot](#adding-a-slot).
 
 ## Invariants
@@ -140,10 +141,12 @@ is what lets the harness change underneath without breaking projects.
 
 Each slot is a row here, and links the spec of the feature that asks it.
 
-| Slot           | Asked by                                                                                                                                  | Input                                     | Answer                                      | Timeout |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------- | ------- |
-| `ensureTenant` | The tenant press, for an environment with `validate.tenantExtension` ([36](36-remote-validation.md#a-tenant-from-the-projects-extension)) | `{ environment, tenant: string \| null }` | `{ tenant }`, a non-blank one-line name     | 1 hour  |
-| `reseedTenant` | The same press, after `ensureTenant`; optional                                                                                            | `{ environment, tenant }`                 | nothing (`undefined`); a throw is a failure | 1 hour  |
+| Slot            | Asked by                                                                                                                                             | Input                                                                     | Answer                                         | Timeout   |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------- | --------- |
+| `ensureTenant`  | The tenant press, for an environment with `validate.tenantExtension` ([36](36-remote-validation.md#a-tenant-from-the-projects-extension))            | `{ environment, tenant: string \| null }`                                 | `{ tenant }`, a non-blank one-line name        | 1 hour    |
+| `reseedTenant`  | The same press, after `ensureTenant`; optional                                                                                                       | `{ environment, tenant }`                                                 | nothing (`undefined`); a throw is a failure    | 1 hour    |
+| `routeReview`   | The review's route desk, with `review.routeExtension` ([07](07-pull-requests.md#the-review-from-the-projects-extension))                             | `{ pr: { number, title, branch, base, author, body }, modes, allowSkip }` | `{ mode, reason }` or `{ skip: true, reason }` | 2 minutes |
+| `publishReview` | `review_report`, once, after a review is recorded, with `review.publishExtension` ([07](07-pull-requests.md#the-review-from-the-projects-extension)) | `{ pr, headSha, mode, verdict, summary, findings }`                       | `{ thread }`, a one-line thread id or null     | 5 minutes |
 
 ## Adding a slot
 

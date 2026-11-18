@@ -25,10 +25,12 @@ LubbDubb feature switched on by config.
 
 Today's slots, `apiVersion` **1**:
 
-| Slot           | Asked when                                                                                                                 | Input                                     | Answer                                                        |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| `ensureTenant` | The operator presses prepare on a goal's remote-validation sheet, for an environment with `validate.tenantExtension: true` | `{ environment, tenant: string \| null }` | `{ tenant: "<name>" }` — the tenant you provisioned, one line |
-| `reseedTenant` | Straight after `ensureTenant`, same press                                                                                  | `{ environment, tenant }`                 | nothing (`return;`). Throw to fail                            |
+| Slot            | Asked when                                                                                                                 | Input                                                                     | Answer                                                                    |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `ensureTenant`  | The operator presses prepare on a goal's remote-validation sheet, for an environment with `validate.tenantExtension: true` | `{ environment, tenant: string \| null }`                                 | `{ tenant: "<name>" }` — the tenant you provisioned, one line             |
+| `reseedTenant`  | Straight after `ensureTenant`, same press                                                                                  | `{ environment, tenant }`                                                 | nothing (`return;`). Throw to fail                                        |
+| `routeReview`   | A pull request is due the fleet's review, with `review.routeExtension: true`                                               | `{ pr: { number, title, branch, base, author, body }, modes, allowSkip }` | `{ mode, reason }`, or `{ skip: true, reason }`                           |
+| `publishReview` | Straight after the reviewer records its review, with `review.publishExtension: true`                                       | `{ pr, headSha, mode, verdict, summary, findings }`                       | `{ thread: "<id>" }` of the thread you posted into, or `{ thread: null }` |
 
 - `ensureTenant` must be **idempotent**. `tenant` is the one already stamped, or null the
   first time, so hand it back while it still exists. **Return the name your provisioning
@@ -38,6 +40,13 @@ Today's slots, `apiVersion` **1**:
   control a confirm-twice "Reseed". Leaving it out gives a harmless "Provision".
 - Both time out after **one hour**. The context's `signal` fires when the call times out or fails.
   Pass it to `fetch` and child processes so the work actually stops.
+- `routeReview` replaces the triage agent. Answer one of the `modes` you were given; `skip` only
+  where `allowSkip` is true. A failure, or a mode not in the list, runs `review.defaultMode`. Times out
+  after **two minutes**.
+- `publishReview` replaces `review.publish`, which must stay `"none"`. Post the findings where your team
+  reads them. Return the id of the thread you opened, if any: once it is resolved, the review reads as dealt
+  with. A failure leaves the review recorded but not published. It is **asked once**, never retried (a
+  restart mid-call drops it), so it never double-posts. Times out after **five minutes**.
 - If the slot you need is not here, **do not bend another slot to do it.** Write
   down the question LubbDubb would need to ask, with its input and answer, and
   tell the operator: a new slot is a LubbDubb change. Its repository has an
@@ -72,6 +81,8 @@ Start from [`starter.ts`](starter.ts) beside this skill. Copy it to, say,
    sets `"validate": { "tenantExtension": true, … }` and drops `tenant`,
    `tenantEnv`, `ensureTenant` and `reseed`. Keeping them alongside refuses boot.
    Environments without the key keep their commands.
+   For the review, set `"review": { "routeExtension": true }` (and drop `routingCharterFile`) and/or
+   `"review": { "publishExtension": true }` (and keep `publish` at `"none"`).
 
 3. Restart LubbDubb. A loaded extension is named on the boot console. Every problem
    **refuses to start**, naming the file and what is wrong. Nothing is skipped with a
@@ -92,13 +103,16 @@ Start from [`starter.ts`](starter.ts) beside this skill. Copy it to, say,
 
 ### When it will not start
 
-| It says                                                                | Fix                                                                                            |
-| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `could not be loaded: …`                                               | A syntax error, or an import it cannot resolve from the file's folder.                         |
-| `its default export is not an object`                                  | Use `export default { … }`, not a named export or a function.                                  |
-| `it exports "x", which no extension carries`                           | Only `apiVersion`, `name` and `slots` are allowed.                                             |
-| `written for apiVersion N and this harness speaks M`                   | A slot's contract changed. Read the table above again, update the slots, then bump the number. |
-| `fills the "x" slot, which this harness does not have`                 | A misspelling, or a slot this version of LubbDubb does not ask.                                |
-| `both fill the "x" slot`                                               | Two extensions answer one slot. Merge them, or drop one.                                       |
-| `set "validate.tenantExtension" and no extension fills "ensureTenant"` | The extension is not listed in `extensions`, or does not fill `ensureTenant`.                  |
-| `"validate.reseed" and "validate.tenantExtension" both reseed`         | Delete the `reseed` command. The extension's `reseedTenant` does it.                           |
+| It says                                                                        | Fix                                                                                            |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `could not be loaded: …`                                                       | A syntax error, or an import it cannot resolve from the file's folder.                         |
+| `its default export is not an object`                                          | Use `export default { … }`, not a named export or a function.                                  |
+| `it exports "x", which no extension carries`                                   | Only `apiVersion`, `name` and `slots` are allowed.                                             |
+| `written for apiVersion N and this harness speaks M`                           | A slot's contract changed. Read the table above again, update the slots, then bump the number. |
+| `fills the "x" slot, which this harness does not have`                         | A misspelling, or a slot this version of LubbDubb does not ask.                                |
+| `both fill the "x" slot`                                                       | Two extensions answer one slot. Merge them, or drop one.                                       |
+| `set "validate.tenantExtension" and no extension fills "ensureTenant"`         | The extension is not listed in `extensions`, or does not fill `ensureTenant`.                  |
+| `"validate.reseed" and "validate.tenantExtension" both reseed`                 | Delete the `reseed` command. The extension's `reseedTenant` does it.                           |
+| `"review.routeExtension" is set and no extension fills the "routeReview" slot` | Fill `routeReview`, or drop the key. Same for `publishExtension` and `publishReview`.          |
+| `review.routeExtension and review.routingCharterFile both choose`              | Delete `routingCharterFile`. The extension chooses.                                            |
+| `review.publishExtension and review.publish (…) both decide`                   | Set `review.publish` to `"none"`.                                                              |
