@@ -15,11 +15,13 @@ CREATE TABLE IF NOT EXISTS local_validations (
   ref          TEXT NOT NULL,       -- the branch that run had out; what a fix is dispatched onto
   commit_sha   TEXT,                -- named for local_runs' reason: COMMIT is a keyword
   status       TEXT NOT NULL,
+  requested_by TEXT NOT NULL DEFAULT 'operator', -- operator | auto
   requested_at TEXT NOT NULL,
   dispatched_at TEXT,               -- when an agent actually spawned, not when one was proposed
   ended_at     TEXT,
   task_id      TEXT,                -- the validator
   fix_task_id  TEXT,                -- the fix, and the latch that keeps one failure to one fix
+  fix_ticket_ref TEXT,              -- on the integration branch, the bug filed instead; '' from before the column
   plan         TEXT,                -- markdown, written before the environment was up
   summary      TEXT,
   findings     TEXT NOT NULL,       -- JSON array of LocalValidationFinding

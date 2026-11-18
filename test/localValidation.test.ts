@@ -107,11 +107,13 @@ function row(over: Partial<LocalValidation> = {}): LocalValidation {
     ref: 'issue/12',
     commit: COMMIT,
     status: 'pending',
+    requestedBy: 'operator',
     requestedAt: NOW,
     dispatchedAt: null,
     endedAt: null,
     taskId: null,
     fixTaskId: null,
+    fixTicketRef: null,
     plan: null,
     summary: null,
     findings: [],
@@ -342,7 +344,7 @@ test('a configured browser is asked to record the run, and a missing recorder is
 });
 
 test('with no browser configured the prompt says so rather than leaving the agent to find out', async () => {
-  const plan = await rules({ instruction: '', setup: '', browser: null }).decide(ctx());
+  const plan = await rules({ auto: false, instruction: '', setup: '', browser: null }).decide(ctx());
   const action = plan.actions.find((a) => 'originRef' in a && a.originRef === 'issue:12:validate-local:lv1');
   const dispatch = action as unknown as { prompt: string; mcpServers: unknown[] };
   assert.deepEqual(dispatch.mcpServers, []);

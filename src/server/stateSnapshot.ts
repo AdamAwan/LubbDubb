@@ -1,5 +1,6 @@
 import type { System } from '../system/system.js';
 import type { Config } from '../config/config.js';
+import { localRunConfigured } from '../localRun/policy.js';
 import type { CockpitState, OpenPullRequest, PullRequest, StateSection } from '../wire.js';
 import { truncateAreaPaths } from '../intake/placement.js';
 import { buildStacks } from '../stacks/stack.js';
@@ -209,7 +210,7 @@ function harnessSection(
       defaultProfile: config.agentModels?.default ?? null,
       desktopFolder: config.repoRoot,
       ejectionEnabled: config.ejection.enabled,
-      localRunConfigured: config.localRun.instruction.trim() !== '',
+      localRunConfigured: localRunConfigured(config.localRun),
       localValidationBrowserConfigured: config.localValidation.browser !== null,
       localRunStopConfigured: config.localRun.stopInstruction.trim() !== '',
       localRunRefreshConfigured: config.localRun.refreshInstruction.trim() !== '',

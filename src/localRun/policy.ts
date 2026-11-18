@@ -17,3 +17,7 @@ export const DEFAULT_LOCAL_RUN: LocalRunPolicy = {
   refreshInstruction: '',
   url: '',
 };
+
+export function localRunConfigured(policy: LocalRunPolicy): boolean {
+  return policy.instruction.trim() !== '';
+}

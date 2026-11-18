@@ -166,6 +166,7 @@ function sweepDeps(): { deps: PulseDeps; calls: string[] } {
     appraisals: { announce: async () => void calls.push('appraisals') } as unknown as PulseDeps['appraisals'],
     areaPaths: { refresh: async () => void calls.push('areaPaths') } as unknown as PulseDeps['areaPaths'],
     localValidations: { sweep: note('localValidations') },
+    localValidationAuto: { run: async () => void calls.push('localValidationAuto') },
     tickets: { run: async () => void calls.push('tickets') },
   };
   return { deps, calls };
@@ -207,7 +208,14 @@ test('a sweep needing a fresh world read is skipped on a local cycle, and no oth
   const local = sweepDeps();
   await walkSweeps(local.deps, false);
   const worldFacing = PULSE_PIPELINE.filter((e) => e.phase !== 'reconcile' && e.readWorld).map((e) => e.id);
-  assert.deepEqual(worldFacing, ['appraisals', 'areaPaths', 'closedBlocks', 'reviewedElsewhere', 'tickets']);
+  assert.deepEqual(worldFacing, [
+    'appraisals',
+    'areaPaths',
+    'closedBlocks',
+    'reviewedElsewhere',
+    'localValidationAuto',
+    'tickets',
+  ]);
   for (const id of worldFacing) {
     assert.ok(fresh.calls.includes(id), `${id} runs on a cycle that read the world`);
     assert.ok(!local.calls.includes(id), `${id} is skipped on a local cycle, and the flag is what skips it`);

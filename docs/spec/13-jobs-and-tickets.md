@@ -338,9 +338,11 @@ Tests: `test/jobSchedules.test.ts`.
 
 ## Filing a ticket
 
-Five things file a tracker item: unrecorded **work**, a **brief**, a **bug** an operator raised, an
-**app error** pressed on the Errors tab ([39](39-app-errors.md#the-presses)), and a **repo lesson**
-too large to make as a pull request ([41](41-repo-lessons.md#a-pull-request-or-a-ticket)). All five go through `ActionSink.createIssue`
+Six things file a tracker item: unrecorded **work**, a **brief**, a **bug** an operator raised, an
+**app error** pressed on the Errors tab ([39](39-app-errors.md#the-presses)), a **repo lesson**
+too large to make as a pull request ([41](41-repo-lessons.md#a-pull-request-or-a-ticket)), and a
+**local validation that failed on the integration branch**, filed as a bug against its goal
+([32](32-local-validation.md#when-it-fails)). All six go through `ActionSink.createIssue`
 ([15](15-integrations.md)), and none of them asks a model to run a `gh` / `az` command any more
 (issue #394).
 
