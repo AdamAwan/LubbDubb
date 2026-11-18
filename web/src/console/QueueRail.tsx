@@ -125,7 +125,7 @@ export function holdingLabel(holding: number): string {
   return `holding ${holding} ${holding === 1 ? 'part' : 'parts'}`;
 }
 
-function KindTag({ kind }: { kind: NeedKind }): JSX.Element {
+export function KindTag({ kind }: { kind: NeedKind }): JSX.Element {
   return (
     <Tag>
       {/* Hidden from the reading order on purpose: the word beside it is
@@ -392,23 +392,62 @@ function AssignGroupRow({
   );
 }
 
-export function QueueRail({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const rows = view.needsYou;
-  const focus = view.goalPage === null ? null : `issue:${view.goalPage.issue.number}`;
+/**
+ * The rail's tiers over a list of rows: a heading per urgency, and the fold over
+ * the asks that hold nothing. Shared with the Needs you page, which draws the
+ * same tiers at full width. → docs/spec/44-needs-you.md#from-the-orchestrator
+ */
+export function RailTiers({
+  rows,
+  draw,
+}: {
+  rows: readonly NeedRow[];
+  draw: (rows: readonly NeedRow[]) => ReactNode;
+}): JSX.Element {
   const [showLater, setShowLater] = useState(false);
   const sections = URGENCY_ORDER.map((urgency) => ({
     urgency,
     rows: rows.filter((r) => r.urgency === urgency),
   })).filter((s) => s.rows.length > 0);
-  /* The count over the heading stays the whole queue, folded rows included: a
-     number that moved when a section closed would read as asks going away. */
-  const pressing = rows.filter((r) => r.urgency !== 'later').length;
   /* The fold exists to keep asks that hold nothing out of the way of the ones
      the fleet cannot get past. With no `now` row left there is nothing to keep
      them out of the way of, so they open on their own — including the case where
      the rail's only content is the fold. */
   const answerNow = rows.filter((r) => r.urgency === 'now').length;
   const openLater = showLater || answerNow === 0;
+  return (
+    <>
+      {sections.map((section) => (
+        <Fragment key={section.urgency}>
+          {section.urgency === 'later' ? (
+            /* Folded, and by a control that says what is behind it rather
+               than a chevron: these hold nothing, and a rail that spends a
+               row each on them is the reason the pressing ones get skimmed.
+               The fold is per-visit state, not a `Place` field — it says
+               nothing about where the operator is. */
+            <FoldToggle
+              subject="escalation"
+              className="cn-railmore"
+              open={openLater}
+              onToggle={setShowLater}
+              label={`${section.rows.length} holding nothing`}
+            />
+          ) : (
+            <div className="cn-railsub">{URGENCY_LABEL[section.urgency]}</div>
+          )}
+          {draw(section.urgency === 'later' && !openLater ? [] : section.rows)}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
+export function QueueRail({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const rows = view.needsYou;
+  const focus = view.goalPage === null ? null : `issue:${view.goalPage.issue.number}`;
+  /* The count over the heading stays the whole queue, folded rows included: a
+     number that moved when a section closed would read as asks going away. */
+  const pressing = rows.filter((r) => r.urgency !== 'later').length;
 
   return (
     <>
@@ -424,25 +463,10 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
         {rows.length === 0 ? (
           <p className="cn-rail-empty">Nothing is waiting on you</p>
         ) : (
-          sections.map((section) => (
-            <Fragment key={section.urgency}>
-              {section.urgency === 'later' ? (
-                /* Folded, and by a control that says what is behind it rather
-                   than a chevron: these hold nothing, and a rail that spends a
-                   row each on them is the reason the pressing ones get skimmed.
-                   The fold is per-visit state, not a `Place` field — it says
-                   nothing about where the operator is. */
-                <FoldToggle
-                  subject="escalation"
-                  className="cn-railmore"
-                  open={openLater}
-                  onToggle={setShowLater}
-                  label={`${section.rows.length} holding nothing`}
-                />
-              ) : (
-                <div className="cn-railsub">{URGENCY_LABEL[section.urgency]}</div>
-              )}
-              {groupAsks(section.urgency === 'later' && !openLater ? [] : section.rows, view.state).map((item) =>
+          <RailTiers
+            rows={rows}
+            draw={(tier) =>
+              groupAsks(tier, view.state).map((item) =>
                 item.kind === 'assign' ? (
                   <AssignGroupRow
                     key={`assign:${item.first.id}`}
@@ -462,9 +486,9 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
                     actions={actions}
                   />
                 ),
-              )}
-            </Fragment>
-          ))
+              )
+            }
+          />
         )}
       </div>
       <HandledLine view={view} actions={actions} />
@@ -473,7 +497,7 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
 }
 
 // → docs/spec/43-handled-for-you.md#on-the-rail
-function HandledLine({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+export function HandledLine({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const open = view.state.handledOpen;
   const here = view.goalPage === null && view.tab === 'handled';
   return (

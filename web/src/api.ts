@@ -203,6 +203,7 @@ export const api = {
     post<AppErrorTriagePressPayload>('/api/app-errors/triage', { environment, fingerprint }),
   claimBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/claim`, {}),
   unclaimBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/unclaim`, {}),
+  listenSend: (item: NonNullable<AppState['listener']['on']>) => post<{ ok: true }>('/api/listen/send', { item }),
   closeBotPr: (prNumber: number) => post<{ ok: true }>(`/api/bot-prs/${prNumber}/close`, {}),
   summariseBotPrs: () => post<{ ok: true; prs: number }>('/api/bot-prs/risk', {}),
   getMcp: () => authFetch('/api/mcp').then((r) => json<McpChannelPayload>(r)),

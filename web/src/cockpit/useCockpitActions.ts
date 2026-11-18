@@ -35,6 +35,7 @@ export function useCockpitActions(refresh: Refresh, go: Go): { actions: CockpitA
       ...placeActions(go),
       ...configFixActions(undoable.current, setAppliedFixes),
       fetchWorkSubtree: (ref) => api.getWorkSubtree(ref),
+      listenSend: (item) => then(api.listenSend(item)),
     };
   }, [refresh, go]);
   return { actions, appliedFixes };

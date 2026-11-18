@@ -1,7 +1,9 @@
 # 44 — The Needs you page
 
-**Not yet built.** Everything below is the design the next change is written against; paths that do
-not exist yet are in italics.
+**Partly built.** The cockpit page is built — the tab, the two columns, the Claude button and the
+listener status, which reads whatever `listener` the snapshot ships. The server side below — the
+listener, `ask_wait`, `pr_read`, `POST /api/listen/send` and the two skills — is not yet built; paths
+that do not exist yet are in italics.
 
 The overview answers _what is the fleet doing_. That stopped being the operator's question: what
 matters is **what is waiting on me** — the orchestrator's asks and the pull requests that need a
@@ -15,16 +17,16 @@ part of this page **only**: no other surface sends anything to it.
 ## Invariants
 
 - **The old overview and the rail are unchanged.** This page is a new tab; nothing about Cards, Focus mode or the queue rail moves. → [§](#where-it-sits) · _no test_
-- **Only this page sends to the listening chat.** `POST /api/listen/send` has one caller, `web/src/console/NeedsYouPage.tsx`; every other surface keeps its own buttons and its own deep links. → [§](#scope) · _test/needsYouPage.test.ts_
-- **Which pull requests are drawn is `prsOnYou`, one pure function.** A pull request is on the page when any one of its reasons holds, and a reason is read off fields the server already decided — never re-derived in the browser. → [§](#pull-requests-waiting-on-you) · _test/prsOnYou.test.ts_
-- **The page reads `listener.state`; it never guesses.** `listening`, `busy` and `off` are the server's, off whether a wait is open. → [§](#is-a-chat-listening) · _test/listener.test.ts_
-- **A wait is bounded.** `ask_wait` returns by itself after `LISTEN_WAIT_MS` (10 minutes) with nothing, and the skill calls it again; a held call never outlives that bound. → [§](#the-wait) · _test/listener.test.ts_
-- **An item is handed out once.** A sent item leaves the queue the moment one `ask_wait` returns it; a second waiter never receives it too. → [§](#the-wait) · _test/listener.test.ts_
+- **Only this page sends to the listening chat.** `POST /api/listen/send` has one caller, `web/src/console/NeedsYouPage.tsx`; every other surface keeps its own buttons and its own deep links. → [§](#scope) · `test/needsYouPage.test.ts`
+- **Which pull requests are drawn is `prsOnYou`, one pure function.** A pull request is on the page when any one of its reasons holds, and a reason is read off fields the server already decided — never re-derived in the browser. → [§](#pull-requests-waiting-on-you) · `test/prsOnYou.test.ts`
+- **The page reads `listener.state`; it never guesses.** `listening`, `busy` and `off` are the server's, off whether a wait is open. → [§](#is-a-chat-listening) · `test/needsYouPage.test.ts`
+- **A wait is bounded.** `ask_wait` returns by itself after `LISTEN_WAIT_MS` (10 minutes) with nothing, and the skill calls it again; a held call never outlives that bound. → [§](#the-wait) · _no test_
+- **An item is handed out once.** A sent item leaves the queue the moment one `ask_wait` returns it; a second waiter never receives it too. → [§](#the-wait) · _no test_
 - **The listen loop decides nothing.** `/lubbdubb:listen` hands each item to the same reading the `next` skill does; the operator answers. → [§](#the-listen-skill) · _no test_
 
 ## Where it sits
 
-A `ConsoleTab`, `needs`, reached at `?tab=needs` and drawn by _web/src/console/NeedsYouPage.tsx_. The
+A `ConsoleTab`, `needs`, reached at `?tab=needs` and drawn by `web/src/console/NeedsYouPage.tsx`. The
 top bar names it **Needs you** with a `new` tag. It is not the default home: the overview stays the
 first tab until the operator decides otherwise.
 
@@ -57,7 +59,7 @@ different questions, and the operator asked for both.
 
 ## Pull requests waiting on you
 
-`prsOnYou` (_web/src/view/prsOnYou.ts_) over `world.pullRequests`. A pull request is drawn when any of
+`prsOnYou` (`web/src/view/prsOnYou.ts`) over `world.pullRequests`. A pull request is drawn when any of
 these hold, and each that holds is a tag on its row:
 
 | Reason             | Read off                                                              |
@@ -68,10 +70,11 @@ these hold, and each that holds is a tag on its row:
 | `Needs a reviewer` | `assignAsk` is set and not empty                                      |
 | `No description`   | `body` is read and empty after trimming                               |
 
-Sorted by the first reason in that order, then newest first. The row is `prRow`
+Sorted by the first reason in that order, then newest first — by number, since a pull request
+carries no opened-at time. The row is `prRow`
 (`web/src/console/prRow.tsx`) with the tags as its chips and the [Claude button](#the-claude-button)
 as its action. The card's header counts the drawn rows against every open one, and its foot links to
-the full list.
+the full list — the overview's pull request card, which draws every open one.
 
 ## The Claude button
 
