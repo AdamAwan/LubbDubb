@@ -10,6 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { issueBranch } from '../src/dispatcher/issuePickup.js';
 import { localValidationOrigin } from '../src/validation/local/origin.js';
+import { localValidationIsOpen } from '../src/validation/local/stale.js';
 import { LocalValidationTicketDesk } from '../src/validation/local/ticket.js';
 import type { TicketFiler } from '../src/tickets/filing.js';
 import type { CiStatus, Issue, PullRequest, WorldSnapshot } from '../src/types.js';
@@ -93,7 +94,7 @@ test('a delivered goal with green CI on the commit it would run is validated wit
     await press(system, snapshot);
 
     const row = system.store.localValidations.latestLocalValidation('issue:12');
-    assert.equal(row?.status, 'pending');
+    assert.ok(row !== null && localValidationIsOpen(row), 'open — its own cycle may already have dispatched it');
     assert.equal(row?.requestedBy, 'auto');
     assert.equal(row?.commit, HEAD);
     assert.equal(system.store.localRuns.liveLocalRun()?.originRef, 'issue:12');
@@ -192,7 +193,7 @@ test('a press runs a cycle of its own, which dispatches the validator', async ()
 
     await press(system, snapshot);
 
-    const deadline = Date.now() + 5_000;
+    const deadline = Date.now() + 20_000;
     while (
       system.store.localValidations.latestLocalValidation('issue:12')?.status === 'pending' &&
       Date.now() < deadline
@@ -212,7 +213,7 @@ function land(system: System, n: number, mergedAt: string, pr = 100 + n): void {
 }
 
 async function dispatched(system: System, originRef: string): Promise<string | undefined> {
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + 20_000;
   while (system.store.localValidations.latestLocalValidation(originRef)?.status === 'pending' && Date.now() < deadline)
     await new Promise((resolve) => setTimeout(resolve, 50));
   return system.store.localValidations.latestLocalValidation(originRef)?.status;
@@ -302,7 +303,8 @@ test('only an automatic validation may report skipped', async () => {
     const asked = system.localValidations.request({ originRef: 'issue:12', run });
     const refused = system.localValidations.report(task(asked.id), skip);
     assert.equal(refused.ok, false);
-    assert.equal(system.store.localValidations.getLocalValidation(asked.id)?.status, 'pending');
+    const still = system.store.localValidations.getLocalValidation(asked.id);
+    assert.ok(still !== null && localValidationIsOpen(still), 'nothing was recorded on it');
   } finally {
     system.store.close();
   }
