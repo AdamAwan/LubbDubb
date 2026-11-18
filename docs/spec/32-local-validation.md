@@ -208,8 +208,8 @@ the harness's own `node` (`{node}`, which is `process.execPath`) — no `npx`, n
 Playwright writes video with its own ffmpeg build, installed per revision under the Playwright cache
 (`ffmpeg-<revision>`), and every `@playwright/mcp` release can bundle a Playwright that wants a new one;
 `bundledPlaywright()` (`src/validation/local/policy.ts`) reads that revision off the installed
-`playwright-core`'s `browsers.json`, resolved through `@playwright/mcp` and the `playwright` it drives, so it is the copy that records. So bumping the one
-dependency moves the server, its Playwright and the revision together, with nothing to keep in step.
+`playwright-core`'s `browsers.json` — the copy `playwright` itself resolves, reached through
+`@playwright/mcp`, because that is the one that records. So bumping the one dependency moves the server, its Playwright and the revision together, with nothing to keep in step.
 
 **`npm ci` installs the matching ffmpeg.** The `postinstall` script (`scripts/installFfmpeg.ts`) runs the
 bundled `playwright-core`'s `install ffmpeg`, which can only fetch its own revision. A failed download —
@@ -235,15 +235,16 @@ explain a missing video, because the harness reads that for itself:
   revision this harness cannot know. Each finding is **one** recorded error (`boot`, or `runtime` for a
   live change):
   - **The bundled package cannot be read** (no `bin`), recorder or not: the error names `npm ci`.
-    `bundledPlaywright()` never throws — it answers the failure as a message, keeping only a success, so a
-    repaired install is seen on the next check without a restart — and
-    `substituteBrowserArgs` then leaves `{playwrightMcp}` as written, so the browser fails to connect and
+    `bundledPlaywright()` never throws — it answers the failure as a message and keeps only a success, so
+    dispatch picks up a repaired install without a restart (the recorded error stays until the next boot
+    or browser change) — and `substituteBrowserArgs` then leaves `{playwrightMcp}` as written, so the browser fails to connect and
     the run reports `blocked`, where a throw at dispatch would abort the whole pass.
   - **A recorder is offered and the bundled Playwright names no ffmpeg build**: the browser still
     launches; only the recording is lost, and the error says so.
   - **A recorder is offered and `ffmpeg-<revision>` is missing** from the Playwright cache (a non-empty
     `PLAYWRIGHT_BROWSERS_PATH`, else the platform's default, with an empty `XDG_CACHE_HOME` or
-    `LOCALAPPDATA` read as unset): the error names `node <playwright-core>/cli.js install ffmpeg`. Under
+    `LOCALAPPDATA` read as unset): the error names `node <playwright-core>/cli.js install ffmpeg`, with the full path of the
+    `playwright-core` that `playwright` resolves, which need not be the top-level one. Under
     `PLAYWRIGHT_BROWSERS_PATH=0` Playwright installs inside its own package, which this harness does not
     locate, so it says nothing there rather than guess.
 
