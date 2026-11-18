@@ -30,6 +30,11 @@ test('a project names the bundled server by token, beside its own flags', () => 
   };
   const launched = substituteBrowserArgs(own, { outputDir: '/out', profileDir: '/profile' });
   assert.equal(launched.command, process.execPath);
+  const inCommand = substituteBrowserArgs(
+    { ...own, command: '{outputDir}/run' },
+    { outputDir: '/o', profileDir: '/p' },
+  );
+  assert.equal(inCommand.command, '/o/run', 'tokens are filled in command too');
   assert.deepEqual(launched.args, [mcpCli, '--timeout-navigation', '15000', '--caps', 'devtools']);
   const unknown = substituteBrowserArgs(browser(['{toString}', '{nope}']), { outputDir: '/o', profileDir: '/p' });
   assert.deepEqual(unknown.args, ['{toString}', '{nope}'], 'only the browser tokens are substituted');
@@ -87,8 +92,8 @@ test('the preflight is quiet where ffmpeg is there, or where it cannot know the 
   assert.equal(ffmpegPreflight(browser(['@playwright/mcp@0.0.1', '--caps', 'devtools']), host([])), null);
   assert.ok(ffmpegPreflight(browser(['{playwrightMcp}', '--caps', 'devtools']), host([])) !== null);
   assert.equal(ffmpegPreflight(browser(['{playwrightMcp}']), host([])), null, 'no recorder on offer');
-  const asCommand = { ...browser(['--caps', 'devtools']), command: '{playwrightMcp}' };
-  assert.ok(ffmpegPreflight(asCommand, host([])) !== null, 'the token in command counts too');
+  const mentioned = browser(['@playwright/mcp@0.0.40', '--note={playwrightMcp}', '--caps', 'devtools']);
+  assert.equal(ffmpegPreflight(mentioned, host([])), null, 'only the token as the entry point counts');
   assert.equal(ffmpegPreflight(null, host([])), null);
   const inNodeModules = { ...host([]), env: { PLAYWRIGHT_BROWSERS_PATH: '0' } };
   assert.equal(ffmpegPreflight(DEFAULT_LOCAL_VALIDATION.browser, inNodeModules), null);

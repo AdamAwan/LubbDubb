@@ -24,10 +24,16 @@ function playwrightCacheDir(host: Host): string | null {
 
 export function ffmpegPreflight(browser: ExtraMcpServer | null, host: Host): string | null {
   if (browser === null || !recorderOffered(browser)) return null;
-  if (![browser.command, ...browser.args].some((part) => part.includes(PLAYWRIGHT_MCP_TOKEN))) return null;
+  if (!browser.args.includes(PLAYWRIGHT_MCP_TOKEN)) return null;
   const cache = playwrightCacheDir(host);
   if (cache === null) return null;
-  const { coreCli, ffmpegRevision } = bundledPlaywright();
+  let bundled: ReturnType<typeof bundledPlaywright>;
+  try {
+    bundled = bundledPlaywright();
+  } catch (err) {
+    return `The browser cannot start: the bundled @playwright/mcp is not usable — ${err instanceof Error ? err.message : String(err)}. Run \`npm ci\`.`;
+  }
+  const { coreCli, ffmpegRevision } = bundled;
   const dir = join(cache, `ffmpeg-${ffmpegRevision}`);
   if (host.exists(dir)) return null;
   return (
