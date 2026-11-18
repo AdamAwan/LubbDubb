@@ -147,20 +147,27 @@ inside it — and keeps it current while `uncaughtException` listeners run for a
 right after `buildSystem`, that asks `system.extensions.contain(err)`:
 
 - **Inside a scope whose call is still open**, the error fails that call — the race in `call` rejects
-  with it — so it is recorded once, as the slot's failure, and the signal is aborted.
+  with it — so it is recorded once, as the slot's failure, and the signal is aborted. A second throw
+  before the call closes is recorded on its own, as `threw again during its "<slot>" slot`.
 - **Inside a scope whose call has ended**, it is recorded as `extension "<name>" threw after its
 "<slot>" slot ended: …`, source `runtime`.
 - **Outside any scope**, `contain` answers false and the listener does what Node would have done: prints
   the error and exits with code 1. A harness bug still crashes the harness; registering the listener
-  must not turn every uncaught exception into a log line.
+  must not turn every uncaught exception into a log line. If `contain` itself throws, the listener
+  prints that too and treats the original as uncontained.
 
 Why continuing is sound here, against Node's general advice not to resume after an uncaught exception:
 the throw unwound only the extension's own handler and the internals of the emitter that called it,
 which the extension owns — the harness's state was not on that stack. The extension's own state may be
-broken, and that is its failure, recorded under its name. The one way a harness error could be
+broken, and that is its failure, recorded under its name. Harness code the host calls from inside a
+slot — the caller's `progress` listener, `errors.record` — runs under `AsyncLocalStorage.exit`, so
+nothing it schedules carries the extension's scope. The one way a harness error could be
 misattributed is a resource the harness shares that was first created inside a slot's scope (a pooled
 socket, say); an extension gets no harness object, so there is none it can create, and a misattributed
-throw would still be recorded with its stack, not lost.
+throw would still be recorded with its stack, not lost. The scope also stays with a resource the
+extension creates on one call and caches for later ones (a client, a long-lived child): a throw from it
+during a later call is recorded against the call that created it, and the later call ends at its
+timeout rather than at the throw. Owning such a resource's handlers is the extension's job.
 
 Containment does not stop the work. A child process the slot started keeps running, and on Windows
 aborting the direct child leaves its own children running; the [guide](#writing-an-extension) tells
@@ -199,8 +206,8 @@ Each slot is a row here, and links the spec of the feature that asks it.
 
 ¹ `remoteValidation.tenantTimeoutMs`, default one hour — the kill of the `ensureTenant` and `reseed`
 commands these slots replace, so one key bounds the tenant work whichever answers it. A slot's
-`timeoutMs` in the book is a number or a function of the config; the host reads it on each call, so the
-book stays one table. Every other timeout is fixed in the book.
+`timeoutMs` in the book is a number or a function of the config, resolved on each call against the
+config the host was built with — so, like the commands' kill, a change takes a restart. Every other timeout is fixed in the book.
 
 ## Adding a slot
 

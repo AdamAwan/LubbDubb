@@ -1358,7 +1358,7 @@ half-seeded reading. Only what answers changes.
   and capped at the same **200** lines as a command's tail.
 - **`progress` is the slot's output.** A reseed that runs for most of an hour, waiting on browser
   sign-ins the operator must answer, says so line by line in the tenant panel while it runs, exactly
-  where a command's output would be. The time of the last line is the tail's `lastOutputAt`, so the
+  where a command's output would be. The time of the last non-blank line is the tail's `lastOutputAt`, so the
   panel's _Nothing printed for …_ stall reading works the same; before the slot's first line it is
   null, as for a command that has printed nothing. A line after the slot has settled is dropped
   ([42](42-extensions.md#calling-a-slot)), so a slot left running past its timeout never writes into

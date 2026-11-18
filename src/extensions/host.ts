@@ -24,6 +24,7 @@ interface Scope {
   slot: string;
   bound: Bound;
   open: boolean;
+  faulted: boolean;
   fault: (err: unknown) => void;
 }
 
@@ -68,13 +69,13 @@ export class ExtensionHost<S extends SlotMap> {
     const faulted = new Promise<never>((_, reject) => {
       fault = reject;
     });
-    const scope: Scope = { slot, bound, open: true, fault };
+    const scope: Scope = { slot, bound, open: true, faulted: false, fault };
     const progress = (line: string): void => {
       if (!scope.open || onProgress === undefined) return;
       try {
-        onProgress(String(line));
+        this.scope.exit(() => onProgress(String(line)));
       } catch (err) {
-        this.opts.errors.record({
+        this.record({
           source: 'runtime',
           message: `a progress line from extension "${bound.extension}" on the "${slot}" slot was not shown: ${thrownText(err)}`,
           detail: thrownStack(err),
@@ -91,9 +92,7 @@ export class ExtensionHost<S extends SlotMap> {
         Promise.race([running, faulted]),
         timeoutMs,
         `it did not answer within ${timeoutMs} ms`,
-      ).finally(() => {
-        scope.open = false;
-      });
+      );
       const refused = definition.check(value);
       if (refused !== null) return this.failed(slot, bound, controller, `it answered with the wrong shape: ${refused}`);
       return { ok: true, value: value as S[K]['output'] };
@@ -107,16 +106,22 @@ export class ExtensionHost<S extends SlotMap> {
   contain(err: unknown): boolean {
     const scope = this.scope.getStore();
     if (scope === undefined) return false;
-    if (scope.open) {
+    if (scope.open && !scope.faulted) {
+      scope.faulted = true;
       scope.fault(err);
       return true;
     }
-    this.opts.errors.record({
+    const when = scope.open ? `again during its "${scope.slot}" slot` : `after its "${scope.slot}" slot ended`;
+    this.record({
       source: 'runtime',
-      message: `extension "${scope.bound.extension}" threw after its "${scope.slot}" slot ended: ${thrownText(err)}`,
+      message: `extension "${scope.bound.extension}" threw ${when}: ${thrownText(err)}`,
       detail: thrownStack(err),
     });
     return true;
+  }
+
+  private record(entry: Parameters<ErrorRecorder['record']>[0]): void {
+    this.scope.exit(() => this.opts.errors.record(entry));
   }
 
   private failed(
@@ -128,7 +133,7 @@ export class ExtensionHost<S extends SlotMap> {
   ): SlotResult<never> {
     controller.abort();
     const detail = `extension "${bound.extension}" failed the "${slot}" slot: ${why}`;
-    this.opts.errors.record({ source: 'runtime', message: detail, detail: stack });
+    this.record({ source: 'runtime', message: detail, detail: stack });
     return { ok: false, detail };
   }
 }

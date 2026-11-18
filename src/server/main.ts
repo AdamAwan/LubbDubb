@@ -100,7 +100,13 @@ async function main(): Promise<void> {
   const extensions = await loadExtensions({ paths: config.extensions, book: EXTENSION_SLOTS });
   const system = buildSystem(config, { extensions });
   process.on('uncaughtException', (err) => {
-    if (system.extensions.contain(err)) return;
+    let contained = false;
+    try {
+      contained = system.extensions.contain(err);
+    } catch (containing) {
+      console.error('[lubbdubb] containing an extension fault failed:', containing);
+    }
+    if (contained) return;
     console.error('[lubbdubb] fatal:', err);
     process.exit(1);
   });

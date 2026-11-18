@@ -338,3 +338,23 @@ test('a throw from a handler an extension left behind is contained and recorded,
     ],
   );
 });
+
+test('a second throw while the slot is still open is recorded on its own, not lost', async () => {
+  const holder = globalThis as { __extFault?: (message: string) => void };
+  const { recorded, host: h } = await host(`export default { apiVersion: 1, name: 'nxg', slots: {
+    count: () => new Promise(() => { globalThis.__extFault('first'); globalThis.__extFault('second'); }),
+  } };`);
+  holder.__extFault = (message) => assert.equal(h.contain(new Error(message)), true);
+  try {
+    assert.deepEqual(await h.call('count', null), {
+      ok: false,
+      detail: 'extension "nxg" failed the "count" slot: first',
+    });
+  } finally {
+    delete holder.__extFault;
+  }
+  assert.deepEqual(
+    recorded.map((r) => r.message),
+    ['extension "nxg" threw again during its "count" slot: second', 'extension "nxg" failed the "count" slot: first'],
+  );
+});
