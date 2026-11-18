@@ -31,6 +31,7 @@ import type {
   Job,
   JobAttachment,
   JobSchedule,
+  ListenerView,
   NoSheet,
   PlanAtom,
   PlanCaveatAnswer,
@@ -245,6 +246,8 @@ export interface CockpitState {
   asks: AskRow[];
   /** How many small asks the harness answered itself that the operator has not checked yet. → docs/spec/43-handled-for-you.md */
   handledOpen: number;
+  /** Whether a Claude chat is running `/lubbdubb:listen`, and what it was sent. → docs/spec/44-needs-you.md */
+  listener: ListenerView;
 }
 
 export interface EjectionView extends Ejection {
