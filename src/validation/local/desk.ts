@@ -87,7 +87,7 @@ export class LocalValidationDesk extends EventEmitter {
   report(
     task: Task,
     result: {
-      status: 'passed' | 'failed' | 'blocked';
+      status: 'passed' | 'failed' | 'blocked' | 'skipped';
       summary: string;
       findings: LocalValidationFinding[];
       visited: string[];
@@ -97,7 +97,14 @@ export class LocalValidationDesk extends EventEmitter {
     const target = this.resolve(task);
     if (!target.ok) return target;
     const { row } = target;
-    if (result.status !== 'blocked') {
+    if (result.status === 'skipped' && row.requestedBy !== 'auto')
+      return {
+        ok: false,
+        error:
+          'Nothing was recorded: a person asked for this validation, so it is theirs to call off, not yours to skip. ' +
+          'Run the plan, or report "blocked" if there is nothing a user could see to drive.',
+      };
+    if (result.status === 'passed' || result.status === 'failed') {
       const stale = validationRunStale(row, this.deps.store.localRuns.liveLocalRun());
       if (stale !== null)
         return {
@@ -119,7 +126,7 @@ export class LocalValidationDesk extends EventEmitter {
       recordingStatus: recordingStatus(
         task,
         media === null ? null : media.some((name) => mediaKind(name) === 'video'),
-        result.status === 'blocked',
+        result.status === 'blocked' || result.status === 'skipped',
       ),
     });
     if (written === null)

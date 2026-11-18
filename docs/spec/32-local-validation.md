@@ -18,6 +18,7 @@ Everything else in the harness reads the work. This is the one thing that **runs
 - **Which validation a report is about comes off the dispatch origin: `localValidationOriginParts` parses `:validate-local:` alone.** The fix agent is refused a reading by the parse, not by a sentence in a prompt. → [§](#the-three-tools) · `test/localValidation.test.ts`
 - **The agent owns the running environment's state and none of its code.** It may change flags, configuration and data by any means the project offers, and reports every change; the checkout stays read-only and the session stays the operator's. → [§](#setting-the-environment-up) · `test/localValidation.test.ts`
 - **A browser that will not start is `blocked`, never `failed`, and the prompt offers a configured browser as a claim to check.** A `failed` dispatches a fix for a defect that is not in the goal. → [§](#the-browser) · `test/localValidation.test.ts`
+- **Only an automatic validation may report `skipped`.** A person who pressed the button asked for the run. → [§](#nothing-to-see) · `test/localValidationAuto.test.ts`
 - **The automatic press never takes an environment it did not start, and presses each goal commit once.** It acts only when nothing is live or the live run is the settled run of its own last press, and skips a goal whose latest row is on the commit it would run — whatever that row's status, so a run the operator called off stays called off. → [§](#the-automatic-press) · `test/localValidationAuto.test.ts`
 - **The swap and refresh consents are given before the runner is called, with the route's 409 as the backstop.** Once `start` is reached the previous environment is already coming down. → [§](#the-press) · `test/localValidation.test.ts`
 - **`tasks.mcp_servers` has a real `TASK_COLUMNS` entry, and a launch's servers are read off the task row rather than re-derived at spawn.** Without it every resumed validation comes back without its browser. → [§](#persistence) · _no test_
@@ -44,7 +45,9 @@ re-litigated:
 `local_runs`' rule: a validation abandoned because somebody swapped the environment is the case an
 operator actually hits, and its reason has to be readable afterwards.
 
-`pending` → `dispatched` → `passed` | `failed` | `blocked` | `abandoned`.
+`pending` → `dispatched` → `passed` | `failed` | `blocked` | `skipped` | `abandoned`.
+
+- **`skipped`** is an automatic validation's answer that the change has nothing a user could see — [nothing to see](#nothing-to-see).
 
 - **`blocked`** is the third answer and the reason there are three, and it is the **one word every
   validation path takes** for the fact: an agent that could not reach or confirm the environment has
@@ -131,7 +134,36 @@ finished — whose run target (the same `localRunChoices` the runner would pick)
 request (`prState` open) with `ciStatus` `passing` and a `headSha`. The target is read through the
 runner's own `choicesFor`, off the stored baseline, so it is the ref `start` will accept. The local clone must already have that commit at
 the target (`previewCommit`); a checkout that has not fetched it yet waits for a later pulse rather
-than validating code CI never saw. Oldest delivery first, **one press per pulse**.
+than validating code CI never saw.
+
+**And for what has already merged.** A goal whose work merged before anything pressed for it — a pull
+request that merged inside a pulse, or a goal whose CI was never green while it was open — is pressed
+from `goal_landings` ([24](24-environments.md#recording-a-landing)) rather than from the world, because
+`closedPullRequests` is a window and a landing is not. A goal qualifies when it has a landing with
+`on_integration = yes`, its run target is now `null` (no open pull request of its own and every part
+merged or settled — the goal is all in), and nothing has read it: its latest row is absent, or is
+`blocked` or `abandoned` (neither says anything about the code) and was requested before the newest
+landing. A `passed`, `failed` or `skipped` row from before the merge already read the goal's head. It runs on the **integration branch**, so a
+failure dispatches no fix ([when it fails](#when-it-fails)) and what fails may not be this goal's.
+
+**Only merges after it was switched on.** A landing counts only from the instant the press first saw
+`localValidation.auto` on, kept in `connector_state` under `localValidation.autoSince` and cleared when it
+is turned off — so turning it on validates what merges next rather than queueing every goal ever
+merged, a restart does not move the line, and turning it off and on again draws a new one.
+
+Both kinds together, ready-time first (a delivery's `decided_at`, a landing's `merged_at`), **one press
+per pulse**.
+
+### Nothing to see
+
+A press is made for every ready goal, and some goals change nothing a person could see — a refactor,
+tests, tooling. The **validator** decides, not the press: an `auto` row's briefing **appends** a
+section ([05](05-dispatcher.md#prompt-templates)) telling it to read the diff first and, if nothing
+reaches a user, report `skipped` with one sentence why and drive nothing. `skipped` is a settled
+status like `blocked`: no reading about the goal, no fix, no notification, and it counts as the
+commit's run, so the press does not come back for it. **Only an `auto` row may be skipped** — a
+validation a person asked for is refused `skipped` by the desk, pointed at running the plan or
+`blocked`, because a person who pressed the button wanted it driven.
 
 **What it never does.**
 
@@ -145,6 +177,10 @@ than validating code CI never saw. Oldest delivery first, **one press per pulse*
 - **Run a commit twice.** A goal whose latest row is on the commit it would run is skipped whatever
   that row's status: a pass stands, a failure has dispatched its fix (whose push is a new commit, and
   validated in turn), and a run the operator called off stays called off.
+- **Hold the environment for a row nothing dispatches.** An `auto` row the rule never takes — its
+  goal gated, or gone from the dispatcher's world — would keep the environment from ever being the
+  press's again. Fifteen minutes after it was requested, still `pending`, the press abandons it with
+  that reason.
 - **Retry a refused start.** A `start` that fails is recorded through `errors.record` once and the
   goal-commit pair is not tried again by this process.
 
@@ -173,6 +209,12 @@ other rule ([05](05-dispatcher.md#the-rule-book)).
 - **Directly behind `manual-job`, where `validate-check` is last.** That rule is a standing
   obligation and must never take the last slot from real work; this is a person at a screen waiting
   for something they asked for, with an environment already burning on their machine.
+- **A row on the integration branch dispatches on a retained run.** A merge usually closes the issue,
+  and the world snapshots open issues only, so the goal of a [merged press](#the-automatic-press) is
+  often there only as a retained run; the rule takes it, and nothing else — an issue in neither (an
+  abandoned run, say) is not dispatched for. A live issue still answers to the watch gate. The
+  briefing carries the goal's merge commits (`DispatchContext.goalLandings`), because on the
+  integration branch there is no branch diff to read.
 - **No cooldown budget and no escalation.** A row is one press rather than a standing signal: it is
   re-proposed each pulse until it dispatches, the operator calls it off, or the environment goes
   away. One agent per row is the store's `WHERE status = 'pending'` on the dispatched flip, which is
@@ -358,11 +400,11 @@ named only in the `local-validation` prompt's own tool section
 every planner and part agent in the fleet, and a `local_run_read` reached for by an agent on somebody
 else's branch is a reading of a machine running code that is not theirs.
 
-| Tool                      | Does                                                                                                                                    |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `local_validation_plan`   | Record the test plan and its `setup` section. Once, up front — it lands on the goal's page while the environment is still coming up.    |
-| `local_run_read`          | What the environment is doing now: status, URL, ports, freshness, the session's tail, and the caveat. Reports only.                     |
-| `local_validation_report` | `passed`, `failed` or `blocked`, with a summary, every state change it made (`setup`) and — for a failure — the findings. Ends the run. |
+| Tool                      | Does                                                                                                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `local_validation_plan`   | Record the test plan and its `setup` section. Once, up front — it lands on the goal's page while the environment is still coming up.                                         |
+| `local_run_read`          | What the environment is doing now: status, URL, ports, freshness, the session's tail, and the caveat. Reports only.                                                          |
+| `local_validation_report` | `passed`, `failed`, `blocked` or — on an `auto` row only — `skipped`, with a summary, every state change it made (`setup`) and — for a failure — the findings. Ends the run. |
 
 `local_run_read` is `describeLocalRun` (`src/localRun/describe.ts`), the **same function** the
 desktop channel's `local_run` answers with ([11](11-mcp-tools.md#the-desktop-channel)). Two names,
@@ -547,7 +589,10 @@ row's own directory with a traversal refused.
 `test/localValidationAuto.test.ts`: the automatic press on a delivered goal with green CI; nothing
 while off, undelivered, CI not green, or the checkout behind; an operator's environment never taken;
 one goal at a time, a settled auto run handing its environment on, a commit never run twice and a new
-one run; and a press requesting the cycle that dispatches the validator.
+one run; a press requesting the cycle that dispatches the validator; a goal merged since auto came on
+validated once on the integration branch and dispatched with its issue closed; a merge from before it
+came on, and a goal already validated, left alone; and `skipped` accepted on an `auto` row and refused on
+an operator's.
 
 `test/localValidationView.test.ts` covers the cockpit's pure half: every status has a word and a
 tone, each phase its words, the offer's three arms with the sentence each names, and the two

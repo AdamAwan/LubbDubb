@@ -64,6 +64,7 @@ export function buildDispatchInputs(store: Store, pulse: PulseReadings, watched 
       ...store.localValidations.listOpenLocalValidations(),
       ...store.localValidations.listLocalValidationsAwaitingFix(),
     ],
+    goalLandings: store.environments.listGoalLandings(),
     featureSummaryKeys:
       featureStandings.length === 0
         ? []

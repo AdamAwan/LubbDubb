@@ -45,7 +45,8 @@ export interface LocalRunReadings {
   freshness: LocalRunFreshness | null;
 }
 
-export type LocalValidationStatus = 'pending' | 'dispatched' | 'passed' | 'failed' | 'blocked' | 'abandoned';
+export type LocalValidationStatus =
+  'pending' | 'dispatched' | 'passed' | 'failed' | 'blocked' | 'skipped' | 'abandoned';
 
 export type LocalValidationRequester = 'operator' | 'auto';
 

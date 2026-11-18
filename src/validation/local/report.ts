@@ -24,8 +24,8 @@ const FindingSchema = strictObject(
 
 const ReportSchema = strictObject(
   {
-    result: z.enum(['passed', 'failed', 'blocked'], {
-      error: 'result must be "passed", "failed" or "blocked"',
+    result: z.enum(['passed', 'failed', 'blocked', 'skipped'], {
+      error: 'result must be "passed", "failed", "blocked" or "skipped"',
     }),
     summary: z
       .string(absentOr('summary is required — say what you did and what you saw'))
@@ -43,7 +43,7 @@ const ReportSchema = strictObject(
 type ParsedReport = z.infer<typeof ReportSchema>;
 
 interface LocalValidationReport {
-  result: 'passed' | 'failed' | 'blocked';
+  result: 'passed' | 'failed' | 'blocked' | 'skipped';
   summary: string;
   findings: LocalValidationFinding[];
   visited: string[];

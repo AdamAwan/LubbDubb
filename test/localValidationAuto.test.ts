@@ -9,6 +9,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { issueBranch } from '../src/dispatcher/issuePickup.js';
+import { localValidationOrigin } from '../src/validation/local/origin.js';
 import type { CiStatus, Issue, PullRequest, WorldSnapshot } from '../src/types.js';
 
 const HEAD = 'c'.repeat(40);
@@ -198,6 +199,108 @@ test('a press runs a cycle of its own, which dispatches the validator', async ()
     const row = system.store.localValidations.latestLocalValidation('issue:12');
     assert.equal(row?.requestedBy, 'auto');
     assert.equal(row?.status, 'dispatched');
+  } finally {
+    system.store.close();
+  }
+});
+
+function land(system: System, n: number, mergedAt: string, pr = 100 + n): void {
+  system.store.environments.recordGoalLanding({ prNumber: pr, goalRef: `issue:${String(n)}`, sha: HEAD, mergedAt });
+  system.store.environments.markLandingIntegration(pr, true);
+}
+
+async function dispatched(system: System, originRef: string): Promise<string | undefined> {
+  const deadline = Date.now() + 5_000;
+  while (system.store.localValidations.latestLocalValidation(originRef)?.status === 'pending' && Date.now() < deadline)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  return system.store.localValidations.latestLocalValidation(originRef)?.status;
+}
+
+async function justNow(): Promise<string> {
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  return new Date().toISOString();
+}
+
+test('a goal merged since auto was switched on is validated once, on the integration branch', async () => {
+  const { system } = build();
+  try {
+    const empty: WorldSnapshot = { takenAt: '2026-01-01T00:00:00.000Z', issues: [issue(12)], pullRequests: [] };
+    await press(system, empty);
+    land(system, 12, await justNow());
+
+    await press(system, empty);
+    const row = system.store.localValidations.latestLocalValidation('issue:12');
+    assert.equal(row?.requestedBy, 'auto');
+    assert.equal(row?.ref, 'main');
+    assert.equal(await dispatched(system, 'issue:12'), 'dispatched', 'dispatched onto the integration branch');
+
+    system.store.localValidations.abandonLocalValidation(row.id, 'done');
+    await press(system, empty);
+    assert.equal(system.store.localValidations.latestLocalValidation('issue:12')?.id, row.id, 'once per merge');
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a merge from before auto was switched on is not queued, nor one already validated', async () => {
+  const { system } = build();
+  try {
+    land(system, 12, '2020-01-01T00:00:00.000Z');
+    const empty = world(system);
+    await press(system, empty);
+    assert.equal(system.store.localValidations.latestLocalValidation('issue:12'), null, 'the backlog stays put');
+
+    const run = await system.localRun.start('issue:13');
+    assert.ok(run.ok);
+    const mine = system.localValidations.request({ originRef: 'issue:13', run: run.run });
+    system.store.localValidations.recordLocalValidationReport(mine.id, {
+      status: 'passed',
+      summary: 'fine',
+      findings: [],
+      visited: [],
+      setup: [],
+      screenshots: [],
+      note: null,
+      recordingStatus: null,
+    });
+    await system.localRun.stop('done');
+    land(system, 13, await justNow());
+    await press(system, empty);
+    assert.equal(system.store.localValidations.latestLocalValidation('issue:13')?.id, mine.id);
+  } finally {
+    system.store.close();
+  }
+});
+
+test('only an automatic validation may report skipped', async () => {
+  const { system, worktrees } = build();
+  try {
+    const snapshot = world(system, { n: 12, ci: 'passing' });
+    worktrees.setPreviewCommit(issueBranch(12), HEAD);
+    deliver(system, 12);
+    await press(system, snapshot);
+    const auto = system.store.localValidations.latestLocalValidation('issue:12');
+    assert.ok(auto);
+    const skip = { status: 'skipped' as const, summary: 'a refactor', findings: [], visited: [], setup: [] };
+    const task = (id: string) =>
+      system.store.tasks.createTask({
+        kind: 'code',
+        title: 'validate',
+        prompt: 'go',
+        branch: `validate-local/${id}`,
+        originRef: localValidationOrigin(12, id),
+      });
+
+    const done = system.localValidations.report(task(auto.id), skip);
+    assert.ok(done.ok);
+    assert.equal(done.row.status, 'skipped');
+
+    const run = system.store.localRuns.liveLocalRun();
+    assert.ok(run);
+    const asked = system.localValidations.request({ originRef: 'issue:12', run });
+    const refused = system.localValidations.report(task(asked.id), skip);
+    assert.equal(refused.ok, false);
+    assert.equal(system.store.localValidations.getLocalValidation(asked.id)?.status, 'pending');
   } finally {
     system.store.close();
   }

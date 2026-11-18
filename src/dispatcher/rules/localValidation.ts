@@ -12,7 +12,7 @@ import { issueWatchGateReason } from '../issuePickup.js';
 import { liveChecks } from '../../validation/verdict.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import { partBase } from '../../plans/parts.js';
-import type { ExtraMcpServer, LocalRun, LocalValidation, Plan, PlanPart } from '../../types.js';
+import type { ExtraMcpServer, Issue, LocalRun, LocalValidation, Plan, PlanPart } from '../../types.js';
 import type { RawAction, StageContext } from './context.js';
 
 // → docs/spec/05-dispatcher.md (rule `local-validation`)
@@ -26,9 +26,8 @@ export function localValidation(s: StageContext): void {
 
     const issueNumber = issueOriginNumber('root', row.originRef);
     if (issueNumber === null) continue;
-    const issue = s.liveIssue(issueNumber);
+    const issue = issueToValidate(s, row, issueNumber);
     if (issue === null) continue;
-    if (issueWatchGateReason(issue, s.pickup) !== null) continue;
 
     const origin = localValidationOrigin(issueNumber, row.id);
     if (s.activeOrigins.has(origin)) continue;
@@ -37,7 +36,7 @@ export function localValidation(s: StageContext): void {
     const browser = browserFor(s, outputDir);
 
     const title = `Validate #${String(issueNumber)} locally`;
-    const reason = `The operator asked for #${String(issueNumber)} to be validated against the local environment, which is running ${row.ref}.`;
+    const reason = `${row.requestedBy === 'auto' ? 'The harness asked' : 'The operator asked'} for #${String(issueNumber)} to be validated against the local environment, which is running ${row.ref}.`;
     const plan = s.plansByOrigin.get(row.originRef) ?? null;
     s.candidates.push({
       origin,
@@ -63,6 +62,8 @@ export function localValidation(s: StageContext): void {
             setup: s.localValidation.setup,
             outputDir,
             browserKey: browser?.key ?? null,
+            auto: row.requestedBy === 'auto',
+            merges: row.ref === s.defaultBranch ? mergesOf(s, row.originRef) : [],
           }),
         mcpServers: browser === null ? [] : [browser],
         localValidation: { id: row.id, as: 'validation' },
@@ -74,6 +75,23 @@ export function localValidation(s: StageContext): void {
       } satisfies RawAction,
     });
   }
+}
+
+function mergesOf(s: StageContext, originRef: string): string[] {
+  return (s.ctx.goalLandings ?? [])
+    .filter((l) => l.goalRef === originRef && l.onIntegration === true)
+    .map((l) => l.sha);
+}
+
+function issueToValidate(
+  s: StageContext,
+  row: LocalValidation,
+  issueNumber: number,
+): Pick<Issue, 'title' | 'body'> | null {
+  const live = s.liveIssue(issueNumber);
+  if (live !== null) return issueWatchGateReason(live, s.pickup) === null ? live : null;
+  if (row.ref !== s.defaultBranch || !s.retained.has(issueNumber)) return null;
+  return s.ctx.world.issues.find((issue) => issue.number === issueNumber) ?? null;
 }
 
 function runToValidate(s: StageContext, row: LocalValidation): LocalRun | null {

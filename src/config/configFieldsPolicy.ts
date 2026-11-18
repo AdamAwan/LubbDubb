@@ -181,7 +181,7 @@ export const POLICY_FIELDS: readonly ConfigField[] = [
     path: 'localValidation.auto',
     type: 'boolean',
     access: 'plain',
-    why: 'Validate a goal on your machine without a press, once its work is delivered and CI is green on the commit it would run. Never takes the environment from a run you started, and validates each commit once. Off means only the Run it here button starts one.',
+    why: 'Validate a goal on your machine without a press: once its work is delivered and CI is green on the commit it would run, or once it has merged since this was switched on. The agent skips a goal with nothing a user could see. Never takes the environment from a run you started, and validates each commit once. Off means only the Run it here button starts one.',
   },
   {
     path: 'localValidation.instruction',

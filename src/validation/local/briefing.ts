@@ -15,6 +15,8 @@ interface ValidationBrief {
   setup: string;
   outputDir: string;
   browserKey: string | null;
+  auto: boolean;
+  merges: string[];
 }
 
 function said(value: string | null | undefined): string | null {
@@ -165,8 +167,25 @@ function toolsSection(): string {
     `- \`local_run_read\` — what the environment is doing right now: status, URL, the ports it holds, and the ` +
     `tail of the session bringing it up. Read it rather than guessing, and read it again rather than ` +
     `remembering.\n` +
-    `- \`local_validation_report\` — \`passed\`, \`failed\` or \`blocked\`, with a summary, every state ` +
+    `- \`local_validation_report\` — \`passed\`, \`failed\` or \`blocked\` (or \`skipped\`, only where told), with a summary, every state ` +
     `change you made, and, for a failure, the findings. This ends the run.\n`
+  );
+}
+
+function autoSection(auto: boolean, merges: string[]): string {
+  if (!auto) return '';
+  const diff =
+    merges.length === 0
+      ? `Read the diff before anything else.`
+      : `This goal has already merged, so the checkout is the integration branch and its own diff is in ` +
+        `the merge commits: ${merges.map((sha) => `\`${sha}\``).join(', ')} — read them with \`git show\` ` +
+        `before anything else. A failure here dispatches no fix, so say in the summary what to fix.`;
+  return (
+    `## Nobody asked for this one\n\n` +
+    `The harness started this validation on its own, because the goal's work is finished. ${diff} ` +
+    `If it changes nothing a user could see or do — a refactor, tests, build or internal tooling, a ` +
+    `change only another service would notice — report \`skipped\` straight away with one sentence ` +
+    `saying why, and do not drive the application. If any of it reaches a user, run the plan as usual.\n`
   );
 }
 
@@ -180,6 +199,7 @@ export function localValidationBriefing(brief: ValidationBrief): string {
     browserSection(brief.browserKey, brief.outputDir),
     rulesSection(brief.outputDir),
     toolsSection(),
+    autoSection(brief.auto, brief.merges),
   ]
     .filter((section) => section !== '')
     .join('\n');

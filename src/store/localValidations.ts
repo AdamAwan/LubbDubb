@@ -140,7 +140,7 @@ export class LocalValidationStore {
   recordLocalValidationReport(
     id: string,
     result: {
-      status: Extract<LocalValidationStatus, 'passed' | 'failed' | 'blocked'>;
+      status: Extract<LocalValidationStatus, 'passed' | 'failed' | 'blocked' | 'skipped'>;
       summary: string;
       findings: LocalValidationFinding[];
       visited: string[];
@@ -203,7 +203,15 @@ interface Row {
   recording_status: string | null | undefined;
 }
 
-const STATUSES: LocalValidationStatus[] = ['pending', 'dispatched', 'passed', 'failed', 'blocked', 'abandoned'];
+const STATUSES: LocalValidationStatus[] = [
+  'pending',
+  'dispatched',
+  'passed',
+  'failed',
+  'blocked',
+  'skipped',
+  'abandoned',
+];
 
 function parseList<T>(raw: string | null): T[] {
   if (raw === null) return [];
