@@ -76,10 +76,8 @@ export function buildStateSections(
   if (want.has('queue')) Object.assign(out, queueSection(r));
   if (want.has('inbox')) Object.assign(out, inboxSection(r));
   if (want.has('activity')) Object.assign(out, activitySection(r));
-  if (want.has('asks')) {
-    out.asks = buildAskQueue(askInputs(r, want, out), opts?.setup ?? null);
-    out.handledOpen = openHandledCount(system.store, Date.now());
-  }
+  if (want.has('asks')) out.asks = buildAskQueue(askInputs(r, want, out), opts?.setup ?? null);
+  if (want.has('asks')) out.handledOpen = openHandledCount(system.store, Date.now());
   return out;
 }
 
