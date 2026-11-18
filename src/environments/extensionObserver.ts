@@ -3,8 +3,8 @@ import type { ExtensionSlots } from '../extensions/slots.js';
 import { unexposed, type ExposureReading, type ExposureRequest } from './exposure.js';
 import type { EnvironmentObservationRequest, EnvironmentObserver } from './observer.js';
 import type { EnvironmentConfig } from './policy.js';
-import { watchFromExtension } from './readingExtensions.js';
-import { parseWatchResult, preparedQuery, unanswered, type WatchResult } from './watchResult.js';
+import { routeByEnvironment, watchFromExtension } from './readingExtensions.js';
+import { preparedQuery, readWatchRows, unanswered, type WatchResult } from './watchResult.js';
 
 // → docs/spec/29-post-deploy-watch.md#from-the-projects-extension
 
@@ -33,7 +33,7 @@ export class ExtensionEnvironmentObserver implements EnvironmentObserver {
       commits: request.commits === undefined ? null : [...request.commits],
     });
     if (!answer.ok) return unanswered(`the observation failed: ${answer.detail}`);
-    return parseWatchResult(JSON.stringify(answer.value), request.checkId, request.kind);
+    return readWatchRows(answer.value, request.checkId, request.kind);
   }
 
   async exposure(request: ExposureRequest): Promise<ExposureReading> {
@@ -49,14 +49,14 @@ export class ExtensionEnvironmentObserver implements EnvironmentObserver {
 
 /** The observer for each environment: the extension's where it sets `watch.extension`, else its commands'. */
 export class RoutedEnvironmentObserver implements EnvironmentObserver {
-  private readonly fromExtension: ReadonlySet<string>;
+  private readonly for: (environment: string) => EnvironmentObserver;
 
   constructor(
     environments: readonly EnvironmentConfig[],
-    private readonly commands: EnvironmentObserver,
-    private readonly extension: EnvironmentObserver,
+    commands: EnvironmentObserver,
+    extension: EnvironmentObserver,
   ) {
-    this.fromExtension = new Set(environments.filter(watchFromExtension).map((e) => e.name));
+    this.for = routeByEnvironment(environments, watchFromExtension, commands, extension);
   }
 
   observe(request: EnvironmentObservationRequest): Promise<WatchResult> {
@@ -65,9 +65,5 @@ export class RoutedEnvironmentObserver implements EnvironmentObserver {
 
   exposure(request: ExposureRequest): Promise<ExposureReading> {
     return this.for(request.environment).exposure(request);
-  }
-
-  private for(environment: string): EnvironmentObserver {
-    return this.fromExtension.has(environment) ? this.extension : this.commands;
   }
 }

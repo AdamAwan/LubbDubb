@@ -1,3 +1,4 @@
+import { READING_SLOT_LABELS } from './readingExtensions.js';
 import type { GoalWatchKind, WatchSourceDeclaration, WatchSourceLanguage, WatchSourceRunner } from '../types.js';
 
 // → docs/spec/29-post-deploy-watch.md#sources
@@ -8,9 +9,6 @@ export const WATCH_SOURCE_RUNNERS: readonly WatchSourceRunner[] = ['harness', 'o
 
 /** The name `watch.observe` alone stands for. */
 const SHORTHAND_SOURCE = 'logs';
-
-/** What answers a harness-run source on an environment with `watch.extension`, in place of its `observe`. */
-const WATCH_READING_SLOT = 'the "watchReading" slot';
 
 export interface WatchSourceConfig {
   language: WatchSourceLanguage;
@@ -100,7 +98,7 @@ export function resolveWatchSource(
         'and asks a person for the reading instead',
       operator: source,
     };
-  const observe = environment.watch?.extension === true ? WATCH_READING_SLOT : (source.observe ?? '');
+  const observe = environment.watch?.extension === true ? READING_SLOT_LABELS.watchReading : (source.observe ?? '');
   if (observe.trim() === '')
     return {
       source: null,

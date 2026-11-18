@@ -92,7 +92,7 @@ grouping, states, links, triage and the cockpit are the same.
   `RoutedAppErrorDetail` the detail query; an environment without the key keeps its commands even when
   an extension fills the slots.
 - **`appErrors`** is handed `{ environment, since }` and answers what the command would print, as a
-  value: the list of groups, or `{ groups, query?, queryLink? }`. It is read by `parseAppErrorReport`,
+  value: the list of groups, or `{ groups, query?, queryLink? }`. It is read by `readAppErrorReport` — `parseAppErrorReport` without its text step —
   the [output contract](#the-output-contract) below, refusals and caps included.
 - **`appErrorDetail` is optional**, as `errors.detail` is. Handed `{ environment, fingerprint, since }`, it
   answers `{ text }`, capped as the command's output is. Whether an environment has a detail query —

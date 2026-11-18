@@ -136,11 +136,12 @@ export function buildEnvironmentDesks(
     opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot),
     new ExtensionEnvironmentObserver(extensions),
   );
+  const prober = environmentProber(config, opts, base);
   const watchAsks = new WatchAsks({ store, environments: config.environments, errors });
   const environments = new EnvironmentDesk({
     store,
     environments: config.environments,
-    prober: environmentProber(config, opts, base),
+    prober,
     healthProber: opts.environmentHealthProber ?? new CommandEnvironmentHealthProber(config.repoRoot),
     git: gitObserver,
     sink,
@@ -201,7 +202,7 @@ export function buildEnvironmentDesks(
     watchAsks,
     appErrorPayloads,
     appErrorTriage,
-    ...buildRemoteValidationDesks(config, opts, base, environmentObserver, proposals),
+    ...buildRemoteValidationDesks(config, opts, base, { observer: environmentObserver, prober }, proposals),
   };
 }
 
@@ -265,7 +266,7 @@ function buildRemoteValidationDesks(
   config: Config,
   opts: BuildOptions,
   base: Foundation,
-  environmentObserver: EnvironmentObserver,
+  readings: { observer: EnvironmentObserver; prober: EnvironmentProber },
   proposals: Pick<ProposalDesk, 'accept'>,
 ) {
   const { store, sink, errors, gitObserver, extensions } = base;
@@ -291,7 +292,7 @@ function buildRemoteValidationDesks(
     store,
     environments: config.environments,
     desk: remoteValidation,
-    prober: environmentProber(config, opts, base),
+    prober: readings.prober,
     git: gitObserver,
     tenants: new RoutedTenantKeeper(
       config.environments,
@@ -326,7 +327,7 @@ function buildRemoteValidationDesks(
   const remoteReadings = new RemoteReadingDesk({
     store,
     environments: config.environments,
-    prober: environmentProber(config, opts, base),
+    prober: readings.prober,
     validationRoot: config.validationRoot,
     errors,
   });

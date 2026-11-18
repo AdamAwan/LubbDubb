@@ -10,8 +10,20 @@ export const READING_SLOT_LABELS = {
   at: 'the "deployedCommits" slot',
   errorsList: 'the "appErrors" slot',
   errorsDetail: 'the "appErrorDetail" slot',
+  watchReading: 'the "watchReading" slot',
   exposure: 'the "watchExposure" slot',
 } as const;
+
+/** Per environment, the extension's implementation where it opted in, else the commands'. */
+export function routeByEnvironment<T>(
+  environments: readonly EnvironmentConfig[],
+  opted: (environment: EnvironmentConfig) => boolean,
+  commands: T,
+  extension: T,
+): (environment: string) => T {
+  const fromExtension = new Set(environments.filter(opted).map((e) => e.name));
+  return (environment) => (fromExtension.has(environment) ? extension : commands);
+}
 
 export function atFromExtension(environment: EnvironmentConfig): boolean {
   return environment.atExtension === true;

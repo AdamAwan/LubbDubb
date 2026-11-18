@@ -117,14 +117,19 @@ Start from [`starter.ts`](starter.ts) beside this skill. Copy it to, say,
 - Then boot LubbDubb against a non-production environment and make it ask the slot.
   For tenants, press prepare on a goal's sheet; the tenant panel shows what was asked
   and what came back. For reviews, open a pull request with `review.enabled` on; the
-  route's reason and the review row show what your code answered.
+  route's reason and the review row show what your code answered. For readings, opt in one
+  non-production environment and let the pulse ask: the environment's deployed commit, its
+  errors read and its watch readings show what came back, or `unknown` with your slot's
+  failure as the reason.
 - A slot that throws, rejects, times out or answers the wrong shape is recorded on
   LubbDubb's error log as `extension "<name>" failed the "<slot>" slot: …`. What happens
   next is the slot's own rule, and it is never the old config path, because that would
   hide that your extension is broken:
   - a tenant press fails;
   - a route falls back to `review.defaultMode`;
-  - a publication is skipped, and the review stays recorded.
+  - a publication is skipped, and the review stays recorded;
+  - a reading is `unknown` (a landing unconfirmed, an errors read or a watch check
+    `unknown`), and asked again next time.
 
 ### When it will not start
 

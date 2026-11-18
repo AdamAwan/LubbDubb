@@ -749,7 +749,7 @@ verdicts, the bench row and the cockpit are the same.
   `source`, `language`, `checkId`, `kind`, `since`, `until`, `commits` (null at the dry run) and the
   `query` — **prepared exactly as for a command**: a query without `{since}` is refused before the slot
   is asked, `{since}` and `{until}` are substituted, and a `kql` query carries the id projection. It
-  answers a list of rows, which are read by `parseWatchResult`, the command's own contract: **each row
+  answers a list of rows, which are read by `readWatchRows` — `parseWatchResult` without its text step, the command's own contract: **each row
   must carry `lubbdubbWatchId`**, a measure is one row with a numeric `value`. A typed input does not
   prove the query was run, so the echo is kept.
 - **`watchExposure`** is handed `{ environment, commits }` and answers `{ share }`, 0 to 1. It is asked

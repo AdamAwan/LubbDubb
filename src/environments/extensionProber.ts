@@ -2,7 +2,7 @@ import type { ExtensionHost } from '../extensions/host.js';
 import type { ExtensionSlots } from '../extensions/slots.js';
 import type { EnvironmentConfig } from './policy.js';
 import type { EnvironmentHead, EnvironmentProber } from './prober.js';
-import { atFromExtension } from './readingExtensions.js';
+import { atFromExtension, routeByEnvironment } from './readingExtensions.js';
 
 // → docs/spec/24-environments.md#from-the-projects-extension
 
@@ -21,17 +21,13 @@ export class ExtensionEnvironmentProber implements EnvironmentProber {
 
 /** The prober for each environment: the extension's where it sets `atExtension`, else the `at` command's. */
 export class RoutedEnvironmentProber implements EnvironmentProber {
-  private readonly fromExtension: ReadonlySet<string>;
+  private readonly for: (environment: string) => EnvironmentProber;
 
-  constructor(
-    environments: readonly EnvironmentConfig[],
-    private readonly commands: EnvironmentProber,
-    private readonly extension: EnvironmentProber,
-  ) {
-    this.fromExtension = new Set(environments.filter(atFromExtension).map((e) => e.name));
+  constructor(environments: readonly EnvironmentConfig[], commands: EnvironmentProber, extension: EnvironmentProber) {
+    this.for = routeByEnvironment(environments, atFromExtension, commands, extension);
   }
 
   at(environment: string, command: string): Promise<EnvironmentHead> {
-    return (this.fromExtension.has(environment) ? this.extension : this.commands).at(environment, command);
+    return this.for(environment).at(environment, command);
   }
 }

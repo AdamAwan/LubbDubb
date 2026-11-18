@@ -1,7 +1,7 @@
 import type { ExtensionHost } from '../extensions/host.js';
 import type { ExtensionSlots } from '../extensions/slots.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
-import { errorsFromExtension, READING_SLOT_LABELS } from '../environments/readingExtensions.js';
+import { errorsFromExtension, READING_SLOT_LABELS, routeByEnvironment } from '../environments/readingExtensions.js';
 import {
   capDetailOutput,
   type AppErrorDetailOutput,
@@ -9,7 +9,7 @@ import {
   type AppErrorDetailRunner,
 } from './detailCommand.js';
 import type { AppErrorReader, AppErrorReadRequest } from './reader.js';
-import { parseAppErrorReport, unreadableErrors, type AppErrorReport } from './report.js';
+import { readAppErrorReport, unreadableErrors, type AppErrorReport } from './report.js';
 
 // → docs/spec/39-app-errors.md#from-the-projects-extension
 
@@ -22,24 +22,20 @@ export class ExtensionAppErrorReader implements AppErrorReader {
   async list(request: AppErrorReadRequest): Promise<AppErrorReport> {
     const answer = await this.host.call('appErrors', { environment: request.environment, since: request.since });
     if (!answer.ok) return unreadableErrors(answer.detail);
-    return parseAppErrorReport(JSON.stringify(answer.value));
+    return readAppErrorReport(answer.value);
   }
 }
 
 /** The error reader for each environment: the extension's where it sets `errors.extension`, else `errors.list`'s. */
 export class RoutedAppErrorReader implements AppErrorReader {
-  private readonly fromExtension: ReadonlySet<string>;
+  private readonly for: (environment: string) => AppErrorReader;
 
-  constructor(
-    environments: readonly EnvironmentConfig[],
-    private readonly commands: AppErrorReader,
-    private readonly extension: AppErrorReader,
-  ) {
-    this.fromExtension = new Set(environments.filter(errorsFromExtension).map((e) => e.name));
+  constructor(environments: readonly EnvironmentConfig[], commands: AppErrorReader, extension: AppErrorReader) {
+    this.for = routeByEnvironment(environments, errorsFromExtension, commands, extension);
   }
 
   list(request: AppErrorReadRequest): Promise<AppErrorReport> {
-    return (this.fromExtension.has(request.environment) ? this.extension : this.commands).list(request);
+    return this.for(request.environment).list(request);
   }
 }
 
@@ -64,27 +60,28 @@ export class ExtensionAppErrorDetailRunner implements AppErrorDetailRunner {
  * triage brief says is declared are both read here.
  */
 export class RoutedAppErrorDetail implements AppErrorDetailRunner {
-  private readonly byName: ReadonlyMap<string, EnvironmentConfig>;
+  private readonly for: (environment: string) => AppErrorDetailRunner;
+  private readonly commands: ReadonlyMap<string, string | null>;
 
   constructor(
     environments: readonly EnvironmentConfig[],
-    private readonly host: Pick<ExtensionHost<ExtensionSlots>, 'provider'>,
-    private readonly commands: AppErrorDetailRunner,
-    private readonly extension: AppErrorDetailRunner,
+    host: Pick<ExtensionHost<ExtensionSlots>, 'provider'>,
+    commands: AppErrorDetailRunner,
+    extension: AppErrorDetailRunner,
   ) {
-    this.byName = new Map(environments.map((e) => [e.name, e]));
+    this.for = routeByEnvironment(environments, errorsFromExtension, commands, extension);
+    const slot = host.provider('appErrorDetail') === null ? null : READING_SLOT_LABELS.errorsDetail;
+    this.commands = new Map(
+      environments.map((e) => [e.name, errorsFromExtension(e) ? slot : (e.errors?.detail ?? null)]),
+    );
   }
 
   /** What `errors.detail` names on this environment, or what answers in its place; null where nothing does. */
   command(environment: string): string | null {
-    const declared = this.byName.get(environment);
-    if (declared === undefined) return null;
-    if (!errorsFromExtension(declared)) return declared.errors?.detail ?? null;
-    return this.host.provider('appErrorDetail') === null ? null : READING_SLOT_LABELS.errorsDetail;
+    return this.commands.get(environment) ?? null;
   }
 
   detail(request: AppErrorDetailRequest): Promise<AppErrorDetailOutput> {
-    const declared = this.byName.get(request.environment);
-    return (declared !== undefined && errorsFromExtension(declared) ? this.extension : this.commands).detail(request);
+    return this.for(request.environment).detail(request);
   }
 }

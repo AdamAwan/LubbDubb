@@ -5,7 +5,7 @@ import { carriesSince, missingSinceRefusal, withPeriod } from '../validation/wat
 
 export type WatchQueryKind = 'signal' | 'presence' | 'measure';
 
-type WatchRow = Record<string, string | number | boolean | null>;
+export type WatchRow = Record<string, string | number | boolean | null>;
 
 export const WATCH_ID_COLUMN = 'lubbdubbWatchId';
 
@@ -104,6 +104,15 @@ function parseRows(stdout: string, kind: WatchQueryKind, echo: string | null, sa
   } catch (err) {
     return unanswered(`${said.notJson}: ${(err as Error).message}`);
   }
+  return readRows(json, kind, echo, said);
+}
+
+/** An extension's answer, already a value, held to the command's contract — id echo included. */
+export function readWatchRows(json: unknown, checkId: string, kind: WatchQueryKind): WatchResult {
+  return readRows(json, kind, checkId, OBSERVATION_SAID);
+}
+
+function readRows(json: unknown, kind: WatchQueryKind, echo: string | null, said: ContractWords): WatchResult {
   if (!Array.isArray(json)) return unanswered(said.notList);
   const rows: WatchRow[] = [];
   for (const entry of json) {

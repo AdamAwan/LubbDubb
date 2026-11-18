@@ -69,7 +69,8 @@ export class AppErrorTriageDesk {
   }
 
   private detailCommand(environment: EnvironmentConfig): string | null {
-    return this.deps.detailQuery?.(environment.name) ?? environment.errors?.detail ?? null;
+    const { detailQuery } = this.deps;
+    return detailQuery === undefined ? (environment.errors?.detail ?? null) : detailQuery(environment.name);
   }
 
   /** @public called by the pulse, directly below `appErrorTracker`. Starts the assembly it owes and does not wait. */

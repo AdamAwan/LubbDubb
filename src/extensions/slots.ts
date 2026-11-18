@@ -1,4 +1,7 @@
 import type { SlotBook } from './contract.js';
+import { ERRORS_COMMAND_TIMEOUT_MS } from '../appErrors/command.js';
+import type { WatchSourceLanguage } from '../types.js';
+import type { WatchQueryKind, WatchRow } from '../environments/watchResult.js';
 
 // → docs/spec/42-extensions.md#the-slots
 
@@ -17,10 +20,6 @@ interface ReviewedPr {
 
 const READING_SLOT_TIMEOUT_MS = 30_000;
 
-const ERRORS_SLOT_TIMEOUT_MS = 60_000;
-
-type WatchRowValue = string | number | boolean | null;
-
 // A type alias, not an interface: `ExtensionHost` asks for a `SlotMap`, and only an alias meets its index signature.
 export type ExtensionSlots = {
   ensureTenant: { input: { environment: string; tenant: string | null }; output: { tenant: string } };
@@ -35,15 +34,15 @@ export type ExtensionSlots = {
     input: {
       environment: string;
       source: string;
-      language: 'kql' | 'sql' | 'promql' | 'other';
+      language: WatchSourceLanguage;
       checkId: string;
       query: string;
-      kind: 'signal' | 'presence' | 'measure';
+      kind: WatchQueryKind;
       since: string;
       until: string;
       commits: string[] | null;
     };
-    output: Record<string, WatchRowValue>[];
+    output: WatchRow[];
   };
   watchExposure: { input: { environment: string; commits: string[] }; output: { share: number } };
   routeReview: {
@@ -80,14 +79,14 @@ export const EXTENSION_SLOTS: SlotBook<ExtensionSlots> = {
   },
   deployedCommits: { timeoutMs: READING_SLOT_TIMEOUT_MS, check: deployedCommitsRefusal },
   appErrors: {
-    timeoutMs: ERRORS_SLOT_TIMEOUT_MS,
+    timeoutMs: ERRORS_COMMAND_TIMEOUT_MS,
     check: (value) =>
       typeof value === 'object' && value !== null
         ? null
         : 'it must answer the error groups as a list, or { groups, query?, queryLink? }',
   },
   appErrorDetail: {
-    timeoutMs: ERRORS_SLOT_TIMEOUT_MS,
+    timeoutMs: ERRORS_COMMAND_TIMEOUT_MS,
     check: (value) => {
       const text = (value as { text?: unknown } | null)?.text;
       return typeof text === 'string' && text.trim() !== ''

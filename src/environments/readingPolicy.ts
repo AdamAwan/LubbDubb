@@ -1,3 +1,4 @@
+import { sentence } from '../primitives.js';
 import type { EnvironmentConfig } from './policy.js';
 
 // → docs/spec/42-extensions.md#the-slots — the reading keys, each refused beside the command it replaces.
@@ -35,7 +36,7 @@ export function validateErrorsExtension(errors: EnvironmentErrors, where: string
   const beside = (['list', 'detail'] as const).filter((key) => errors[key] !== undefined);
   if (beside.length > 0)
     throw new Error(
-      `${where}: "errors.extension" sits beside ${beside.map((k) => `"errors.${k}"`).join(' and ')} — two answers ` +
+      `${where}: "errors.extension" sits beside ${sentence(beside.map((k) => `"errors.${k}"`))} — two answers ` +
         'to one question. Keep the commands, or drop them and let the extension answer.',
     );
 }
@@ -55,7 +56,7 @@ export function validateWatchExtension(watch: EnvironmentWatch, where: string): 
   ];
   if (beside.length > 0)
     throw new Error(
-      `${where}: "watch.extension" sits beside ${beside.join(', ')} — two answers to one question. Keep the ` +
+      `${where}: "watch.extension" sits beside ${sentence(beside)} — two answers to one question. Keep the ` +
         'commands, or drop them and let the extension answer.',
     );
 }
