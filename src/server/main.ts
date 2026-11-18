@@ -1,6 +1,4 @@
 import type { OrphanedWork } from '../agents/crashRecovery.js';
-import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { loadDeploymentConfig, type Config } from '../config/config.js';
 import { watchConfigFile } from '../config/configWatch.js';
@@ -8,7 +6,7 @@ import { UPGRADE_EXIT_CODE } from '../selfUpdate/handoff.js';
 import { buildSystem, type System } from '../system/system.js';
 import { loadExtensions } from '../extensions/load.js';
 import { EXTENSION_SLOTS } from '../extensions/slots.js';
-import { ffmpegPreflight } from '../validation/local/ffmpeg.js';
+import { browserPreflight } from '../validation/local/ffmpeg.js';
 import { buildApp } from './app.js';
 
 // → docs/spec/21-self-update.md#where-the-shutdown-handlers-are-registered
@@ -106,12 +104,7 @@ async function main(): Promise<void> {
 
   clearVivarium(system);
 
-  const ffmpeg = ffmpegPreflight(config.localValidation.browser, {
-    env: process.env,
-    platform: process.platform,
-    home: homedir(),
-    exists: existsSync,
-  });
+  const ffmpeg = browserPreflight(config.localValidation.browser);
   if (ffmpeg !== null) system.errors.record({ source: 'boot', message: ffmpeg });
   void system.lessonParent.resolve();
 

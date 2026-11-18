@@ -89,7 +89,7 @@ function placeholdersIn(template: string): string[] {
 
 export function renderTemplate(template: string, vars: Record<string, string | number | undefined>): string {
   return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
-    name in vars && vars[name] !== undefined ? String(vars[name]) : whole,
+    Object.hasOwn(vars, name) && vars[name] !== undefined ? String(vars[name]) : whole,
   );
 }
 

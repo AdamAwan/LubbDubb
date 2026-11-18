@@ -7,23 +7,22 @@ import type { ExtraMcpServer } from '../../types.js';
 
 // → docs/spec/32-local-validation.md
 
-interface BundledPlaywright {
+export interface BundledPlaywright {
   mcpCli: string;
   coreCli: string;
-  ffmpegRevision: string;
+  ffmpegRevision: string | null;
 }
 
-let bundled: BundledPlaywright | string | undefined;
+let bundled: BundledPlaywright | undefined;
 
 export function bundledPlaywright(): BundledPlaywright | string {
-  if (bundled === undefined) {
-    try {
-      bundled = readBundledPlaywright();
-    } catch (err) {
-      bundled = failure(err);
-    }
+  if (bundled !== undefined) return bundled;
+  try {
+    bundled = readBundledPlaywright();
+    return bundled;
+  } catch (err) {
+    return failure(err);
   }
-  return bundled;
 }
 
 function readBundledPlaywright(): BundledPlaywright {
@@ -31,17 +30,16 @@ function readBundledPlaywright(): BundledPlaywright {
   const { bin } = JSON.parse(readFileSync(mcpPackage, 'utf8')) as { bin?: string | Record<string, string> };
   const cli = typeof bin === 'string' ? bin : bin?.['playwright-mcp'];
   if (!cli) throw new Error(`No playwright-mcp bin in ${mcpPackage}`);
-  const core = dirname(createRequire(mcpPackage).resolve('playwright-core/package.json'));
+  const playwrightPackage = createRequire(mcpPackage).resolve('playwright/package.json');
+  const core = dirname(createRequire(playwrightPackage).resolve('playwright-core/package.json'));
   const browsersJson = join(core, 'browsers.json');
   const { browsers } = JSON.parse(readFileSync(browsersJson, 'utf8')) as {
     browsers: { name: string; revision: string }[];
   };
-  const ffmpeg = browsers.find((browser) => browser.name === 'ffmpeg');
-  if (ffmpeg === undefined) throw new Error(`No ffmpeg entry in ${browsersJson}`);
   return {
     mcpCli: join(dirname(mcpPackage), cli),
     coreCli: join(core, 'cli.js'),
-    ffmpegRevision: ffmpeg.revision,
+    ffmpegRevision: browsers.find((browser) => browser.name === 'ffmpeg')?.revision ?? null,
   };
 }
 
@@ -50,7 +48,7 @@ export interface LocalValidationPolicy {
   browser: ExtraMcpServer | null;
 }
 
-export const PLAYWRIGHT_MCP_TOKEN = '{playwrightMcp}';
+const PLAYWRIGHT_MCP_TOKEN = '{playwrightMcp}';
 
 export const DEFAULT_LOCAL_VALIDATION: LocalValidationPolicy = {
   instruction: '',
@@ -69,16 +67,21 @@ export const DEFAULT_LOCAL_VALIDATION: LocalValidationPolicy = {
   },
 };
 
+export function usesBundledServer(server: ExtraMcpServer): boolean {
+  return [server.command, ...server.args].some((part) => part.includes(PLAYWRIGHT_MCP_TOKEN));
+}
+
 export function substituteBrowserArgs(
   server: ExtraMcpServer,
   paths: { outputDir: string; profileDir: string },
+  bundle: () => BundledPlaywright | string = bundledPlaywright,
 ): ExtraMcpServer {
   const values: Record<string, () => string | undefined> = {
     outputDir: () => paths.outputDir,
     profileDir: () => paths.profileDir,
     node: () => process.execPath,
     playwrightMcp: () => {
-      const found = bundledPlaywright();
+      const found = bundle();
       return typeof found === 'string' ? undefined : found.mcpCli;
     },
   };

@@ -33,6 +33,7 @@ import { featureRecords, type FeatureBoardFacts } from '../featureSummaries/feat
 import { standingProfile } from '../intake/profilePin.js';
 import { investigateLabelFor } from '../watchLabels.js';
 import { sequenceableFeatures } from '../sequence/sequence.js';
+import { browserPreflight } from '../validation/local/ffmpeg.js';
 import { LiveConfig } from '../config/configApply.js';
 import type { BuildOptions, LateBinding, Foundation, AgentRuntime } from './systemFoundation.js';
 import type { Channels } from './system.js';
@@ -206,7 +207,7 @@ export function buildFleet(
 
 function buildDispatch(
   config: Config,
-  { runtimeControl, watchLabel, reviewRouter, reviewPublisher }: Foundation,
+  { runtimeControl, watchLabel, reviewRouter, reviewPublisher, errors }: Foundation,
   prompts: PromptTemplates,
   reviewCharters: Channels['reviewCharters'],
 ) {
@@ -250,6 +251,14 @@ function buildDispatch(
   });
   const dispatcher: Dispatcher = rules;
 
-  const liveConfig = new LiveConfig({ running: config, runtimeControl, dispatcher: rules });
+  const liveConfig = new LiveConfig({
+    running: config,
+    runtimeControl,
+    dispatcher: rules,
+    checkBrowser: (browser) => {
+      const message = browserPreflight(browser);
+      if (message !== null) errors.record({ source: 'runtime', message });
+    },
+  });
   return { issuePickup, dispatcher, liveConfig };
 }

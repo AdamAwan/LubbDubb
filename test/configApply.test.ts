@@ -10,12 +10,21 @@ function recordingDispatcher(): { seen: CiPolicy[]; setCiPolicy: (ci: CiPolicy) 
   return { seen, setCiPolicy: (ci: CiPolicy) => seen.push(ci) };
 }
 
-function harness(overrides: Partial<Config> = {}) {
+function harness(overrides: Partial<Config> = {}, checkBrowser: (browser: unknown) => void = () => {}) {
   const running = loadConfig({ maxConcurrentAgents: 3, ...overrides });
   const runtimeControl = new RuntimeControl(running.maxConcurrentAgents, running.startPaused);
   const dispatcher = recordingDispatcher();
-  return { running, runtimeControl, dispatcher, live: new LiveConfig({ running, runtimeControl, dispatcher }) };
+  const live = new LiveConfig({ running, runtimeControl, dispatcher, checkBrowser });
+  return { running, runtimeControl, dispatcher, live };
 }
+
+test('a live browser change is checked as boot checks it', () => {
+  const checked: unknown[] = [];
+  const { live } = harness({}, (browser) => checked.push(browser));
+  const browser = { key: 'browser', command: '{node}', args: ['{playwrightMcp}'] };
+  live.apply(loadConfig({ maxConcurrentAgents: 3, localValidation: { instruction: '', browser } }));
+  assert.deepEqual(checked, [browser]);
+});
 
 test('the agent cap applies now: the configured value and the live one both move', () => {
   const { running, runtimeControl, live } = harness();

@@ -1,7 +1,9 @@
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { ExtraMcpServer } from '../../types.js';
 import { recorderOffered } from '../recording.js';
-import { bundledPlaywright, PLAYWRIGHT_MCP_TOKEN } from './policy.js';
+import { type BundledPlaywright, bundledPlaywright, usesBundledServer } from './policy.js';
 
 // → docs/spec/32-local-validation.md#the-recording
 
@@ -10,6 +12,7 @@ interface Host {
   platform: NodeJS.Platform;
   home: string;
   exists: (path: string) => boolean;
+  bundle: () => BundledPlaywright | string;
 }
 
 function playwrightCacheDir(host: Host): string | null {
@@ -23,14 +26,16 @@ function playwrightCacheDir(host: Host): string | null {
 }
 
 export function ffmpegPreflight(browser: ExtraMcpServer | null, host: Host): string | null {
-  if (browser === null || !browser.args.includes(PLAYWRIGHT_MCP_TOKEN)) return null;
-  const bundled = bundledPlaywright();
+  if (browser === null || !usesBundledServer(browser)) return null;
+  const bundled = host.bundle();
   if (typeof bundled === 'string')
     return `The browser cannot start: the bundled @playwright/mcp is not usable — ${bundled}. Run \`npm ci\`.`;
   if (!recorderOffered(browser)) return null;
+  const { coreCli, ffmpegRevision } = bundled;
+  if (ffmpegRevision === null)
+    return `Validation runs will not be recorded: the bundled Playwright (${coreCli}) names no ffmpeg build.`;
   const cache = playwrightCacheDir(host);
   if (cache === null) return null;
-  const { coreCli, ffmpegRevision } = bundled;
   const dir = join(cache, `ffmpeg-${ffmpegRevision}`);
   if (host.exists(dir)) return null;
   return (
@@ -38,4 +43,14 @@ export function ffmpegPreflight(browser: ExtraMcpServer | null, host: Host): str
     `Install it with \`node ${coreCli} install ffmpeg\` — the Playwright bundled with LubbDubb, which ` +
     `\`npm ci\` runs for you unless install scripts were skipped or its download was blocked.`
   );
+}
+
+export function browserPreflight(browser: ExtraMcpServer | null): string | null {
+  return ffmpegPreflight(browser, {
+    env: process.env,
+    platform: process.platform,
+    home: homedir(),
+    exists: existsSync,
+    bundle: bundledPlaywright,
+  });
 }
