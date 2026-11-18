@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { validateLocalValidationReport } from '../../validation/local/report.js';
+import { LOCAL_VALIDATION_RESULTS, validateLocalValidationReport } from '../../validation/local/report.js';
 import { toolSchema } from '../schema.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
@@ -33,7 +33,7 @@ export const localValidationReport: ToolFactory = ({ deps, task, ok }) => ({
   inputSchema: toolSchema(
     z.object({
       result: z
-        .enum(['passed', 'failed', 'blocked', 'skipped'])
+        .enum(LOCAL_VALIDATION_RESULTS)
         .describe(
           '"passed" — you ran the plan against the application and it did what it should. "failed" — you ran ' +
             'it and it did not; needs at least one finding. "blocked" — you could not run it, and nothing is ' +
@@ -97,12 +97,17 @@ export const localValidationReport: ToolFactory = ({ deps, task, ok }) => ({
 });
 
 function meaning(row: LocalValidation): string {
-  return row.status === 'failed'
-    ? `it is on the goal's page now, and an agent is dispatched to ${row.ref} to fix what you listed — unless ` +
-        `${row.ref} is the integration branch, where no fix is dispatched and the operator decides. Your run is over.`
-    : row.status === 'blocked'
-      ? "no reading was recorded about whether the change works, and your reason is on the goal's page for the operator. Your run is over."
-      : row.status === 'skipped'
-        ? "it is on the goal's page as skipped, with your reason. Your run is over."
-        : "it is on the goal's page now, attributed to an agent rather than to a person. Your run is over.";
+  switch (row.status) {
+    case 'failed':
+      return (
+        `it is on the goal's page now, and an agent is dispatched to ${row.ref} to fix what you listed — unless ` +
+        `${row.ref} is the integration branch, where a ticket is filed against the goal instead. Your run is over.`
+      );
+    case 'blocked':
+      return "no reading was recorded about whether the change works, and your reason is on the goal's page for the operator. Your run is over.";
+    case 'skipped':
+      return "it is on the goal's page as skipped, with your reason. Your run is over.";
+    default:
+      return "it is on the goal's page now, attributed to an agent rather than to a person. Your run is over.";
+  }
 }

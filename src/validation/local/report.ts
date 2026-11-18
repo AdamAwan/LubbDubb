@@ -1,8 +1,15 @@
 import { z } from 'zod';
 import { absentOr, strictObject } from '../../schemaErrors.js';
-import type { LocalValidationFinding } from '../../types.js';
+import type { LocalValidationFinding, LocalValidationResult } from '../../types.js';
 
 // → docs/spec/32-local-validation.md
+
+export const LOCAL_VALIDATION_RESULTS = [
+  'passed',
+  'failed',
+  'blocked',
+  'skipped',
+] as const satisfies readonly LocalValidationResult[];
 
 const FindingSchema = strictObject(
   {
@@ -24,7 +31,7 @@ const FindingSchema = strictObject(
 
 const ReportSchema = strictObject(
   {
-    result: z.enum(['passed', 'failed', 'blocked', 'skipped'], {
+    result: z.enum(LOCAL_VALIDATION_RESULTS, {
       error: 'result must be "passed", "failed", "blocked" or "skipped"',
     }),
     summary: z
@@ -43,7 +50,7 @@ const ReportSchema = strictObject(
 type ParsedReport = z.infer<typeof ReportSchema>;
 
 interface LocalValidationReport {
-  result: 'passed' | 'failed' | 'blocked' | 'skipped';
+  result: LocalValidationResult;
   summary: string;
   findings: LocalValidationFinding[];
   visited: string[];

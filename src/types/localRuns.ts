@@ -48,6 +48,8 @@ export interface LocalRunReadings {
 export type LocalValidationStatus =
   'pending' | 'dispatched' | 'passed' | 'failed' | 'blocked' | 'skipped' | 'abandoned';
 
+export type LocalValidationResult = Extract<LocalValidationStatus, 'passed' | 'failed' | 'blocked' | 'skipped'>;
+
 export type LocalValidationRequester = 'operator' | 'auto';
 
 export interface LocalValidationFinding {
@@ -80,6 +82,7 @@ export interface LocalValidation {
   endedAt: string | null;
   taskId: string | null;
   fixTaskId: string | null;
+  fixTicketRef: string | null;
   plan: string | null;
   summary: string | null;
   findings: LocalValidationFinding[];

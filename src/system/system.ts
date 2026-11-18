@@ -195,7 +195,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   };
   const harness = buildHarness(config, opts, { base, channels, fleet, intake, envs, lessons, bench, late });
   const pulse = wirePulse(config, base, fleet, harness);
-  const local = buildLocalRuns(config, opts, base, runtime, () => pulse.localCycles.request());
+  const local = buildLocalRuns(config, opts, base, runtime, { pulse, bench, channels });
   const system: System = {
     config,
     setupReading: { latest: null },
@@ -395,6 +395,7 @@ function buildHarness(
     localRun: { noteAlive: () => late.get().localRun.noteAlive() },
     localValidations: { sweep: () => late.get().localValidations.sweep() },
     localValidationAuto: { run: (world) => late.get().localValidationAuto.run(world) },
+    localValidationTickets: { run: () => late.get().localValidationTickets.run() },
     goalIntake: () => discussionIntake(base.discussions),
     remoteRuns: reads.remoteRuns,
     landings: fleet.landings,

@@ -10,6 +10,8 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { issueBranch } from '../src/dispatcher/issuePickup.js';
 import { localValidationOrigin } from '../src/validation/local/origin.js';
+import { LocalValidationTicketDesk } from '../src/validation/local/ticket.js';
+import type { TicketFiler } from '../src/tickets/filing.js';
 import type { CiStatus, Issue, PullRequest, WorldSnapshot } from '../src/types.js';
 
 const HEAD = 'c'.repeat(40);
@@ -301,6 +303,54 @@ test('only an automatic validation may report skipped', async () => {
     const refused = system.localValidations.report(task(asked.id), skip);
     assert.equal(refused.ok, false);
     assert.equal(system.store.localValidations.getLocalValidation(asked.id)?.status, 'pending');
+  } finally {
+    system.store.close();
+  }
+});
+
+test('a failed validation on the integration branch files one linked, watched bug; a branch run does not', async () => {
+  const { system } = build();
+  try {
+    const filed: Parameters<TicketFiler>[0][] = [];
+    const desk = new LocalValidationTicketDesk({
+      store: system.store,
+      filing: async (input) => {
+        filed.push(input);
+        return '#900';
+      },
+      canFile: () => true,
+      prompts: system.prompts,
+      watchLabel: 'watch',
+      defaultBranch: 'main',
+      errors: { record: () => [] } as never,
+      changed: () => {},
+    });
+    const failed = (originRef: string, ref: string) => {
+      const row = system.store.localValidations.createLocalValidation({ originRef, runId: 'r', ref, commit: HEAD });
+      system.store.localValidations.recordLocalValidationReport(row.id, {
+        status: 'failed',
+        summary: 'the button does nothing',
+        findings: [{ title: 'Save is dead', detail: 'clicked it', severity: 'blocker', url: null, screenshot: null }],
+        visited: [],
+        setup: [],
+        screenshots: [],
+        note: null,
+        recordingStatus: null,
+      });
+      return row.id;
+    };
+    const onMain = failed('issue:12', 'main');
+    failed('issue:13', issueBranch(13));
+
+    await desk.run();
+    await desk.run();
+
+    assert.equal(filed.length, 1, 'once, and only for the integration branch');
+    assert.equal(filed[0]?.bug, true);
+    assert.equal(filed[0]?.relatedTo, 12);
+    assert.deepEqual(filed[0]?.labels, ['watch']);
+    assert.match(filed[0]?.body ?? '', /Save is dead/);
+    assert.equal(system.store.localValidations.getLocalValidation(onMain)?.fixTicketRef, '#900');
   } finally {
     system.store.close();
   }

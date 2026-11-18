@@ -113,6 +113,7 @@ function row(over: Partial<LocalValidation> = {}): LocalValidation {
     endedAt: null,
     taskId: null,
     fixTaskId: null,
+    fixTicketRef: null,
     plan: null,
     summary: null,
     findings: [],

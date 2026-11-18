@@ -1,30 +1,30 @@
 import type { ErrorRecorder } from '../../errorLog.js';
+import { goalMergedAt, landedCommits } from '../../environments/landings.js';
 import { issueOriginRef } from '../../issueOrigins.js';
 import type { LocalRunChoices } from '../../localRun/ref.js';
 import type { LocalRunner } from '../../localRun/runner.js';
 import { prState } from '../../pr/prHealth.js';
 import type { Store } from '../../store/store.js';
-import type { LocalRun, LocalValidation, WorldSnapshot } from '../../types.js';
+import type { GoalLanding, LocalRun, LocalValidation, WorldSnapshot } from '../../types.js';
 import { localValidationIsOpen } from './stale.js';
 
 // → docs/spec/32-local-validation.md#the-automatic-press
 
 interface Candidate {
   originRef: string;
-  at: string | null;
+  at?: string;
   commit: string;
-  readyAt: string;
+  readyAt: number;
 }
 
 const SINCE_KEY = 'localValidation.autoSince';
-
-const UNDISPATCHED_AFTER_MS = 15 * 60 * 1000;
 
 const READ: ReadonlySet<LocalValidation['status']> = new Set(['passed', 'failed', 'skipped']);
 
 interface LocalValidationAutoPressDeps {
   store: Store;
-  enabled: () => boolean;
+  on: () => boolean;
+  configured: () => boolean;
   start: LocalRunner['start'];
   request: (input: { originRef: string; run: LocalRun; requestedBy: 'auto' }) => LocalValidation;
   tipOf: (ref: string) => Promise<string>;
@@ -44,16 +44,14 @@ export class LocalValidationAutoPress {
   }
 
   async run(world: WorldSnapshot): Promise<void> {
+    if (this.pressing !== null) return;
     const since = this.since();
-    if (since === null || this.pressing !== null) return;
+    if (since === null || !this.deps.configured()) return;
     try {
-      const live = this.deps.store.localRuns.liveLocalRun();
-      if (live !== null) this.unstick(live);
-      if (live !== null && !this.ours(live)) return;
+      if (!this.free()) return;
       for (const candidate of this.candidates(world, since)) {
-        if (candidate.at !== null && (await this.tipOf(candidate.at)) !== candidate.commit) continue;
-        const now = this.deps.store.localRuns.liveLocalRun();
-        if (now !== null && !this.ours(now)) return;
+        if (candidate.at !== undefined && (await this.tipOf(candidate.at)) !== candidate.commit) continue;
+        if (!this.free()) return;
         this.pressing = this.press(candidate).finally(() => {
           this.pressing = null;
         });
@@ -66,7 +64,7 @@ export class LocalValidationAutoPress {
 
   private async press(candidate: Candidate): Promise<void> {
     try {
-      const started = await this.deps.start(candidate.originRef, candidate.at ?? undefined);
+      const started = await this.deps.start(candidate.originRef, candidate.at);
       if (!started.ok) {
         this.refused.add(key(candidate.originRef, candidate.commit));
         this.deps.errors.record({
@@ -82,16 +80,16 @@ export class LocalValidationAutoPress {
     }
   }
 
-  private since(): string | null {
+  private since(): number | null {
     const stored = this.deps.store.world.getConnectorState(SINCE_KEY) ?? '';
-    if (!this.deps.enabled()) {
+    if (!this.deps.on()) {
       if (stored !== '') this.deps.store.world.setConnectorState(SINCE_KEY, '');
       return null;
     }
-    if (stored !== '') return stored;
-    const now = new Date().toISOString();
-    this.deps.store.world.setConnectorState(SINCE_KEY, now);
-    return now;
+    if (stored !== '') return Date.parse(stored);
+    const now = new Date();
+    this.deps.store.world.setConnectorState(SINCE_KEY, now.toISOString());
+    return now.getTime();
   }
 
   private tipOf(ref: string): Promise<string | null> {
@@ -111,17 +109,9 @@ export class LocalValidationAutoPress {
     });
   }
 
-  private unstick(live: LocalRun): void {
-    const latest = this.deps.store.localValidations.latestLocalValidation(live.originRef);
-    if (latest?.status !== 'pending' || latest.requestedBy !== 'auto' || latest.runId !== live.id) return;
-    if (Date.now() - Date.parse(latest.requestedAt) < UNDISPATCHED_AFTER_MS) return;
-    this.deps.store.localValidations.abandonLocalValidation(
-      latest.id,
-      'started automatically, and never dispatched — the goal is not one the fleet will work on now',
-    );
-  }
-
-  private ours(live: LocalRun): boolean {
+  private free(): boolean {
+    const live = this.deps.store.localRuns.liveLocalRun();
+    if (live === null) return true;
     if (live.status === 'stopping') return false;
     const latest = this.deps.store.localValidations.latestLocalValidation(live.originRef);
     return (
@@ -129,12 +119,10 @@ export class LocalValidationAutoPress {
     );
   }
 
-  private candidates(world: WorldSnapshot, since: string): Candidate[] {
+  private candidates(world: WorldSnapshot, since: number): Candidate[] {
     const latest = new Map(this.deps.store.localValidations.listLatestLocalValidations().map((v) => [v.originRef, v]));
-    const found = [...this.delivered(world, latest), ...this.landed(since, latest)];
-    return found
-      .filter((c) => !this.refused.has(key(c.originRef, c.commit)))
-      .sort((a, b) => Date.parse(a.readyAt) - Date.parse(b.readyAt));
+    const found = [...this.delivered(world, latest), ...this.landed(world, since, latest)];
+    return found.filter((c) => !this.refused.has(key(c.originRef, c.commit))).sort((a, b) => a.readyAt - b.readyAt);
   }
 
   private delivered(world: WorldSnapshot, latest: ReadonlyMap<string, LocalValidation>): Candidate[] {
@@ -151,31 +139,30 @@ export class LocalValidationAutoPress {
       const at = this.deps.choicesFor(originRef).target;
       const pr = at === null ? undefined : prs.get(at);
       if (at === null || pr?.ciStatus !== 'passing' || !pr.headSha || last?.commit === pr.headSha) continue;
-      found.push({ originRef, at, commit: pr.headSha, readyAt: delivery.decidedAt });
+      found.push({ originRef, at, commit: pr.headSha, readyAt: Date.parse(delivery.decidedAt) });
     }
     return found;
   }
 
-  private landed(since: string, latest: ReadonlyMap<string, LocalValidation>): Candidate[] {
-    const newest = new Map<string, { sha: string; at: string }>();
-    for (const landing of this.deps.store.environments.listGoalLandings()) {
-      if (landing.onIntegration !== true) continue;
-      const at = landing.mergedAt ?? landing.recordedAt;
-      const seen = newest.get(landing.goalRef);
-      if (seen === undefined || Date.parse(at) > Date.parse(seen.at))
-        newest.set(landing.goalRef, { sha: landing.sha, at });
-    }
+  private landed(world: WorldSnapshot, since: number, latest: ReadonlyMap<string, LocalValidation>): Candidate[] {
+    const landings = this.deps.store.environments.listGoalLandings();
     const found: Candidate[] = [];
-    for (const [originRef, landing] of newest) {
-      if (Date.parse(landing.at) < Date.parse(since)) continue;
+    for (const issue of world.issues) {
+      const originRef = issueOriginRef('root', issue.number);
+      const mergedAt = goalMergedAt(landings, originRef);
+      if (mergedAt === null || mergedAt < since) continue;
       const last = latest.get(originRef);
       if (last !== undefined && (localValidationIsOpen(last) || READ.has(last.status))) continue;
-      if (last !== undefined && Date.parse(last.requestedAt) >= Date.parse(landing.at)) continue;
+      if (last !== undefined && Date.parse(last.requestedAt) >= mergedAt) continue;
       if (this.deps.choicesFor(originRef).target !== null) continue;
-      found.push({ originRef, at: null, commit: landing.sha, readyAt: landing.at });
+      found.push({ originRef, commit: lastCommit(landings, originRef), readyAt: mergedAt });
     }
     return found;
   }
+}
+
+function lastCommit(landings: readonly GoalLanding[], goalRef: string): string {
+  return landedCommits(landings, goalRef).at(-1) ?? goalRef;
 }
 
 function key(originRef: string, commit: string): string {

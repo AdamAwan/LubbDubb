@@ -5,6 +5,10 @@ import { LocalRunner } from '../localRun/runner.js';
 import { localRunConfigured } from '../localRun/policy.js';
 import { LocalValidationDesk } from '../validation/local/desk.js';
 import { LocalValidationAutoPress } from '../validation/local/auto.js';
+import { LocalValidationTicketDesk } from '../validation/local/ticket.js';
+import { trackerCoordinates } from '../mcp/findings.js';
+import type { TicketFiler } from '../tickets/filing.js';
+import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import { LocalRunWatch } from '../localRun/watch.js';
 import { CommandPortLister } from '../localRun/ports.js';
 import { FakePortLister } from '../localRun/fakePortLister.js';
@@ -16,12 +20,18 @@ import type { BuildOptions, Foundation, AgentRuntime } from './systemFoundation.
 
 export type LocalRuns = ReturnType<typeof buildLocalRuns>;
 
+interface LocalRunNeighbours {
+  pulse: { localCycles: { request(): void } };
+  bench: { filing: TicketFiler };
+  channels: { prompts: PromptTemplates };
+}
+
 export function buildLocalRuns(
   config: Config,
   opts: BuildOptions,
   base: Foundation,
   runtime: AgentRuntime,
-  cycle: () => void,
+  { pulse, bench, channels }: LocalRunNeighbours,
 ) {
   const { store, worktrees, gitObserver, errors } = base;
   const { agentSetup, reapTree, realTransport } = runtime;
@@ -74,13 +84,24 @@ export function buildLocalRuns(
   });
   const localValidationAuto = new LocalValidationAutoPress({
     store,
-    enabled: () => config.localValidation.auto && localRunConfigured(config.localRun),
+    on: () => config.localValidation.auto,
+    configured: () => localRunConfigured(config.localRun),
     start: (originRef, at) => localRun.start(originRef, at),
     request: (input) => localValidations.request(input),
     tipOf: (ref) => worktrees.previewCommit(ref),
     choicesFor,
-    cycle,
+    cycle: () => pulse.localCycles.request(),
     errors,
   });
-  return { localRun, localRunWatch, localValidations, localValidationAuto };
+  const localValidationTickets = new LocalValidationTicketDesk({
+    store,
+    filing: bench.filing,
+    canFile: () => trackerCoordinates(config) !== null,
+    prompts: channels.prompts,
+    watchLabel: base.watchLabel,
+    defaultBranch: config.defaultBranch,
+    errors,
+    changed: () => localValidations.emit('changed'),
+  });
+  return { localRun, localRunWatch, localValidations, localValidationAuto, localValidationTickets };
 }

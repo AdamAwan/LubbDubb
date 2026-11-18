@@ -88,6 +88,7 @@ export interface PulseDeps {
   areaPaths?: AreaPathDirectory;
   localValidations?: { sweep(): void };
   localValidationAuto?: { run(world: WorldSnapshot): Promise<void> };
+  localValidationTickets?: { run(): Promise<void> };
   tickets?: { run(): Promise<void> };
 }
 
@@ -186,7 +187,10 @@ const ENTRIES = [
     { id: 'localValidations', readWorld: false, run: (d) => d.localValidations?.sweep() },
     { id: 'localValidationAuto', readWorld: true, run: (d, at) => d.localValidationAuto?.run(at.dispatchWorld) },
   ]),
-  ...phase('afterExecute', [{ id: 'tickets', readWorld: true, run: (d) => d.tickets?.run() }]),
+  ...phase('afterExecute', [
+    { id: 'tickets', readWorld: true, run: (d) => d.tickets?.run() },
+    { id: 'localValidationTickets', readWorld: false, run: (d) => d.localValidationTickets?.run() },
+  ]),
 ];
 
 export type PulseId = (typeof ENTRIES)[number]['id'];

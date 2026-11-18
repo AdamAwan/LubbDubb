@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS local_validations (
   ended_at     TEXT,
   task_id      TEXT,                -- the validator
   fix_task_id  TEXT,                -- the fix, and the latch that keeps one failure to one fix
+  fix_ticket_ref TEXT,              -- on the integration branch, the bug filed instead; '' from before the column
   plan         TEXT,                -- markdown, written before the environment was up
   summary      TEXT,
   findings     TEXT NOT NULL,       -- JSON array of LocalValidationFinding

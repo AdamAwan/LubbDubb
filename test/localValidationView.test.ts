@@ -34,6 +34,7 @@ function validation(over: Partial<LocalValidationView> = {}): LocalValidationVie
     endedAt: null,
     taskId: 't1',
     fixTaskId: null,
+    fixTicketRef: null,
     plan: null,
     summary: null,
     findings: [],

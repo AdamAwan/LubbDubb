@@ -139,16 +139,16 @@ than validating code CI never saw.
 **And for what has already merged.** A goal whose work merged before anything pressed for it — a pull
 request that merged inside a pulse, or a goal whose CI was never green while it was open — is pressed
 from `goal_landings` ([24](24-environments.md#recording-a-landing)) rather than from the world, because
-`closedPullRequests` is a window and a landing is not. A goal qualifies when it has a landing with
-`on_integration = yes`, its run target is now `null` (no open pull request of its own and every part
+`closedPullRequests` is a window and a landing is not. A goal qualifies when it has a landing not
+placed off the integration branch (`goalMergedAt`, [24](24-environments.md#what-counts-as-a-landing)), its run target is now `null` (no open pull request of its own and every part
 merged or settled — the goal is all in), and nothing has read it: its latest row is absent, or is
 `blocked` or `abandoned` (neither says anything about the code) and was requested before the newest
 landing. A `passed`, `failed` or `skipped` row from before the merge already read the goal's head. It runs on the **integration branch**, so a
 failure dispatches no fix ([when it fails](#when-it-fails)) and what fails may not be this goal's.
 
 **Only merges after it was switched on.** A landing counts only from the instant the press first saw
-`localValidation.auto` on, kept in `connector_state` under `localValidation.autoSince` and cleared when it
-is turned off — so turning it on validates what merges next rather than queueing every goal ever
+`localValidation.auto` on, kept in `connector_state` under `localValidation.autoSince` and cleared when
+that key — and nothing else — is turned off — so turning it on validates what merges next rather than queueing every goal ever
 merged, a restart does not move the line, and turning it off and on again draws a new one.
 
 Both kinds together, ready-time first (a delivery's `decided_at`, a landing's `merged_at`), **one press
@@ -177,10 +177,11 @@ validation a person asked for is refused `skipped` by the desk, pointed at runni
 - **Run a commit twice.** A goal whose latest row is on the commit it would run is skipped whatever
   that row's status: a pass stands, a failure has dispatched its fix (whose push is a new commit, and
   validated in turn), and a run the operator called off stays called off.
-- **Hold the environment for a row nothing dispatches.** An `auto` row the rule never takes — its
-  goal gated, or gone from the dispatcher's world — would keep the environment from ever being the
-  press's again. Fifteen minutes after it was requested, still `pending`, the press abandons it with
-  that reason.
+- **Press for a goal the rule cannot dispatch.** Both kinds are drawn from the dispatcher's world —
+  live issues and retained runs, not an abandoned one — so the row it writes is one the rule can find.
+  What the press cannot see is the watch gate; an `auto` row the rule still never takes (a goal paused
+  meanwhile) would keep the environment from ever being the press's again, so the desk's sweep
+  abandons one still `pending` fifteen minutes after it was requested.
 - **Retry a refused start.** A `start` that fails is recorded through `errors.record` once and the
   goal-commit pair is not tried again by this process.
 
@@ -447,8 +448,16 @@ the fleet on the strength of an exploratory run against a branch — the same ov
 - **It opens no pull request.** A push reaches the branch's own PR where there is one, and opening
   one belongs to the work the branch is part of. The branch's own rules — `pr-ci-failing`,
   `pr-review-comment` — pick the push up.
-- **A validation that ran from the integration branch gets no fix**, because there is no branch of
-  the goal's to put one on. The findings stand on the page for a person.
+- **A validation that ran from the integration branch gets a ticket instead of a fix**, because there
+  is no branch of the goal's to put one on — and the goal's work is still the goal's, so it is filed
+  against it. `LocalValidationTicketDesk` (`src/validation/local/ticket.ts`, the
+  `localValidationTickets` pass below the executor) files one **bug** through `ticketFiler`
+  ([13](13-jobs-and-tickets.md#filing-a-ticket)) per failed reading with findings: related to the
+  goal, carrying the **watch label** so the fleet picks it up, its body rendered from the
+  `local-validation-ticket-body` template. Type, label and relation are arguments, never sentences
+  in the body, which is the one place an override could drop them. Latched on `fix_ticket_ref`, so a
+  reading files once; a filing that fails is recorded and tried again next pulse. Nothing is filed
+  where `trackerCoordinates` names no tracker — the findings stand on the page for a person.
 - **A finding may be wrong**, and the prompt says so: it is one agent's reading of a running
   application, taken without being able to ask anybody what was intended. Changing working code to
   satisfy a mistaken finding is the one outcome here worse than doing nothing.
@@ -468,6 +477,10 @@ the environment is looking at the page.
 
 Its second arm is the one nothing else covers: a `dispatched` row whose task is no longer active. An
 agent that crashed, was killed or spent its stall park leaves a row nobody will ever report against.
+
+Its third is the [automatic press](#the-automatic-press)'s backstop: an `auto` row still `pending`
+fifteen minutes after it was requested is one the rule will not take, and holding it would hold the
+environment from every later press.
 
 ## Configuration
 
@@ -564,6 +577,10 @@ reason — `COMMIT` is a keyword), `status`, `requested_by` (`operator` | `auto`
 `ALTER TABLE` in `LOCAL_VALIDATION_COLUMNS` — a table being new **once** does not keep it exempt
 ([14](14-persistence.md#migrations)); null is _not known_ and nothing is backfilled
 ([the recording](#the-recording)). `requested_by` defaults to `operator`, which every row from before it was.
+`fix_ticket_ref` null means _not yet filed_, so its column comes with a backfill gated on
+`ensureColumns` adding it ([14](14-persistence.md#when-a-null-means-something)): every `failed` row
+already there is set to `''`, or the first boot after the upgrade would file a bug for every
+integration-branch failure ever recorded.
 
 `tasks.mcp_servers` is a column on an **existing** table and therefore has a real `TASK_COLUMNS`
 entry. Without it every database from before this change would read it as absent and every resumed
@@ -591,8 +608,9 @@ while off, undelivered, CI not green, or the checkout behind; an operator's envi
 one goal at a time, a settled auto run handing its environment on, a commit never run twice and a new
 one run; a press requesting the cycle that dispatches the validator; a goal merged since auto came on
 validated once on the integration branch and dispatched with its issue closed; a merge from before it
-came on, and a goal already validated, left alone; and `skipped` accepted on an `auto` row and refused on
-an operator's.
+came on, and a goal already validated, left alone; `skipped` accepted on an `auto` row and refused on
+an operator's; and a failure on the integration branch filing one related, watched bug, once, where a
+failure on a goal's branch files none.
 
 `test/localValidationView.test.ts` covers the cockpit's pure half: every status has a word and a
 tone, each phase its words, the offer's three arms with the sentence each names, and the two

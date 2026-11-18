@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type Database from 'better-sqlite3';
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 import { toRecordingStatus } from './rows/recording.js';
@@ -6,6 +7,7 @@ import type {
   LocalValidation,
   LocalValidationFinding,
   LocalValidationRequester,
+  LocalValidationResult,
   LocalValidationStatus,
   RecordingStatus,
 } from '../types.js';
@@ -19,6 +21,7 @@ export const LOCAL_VALIDATION_COLUMNS: ColumnMigrations = {
     recording_status: 'TEXT',
     setup: "TEXT NOT NULL DEFAULT '[]'",
     requested_by: "TEXT NOT NULL DEFAULT 'operator'",
+    fix_ticket_ref: 'TEXT',
   },
 };
 
@@ -49,6 +52,7 @@ export class LocalValidationStore {
       endedAt: null,
       taskId: null,
       fixTaskId: null,
+      fixTicketRef: null,
       plan: null,
       summary: null,
       findings: [],
@@ -133,6 +137,22 @@ export class LocalValidationStore {
     this.ctx.prep(`UPDATE local_validations SET fix_task_id = ? WHERE id = ? AND fix_task_id IS NULL`).run(taskId, id);
   }
 
+  listLocalValidationsAwaitingTicket(ref: string): LocalValidation[] {
+    const rows = this.ctx
+      .prep(
+        `SELECT * FROM local_validations WHERE status = 'failed' AND ref = ? AND fix_ticket_ref IS NULL
+           AND findings != '[]' ORDER BY ended_at`,
+      )
+      .all(ref) as Row[];
+    return rows.map(toLocalValidation);
+  }
+
+  markLocalValidationTicket(id: string, ticketRef: string): void {
+    this.ctx
+      .prep(`UPDATE local_validations SET fix_ticket_ref = ? WHERE id = ? AND fix_ticket_ref IS NULL`)
+      .run(ticketRef, id);
+  }
+
   setLocalValidationPlan(id: string, plan: string): void {
     this.ctx.prep(`UPDATE local_validations SET plan = ? WHERE id = ? AND status IN ${OPEN_SQL}`).run(plan, id);
   }
@@ -140,7 +160,7 @@ export class LocalValidationStore {
   recordLocalValidationReport(
     id: string,
     result: {
-      status: Extract<LocalValidationStatus, 'passed' | 'failed' | 'blocked' | 'skipped'>;
+      status: LocalValidationResult;
       summary: string;
       findings: LocalValidationFinding[];
       visited: string[];
@@ -193,6 +213,7 @@ interface Row {
   ended_at: string | null;
   task_id: string | null;
   fix_task_id: string | null;
+  fix_ticket_ref: string | null | undefined;
   plan: string | null;
   summary: string | null;
   findings: string | null;
@@ -239,6 +260,7 @@ function toLocalValidation(row: Row): LocalValidation {
     endedAt: row.ended_at,
     taskId: row.task_id,
     fixTaskId: row.fix_task_id,
+    fixTicketRef: row.fix_ticket_ref || null,
     plan: row.plan,
     summary: row.summary,
     findings: parseList<LocalValidationFinding>(row.findings),
@@ -248,4 +270,8 @@ function toLocalValidation(row: Row): LocalValidation {
     note: row.note,
     recordingStatus: toRecordingStatus(row.recording_status),
   };
+}
+
+export function settleTicketsFromBeforeTheColumn(db: Database.Database): void {
+  db.prepare(`UPDATE local_validations SET fix_ticket_ref = '' WHERE status = 'failed'`).run();
 }

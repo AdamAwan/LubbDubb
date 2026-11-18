@@ -63,7 +63,7 @@ export function localValidation(s: StageContext): void {
             outputDir,
             browserKey: browser?.key ?? null,
             auto: row.requestedBy === 'auto',
-            merges: row.ref === s.defaultBranch ? mergesOf(s, row.originRef) : [],
+            merges: mergesFor(s, row),
           }),
         mcpServers: browser === null ? [] : [browser],
         localValidation: { id: row.id, as: 'validation' },
@@ -77,9 +77,10 @@ export function localValidation(s: StageContext): void {
   }
 }
 
-function mergesOf(s: StageContext, originRef: string): string[] {
+function mergesFor(s: StageContext, row: LocalValidation): string[] {
+  if (row.ref !== s.defaultBranch) return [];
   return (s.ctx.goalLandings ?? [])
-    .filter((l) => l.goalRef === originRef && l.onIntegration === true)
+    .filter((l) => l.goalRef === row.originRef && l.onIntegration !== false)
     .map((l) => l.sha);
 }
 

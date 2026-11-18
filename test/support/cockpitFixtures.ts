@@ -945,6 +945,7 @@ export function buildFixtureState(): AppState {
             endedAt: ago(26),
             taskId: 'task-v1',
             fixTaskId: null,
+            fixTicketRef: null,
             phase: null,
             recordingStatus: null,
             plan: [
@@ -1035,6 +1036,7 @@ export function buildFixtureState(): AppState {
             endedAt: ago(82),
             taskId: 'task-395-lv',
             fixTaskId: null,
+            fixTicketRef: null,
             phase: null,
             recordingStatus: null,
             plan: [

@@ -1786,7 +1786,7 @@ Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-
 `plan-part-escalation`, `issue-plan-escalation`, `issue-assess`, `issue-appraisal`, `issue-investigate`,
 `issue-retro`, `validation-check`, `local-validation`, `local-validation-fix`, `remote-validation`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-triage`, `pr-split`, `pr-describe`, `pr-description-check`, `pr-review`, `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
-`work-item-ticket-body`, `brief-ticket-body`, `app-error-ticket-body`, and the retired `work-item-ticket`,
+`work-item-ticket-body`, `brief-ticket-body`, `app-error-ticket-body`, `local-validation-ticket-body`, and the retired `work-item-ticket`,
 `blueprint-ticket`, `blueprint-ticket-body`, `issue-assay`, `issue-pickup`, `issue-pickup-escalation`,
 `review-pack-author` and `review-pack-check`. The filing ids are route-driven rather than dispatcher-driven — they are here
 because _how a ticket should be worded_ is the operator's opinion, which is what the book exists to
@@ -1795,7 +1795,7 @@ _how this project starts on a developer's machine_ is the operator's opinion too
 renders it is on the desktop channel ([20](20-validation.md#getting-the-application-up)).
 
 Not every entry is a prompt. `pr-title` is rendered straight onto a pull request, and
-`work-item-ticket-body`, `brief-ticket-body` and `app-error-ticket-body` are written straight into the tracker: the harness files those items itself
+`work-item-ticket-body`, `brief-ticket-body`, `app-error-ticket-body` and `local-validation-ticket-body` are written straight into the tracker: the harness files those items itself
 ([13](13-jobs-and-tickets.md#filing-a-ticket)), so what stays overridable is the item's **body**
 rather than an instruction to an agent.
 
