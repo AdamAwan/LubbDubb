@@ -358,3 +358,12 @@ test('a second throw while the slot is still open is recorded on its own, not lo
     ['extension "nxg" threw again during its "count" slot: second', 'extension "nxg" failed the "count" slot: first'],
   );
 });
+
+test('a blank progress line is dropped at the host', async () => {
+  const { host: h } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
+    greet: (_, { progress }) => { progress(''); progress(' \\r\\n'); progress('real'); return 'ok'; },
+  } };`);
+  const lines: string[] = [];
+  await h.call('greet', { who: 'sam' }, (line) => lines.push(line));
+  assert.deepEqual(lines, ['real']);
+});

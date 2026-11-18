@@ -24,8 +24,7 @@ interface Scope {
   slot: string;
   bound: Bound;
   open: boolean;
-  faulted: boolean;
-  fault: (err: unknown) => void;
+  fault: ((err: unknown) => void) | null;
 }
 
 export class ExtensionHost<S extends SlotMap> {
@@ -69,11 +68,12 @@ export class ExtensionHost<S extends SlotMap> {
     const faulted = new Promise<never>((_, reject) => {
       fault = reject;
     });
-    const scope: Scope = { slot, bound, open: true, faulted: false, fault };
+    const scope: Scope = { slot, bound, open: true, fault };
     const progress = (line: string): void => {
-      if (!scope.open || onProgress === undefined) return;
+      const text = String(line);
+      if (!scope.open || onProgress === undefined || text.trim() === '') return;
       try {
-        this.scope.exit(() => onProgress(String(line)));
+        this.scope.exit(() => onProgress(text));
       } catch (err) {
         this.record({
           source: 'runtime',
@@ -106,9 +106,10 @@ export class ExtensionHost<S extends SlotMap> {
   contain(err: unknown): boolean {
     const scope = this.scope.getStore();
     if (scope === undefined) return false;
-    if (scope.open && !scope.faulted) {
-      scope.faulted = true;
-      scope.fault(err);
+    if (scope.open && scope.fault !== null) {
+      const fault = scope.fault;
+      scope.fault = null;
+      fault(err);
       return true;
     }
     const when = scope.open ? `again during its "${scope.slot}" slot` : `after its "${scope.slot}" slot ended`;

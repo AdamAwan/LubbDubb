@@ -89,7 +89,8 @@ export class ExtensionTenantKeeper implements TenantKeeper {
       lines: [`asked ${request.command}`],
       lastOutputAt: null,
       print: (line) => {
-        if (appendTail(run.lines, line) > 0) run.lastOutputAt = new Date(this.now()).toISOString();
+        appendTail(run.lines, line);
+        run.lastOutputAt = new Date(this.now()).toISOString();
       },
     };
     this.latest.set(request.environment, run);

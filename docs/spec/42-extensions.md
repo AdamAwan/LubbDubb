@@ -129,7 +129,7 @@ slot. Asking a slot nobody fills is not-ok and records nothing: it is a question
 
 `progress` is the host's, not the caller's listener: it never throws into the slot. A listener that
 throws is recorded (source `runtime`, naming the extension and the slot) and the slot carries on, since
-a cockpit that failed to draw a line is no reason to fail a 40-minute reseed. Once the call has settled
+a cockpit that failed to draw a line is no reason to fail a 40-minute reseed. A blank line is dropped at the host, so no caller sees one. Once the call has settled
 — answered, thrown or timed out — `progress` is closed and a later line is dropped silently: after a
 timeout the slot's own work may still be running, and the caller has already written its outcome.
 

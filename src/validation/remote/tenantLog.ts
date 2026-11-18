@@ -230,11 +230,9 @@ function linesOf(text: string): string[] {
     .filter((line) => line.trim() !== '');
 }
 
-export function appendTail(lines: string[], text: string): number {
-  const added = linesOf(text).slice(-TAIL_LINES);
-  lines.push(...added);
+export function appendTail(lines: string[], text: string): void {
+  lines.push(...linesOf(text).slice(-TAIL_LINES));
   if (lines.length > TAIL_LINES) lines.splice(0, lines.length - TAIL_LINES);
-  return added.length;
 }
 
 export function readTail(dir: string): TenantTail {
