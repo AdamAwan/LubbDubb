@@ -10,7 +10,9 @@ import type { ExtraMcpServer, Task } from '../src/types.js';
 // → docs/spec/32-local-validation.md#the-recording
 
 const browser = (args: string[]): ExtraMcpServer => ({ key: 'browser', command: 'npx', args });
-const { coreCli, ffmpegRevision: FFMPEG_REVISION, mcpCli } = bundledPlaywright();
+const found = bundledPlaywright();
+if (typeof found === 'string') throw new Error(found);
+const { coreCli, ffmpegRevision: FFMPEG_REVISION, mcpCli } = found;
 
 test('the default browser is the bundled @playwright/mcp, run by this node, and offers the recorder', () => {
   const server = DEFAULT_LOCAL_VALIDATION.browser as ExtraMcpServer;

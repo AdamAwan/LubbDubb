@@ -238,7 +238,9 @@ explain a missing video, because the harness reads that for itself:
   default among them: a block naming its own package names a revision this harness cannot know. Before
   any of that, any block with `{playwrightMcp}` as a whole argument — recorder or not — whose bundled package cannot be read
   (no `bin`, no ffmpeg entry) gets one `boot` error naming `npm ci` instead, rather than the harness
-  failing to start.
+  failing to start. `bundledPlaywright()` never throws: it keeps that failure as a message, once per
+  process, and `substituteBrowserArgs` then leaves `{playwrightMcp}` as written — the browser fails to
+  connect and the run reports `blocked`, where a throw at dispatch would abort the whole pass.
 - **On each settled run**, a `recordingStatus` is written beside the report — `kept` where a video is
   there, `missing` where the agent was launched with the recorder (a server whose `--caps` include
   `devtools`) and none was written, `not_offered` otherwise (`recordingStatus`, `recorderOffered` in

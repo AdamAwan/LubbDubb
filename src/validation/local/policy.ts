@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { failure } from '../../primitives.js';
 import type { ExtraMcpServer } from '../../types.js';
 
 // → docs/spec/32-local-validation.md
@@ -12,10 +13,20 @@ interface BundledPlaywright {
   ffmpegRevision: string;
 }
 
-let bundled: BundledPlaywright | undefined;
+let bundled: BundledPlaywright | string | undefined;
 
-export function bundledPlaywright(): BundledPlaywright {
-  if (bundled !== undefined) return bundled;
+export function bundledPlaywright(): BundledPlaywright | string {
+  if (bundled === undefined) {
+    try {
+      bundled = readBundledPlaywright();
+    } catch (err) {
+      bundled = failure(err);
+    }
+  }
+  return bundled;
+}
+
+function readBundledPlaywright(): BundledPlaywright {
   const mcpPackage = fileURLToPath(import.meta.resolve('@playwright/mcp/package.json'));
   const { bin } = JSON.parse(readFileSync(mcpPackage, 'utf8')) as { bin?: string | Record<string, string> };
   const cli = typeof bin === 'string' ? bin : bin?.['playwright-mcp'];
@@ -27,12 +38,11 @@ export function bundledPlaywright(): BundledPlaywright {
   };
   const ffmpeg = browsers.find((browser) => browser.name === 'ffmpeg');
   if (ffmpeg === undefined) throw new Error(`No ffmpeg entry in ${browsersJson}`);
-  bundled = {
+  return {
     mcpCli: join(dirname(mcpPackage), cli),
     coreCli: join(core, 'cli.js'),
     ffmpegRevision: ffmpeg.revision,
   };
-  return bundled;
 }
 
 export interface LocalValidationPolicy {
@@ -63,13 +73,19 @@ export function substituteBrowserArgs(
   server: ExtraMcpServer,
   paths: { outputDir: string; profileDir: string },
 ): ExtraMcpServer {
-  const values: Record<string, () => string> = {
+  const values: Record<string, () => string | undefined> = {
     outputDir: () => paths.outputDir,
     profileDir: () => paths.profileDir,
     node: () => process.execPath,
-    playwrightMcp: () => bundledPlaywright().mcpCli,
+    playwrightMcp: () => {
+      const found = bundledPlaywright();
+      return typeof found === 'string' ? undefined : found.mcpCli;
+    },
   };
   const render = (text: string): string =>
-    text.replace(/\{(\w+)\}/g, (whole, name: string) => (Object.hasOwn(values, name) ? values[name]!() : whole));
+    text.replace(
+      /\{(\w+)\}/g,
+      (whole, name: string) => (Object.hasOwn(values, name) ? values[name]!() : undefined) ?? whole,
+    );
   return { ...server, command: render(server.command), args: server.args.map(render) };
 }

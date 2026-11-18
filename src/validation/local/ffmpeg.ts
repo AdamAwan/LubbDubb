@@ -1,5 +1,4 @@
 import { join } from 'node:path';
-import { failure } from '../../primitives.js';
 import type { ExtraMcpServer } from '../../types.js';
 import { recorderOffered } from '../recording.js';
 import { bundledPlaywright, PLAYWRIGHT_MCP_TOKEN } from './policy.js';
@@ -25,12 +24,9 @@ function playwrightCacheDir(host: Host): string | null {
 
 export function ffmpegPreflight(browser: ExtraMcpServer | null, host: Host): string | null {
   if (browser === null || !browser.args.includes(PLAYWRIGHT_MCP_TOKEN)) return null;
-  let bundled: ReturnType<typeof bundledPlaywright>;
-  try {
-    bundled = bundledPlaywright();
-  } catch (err) {
-    return `The browser cannot start: the bundled @playwright/mcp is not usable — ${failure(err)}. Run \`npm ci\`.`;
-  }
+  const bundled = bundledPlaywright();
+  if (typeof bundled === 'string')
+    return `The browser cannot start: the bundled @playwright/mcp is not usable — ${bundled}. Run \`npm ci\`.`;
   if (!recorderOffered(browser)) return null;
   const cache = playwrightCacheDir(host);
   if (cache === null) return null;
