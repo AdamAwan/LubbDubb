@@ -78,6 +78,7 @@ export function buildStateSections(
   if (want.has('activity')) Object.assign(out, activitySection(r));
   if (want.has('asks')) out.asks = buildAskQueue(askInputs(r, want, out), opts?.setup ?? null);
   if (want.has('asks')) out.handledOpen = openHandledCount(system.store, Date.now());
+  if (want.has('asks')) out.listener = { state: 'off', on: null, queued: 0, sent: [] };
   return out;
 }
 
