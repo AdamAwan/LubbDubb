@@ -274,3 +274,37 @@ test('the desktop channel prepares an extension tenant, confirming first only wh
   assert.equal(confirmed.isError, false, confirmed.text);
   assert.equal(confirmed.ok, true, 'with no tenant yet, the environment name is the confirmation, as for commands');
 });
+
+test('a slot’s progress lines show in the tenant output while it runs, with when it last spoke', async () => {
+  const { system } = await bench(`
+let release;
+globalThis.__tenantRelease = () => release?.();
+export default { apiVersion: 1, name: 'acme', slots: {
+  ensureTenant: () => ({ tenant: 'acme-validation-7' }),
+  reseedTenant: async (_, { progress }) => {
+    progress('seeding orders\\nsign in at https://login.example.invalid');
+    await new Promise((r) => { release = r; });
+    progress('seeded');
+  },
+} };`);
+  const g = globalThis as { __tenantRelease?: () => void };
+  let settled = false;
+  system.remoteRuns.beginPrepareTenant('acceptance', () => {
+    settled = true;
+  });
+  let output = system.remoteRuns.tenantOutput('acceptance');
+  while (!output.lines.includes('seeding orders')) {
+    await new Promise((r) => setImmediate(r));
+    output = system.remoteRuns.tenantOutput('acceptance');
+  }
+  assert.deepEqual(output.lines.slice(-2), ['seeding orders', 'sign in at https://login.example.invalid']);
+  assert.notEqual(output.lastOutputAt, null);
+
+  g.__tenantRelease?.();
+  while (!settled) await new Promise((r) => setImmediate(r));
+  delete g.__tenantRelease;
+  assert.deepEqual(system.remoteRuns.tenantOutput('acceptance').lines.slice(-2), [
+    'seeded',
+    'it answered `acme-validation-7`',
+  ]);
+});

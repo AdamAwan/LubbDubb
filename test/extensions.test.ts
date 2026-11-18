@@ -270,3 +270,38 @@ test('a timed-out slot sees its signal aborted', async () => {
     delete holder.__extAborted;
   }
 });
+
+test('a slot’s progress lines reach the caller while it runs, and none after it has answered', async () => {
+  const { host: h, recorded } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
+    greet: ({ who }, { progress }) => {
+      progress('signing in');
+      progress('waiting on ' + who);
+      setTimeout(() => progress('too late'), 0);
+      return 'done';
+    },
+  } };`);
+  const lines: string[] = [];
+  assert.deepEqual(await h.call('greet', { who: 'sam' }, (line) => lines.push(line)), { ok: true, value: 'done' });
+  await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(lines, ['signing in', 'waiting on sam']);
+  assert.deepEqual(recorded, []);
+});
+
+test('a progress listener that throws is recorded, and the slot carries on to its answer', async () => {
+  const { host: h, recorded } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
+    greet: (_, { progress }) => { progress('one'); return 'still here'; },
+  } };`);
+  const result = await h.call('greet', { who: 'sam' }, () => {
+    throw new Error('the cockpit fell over');
+  });
+  assert.deepEqual(result, { ok: true, value: 'still here' });
+  assert.equal(recorded.length, 1);
+  assert.match(recorded[0]!.message, /extension "acme" on the "greet" slot was not shown: the cockpit fell over/);
+});
+
+test('a slot that reports progress with no listener answers as before', async () => {
+  const { host: h } = await host(`export default { apiVersion: 1, name: 'acme', slots: {
+    greet: (_, { progress }) => { progress('nobody hears this'); return 'ok'; },
+  } };`);
+  assert.deepEqual(await h.call('greet', { who: 'sam' }), { ok: true, value: 'ok' });
+});

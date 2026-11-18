@@ -44,17 +44,38 @@ export class ExtensionHost<S extends SlotMap> {
     return this.bound.get(slot)?.extension ?? null;
   }
 
-  async call<K extends keyof S & string>(slot: K, input: S[K]['input']): Promise<SlotResult<S[K]['output']>> {
+  async call<K extends keyof S & string>(
+    slot: K,
+    input: S[K]['input'],
+    onProgress?: (line: string) => void,
+  ): Promise<SlotResult<S[K]['output']>> {
     const bound = this.bound.get(slot);
     if (!bound) return { ok: false, detail: `no extension fills the "${slot}" slot` };
     const definition = this.opts.book[slot];
     const controller = new AbortController();
+    let open = true;
+    const progress = (line: string): void => {
+      if (!open || onProgress === undefined) return;
+      try {
+        onProgress(String(line));
+      } catch (err) {
+        this.opts.errors.record({
+          source: 'runtime',
+          message: `a progress line from extension "${bound.extension}" on the "${slot}" slot was not shown: ${thrownText(err)}`,
+          detail: thrownStack(err),
+        });
+      }
+    };
     try {
       const value = await withDeadline(
-        Promise.resolve().then(() => bound.run(input, { repoRoot: this.opts.repoRoot, signal: controller.signal })),
+        Promise.resolve().then(() =>
+          bound.run(input, { repoRoot: this.opts.repoRoot, signal: controller.signal, progress }),
+        ),
         definition.timeoutMs,
         `it did not answer within ${definition.timeoutMs} ms`,
-      );
+      ).finally(() => {
+        open = false;
+      });
       const refused = definition.check(value);
       if (refused !== null) return this.failed(slot, bound, controller, `it answered with the wrong shape: ${refused}`);
       return { ok: true, value: value as S[K]['output'] };

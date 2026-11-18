@@ -1353,8 +1353,16 @@ half-seeded reading. Only what answers changes.
   command.
 - **A restart ends it.** The extension runs inside the harness, so unlike a command it does not
   outlive the process: a preparation it was answering is closed at boot as not knowable (`ok: null`),
-  exactly as a command whose runner is gone. Its output is the asking and the answer, kept in memory
-  for the latest preparation per environment.
+  exactly as a command whose runner is gone. Its output is the asking, each line the slot passes to
+  its context's `progress`, and the answer, kept in memory for the latest preparation per environment
+  and capped at the same **200** lines as a command's tail.
+- **`progress` is the slot's output.** A reseed that runs for most of an hour, waiting on browser
+  sign-ins the operator must answer, says so line by line in the tenant panel while it runs, exactly
+  where a command's output would be. The time of the last line is the tail's `lastOutputAt`, so the
+  panel's _Nothing printed for …_ stall reading works the same; before the slot's first line it is
+  null, as for a command that has printed nothing. A line after the slot has settled is dropped
+  ([42](42-extensions.md#calling-a-slot)), so a slot left running past its timeout never writes into
+  the next preparation's output.
 - **The reseed control is drawn destructive** only where an extension fills `reseedTenant`; provisioning
   alone is not. Both the gate and the cockpit's tenant panel read this from the desk's
   `tenantSteps`, the same answer the press runs on, never from config.
@@ -1459,7 +1467,8 @@ other string, because what a command prints is the project's business.
 
 `GET /api/tenant-commands/:environment/output` serves `{lines, lastOutputAt}` for the environment's
 current or last launch — fetched, never on the snapshot, for the local run's reason
-([16](16-http-api.md#get-apilocal-runoutput)). `lastOutputAt` is the log's mtime, and it is the
+([16](16-http-api.md#get-apilocal-runoutput)). `lastOutputAt` is the log's mtime (for an
+[extension's tenant](#a-tenant-from-the-projects-extension), its last `progress` line), and it is the
 **only** stall reading: the panel says _Nothing printed for 12:00_ once a running command has been
 quiet for five minutes, and never guesses why.
 

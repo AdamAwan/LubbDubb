@@ -12,6 +12,7 @@ export type SlotMap = Record<string, SlotSignature>;
 interface SlotContext {
   repoRoot: string;
   signal: AbortSignal;
+  progress: (line: string) => void;
 }
 
 export type SlotImplementation = (input: unknown, context: SlotContext) => unknown;

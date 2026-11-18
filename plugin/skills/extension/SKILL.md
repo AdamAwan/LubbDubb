@@ -45,6 +45,11 @@ Today's slots, `apiVersion` **1**:
   control a confirm-twice "Reseed". Leaving it out gives a harmless "Provision".
 - The tenant slots time out after **one hour**. The context's `signal` fires when the call times out or fails.
   Pass it to `fetch` and child processes so the work actually stops.
+- A long tenant slot should **say what it is doing**: call the context's `progress("<line>")` at each
+  step, and above all when it waits on the operator (a browser sign-in to answer). Each line shows in
+  the tenant panel's output while the call runs, as a command's output does, and a slot quiet for five
+  minutes reads _Nothing printed for …_ there. A line after the slot has answered is dropped. On a
+  LubbDubb older than `progress`, the context has none: call `progress?.(…)` if it must load there.
 - The reading slots (`deployedCommits` to `watchExposure`) replace a shell command, and
   keep its contract: the same answers, read the same way. They time out after **30
   seconds** (`appErrors` and `appErrorDetail` after one minute). **Throw when you do
@@ -72,7 +77,7 @@ Start from [`starter.ts`](starter.ts) beside this skill. Copy it to, say,
 `tools/lubbdubb.extension.ts` and delete the slots you do not fill.
 
 - The default export carries only `apiVersion`, `name` and `slots`. Any other key refuses boot.
-- Each slot is `(input, { repoRoot, signal }) => answer`, and may be `async`.
+- Each slot is `(input, { repoRoot, signal, progress }) => answer`, and may be `async`.
 - `.ts`, `.js` and `.mjs` all work. Imports resolve from the file's own folder, so
   it can use the project's own dependencies.
 - It runs **inside the LubbDubb process**, with its permissions. Keep the work on
@@ -112,11 +117,11 @@ Start from [`starter.ts`](starter.ts) beside this skill. Copy it to, say,
 ### Testing it
 
 - **Unit-test each slot as a plain function**, in the project's own test runner:
-  call it with a sample input and `{ repoRoot, signal: new AbortController().signal }`,
+  call it with a sample input and `{ repoRoot, signal: new AbortController().signal, progress: console.log }`,
   then check the answer's shape against the table above.
 - Then boot LubbDubb against a non-production environment and make it ask the slot.
-  For tenants, press prepare on a goal's sheet; the tenant panel shows what was asked
-  and what came back. For reviews, open a pull request with `review.enabled` on; the
+  For tenants, press prepare on a goal's sheet; the tenant panel shows what was asked,
+  each `progress` line, and what came back. For reviews, open a pull request with `review.enabled` on; the
   route's reason and the review row show what your code answered. For readings, opt in one
   non-production environment and let the pulse ask: the environment's deployed commit, its
   errors read and its watch readings show what came back, or `unknown` with your slot's
