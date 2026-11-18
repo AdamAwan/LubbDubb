@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Config } from '../config/config.js';
 import { withDeadline } from '../primitives.js';
@@ -19,8 +20,16 @@ interface Bound {
   run: SlotImplementation;
 }
 
+interface Scope {
+  slot: string;
+  bound: Bound;
+  open: boolean;
+  fault: (err: unknown) => void;
+}
+
 export class ExtensionHost<S extends SlotMap> {
   private readonly bound = new Map<string, Bound>();
+  private readonly scope = new AsyncLocalStorage<Scope>();
 
   constructor(
     private readonly opts: {
@@ -49,9 +58,17 @@ export class ExtensionHost<S extends SlotMap> {
     if (!bound) return { ok: false, detail: `no extension fills the "${slot}" slot` };
     const definition = this.opts.book[slot];
     const controller = new AbortController();
+    let fault: (err: unknown) => void = () => {};
+    const faulted = new Promise<never>((_, reject) => {
+      fault = reject;
+    });
+    const scope: Scope = { slot, bound, open: true, fault };
+    const running = this.scope.run(scope, () =>
+      Promise.resolve().then(() => bound.run(input, { repoRoot: this.opts.repoRoot, signal: controller.signal })),
+    );
     try {
       const value = await withDeadline(
-        Promise.resolve().then(() => bound.run(input, { repoRoot: this.opts.repoRoot, signal: controller.signal })),
+        Promise.race([running, faulted]),
         definition.timeoutMs,
         `it did not answer within ${definition.timeoutMs} ms`,
       );
@@ -60,7 +77,24 @@ export class ExtensionHost<S extends SlotMap> {
       return { ok: true, value: value as S[K]['output'] };
     } catch (err) {
       return this.failed(slot, bound, controller, thrownText(err), thrownStack(err));
+    } finally {
+      scope.open = false;
     }
+  }
+
+  contain(err: unknown): boolean {
+    const scope = this.scope.getStore();
+    if (scope === undefined) return false;
+    if (scope.open) {
+      scope.fault(err);
+      return true;
+    }
+    this.opts.errors.record({
+      source: 'runtime',
+      message: `extension "${scope.bound.extension}" threw after its "${scope.slot}" slot ended: ${thrownText(err)}`,
+      detail: thrownStack(err),
+    });
+    return true;
   }
 
   private failed(

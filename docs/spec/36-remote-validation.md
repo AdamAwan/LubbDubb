@@ -1360,6 +1360,10 @@ half-seeded reading. Only what answers changes.
   `tenantSteps`, the same answer the press runs on, never from config.
 - Its timeout is the slot's, one hour, and not `remoteValidation.tenantTimeoutMs`, which is the
   commands' kill.
+- **A failed or timed-out slot aborts its signal and nothing more.** The harness owns no process the
+  extension spawned, so killing its whole tree is the extension's job, unlike a command's
+  ([below](#the-command-outlives-the-harness-and-the-row-follows-it)); a throw from a handler it left behind is contained under its
+  name ([42](42-extensions.md#handlers-that-outlive-the-call)).
 
 ### Reseeding is destructive, and the gate says so
 

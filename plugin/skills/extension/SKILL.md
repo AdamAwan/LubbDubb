@@ -44,7 +44,11 @@ Today's slots, `apiVersion` **1**:
 - `reseedTenant` is **optional**, and it **destroys** what is in the tenant. Filling it makes the cockpit's
   control a confirm-twice "Reseed". Leaving it out gives a harmless "Provision".
 - The tenant slots time out after **one hour**. The context's `signal` fires when the call times out or fails.
-  Pass it to `fetch` and child processes so the work actually stops.
+  Pass it to `fetch`, and on abort **kill a child process's whole tree**, not only the child:
+  `taskkill /PID <pid> /T /F` on Windows, and on POSIX spawn with `detached: true` and
+  `process.kill(-child.pid, 'SIGKILL')`. Killing the direct child alone (which is what passing
+  `signal` to `spawn` does) leaves its own children — a tool PowerShell started, say — still running
+  against the tenant.
 - The reading slots (`deployedCommits` to `watchExposure`) replace a shell command, and
   keep its contract: the same answers, read the same way. They time out after **30
   seconds** (`appErrors` and `appErrorDetail` after one minute). **Throw when you do
@@ -78,6 +82,12 @@ Start from [`starter.ts`](starter.ts) beside this skill. Copy it to, say,
 - It runs **inside the LubbDubb process**, with its permissions. Keep the work on
   the slot's input. Throw rather than `process.exit`, and leave no timers or
   listeners behind.
+- **Never let a stream or event handler throw.** A `data`, `close` or `exit` handler runs
+  outside the slot's own call, often after the slot has already given up: output arriving
+  then, written to a file you closed, throws where your `try` cannot catch it. Catch inside
+  the handler, and stop writing once the signal has fired. LubbDubb contains such a throw
+  (records it and fails the slot if it is still running) rather than crashing, but the work
+  it belonged to is left half-done.
 
 ### Turning it on
 
