@@ -24,7 +24,7 @@ function playwrightCacheDir(host: Host): string | null {
 
 export function ffmpegPreflight(browser: ExtraMcpServer | null, host: Host): string | null {
   if (browser === null || !recorderOffered(browser)) return null;
-  if (!browser.args.some((arg) => arg.includes(PLAYWRIGHT_MCP_TOKEN))) return null;
+  if (![browser.command, ...browser.args].some((part) => part.includes(PLAYWRIGHT_MCP_TOKEN))) return null;
   const cache = playwrightCacheDir(host);
   if (cache === null) return null;
   const { coreCli, ffmpegRevision } = bundledPlaywright();

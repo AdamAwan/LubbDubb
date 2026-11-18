@@ -87,6 +87,8 @@ test('the preflight is quiet where ffmpeg is there, or where it cannot know the 
   assert.equal(ffmpegPreflight(browser(['@playwright/mcp@0.0.1', '--caps', 'devtools']), host([])), null);
   assert.ok(ffmpegPreflight(browser(['{playwrightMcp}', '--caps', 'devtools']), host([])) !== null);
   assert.equal(ffmpegPreflight(browser(['{playwrightMcp}']), host([])), null, 'no recorder on offer');
+  const asCommand = { ...browser(['--caps', 'devtools']), command: '{playwrightMcp}' };
+  assert.ok(ffmpegPreflight(asCommand, host([])) !== null, 'the token in command counts too');
   assert.equal(ffmpegPreflight(null, host([])), null);
   const inNodeModules = { ...host([]), env: { PLAYWRIGHT_BROWSERS_PATH: '0' } };
   assert.equal(ffmpegPreflight(DEFAULT_LOCAL_VALIDATION.browser, inNodeModules), null);

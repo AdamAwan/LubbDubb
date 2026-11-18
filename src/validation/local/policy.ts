@@ -17,8 +17,8 @@ let bundled: BundledPlaywright | undefined;
 export function bundledPlaywright(): BundledPlaywright {
   if (bundled !== undefined) return bundled;
   const mcpPackage = fileURLToPath(import.meta.resolve('@playwright/mcp/package.json'));
-  const mcp = JSON.parse(readFileSync(mcpPackage, 'utf8')) as { bin?: Record<string, string> };
-  const cli = mcp.bin?.['playwright-mcp'];
+  const { bin } = JSON.parse(readFileSync(mcpPackage, 'utf8')) as { bin?: string | Record<string, string> };
+  const cli = typeof bin === 'string' ? bin : bin?.['playwright-mcp'];
   if (cli === undefined) throw new Error(`No playwright-mcp bin in ${mcpPackage}`);
   const core = dirname(createRequire(mcpPackage).resolve('playwright-core/package.json'));
   const browsersJson = join(core, 'browsers.json');
