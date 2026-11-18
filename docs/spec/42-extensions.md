@@ -21,6 +21,7 @@ the change that needs it, following [Adding a slot](#adding-a-slot).
 - **`ExtensionHost.call` never throws.** A throw of any value (even one that cannot be turned into text), a rejection, a timeout or a wrong-shaped answer comes back as `{ ok: false, detail }` and is recorded on the error log; the caller decides what not-ok means. → [§](#calling-a-slot) · `test/extensions.test.ts`
 - **A slot's `progress` never throws into the slot, and a line after the call has settled is dropped.** A caller's listener that throws is recorded on the error log, and the slot carries on; a line from work the slot left running reaches nobody. → [§](#calling-a-slot) · `test/extensions.test.ts`
 - **Every slot in the book is described to project authors, and the starter they copy loads against it and type-checks against its slot types.** The `/lubbdubb:extension` skill is the only place a project learns a slot exists. → [§](#writing-an-extension) · `test/extensionSkill.test.ts`
+- **A throw from code an extension started — a stream, timer or event handler, or a promise nobody awaited — is contained, recorded and attributed to it, never a harness crash; a throw from anywhere else still crashes it.** While the slot's call is open it fails that call; after, it is recorded on its own. → [§](#handlers-that-outlive-the-call) · `test/extensions.test.ts`
 - **A slot's contract changes only with `EXTENSION_API_VERSION`.** An extension written against the old shape is then refused at boot instead of reading the new input wrongly. A new member of the context, which an existing extension simply never reads, is not such a change. → [§](#adding-a-slot) · _no test_
 
 ## When to use one
@@ -131,6 +132,39 @@ throws is recorded (source `runtime`, naming the extension and the slot) and the
 a cockpit that failed to draw a line is no reason to fail a 40-minute reseed. Once the call has settled
 — answered, thrown or timed out — `progress` is closed and a later line is dropped silently: after a
 timeout the slot's own work may still be running, and the caller has already written its outcome.
+
+### Handlers that outlive the call
+
+`call`'s `try` covers only the slot function and the promise it returns. A handler the slot registers —
+a child process's `data` or `exit`, a stream's `error`, a timer — runs later, on its own stack, and a
+throw from it is an uncaught exception: by default the end of the harness. That is what NXG's
+`reseedTenant` did, writing output that arrived after the slot gave up to a file it had closed.
+
+So `call` runs the slot inside an `AsyncLocalStorage` scope naming the extension and the slot. Node
+carries that scope into everything the slot starts — callbacks of handles, timers and promises created
+inside it — and keeps it current while `uncaughtException` listeners run for a throw from one of them
+(including an unhandled rejection, which Node raises the same way). `main.ts` registers one listener,
+right after `buildSystem`, that asks `system.extensions.contain(err)`:
+
+- **Inside a scope whose call is still open**, the error fails that call — the race in `call` rejects
+  with it — so it is recorded once, as the slot's failure, and the signal is aborted.
+- **Inside a scope whose call has ended**, it is recorded as `extension "<name>" threw after its
+"<slot>" slot ended: …`, source `runtime`.
+- **Outside any scope**, `contain` answers false and the listener does what Node would have done: prints
+  the error and exits with code 1. A harness bug still crashes the harness; registering the listener
+  must not turn every uncaught exception into a log line.
+
+Why continuing is sound here, against Node's general advice not to resume after an uncaught exception:
+the throw unwound only the extension's own handler and the internals of the emitter that called it,
+which the extension owns — the harness's state was not on that stack. The extension's own state may be
+broken, and that is its failure, recorded under its name. The one way a harness error could be
+misattributed is a resource the harness shares that was first created inside a slot's scope (a pooled
+socket, say); an extension gets no harness object, so there is none it can create, and a misattributed
+throw would still be recorded with its stack, not lost.
+
+Containment does not stop the work. A child process the slot started keeps running, and on Windows
+aborting the direct child leaves its own children running; the [guide](#writing-an-extension) tells
+authors to kill the whole tree on abort and to catch inside every handler.
 
 What not-ok _means_ is the calling feature's decision, written in its own spec. It is never "fall back
 to the built-in behaviour" by default: an operator who configured an extension expects it to answer,

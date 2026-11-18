@@ -1370,6 +1370,10 @@ half-seeded reading. Only what answers changes.
   hour. The slots replace those commands and do the same job, so a project whose rebuild runs near an
   hour needs the same lever whichever of the two answers; a separate fixed hour would leave it none.
   The host reads the key once, when it is built, so like the commands' kill it takes a restart.
+- **A failed or timed-out slot aborts its signal and nothing more.** The harness owns no process the
+  extension spawned, so killing its whole tree is the extension's job, unlike a command's
+  ([below](#the-command-outlives-the-harness-and-the-row-follows-it)); a throw from a handler it left behind is contained under its
+  name ([42](42-extensions.md#handlers-that-outlive-the-call)).
 
 ### Reseeding is destructive, and the gate says so
 
