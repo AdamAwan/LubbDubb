@@ -17,6 +17,7 @@ export function DesktopLink({
   fullSize = false,
   usage,
   onOpen,
+  className,
 }: {
   folder: string;
   prompt: string;
@@ -29,6 +30,8 @@ export function DesktopLink({
   usage: OpenUsage;
   /** Fired by the click and not awaited by it, so the deep link opens inside the click's own gesture. */
   onOpen?: () => Promise<unknown>;
+  /** A look the surface owns, on top of the link's own. */
+  className?: string;
 }): JSX.Element {
   const inControlRow = useInControlRow();
   const { phase, refusal, run } = useAsyncAction();
@@ -46,8 +49,16 @@ export function DesktopLink({
     ),
   };
   return asControl ? (
-    <BareLink className={[CONTROL_CLASS, flashClass(phase)].filter((c) => c !== '').join(' ')} {...link} />
+    <BareLink
+      className={[CONTROL_CLASS, flashClass(phase), className ?? ''].filter((c) => c !== '').join(' ')}
+      {...link}
+    />
   ) : (
-    <LinkButton {...link} className={flashClass(phase)} ghost size={fullSize ? undefined : 'small'} />
+    <LinkButton
+      {...link}
+      className={[flashClass(phase), className ?? ''].filter((c) => c !== '').join(' ')}
+      ghost
+      size={fullSize ? undefined : 'small'}
+    />
   );
 }

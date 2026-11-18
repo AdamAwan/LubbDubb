@@ -5215,6 +5215,10 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
+The nav's second tab, after the overview, is **Needs you** (`?tab=needs`) — the asks and the pull
+requests waiting on the operator at full width, with no queue rail beside it and the fleet folded to
+one line on the bar while it is open. It is its own spec: [44](44-needs-you.md).
+
 The strip carries the ident, the nav, the fleet gauge, the two ways off it to a tracker, the [**Env**](#the-environments-gauge)
 chip where there is an outage to report, **two
 gauges** — [Usage](#the-usage-chip) and **Local**, in one pill, with a third **tenant** half where an
