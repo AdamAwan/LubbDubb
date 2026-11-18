@@ -142,7 +142,7 @@ export interface Config {
 
 interface RemoteValidationPolicy {
   /**
-   * The kill for `ensureTenant` and `reseed`. Its own default because 30 seconds kills every tenant
+   * The kill for `ensureTenant` and `reseed`, commands or extension slots. Its own default because 30 seconds kills every tenant
    * command this design has, always.
    */
   tenantTimeoutMs: number;
@@ -170,7 +170,7 @@ interface RemoteValidationPolicy {
   tenants?: Readonly<Record<string, string>>;
 }
 
-const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = {
+export const DEFAULT_REMOTE_VALIDATION: RemoteValidationPolicy = {
   tenantTimeoutMs: 60 * 60 * 1000,
   scriptGraceMs: 30 * 24 * 60 * 60 * 1000,
   captureLinkBase: null,

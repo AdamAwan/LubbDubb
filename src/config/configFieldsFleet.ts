@@ -118,7 +118,7 @@ export const FLEET_FIELDS: readonly ConfigField[] = [
     type: 'number',
     ms: true,
     access: 'plain',
-    why: 'How long an ensureTenant or reseed command may take before it is killed. Provisioning a tenant is a job of tens of minutes by the spec’s own account, so the thirty seconds every other command gets would kill both of them on every invocation.',
+    why: 'How long an ensureTenant or reseed command, or the extension slot standing in for one, may take before it is killed. Provisioning a tenant is a job of tens of minutes by the spec’s own account, so the thirty seconds every other command gets would kill both of them on every invocation.',
   },
   {
     path: 'remoteValidation.tenants',

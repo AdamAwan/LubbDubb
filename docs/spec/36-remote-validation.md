@@ -1358,8 +1358,10 @@ half-seeded reading. Only what answers changes.
 - **The reseed control is drawn destructive** only where an extension fills `reseedTenant`; provisioning
   alone is not. Both the gate and the cockpit's tenant panel read this from the desk's
   `tenantSteps`, the same answer the press runs on, never from config.
-- Its timeout is the slot's, one hour, and not `remoteValidation.tenantTimeoutMs`, which is the
-  commands' kill.
+- **Its timeout is `remoteValidation.tenantTimeoutMs`**, the same kill the commands get, default one
+  hour. The slots replace those commands and do the same job, so a project whose rebuild runs near an
+  hour needs the same lever whichever of the two answers; a separate fixed hour would leave it none.
+  The host reads the key once, when it is built, so like the commands' kill it takes a restart.
 
 ### Reseeding is destructive, and the gate says so
 
@@ -2513,7 +2515,8 @@ the old 30-minute kill for a **runner** invocation, is a [retired key](02-config
 because the harness spawns no browser command — the run agent invokes the runner in its own shell, so
 the suite runs under that agent's own stall park and there is nothing for the harness to kill. A file
 still setting it boots with a warning naming it. It carries `tenantTimeoutMs`,
-default one hour, the kill for `ensureTenant` and `reseed`. Every other command, `state.run` included,
+default one hour, the kill for `ensureTenant` and `reseed` — and for the `ensureTenant` and
+`reseedTenant` slots that stand in for them ([A tenant from the project's extension](#a-tenant-from-the-projects-extension)). Every other command, `state.run` included,
 keeps the 30-second kill. And `captureLinkBase`, default **null** — the address this harness is
 reachable at from wherever its tickets are read, used for the one link the harness posts somewhere it
 cannot reach ([Posting the screen to the ticket](#posting-the-screen-to-the-ticket)). And `tenants`,

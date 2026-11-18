@@ -10,7 +10,7 @@ import {
   type SlotMap,
   type SlotResult,
 } from './contract.js';
-import { EXTENSION_SLOTS, type ExtensionSlots } from './slots.js';
+import { extensionSlotBook, type ExtensionSlots } from './slots.js';
 
 // → docs/spec/42-extensions.md#calling-a-slot
 
@@ -97,5 +97,10 @@ export function buildExtensionHost(
   loaded: readonly LoadedExtension[] | undefined,
   errors: ErrorRecorder,
 ): ExtensionHost<ExtensionSlots> {
-  return new ExtensionHost({ book: EXTENSION_SLOTS, extensions: loaded ?? [], repoRoot: config.repoRoot, errors });
+  return new ExtensionHost({
+    book: extensionSlotBook(config.remoteValidation.tenantTimeoutMs),
+    extensions: loaded ?? [],
+    repoRoot: config.repoRoot,
+    errors,
+  });
 }

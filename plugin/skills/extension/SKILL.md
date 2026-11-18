@@ -43,7 +43,9 @@ Today's slots, `apiVersion` **1**:
   pattern delete invented ones within the hour.
 - `reseedTenant` is **optional**, and it **destroys** what is in the tenant. Filling it makes the cockpit's
   control a confirm-twice "Reseed". Leaving it out gives a harmless "Provision".
-- The tenant slots time out after **one hour**. The context's `signal` fires when the call times out or fails.
+- The tenant slots time out at the operator's `remoteValidation.tenantTimeoutMs`, **one hour** unless
+  they set it — the same kill as the `ensureTenant` and `reseed` commands. A rebuild that runs near
+  that needs the key raised, not a detached job. The context's `signal` fires when the call times out or fails.
   Pass it to `fetch` and child processes so the work actually stops.
 - The reading slots (`deployedCommits` to `watchExposure`) replace a shell command, and
   keep its contract: the same answers, read the same way. They time out after **30

@@ -45,7 +45,11 @@ interface Bench {
   logged: string[];
 }
 
-async function bench(source: string | null, environments: EnvironmentConfig[] = [FROM_EXTENSION]): Promise<Bench> {
+async function bench(
+  source: string | null,
+  environments: EnvironmentConfig[] = [FROM_EXTENSION],
+  tenantTimeoutMs?: number,
+): Promise<Bench> {
   const repoRoot = gitRepo();
   if (source !== null) writeFileSync(join(repoRoot, 'ext.mjs'), source);
   const config = loadConfig({
@@ -59,6 +63,7 @@ async function bench(source: string | null, environments: EnvironmentConfig[] = 
     heartbeatIntervalMs: 999_999,
     environments,
     extensions: source === null ? [] : ['ext.mjs'],
+    ...(tenantTimeoutMs === undefined ? {} : { remoteValidation: { tenantTimeoutMs } as never }),
   });
   const commands = new FakeTenantKeeper({ 'ensure:staging': { tenant: 'staging-tenant', detail: null } });
   const logged: string[] = [];
@@ -112,6 +117,19 @@ test('an environment that declares commands keeps them while an extension answer
     ['ensure:./scripts/ensure.sh'],
   );
   assert.deepEqual(asked(), [], 'and the extension is not asked about it');
+});
+
+test('the tenant slots are cut off at remoteValidation.tenantTimeoutMs, as the commands are', async () => {
+  const { system } = await bench(
+    `export default { apiVersion: 1, name: 'acme', slots: {
+    ensureTenant: () => new Promise(() => {}),
+  } };`,
+    [FROM_EXTENSION],
+    50,
+  );
+  const prepared = await system.remoteRuns.prepareTenant('acceptance');
+  assert.equal(prepared.ok, false);
+  assert.match(prepared.detail, /failed the "ensureTenant" slot: it did not answer within 50 ms/);
 });
 
 test('before anything is provisioned the gate is blocked, naming the extension', async () => {
