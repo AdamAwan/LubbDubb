@@ -1,3 +1,9 @@
+import {
+  defaultReviewPublisher,
+  defaultReviewRouter,
+  type ReviewPublisher,
+  type ReviewRouter,
+} from '../review/extensionReview.js';
 import { investigateLabelFor } from '../watchLabels.js';
 import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './dispatcher.js';
 import type { PrRefStyle } from '../pr/prRef.js';
@@ -117,6 +123,8 @@ interface RuleDispatcherOptions {
   prRefStyle?: PrRefStyle;
   review?: Partial<PrReviewPolicy>;
   reviewCharters?: PrReviewCharters;
+  reviewRouter?: ReviewRouter;
+  reviewPublisher?: ReviewPublisher;
   watchNote?: string;
   watchPlanNote?: string;
   instrumentationNote?: string;
@@ -129,6 +137,18 @@ interface RuleDispatcherOptions {
   validationPlanNote?: string;
   /** `lessons.minGoals` is on: rule `repo-lesson` is inert where it is not. */
   lessonsOn?: boolean;
+}
+
+interface ReviewSeams {
+  reviewRouter: ReviewRouter;
+  reviewPublisher: ReviewPublisher;
+}
+
+function reviewSeamsOf(opts: RuleDispatcherOptions, review: PrReviewPolicy): ReviewSeams {
+  return {
+    reviewRouter: opts.reviewRouter ?? defaultReviewRouter(),
+    reviewPublisher: opts.reviewPublisher ?? defaultReviewPublisher(review),
+  };
 }
 
 export class RuleDispatcher implements Dispatcher {
@@ -147,6 +167,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly lessonsOn: boolean;
   private readonly review: PrReviewPolicy;
   private readonly reviewCharters: PrReviewCharters;
+  private readonly reviewSeams: ReviewSeams;
   private ci: CiPolicy;
 
   constructor(opts: RuleDispatcherOptions = {}) {
@@ -169,6 +190,7 @@ export class RuleDispatcher implements Dispatcher {
     this.notes = promptNotes(opts);
     this.review = { ...DEFAULT_PR_REVIEW, ...review };
     this.reviewCharters = reviewCharters;
+    this.reviewSeams = reviewSeamsOf(opts, this.review);
     this.validation = {
       desktopClaimMinutes: validation.desktopClaimMinutes ?? DEFAULT_VALIDATION.desktopClaimMinutes,
     };
@@ -335,6 +357,8 @@ export class RuleDispatcher implements Dispatcher {
     | 'ci'
     | 'review'
     | 'reviewCharters'
+    | 'reviewRouter'
+    | 'reviewPublisher'
     | 'defaultBranch'
     | 'prRefStyle'
     | keyof PromptNotes
@@ -351,6 +375,7 @@ export class RuleDispatcher implements Dispatcher {
       ci: this.ci,
       review: this.review,
       reviewCharters: this.reviewCharters,
+      ...this.reviewSeams,
       defaultBranch: this.defaultBranch,
       prRefStyle: this.prRefStyle,
       ...this.notes,

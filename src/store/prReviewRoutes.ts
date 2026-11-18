@@ -32,15 +32,24 @@ export class PrReviewRouteStore {
 
   listPrReviewRoutes(): PrReviewRoute[] {
     const rows = this.ctx.prep(`SELECT * FROM pr_review_routes ORDER BY decided_at DESC`).all() as Row[];
-    return rows.map((row) => ({
-      prNumber: row.pr_number,
-      mode: row.mode,
-      skipped: row.skipped === 1,
-      reason: row.reason,
-      agentId: row.agent_id,
-      decidedAt: row.decided_at,
-    }));
+    return rows.map(hydrate);
   }
+
+  getPrReviewRoute(prNumber: number): PrReviewRoute | null {
+    const row = this.ctx.prep(`SELECT * FROM pr_review_routes WHERE pr_number=?`).get(prNumber) as Row | undefined;
+    return row === undefined ? null : hydrate(row);
+  }
+}
+
+function hydrate(row: Row): PrReviewRoute {
+  return {
+    prNumber: row.pr_number,
+    mode: row.mode,
+    skipped: row.skipped === 1,
+    reason: row.reason,
+    agentId: row.agent_id,
+    decidedAt: row.decided_at,
+  };
 }
 
 interface Row {

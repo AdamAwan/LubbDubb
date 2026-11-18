@@ -4,7 +4,6 @@ import {
   charterNote,
   modeCharterHeading,
   needsFleetReview,
-  publishNote,
   resolvedReviewMode,
   reviewBranch,
   reviewOrigin,
@@ -46,7 +45,7 @@ export function reviewConcern(
           branch: pr.branch,
           base: pr.baseBranch ?? s.defaultBranch,
         }) +
-        publishNote(s.review.publish) +
+        s.reviewPublisher.note() +
         charterNote(mode === null ? null : (s.reviewCharters.modes[mode] ?? null), modeCharterHeading(mode)) +
         reviewDiscussion(s, pr),
       dispatchReason:

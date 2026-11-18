@@ -130,6 +130,18 @@ export const POLICY_FIELDS: readonly ConfigField[] = [
     why: 'A file in the repository saying how to choose between the modes, read by the triage agent.',
   },
   {
+    path: 'review.routeExtension',
+    type: 'boolean',
+    access: 'fileOnly',
+    why: 'Have the project\u2019s extension choose each review\u2019s mode, through its routeReview slot, instead of the triage agent. Needs an extension that fills the slot. Belongs in lubbdubb.project.json, beside the extension it names.',
+  },
+  {
+    path: 'review.publishExtension',
+    type: 'boolean',
+    access: 'fileOnly',
+    why: 'Hand every recorded review to the project\u2019s extension, through its publishReview slot, to publish where the project wants it. Replaces review.publish, which must stay "none". Belongs in lubbdubb.project.json, beside the extension it names.',
+  },
+  {
     path: 'localRun.instruction',
     type: 'text',
     access: 'plain',

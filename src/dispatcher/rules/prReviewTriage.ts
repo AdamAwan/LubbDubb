@@ -14,7 +14,7 @@ import type { RawAction, StageContext } from './context.js';
 
 export function prReviewTriage(s: StageContext): void {
   const { ctx } = s;
-  if (!triageRuns(s.review)) return;
+  if (!triageRuns(s.review) || !s.reviewRouter.dispatchesTriage()) return;
   for (const pr of ctx.world.pullRequests) {
     if (pr.merged) continue;
     if (!needsFleetReview(pr, reviewReading(s, pr.number), s.review)) continue;

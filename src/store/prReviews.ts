@@ -43,8 +43,10 @@ export class PrReviewStore {
     return { ...input, reviewedAt, publishedThread: null };
   }
 
-  recordPrReviewPublished(prNumber: number, threadId: string): void {
-    this.ctx.prep(`UPDATE pr_reviews SET published_thread=? WHERE pr_number=?`).run(threadId, prNumber);
+  recordPrReviewPublished(prNumber: number, threadId: string, reviewedAt: string | null = null): void {
+    this.ctx
+      .prep(`UPDATE pr_reviews SET published_thread=? WHERE pr_number=? AND (? IS NULL OR reviewed_at=?)`)
+      .run(threadId, prNumber, reviewedAt, reviewedAt);
   }
 
   listPrReviews(): PrReview[] {

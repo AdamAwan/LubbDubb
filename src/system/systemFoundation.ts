@@ -48,6 +48,7 @@ import type { TenantKeeper } from '../validation/remote/tenants.js';
 import type { LoadedExtension } from '../extensions/contract.js';
 import { buildExtensionHost, checkLoadedExtensions } from '../extensions/host.js';
 import { checkTenantExtension } from '../validation/remote/extensionTenants.js';
+import { buildReviewSeams, checkReviewExtension } from '../review/extensionReview.js';
 import { ClaudePluginCli, PluginDesk, type PluginCli } from '../plugin/desk.js';
 import { installRoot } from '../selfUpdate/buildStanding.js';
 import { PERMISSION_PROMPT_TOOL } from '../mcp/names.js';
@@ -212,12 +213,14 @@ function realClone(opts: BuildOptions): boolean {
 export function buildFoundation(config: Config, opts: BuildOptions) {
   checkLoadedExtensions(config, opts.extensions);
   checkTenantExtension(config.environments, opts.extensions);
+  checkReviewExtension(config.review, opts.extensions);
   const reads = new SlowReadTally(opts.readClock);
   const store = new Store(config.dbPath, systemClock, reads);
   store.mcpCalls.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
   store.surfaceReach.pruneSurfaceReach(true);
   const now = (): string => new Date().toISOString();
   const errors = new ErrorLog(store, opts.errorMirror);
+  const extensions = buildExtensionHost(config, opts.extensions, errors);
   const runtimeHealth = new RuntimeHealthWatch({ errors, reads, sampler: opts.loopDelaySampler });
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
   const connector = new CompositeConnector(integrations, now, {
@@ -261,7 +264,8 @@ export function buildFoundation(config: Config, opts: BuildOptions) {
     store,
     now,
     errors,
-    extensions: buildExtensionHost(config, opts.extensions, errors),
+    extensions,
+    ...buildReviewSeams(config, { host: extensions, store, errors, prober: opts.reviewProber }),
     runtimeHealth,
     connector,
     sink: recordIssueComments(opts.sink ?? connector, (issue, ref) =>

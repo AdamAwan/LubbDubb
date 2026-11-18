@@ -17,6 +17,8 @@ export interface PrReviewPolicy {
   reviewedElsewhere: string | null;
   defaultMode: string | null;
   routingCharterFile: string | null;
+  routeExtension: boolean;
+  publishExtension: boolean;
 }
 
 export const DEFAULT_PR_REVIEW: PrReviewPolicy = {
@@ -31,4 +33,6 @@ export const DEFAULT_PR_REVIEW: PrReviewPolicy = {
   reviewedElsewhere: null,
   defaultMode: null,
   routingCharterFile: null,
+  routeExtension: false,
+  publishExtension: false,
 };
