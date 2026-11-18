@@ -1,5 +1,6 @@
 import type { SlotBook } from './contract.js';
 import { ERRORS_COMMAND_TIMEOUT_MS } from '../appErrors/command.js';
+import { READING_TIMEOUT_MS } from '../environments/prober.js';
 import type { WatchSourceLanguage } from '../types.js';
 import type { WatchQueryKind, WatchRow } from '../environments/watchResult.js';
 
@@ -17,8 +18,6 @@ interface ReviewedPr {
   author: string | null;
   body: string | null;
 }
-
-const READING_SLOT_TIMEOUT_MS = 30_000;
 
 // A type alias, not an interface: `ExtensionHost` asks for a `SlotMap`, and only an alias meets its index signature.
 export type ExtensionSlots = {
@@ -77,7 +76,7 @@ export const EXTENSION_SLOTS: SlotBook<ExtensionSlots> = {
     timeoutMs: TENANT_SLOT_TIMEOUT_MS,
     check: (value) => (value === undefined ? null : 'it must answer nothing — a throw is how it says it failed'),
   },
-  deployedCommits: { timeoutMs: READING_SLOT_TIMEOUT_MS, check: deployedCommitsRefusal },
+  deployedCommits: { timeoutMs: READING_TIMEOUT_MS, check: deployedCommitsRefusal },
   appErrors: {
     timeoutMs: ERRORS_COMMAND_TIMEOUT_MS,
     check: (value) =>
@@ -95,14 +94,14 @@ export const EXTENSION_SLOTS: SlotBook<ExtensionSlots> = {
     },
   },
   watchReading: {
-    timeoutMs: READING_SLOT_TIMEOUT_MS,
+    timeoutMs: READING_TIMEOUT_MS,
     check: (value) =>
       Array.isArray(value) && value.every((row) => typeof row === 'object' && row !== null && !Array.isArray(row))
         ? null
         : 'it must answer a list of rows, each an object',
   },
   watchExposure: {
-    timeoutMs: READING_SLOT_TIMEOUT_MS,
+    timeoutMs: READING_TIMEOUT_MS,
     check: (value) => {
       const share = (value as { share?: unknown } | null)?.share;
       return typeof share === 'number' && Number.isFinite(share) && share >= 0 && share <= 1

@@ -15,7 +15,7 @@ export class ExtensionEnvironmentProber implements EnvironmentProber {
   async at(environment: string): Promise<EnvironmentHead> {
     const answer = await this.host.call('deployedCommits', { environment });
     if (!answer.ok) return { commits: null, detail: answer.detail };
-    return { commits: answer.value.commits.map((c) => c.trim()), detail: null };
+    return { commits: answer.value.commits, detail: null };
   }
 }
 

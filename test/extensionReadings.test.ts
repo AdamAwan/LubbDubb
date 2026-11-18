@@ -307,6 +307,34 @@ test('the extension answers the watch: exposure first, then the prepared query, 
   assert.deepEqual(observer.asked, [], 'no command runs for the environment the extension answers');
 });
 
+test('the dry run asks the extension for its sources, unscoped, and never for a source a person runs', async () => {
+  asked();
+  const { system } = await bench(RECORDING, [
+    {
+      name: 'live',
+      at: './scripts/sha.sh',
+      watch: {
+        extension: true,
+        sources: { logs: { language: 'kql', runBy: 'harness' }, sql: { language: 'sql', runBy: 'operator' } },
+      },
+    },
+  ]);
+  system.store.watches.ingestGoalWatch('issue:12', [
+    { ...SIGNAL, source: 'logs' },
+    { ...SIGNAL, id: 'by-hand', seq: 2, source: 'sql', query: 'select * from t where at > {since}', presence: null },
+  ]);
+  await system.watch.run('issue:12');
+
+  const calls = asked().filter(([slot]) => slot === 'watchReading');
+  assert.deepEqual(
+    calls.map(([, input]) => [input.checkId, input.source, input.commits]),
+    [
+      ['no-timeouts', 'logs', null],
+      ['no-timeouts', 'logs', null],
+    ],
+  );
+});
+
 test('rows that do not carry the check’s id are not an answer', async () => {
   const { system } = await bench(
     `export default { apiVersion: 1, name: 'acme', slots: {
@@ -318,7 +346,7 @@ test('rows that do not carry the check’s id are not an answer', async () => {
   await system.harness.runCycle();
   const reading = system.store.watches.listWatchReadings().at(-1);
   assert.equal(reading?.verdict, 'unknown');
-  assert.match(reading?.detail ?? '', /without the query it was given/);
+  assert.match(reading?.detail ?? '', /the extension answered without the query it was given/);
 });
 
 test('an extension that fails a watch reading is unknown, never clean', async () => {

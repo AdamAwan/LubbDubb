@@ -761,6 +761,8 @@ verdicts, the bench row and the cockpit are the same.
 - **Not-ok is `unknown`**: a failed, timed-out (30 seconds) or wrong-shaped reading is `unknown` with
   the slot's words, never `clean`; a failed exposure is _could not tell_, which holds the window unread
   as any exposure shortfall does. Recorded on the error log; never a fallback to a command.
+- **`describe` stays a command.** It answers the author, not a reading, so the key does not cover it; an
+  environment with no shell to run drops it and relies on `schema`.
 - **A restart means nothing here.** Each call is one question and one answer; the next pass asks again.
 
 ### How an author learns the schema
