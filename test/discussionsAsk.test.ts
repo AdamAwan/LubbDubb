@@ -9,7 +9,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { DISCUSSION_AUTHORS } from '../src/discussions/discussionFile.js';
-import { askQueue } from '../src/server/stateSnapshot.js';
+import { askQueue } from '../src/server/askReads.js';
 import { answerWith } from '../src/mcp/askAnswers.js';
 import { failAppraisalOpen } from './support/plans.js';
 

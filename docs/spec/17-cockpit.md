@@ -641,7 +641,7 @@ tier, the group, `holding`, the rail's sort and the Focus order all live in `src
   Two orders rather than one because the spec gives them different jobs — the rail is cut by who is
   stopped, Focus mode by how much work is held and how far along it is — and both are the server's.
   The cockpit sorts by `focusRank` and decides nothing.
-- **`askQueue(system)`** (`src/server/stateSnapshot.ts`) is the queue as a one-at-a-time reader walks
+- **`askQueue(system)`** (`src/server/askReads.ts`) is the queue as a one-at-a-time reader walks
   it: standing rows only, in `focusRank` order. It is the same derivation `/api/state` ships, read off
   the same snapshot reads. Its reader is the desktop channel's `ask_next`, which hands Claude Code its
   head ([11](11-mcp-tools.md#the-next-ask-loop)); the plugin's notice board reads the `asks` section
@@ -5214,6 +5214,10 @@ surface writes, and everything else on a row is a reading. The scroll offset is 
 lands somewhere else entirely, so Back returns to the filter and the list re-reads its first page.
 
 ## The top bar and the panels
+
+The nav's second tab, after the overview, is **Needs you** (`?tab=needs`) — the asks and the pull
+requests waiting on the operator at full width, with no queue rail beside it and the fleet folded to
+one line on the bar while it is open. It is its own spec: [44](44-needs-you.md).
 
 The strip carries the ident, the nav, the fleet gauge, the two ways off it to a tracker, the [**Env**](#the-environments-gauge)
 chip where there is an outage to report, **two

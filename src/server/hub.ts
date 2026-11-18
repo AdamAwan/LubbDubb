@@ -31,8 +31,11 @@ const LOCAL_RUN_COALESCE_MS = 400;
 const FEEDS_ASKS: ReadonlySet<StateSection> = new Set(['goals', 'plans', 'queue', 'inbox']);
 
 function withAsks(event: ServerEvent): ServerEvent {
-  if (event.type !== 'dirty' || event.sections === undefined || event.sections.includes('asks')) return event;
-  return event.sections.some((s) => FEEDS_ASKS.has(s)) ? { ...event, sections: [...event.sections, 'asks'] } : event;
+  if (event.type !== 'dirty' || event.sections === undefined) return event;
+  const asks = event.sections.includes('asks') || event.sections.some((s) => FEEDS_ASKS.has(s));
+  if (!asks) return event;
+  const sections = new Set([...event.sections, 'asks', 'listener'] as const);
+  return { ...event, sections: [...sections] };
 }
 
 export class Hub {
@@ -114,6 +117,7 @@ export class Hub {
     localRun.on('changed', refetchLocalRun);
     localRunWatch.on('changed', refetchLocalRun);
     system.desktop.on('changed', (change) => this.broadcast(change));
+    system.listener.on('changed', () => this.broadcast({ type: 'dirty', sections: ['listener'] }));
     system.localValidations.on('changed', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
     system.remoteRuns.on('tenantSettled', () => this.broadcast({ type: 'dirty', sections: ['goals', 'harness'] }));
   }

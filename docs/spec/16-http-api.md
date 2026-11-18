@@ -64,6 +64,7 @@ is about.
 | `routes/pets.ts`            | The vivarium: opening a shell, feeding, naming, standing and blending                                                                                                      |
 | `routes/setup.ts`           | The first-run surface's two reads, before there is a deployment to configure                                                                                               |
 | `stateSnapshot.ts`          | `buildStateSnapshot`, its sections, and the cockpit-only lenses (stacks, PR attention) it folds                                                                            |
+| `askReads.ts`               | The asks and pull requests as Claude Code reads them — `askQueue`, `askSnapshot`, `prInputs` — off the snapshot's reads                                                    |
 | `stateReads.ts`             | The snapshot's shared reads: world, plans, verdicts, pickup context and the shift log                                                                                      |
 | `stateIssueReads.ts`        | Each world issue enriched with its pickup, verdicts, spend and validation readings                                                                                         |
 | `stateEnvironmentViews.ts`  | Environment reach, health, watch windows, remote sheets and tenant commands                                                                                                |
@@ -329,6 +330,15 @@ checked. `undo` writes the recorded _before_ value back and marks the row `undon
 _after_ value again and reopens it. Either is a **400** when the row is already in that state or the
 write fails, and changes nothing. All three broadcast `world:changed`. The snapshot's `handledOpen` is
 the count of open rows, which the rail draws.
+
+### `POST /api/listen/send`
+
+Hands one item to the Claude chat running `/lubbdubb:listen` ([44](44-needs-you.md#the-wait)). The body
+is `{ item: ListenItem }` — `{ kind: 'ask', id }` or `{ kind: 'pr', number }` — and anything else is a
+**400**. Answers `{ ok: true, sent }`: `sent: false` when the item is already queued or already the one
+the chat is on, which changes nothing. The item goes straight to an open `ask_wait`, or queues for the
+next one. The listener broadcasts `dirty` for its own `listener` section, which the snapshot reads. Its one
+caller is the Needs you page.
 
 ### `GET /api/health`
 
@@ -2539,7 +2549,9 @@ Four properties hold it together:
   rows it draws ([17](17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code)) — among the
   others the test names, `isProposed` (`src/validation/watchProposed.ts`), so the Signals card reads a
   proposed watch check exactly as the window pass does
-  ([29](29-post-deploy-watch.md#the-operator-accepts-the-set)).
+  ([29](29-post-deploy-watch.md#the-operator-accepts-the-set)), and `prOnYouReasons` and `sameItem`
+  (`src/listen/`), so the Needs you page and the listener read one table of why a pull request is on
+  the operator ([44](44-needs-you.md#pull-requests-waiting-on-you)).
 - **Domain types are reused, never re-declared.** A wire type either _is_ the server's type or
   `extends` it. The cockpit's copy previously widened the server's unions three different ways in one
   file — `Job.status` to `string`, `Proposal.action` to an index-signature bag, `Finding.status`
@@ -2596,7 +2608,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 
 ### Sections
 
-**The snapshot is a partition of nine named sections, and `/api/state` will build any subset of
+**The snapshot is a partition of ten named sections, and `/api/state` will build any subset of
 them.** `STATE_SECTIONS` in `src/server/stateSnapshot.ts` is the list; `StateSection` is the type, and
 it lives in `src/wire/state.ts` while the list does not — the cockpit type-imports the wire, so a runtime
 value there would become server code in the SPA bundle
@@ -2612,7 +2624,8 @@ value there would become server code in the SPA bundle
 | `queue`    | `jobs`, `schedules`, `upcoming`, `runway`                                                                                                                     |
 | `inbox`    | `escalations`, `proposals`, `humanTasks`, `bugFilings`                                                                                                        |
 | `activity` | `decisions`, `worldEvents`, `errors`                                                                                                                          |
-| `asks`     | `asks`                                                                                                                                                        |
+| `asks`     | `asks`, `handledOpen`                                                                                                                                         |
+| `listener` | `listener`                                                                                                                                                    |
 
 `refUrls` is in **all** of them and rides every response, whatever was asked for. Every other section
 names things the cockpit draws as links, and this is the map it resolves them in — a patch carrying
@@ -2645,6 +2658,15 @@ themselves, and a bare `dirty` already means everything. A route that broadcasts
 alone when its checks change: it keeps its last reading on the route context for the state route,
 because a reading's probes spawn processes and cannot be taken per snapshot.
 
+#### The listener section
+
+**`listener` is the listen loop's state alone** ([44](44-needs-you.md#the-wait)). Its signal — an
+`ask_wait` opening or returning, a send — moves nothing else, so it is a section of its own and the hub
+broadcasts `dirty` for `listener` and nothing more; folded into `asks` it rebuilt the queue each time a
+chat waited. The other way round holds: a broadcast that names `asks` names `listener` too, because the
+listener prunes against the queue. It reads the queue only to prune a sent ask, and then the reply's own `asks` where it built
+them, so `?sections=listener` alone builds the queue only when an ask is in `sent`.
+
 #### What it is for
 
 Not payload — the rebuild. The cockpit refetches on every `dirty`, one pulse is four of them, and
@@ -2665,7 +2687,7 @@ Measured on that profile, one refetch:
 `control` costs nothing at all because it is never fetched: see [_The WebSocket_](#server-events).
 
 There is a **~30 ms floor** under every sectioned response — the shared reads and `refUrls`, which is
-built from most of them. It is why sections stop at nine rather than one per key: below that size a
+built from most of them. It is why sections stop at ten rather than one per key: below that size a
 section costs about what its neighbours cost, and the partition is only harder to keep true.
 
 `fleet` was still 1.17 MB at that measurement, with `tasks` plus `agents` 87% of what was left on the

@@ -4,6 +4,7 @@ import { BareLink, LinkButton, type OpenUsage } from './button.js';
 import { CONTROL_CLASS, useInControlRow } from './controls.js';
 import { Icon } from './icons.js';
 import { flashClass, useAsyncAction } from './AsyncButton.js';
+import { classes } from './classes.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -17,6 +18,7 @@ export function DesktopLink({
   fullSize = false,
   usage,
   onOpen,
+  className,
 }: {
   folder: string;
   prompt: string;
@@ -29,6 +31,8 @@ export function DesktopLink({
   usage: OpenUsage;
   /** Fired by the click and not awaited by it, so the deep link opens inside the click's own gesture. */
   onOpen?: () => Promise<unknown>;
+  /** A look the surface owns, on top of the link's own. */
+  className?: string;
 }): JSX.Element {
   const inControlRow = useInControlRow();
   const { phase, refusal, run } = useAsyncAction();
@@ -46,8 +50,13 @@ export function DesktopLink({
     ),
   };
   return asControl ? (
-    <BareLink className={[CONTROL_CLASS, flashClass(phase)].filter((c) => c !== '').join(' ')} {...link} />
+    <BareLink className={classes(CONTROL_CLASS, flashClass(phase), className)} {...link} />
   ) : (
-    <LinkButton {...link} className={flashClass(phase)} ghost size={fullSize ? undefined : 'small'} />
+    <LinkButton
+      {...link}
+      className={classes(flashClass(phase), className)}
+      ghost
+      size={fullSize ? undefined : 'small'}
+    />
   );
 }

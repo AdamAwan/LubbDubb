@@ -12,6 +12,7 @@ import { prRefStyle } from '../pr/prRef.js';
 import { apiUrl } from '../server/apiUrl.js';
 import { snapshotRemoteSheets } from '../server/stateEnvironmentViews.js';
 import type { Foundation, LateBinding } from './systemFoundation.js';
+import type { Listener } from '../listen/listener.js';
 
 // → docs/spec/11-mcp-tools.md#the-desktop-channel
 
@@ -20,6 +21,7 @@ export function buildDesktop(
   { store, connector, sink, runtimeControl, errors, discussions, discussionPulls }: Foundation,
   prompts: PromptTemplates,
   late: LateBinding,
+  listener: Listener,
 ): McpDesktopServer {
   return new McpDesktopServer({
     store,
@@ -49,6 +51,8 @@ export function buildDesktop(
     issueContainerTypes: config.issueContainerTypes,
     agentModels: config.agentModels,
     asks: () => late.get().askSnapshot(),
+    prInputs: () => late.get().prInputs(),
+    listener,
     cockpitUrl: apiUrl(config),
     proposals: () => late.get().proposals,
     prAssign: () => late.get().prAssign,

@@ -16,7 +16,9 @@ import { REPO_ROOT as ROOT } from './support/paths.js';
  * and the tables that name an ask's kind and place a goal's parts, and the goal an ask is about, which
  * `ask_next`'s card reads too — and the answers an investigation's findings take, so the cockpit
  * offers exactly the ones the route accepts — and which watch checks are still proposed, so the Signals card
- * and the window pass cannot disagree about what the operator is yet to accept.
+ * and the window pass cannot disagree about what the operator is yet to accept — and the Needs you
+ * page's reasons a pull request is on the operator and its listen-item match, so the page and the
+ * listener read one table.
  */
 const RUNTIME_MODULES: string[] = [
   './asks/queue.js',
@@ -27,6 +29,8 @@ const RUNTIME_MODULES: string[] = [
   './plans/partGroup.js',
   './intake/investigationResolutions.js',
   './validation/watchProposed.js',
+  './listen/prsOnYou.js',
+  './listen/sameItem.js',
 ];
 
 test('the contract passes through runtime from the declared modules and no others', () => {

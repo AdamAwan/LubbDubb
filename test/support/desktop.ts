@@ -1,7 +1,7 @@
 import { orderedProfiles } from '../../src/agents/modelPolicy.js';
 import type { DesktopToolDeps } from '../../src/mcp/desktopContext.js';
 import type { System } from '../../src/system/system.js';
-import { askSnapshot } from '../../src/server/stateSnapshot.js';
+import { askSnapshot, prInputs } from '../../src/server/askReads.js';
 import { desktopRemoteValidation } from '../../src/system/systemDesktop.js';
 
 export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
@@ -37,6 +37,8 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     labelPrefix: system.config.labelPrefix,
     issueContainerTypes: system.config.issueContainerTypes,
     asks: () => askSnapshot(system),
+    prInputs: () => prInputs(system),
+    listener: system.listener,
     cockpitUrl: 'http://127.0.0.1:4300',
     changed: () => {},
   };

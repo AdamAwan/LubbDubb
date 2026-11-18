@@ -1,4 +1,5 @@
 import type { CockpitState } from '../wire.js';
+import type { Issue as DomainIssue } from '../types.js';
 import type { SetupReading } from '../setup/reading.js';
 import type { AskGroup, AskKind, AskRow, AskUrgency } from './askRow.js';
 import { updateAskRows } from './updateAsks.js';
@@ -35,6 +36,14 @@ export type AskInputs = Pick<
 > & {
   world: Pick<CockpitState['world'], 'takenAt' | 'pullRequests' | 'closedPullRequests' | 'issues'>;
   config: Pick<CockpitState['config'], 'watchLabel' | 'desktopFolder'>;
+};
+
+/** What `pr_read` reads one open pull request and the goal it delivers off — no queue built. */
+export type PrReadInputs = Pick<
+  AskInputs,
+  'plans' | 'planParts' | 'archivedPullRequests' | 'retainedRuns' | 'refUrls'
+> & {
+  world: Pick<AskInputs['world'], 'takenAt' | 'pullRequests' | 'closedPullRequests'> & { issues: DomainIssue[] };
 };
 
 /** The standing asks in the one-at-a-time order, beside the inputs they were derived from. */

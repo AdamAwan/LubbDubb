@@ -25,6 +25,7 @@ import { liveChecks } from '../validation/verdict.js';
 import { descriptionCheck, descriptionDismiss, descriptionRead, descriptionWrite } from './desktopDescription.js';
 import { prAssign } from './desktopPrAssign.js';
 import { askNext, askSkip } from './desktopAskNext.js';
+import { askWait, prRead } from './desktopListen.js';
 import { proposalDecide, proposalRead, recoveryDecide } from './desktopInbox.js';
 import { agentRead, fleetControl, fleetStatus, queueControl } from './desktopOps.js';
 import { attentionRead, escalationAnswer, humanTaskSettle } from './desktopAttention.js';
@@ -518,6 +519,8 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   pr_assign: prAssign,
   ask_next: askNext,
   ask_skip: askSkip,
+  ask_wait: askWait,
+  pr_read: prRead,
 };
 
 export function buildDesktopTools(deps: DesktopToolDeps, session: DesktopSession): McpTool[] {

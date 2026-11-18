@@ -15,16 +15,19 @@ import { untriagedCount } from '../worldBuckets.js';
 import { tabUsage } from '../cockpit/usage.js';
 import { useThemeUnsaved } from '../hooks.js';
 import { environmentsReading, menuEntries, usageReading } from './topBarReadings.js';
+import { needsYouInFront } from '../view/needsYouPage.js';
+import { openOverview } from './NeedsYouPage.js';
 
 // → docs/spec/17-cockpit.md
 
-const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'insights'];
-const FEATURE_TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'features', 'insights'];
+const TABS: readonly ConsoleTab[] = ['overview', 'needs', 'tickets', 'insights'];
+const FEATURE_TABS: readonly ConsoleTab[] = ['overview', 'needs', 'tickets', 'features', 'insights'];
 
 const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 
 export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
+  needs: 'Needs you',
   tickets: 'Tickets',
   features: 'Features',
   bots: 'Bot PRs',
@@ -62,6 +65,7 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
             {...(badge === null ? {} : { title: badge.title })}
           >
             {TAB_LABEL[tab]}
+            {tab === 'needs' && <i className="cn-ny-new">new</i>}
             {badge !== null && <i className="cn-badge">{badge.count}</i>}
           </BareButton>
         );
@@ -189,6 +193,26 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
       aria-label={title}
     >
       {reading}
+    </BareButton>
+  );
+}
+
+// → docs/spec/44-needs-you.md#where-it-sits
+function FleetLine({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const out = view.live.length;
+  const free = Math.max(0, view.state.control.cap - out);
+  const title = 'Open the overview — the fleet, its queue and the cap';
+  return (
+    <BareButton
+      usage={tabUsage('overview')}
+      className="cn-read cn-act cn-ny-fleet"
+      onClick={() => openOverview(actions)}
+      title={title}
+    >
+      <span>Fleet</span>
+      <b>
+        {out} out · {free} free · {view.upNext.length} queued
+      </b>
     </BareButton>
   );
 }
@@ -395,11 +419,15 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           next gets to decide. The countdown is inside this reading rather than a chip
           of its own because Pause is the control that stops the thing it is counting
           down to — see {@link Scan}. */}
-      <div className="cn-read cn-cap">
-        <span>Fleet</span>
-        <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
-        <Scan view={view} actions={actions} />
-      </div>
+      {needsYouInFront(view) ? (
+        <FleetLine view={view} actions={actions} />
+      ) : (
+        <div className="cn-read cn-cap">
+          <span>Fleet</span>
+          <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
+          <Scan view={view} actions={actions} />
+        </div>
+      )}
 
       {/* Only when it has something to say — see {@link Environments}. */}
       <Environments view={view} actions={actions} />

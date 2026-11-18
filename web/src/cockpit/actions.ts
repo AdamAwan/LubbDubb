@@ -13,6 +13,7 @@ import type {
   CaveatAnswerInput,
   CheckDecline,
   InvestigationResolution,
+  ListenItem,
 } from '../types.js';
 import type { FeatureMode, OverviewShape, Place } from './place.js';
 import type { GoalTab } from '../view/goalPage.js';
@@ -43,7 +44,7 @@ export type ConsolePanel =
   | null;
 
 export type ConsoleTab =
-  'overview' | 'tickets' | 'features' | 'bots' | 'handled' | 'errors' | 'insights' | 'pets' | 'config';
+  'overview' | 'needs' | 'tickets' | 'features' | 'bots' | 'handled' | 'errors' | 'insights' | 'pets' | 'config';
 
 export type InsightsView =
   'economics' | 'allowance' | 'reliability' | 'throughput' | 'causes' | 'trend' | 'mcp' | 'usage';
@@ -235,4 +236,7 @@ export interface CockpitActions {
   dismissRun(issueNumber: number, note?: string): Promise<void>;
 
   fetchWorkSubtree(ref: string): Promise<{ nodes: WorkNodeView[] }>;
+
+  /** Called from the Needs you page and nowhere else. → docs/spec/44-needs-you.md#scope */
+  listenSend(item: ListenItem): Promise<void>;
 }

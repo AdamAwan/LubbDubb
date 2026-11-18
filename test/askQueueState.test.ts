@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { Hub, type ServerEvent } from '../src/server/hub.js';
 import { buildApp } from '../src/server/app.js';
-import { askQueue } from '../src/server/stateSnapshot.js';
+import { askQueue } from '../src/server/askReads.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -122,7 +122,17 @@ test('askQueue is the same list, standing rows only, in the order a one-at-a-tim
 });
 
 test('a dirty that names a section feeding the queue names the queue too, and the frequent fleet ones do not', () => {
-  const emitters = ['harness', 'agents', 'escalations', 'errors', 'localRun', 'localRunWatch', 'readying', 'desktop'];
+  const emitters = [
+    'harness',
+    'agents',
+    'escalations',
+    'errors',
+    'localRun',
+    'localRunWatch',
+    'readying',
+    'desktop',
+    'listener',
+  ];
   const fake = Object.fromEntries(emitters.map((name) => [name, new EventEmitter()]));
   const hub = new Hub({
     ...fake,
@@ -138,5 +148,10 @@ test('a dirty that names a section feeding the queue names the queue too, and th
   fake.escalations!.emit('created', { id: 'e' });
 
   const dirty = sent.flatMap((e) => (e.type === 'dirty' ? [e.sections] : []));
-  assert.deepEqual(dirty, [['plans', 'asks'], ['fleet'], ['fleet', 'asks'], ['inbox', 'asks']]);
+  assert.deepEqual(dirty, [
+    ['plans', 'asks', 'listener'],
+    ['fleet'],
+    ['fleet', 'asks', 'listener'],
+    ['inbox', 'asks', 'listener'],
+  ]);
 });

@@ -7179,3 +7179,153 @@ button.cn-grow {
   opacity: 0.55;
   text-decoration: line-through;
 }
+
+/* ---------- needs you → docs/spec/44-needs-you.md ---------- */
+.cn-nav .cn-ny-new {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--cn-violet-line);
+  border-radius: 999px;
+  font: 600 9.5px/15px var(--cn-mono);
+  font-style: normal;
+  text-transform: uppercase;
+  color: var(--cn-violet);
+  background: var(--cn-violet-fill);
+}
+.cn-ny {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cn-ny-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cn-ny-head h2 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--cn-fg);
+}
+.cn-ny-counts {
+  font: 12px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cn-ny-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cn-ny-listen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cn-ny-on {
+  border: 1px solid var(--cn-violet);
+  background: var(--cn-violet);
+  color: var(--cn-on-accent);
+}
+.cn-ny-on a {
+  color: inherit;
+}
+.cn-ny-off {
+  border: 1px dashed var(--cn-line-hi);
+  color: var(--cn-fg-dim);
+}
+.cn .btn.cn-ny-claude {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-color: var(--cn-violet);
+  background: var(--cn-violet);
+  color: var(--cn-on-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.cn .btn.cn-ny-claude:hover {
+  border-color: var(--cn-violet);
+  background: color-mix(in srgb, var(--cn-violet) 85%, var(--cn-fg));
+  color: var(--cn-on-accent);
+}
+.cn-ny-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .cn-ny-cols {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.cn-ny-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 8px 0;
+}
+.cn-ny-list .cn-railsub {
+  padding: 8px 6px 2px;
+}
+.cn-ny-list .fold-toggle.cn-railmore {
+  margin: 8px 0 0;
+}
+.cn-ny-item {
+  display: flex;
+  flex-direction: column;
+}
+.cn-ny-ask .cn-qtitle {
+  display: block;
+  margin-bottom: 4px;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+}
+.cn-ny-why {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--cn-fg-dim);
+}
+.cn-ny-acts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.cn-ny-chips {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.cn-ny-sent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--cn-violet-line);
+  border-top: 0;
+  font-size: 11.5px;
+  color: var(--cn-violet);
+  background: var(--cn-violet-fill);
+}
+.cn .cn-ny-all {
+  align-self: flex-start;
+  margin: 10px 13px 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  color: var(--cn-blue-ink);
+  cursor: pointer;
+}
+.cn .cn-ny-all:hover {
+  text-decoration: underline;
+}
