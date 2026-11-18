@@ -172,11 +172,11 @@ test('a dirty is scoped only where the signal provably touches one section', () 
   );
   assert.deepEqual(
     dirtyFor(() => agents.emit('conclusion', {})),
-    [['goals', 'asks']],
+    [['goals', 'asks', 'listener']],
   );
   assert.deepEqual(
     dirtyFor(() => agents.emit('retrospective', {})),
-    [['goals', 'asks']],
+    [['goals', 'asks', 'listener']],
   );
   assert.deepEqual(
     dirtyFor(() => errors.emit('logged', { message: 'x' })),
@@ -216,7 +216,7 @@ test('a write on the desktop channel reaches the cockpit as the matching routeâ€
 
   (system.desktop as unknown as EventEmitter).emit('changed', { type: 'world:changed' });
   (system.desktop as unknown as EventEmitter).emit('changed', { type: 'dirty', sections: ['plans'] });
-  assert.deepEqual(sent, [{ type: 'world:changed' }, { type: 'dirty', sections: ['plans', 'asks'] }]);
+  assert.deepEqual(sent, [{ type: 'world:changed' }, { type: 'dirty', sections: ['plans', 'asks', 'listener'] }]);
 });
 
 test('a change in the listen loop refreshes its own section and not the asks', () => {

@@ -148,5 +148,10 @@ test('a dirty that names a section feeding the queue names the queue too, and th
   fake.escalations!.emit('created', { id: 'e' });
 
   const dirty = sent.flatMap((e) => (e.type === 'dirty' ? [e.sections] : []));
-  assert.deepEqual(dirty, [['plans', 'asks'], ['fleet'], ['fleet', 'asks'], ['inbox', 'asks']]);
+  assert.deepEqual(dirty, [
+    ['plans', 'asks', 'listener'],
+    ['fleet'],
+    ['fleet', 'asks', 'listener'],
+    ['inbox', 'asks', 'listener'],
+  ]);
 });

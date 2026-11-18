@@ -129,6 +129,33 @@ test('the grace running out tells the cockpit', async () => {
   assert.equal(changes, before + 1);
 });
 
+test('a grace timer that fires early waits out the rest rather than staying listening', async () => {
+  let at = 0;
+  const timers: { due: number; fn: () => void }[] = [];
+  const clock = {
+    now: () => at,
+    after: (ms: number, fn: () => void) => {
+      timers.push({ due: at + ms, fn });
+      return () => undefined;
+    },
+  };
+  const listener = new Listener(clock);
+  const wait = listener.wait();
+  at = LISTEN_WAIT_MS;
+  timers.shift()!.fn();
+  await wait;
+  const grace = timers.pop()!;
+  at = grace.due - 1;
+  grace.fn();
+  assert.equal(timers.length, 1, 'the early fire re-armed for the millisecond left');
+  at = timers[0]!.due;
+  let changes = 0;
+  listener.on('changed', () => changes++);
+  timers.shift()!.fn();
+  assert.equal(changes, 1);
+  assert.equal(listener.view(NOBODY).state, 'off');
+});
+
 test('the listener tells the cockpit only when what it shows has changed', async () => {
   const clock = new FakeListenClock();
   const listener = new Listener(clock);

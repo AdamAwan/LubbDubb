@@ -92,11 +92,7 @@ export function askInputs(r: Reads, want: ReadonlySet<StateSection>, out: Partia
   return inputs as AskInputs;
 }
 
-/**
- * The `asks` and `listener` sections, as `want` names them. The listener reads whether a sent item still
- * stands only for what it has sent: a sent ask off this reply's queue, or one built for it; a sent pull
- * request off the open list and `prOnYouReasons`. → docs/spec/44-needs-you.md#the-wait
- */
+/** The `asks` and `listener` sections, as `want` names them. → docs/spec/44-needs-you.md#the-wait */
 export function askSections(
   system: System,
   r: Reads,

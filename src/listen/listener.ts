@@ -143,12 +143,18 @@ export class Listener extends EventEmitter {
 
   private returnedEmpty(): void {
     this.lastEmptyReturn = this.clock.now();
-    this.stopGrace();
-    this.cancelGrace = this.clock.after(LISTEN_GRACE_MS, () => {
-      this.cancelGrace = null;
-      this.changed();
-    });
+    this.armGrace(LISTEN_GRACE_MS);
     this.changed();
+  }
+
+  private armGrace(ms: number): void {
+    this.stopGrace();
+    this.cancelGrace = this.clock.after(ms, () => {
+      this.cancelGrace = null;
+      const left = this.lastEmptyReturn === null ? 0 : this.lastEmptyReturn + LISTEN_GRACE_MS - this.clock.now();
+      if (this.waiter === null && left > 0) this.armGrace(left);
+      else this.changed();
+    });
   }
 
   private stopGrace(): void {

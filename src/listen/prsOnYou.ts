@@ -2,16 +2,19 @@ import type { OpenPullRequest } from '../wire.js';
 
 // → docs/spec/44-needs-you.md#pull-requests-waiting-on-you
 
-export type PrOnYouReason = 'review' | 'call' | 'comments' | 'assign' | 'describe';
+export const PR_ON_YOU_REASONS = ['review', 'call', 'comments', 'assign', 'describe'] as const;
+
+export type PrOnYouReason = (typeof PR_ON_YOU_REASONS)[number];
+
+const HOLDS: Record<PrOnYouReason, (pr: OpenPullRequest) => boolean> = {
+  review: (pr) => pr.attention.assignedToYou !== undefined,
+  call: (pr) => pr.attention.status === 'you' && pr.attention.assignedToYou === undefined,
+  comments: (pr) => pr.unresolvedComments.length > 0,
+  assign: (pr) => pr.assignAsk !== undefined && pr.assignAsk.length > 0,
+  describe: (pr) => pr.body !== undefined && pr.body.trim() === '',
+};
 
 /** Every reason the pull request is on the operator, in the table's order; empty when it is not. */
 export function prOnYouReasons(pr: OpenPullRequest): PrOnYouReason[] {
-  const reasons: PrOnYouReason[] = [];
-  const assigned = pr.attention.assignedToYou !== undefined;
-  if (assigned) reasons.push('review');
-  if (pr.attention.status === 'you' && !assigned) reasons.push('call');
-  if (pr.unresolvedComments.length > 0) reasons.push('comments');
-  if (pr.assignAsk !== undefined && pr.assignAsk.length > 0) reasons.push('assign');
-  if (pr.body !== undefined && pr.body.trim() === '') reasons.push('describe');
-  return reasons;
+  return PR_ON_YOU_REASONS.filter((reason) => HOLDS[reason](pr));
 }

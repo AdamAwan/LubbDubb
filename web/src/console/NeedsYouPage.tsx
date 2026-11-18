@@ -179,7 +179,7 @@ function AskCard({
   open: Destination | null;
   claude: ReactNode;
 }): JSX.Element {
-  const ref = subjectRef(row);
+  const ref = askRef(row);
   const why = row.note ?? row.check?.remedy;
   return (
     <div className={rowClass(row, null, false, 'cn-ny-ask')}>
@@ -275,11 +275,15 @@ function SentStrip({ at, now }: { at: string; now: number }): JSX.Element {
   );
 }
 
+function askRef(row: NeedRow): string | null {
+  return subjectRef(row) ?? (row.prNumber === undefined || row.prNumber === null ? null : `pr:${row.prNumber}`);
+}
+
 function OnItem({ item, asks }: { item: ListenItem | null; asks: readonly NeedRow[] }): ReactNode {
   if (item === null) return 'an item';
   if (item.kind === 'pr') return <Ref to={`pr:${item.number}`} />;
   const row = asks.find((r) => r.id === item.id);
-  const ref = row === undefined ? null : subjectRef(row);
+  const ref = row === undefined ? null : askRef(row);
   return ref === null ? 'an ask' : <Ref to={ref} />;
 }
 

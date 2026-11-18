@@ -137,8 +137,8 @@ or after a day. Those are read off the snapshot as it is built, and only for wha
 at all when `sent` is empty, the standing rows of `asks` (the reply's own, or the queue built for the
 `listener` section alone) for a sent ask, and `prOnYouReasons` over that one open pull request for a sent
 one. So the pruning happens on read, and `sentAt` is when the operator pressed the button, not when the
-chat took the item. A section reply naming `asks` but not `listener` leaves a settled entry in place
-until the next `listener` read; nothing draws it, since its row has left the page. Sending an item again once the chat has
+chat took the item. Every broadcast that refreshes `asks` refreshes `listener` too, so a settled ask
+leaves `sent` on the same refetch that takes it off the page. Sending an item again once the chat has
 moved off it is not a duplicate: it queues, and its `sent` entry moves to the top.
 
 The listener's changes — a wait opened or answered, a send, the grace running out — broadcast
@@ -147,6 +147,9 @@ answer has changed from the last one it announced: a newer wait replacing an ope
 a no-op, is silent. The section is its own so that a wait opening every ten minutes rebuilds the
 listener and nothing else, never the ask queue. Its clock and timers are a seam
 (`ListenClock`); a test injects `FakeListenClock` as `listenClock`.
+
+The grace timer reads the clock when it fires: a timer that fires early re-arms for what is left
+rather than announcing a view that still reads `listening`.
 
 `busy` has no timeout of its own: a chat closed while working an item inline reads `busy` until the
 next `ask_wait` or a restart.

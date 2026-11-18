@@ -2663,7 +2663,8 @@ because a reading's probes spawn processes and cannot be taken per snapshot.
 **`listener` is the listen loop's state alone** ([44](44-needs-you.md#the-wait)). Its signal — an
 `ask_wait` opening or returning, a send — moves nothing else, so it is a section of its own and the hub
 broadcasts `dirty` for `listener` and nothing more; folded into `asks` it rebuilt the queue each time a
-chat waited. It reads the queue only to prune a sent ask, and then the reply's own `asks` where it built
+chat waited. The other way round holds: a broadcast that names `asks` names `listener` too, because the
+listener prunes against the queue. It reads the queue only to prune a sent ask, and then the reply's own `asks` where it built
 them, so `?sections=listener` alone builds the queue only when an ask is in `sent`.
 
 #### What it is for

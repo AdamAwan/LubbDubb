@@ -100,7 +100,7 @@ const PR_ORIGIN = /^pr:(\d+)(?::|$)/;
  */
 export function subjectRef(row: NeedRow): string | null {
   if (row.goalRef !== null) return row.goalRef;
-  const pr = row.prNumber ?? PR_ORIGIN.exec(row.originRef ?? '')?.[1];
+  const pr = PR_ORIGIN.exec(row.originRef ?? '')?.[1];
   return pr === undefined ? null : `pr:${pr}`;
 }
 
