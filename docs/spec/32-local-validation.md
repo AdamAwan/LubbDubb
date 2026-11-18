@@ -228,19 +228,27 @@ package itself (`npx -y @playwright/mcp@…`) still works, but its ffmpeg is the
 start error means carry on, and that the stop answer's file name is no proof — and it is not asked to
 explain a missing video, because the harness reads that for itself:
 
-- **At boot**, and only at boot, `ffmpegPreflight` (`src/validation/local/ffmpeg.ts`, called from `main.ts`) looks for
-  `ffmpeg-<revision>` (the bundled Playwright's) in the Playwright cache (a non-empty `PLAYWRIGHT_BROWSERS_PATH`, else the
-  platform's default, with an empty `XDG_CACHE_HOME` or `LOCALAPPDATA` read as unset) and records **one**
-  `boot` error naming the bundled install command (`node <playwright-core>/cli.js install ffmpeg`) when it is missing. Under `PLAYWRIGHT_BROWSERS_PATH=0`
-  Playwright installs inside its own package, which this harness does not locate, so it says nothing
-  there rather than guess. It checks
-  only a browser that offers the recorder _and_ launches the bundled server — any with `{playwrightMcp}` as a whole argument, the
-  default among them: a block naming its own package names a revision this harness cannot know. Before
-  any of that, any block with `{playwrightMcp}` as a whole argument — recorder or not — whose bundled package cannot be read
-  (no `bin`, no ffmpeg entry) gets one `boot` error naming `npm ci` instead, rather than the harness
-  failing to start. `bundledPlaywright()` never throws: it keeps that failure as a message, once per
-  process, and `substituteBrowserArgs` then leaves `{playwrightMcp}` as written — the browser fails to
-  connect and the run reports `blocked`, where a throw at dispatch would abort the whole pass.
+- **At boot, and again on a live change to `localValidation.browser`**, `ffmpegPreflight`
+  (`src/validation/local/ffmpeg.ts`, through `browserPreflight` from `main.ts` and the live config arm)
+  checks any block that uses the bundled server — `usesBundledServer`, `{playwrightMcp}` anywhere
+  `substituteBrowserArgs` would fill it, the default among them; a block naming its own package names a
+  revision this harness cannot know. Each finding is **one** recorded error (`boot`, or `runtime` for a
+  live change):
+  - **The bundled package cannot be read** (no `bin`), recorder or not: the error names `npm ci`.
+    `bundledPlaywright()` never throws — it keeps the failure as a message, once per process — and
+    `substituteBrowserArgs` then leaves `{playwrightMcp}` as written, so the browser fails to connect and
+    the run reports `blocked`, where a throw at dispatch would abort the whole pass.
+  - **A recorder is offered and the bundled Playwright names no ffmpeg build**: the browser still
+    launches; only the recording is lost, and the error says so.
+  - **A recorder is offered and `ffmpeg-<revision>` is missing** from the Playwright cache (a non-empty
+    `PLAYWRIGHT_BROWSERS_PATH`, else the platform's default, with an empty `XDG_CACHE_HOME` or
+    `LOCALAPPDATA` read as unset): the error names `node <playwright-core>/cli.js install ffmpeg`. Under
+    `PLAYWRIGHT_BROWSERS_PATH=0` Playwright installs inside its own package, which this harness does not
+    locate, so it says nothing there rather than guess.
+
+  A remote validation run drives the same block ([36](36-remote-validation.md#the-browser-the-run-drives)),
+  so this check covers it too.
+
 - **On each settled run**, a `recordingStatus` is written beside the report — `kept` where a video is
   there, `missing` where the agent was launched with the recorder (a server whose `--caps` include
   `devtools`) and none was written, `not_offered` otherwise (`recordingStatus`, `recorderOffered` in

@@ -17,6 +17,21 @@ function harness(overrides: Partial<Config> = {}) {
   return { running, runtimeControl, dispatcher, live: new LiveConfig({ running, runtimeControl, dispatcher }) };
 }
 
+test('a live browser change is checked as boot checks it', () => {
+  const running = loadConfig({ maxConcurrentAgents: 3 });
+  const runtimeControl = new RuntimeControl(running.maxConcurrentAgents, running.startPaused);
+  const checked: unknown[] = [];
+  const live = new LiveConfig({
+    running,
+    runtimeControl,
+    dispatcher: recordingDispatcher(),
+    checkBrowser: (browser) => checked.push(browser),
+  });
+  const browser = { key: 'browser', command: '{node}', args: ['{playwrightMcp}'] };
+  live.apply(loadConfig({ maxConcurrentAgents: 3, localValidation: { instruction: '', browser } }));
+  assert.deepEqual(checked, [browser]);
+});
+
 test('the agent cap applies now: the configured value and the live one both move', () => {
   const { running, runtimeControl, live } = harness();
 

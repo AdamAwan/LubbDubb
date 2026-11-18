@@ -2,6 +2,7 @@ import { CONFIG_FIELDS, readPath } from './configFields.js';
 import type { Config } from './config.js';
 import type { CiPolicy } from '../ci/ciPolicy.js';
 import type { RuntimeControl } from '../runtimeControl.js';
+import type { ExtraMcpServer } from '../types.js';
 
 // → docs/spec/02-configuration.md
 
@@ -16,6 +17,7 @@ interface LiveConfigDeps {
   running: Config;
   runtimeControl: RuntimeControl;
   dispatcher: CiPolicyHolder;
+  checkBrowser?: (browser: ExtraMcpServer | null) => void;
 }
 
 interface CiPolicyHolder {
@@ -58,6 +60,7 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   },
   'localValidation.browser': (next, deps) => {
     deps.running.localValidation = next.localValidation;
+    deps.checkBrowser?.(next.localValidation.browser);
   },
   featureBoard: (next, deps) => {
     deps.running.featureBoard = next.featureBoard;

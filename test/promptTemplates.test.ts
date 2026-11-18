@@ -28,6 +28,11 @@ function tmpDir(): string {
 test('renderTemplate fills tokens, stringifies numbers, leaves unknown tokens untouched', () => {
   assert.equal(renderTemplate('#{number} {title}', { number: 7, title: 'X' }), '#7 X');
   assert.equal(renderTemplate('{a} {b}', { a: 'x' }), 'x {b}');
+  assert.equal(
+    renderTemplate('{toString} {constructor}', {}),
+    '{toString} {constructor}',
+    'inherited keys are not tokens',
+  );
 });
 
 test('stripTemplateDoc removes only a leading comment and trims', () => {

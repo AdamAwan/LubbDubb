@@ -1815,7 +1815,8 @@ Overrides: drop `<id>.md` into `promptTemplatesDir` (default `.lubbdubb/prompts`
 file names no known id, references a placeholder the id does not declare, or is empty once its doc
 header is stripped. A single leading `<!-- ... -->` block is stripped before the prompt reaches the
 agent; a comment inside the body is left alone. `renderTemplate` substitutes `{name}` tokens and
-leaves an unmatched token untouched.
+leaves an unmatched token untouched — matched against the variables' own keys only, so `{toString}` or
+`{constructor}` is unmatched rather than filled with an `Object.prototype` member.
 
 `docs/prompt-templates/` holds ready-to-copy samples of the current defaults, one file per id.
 

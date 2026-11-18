@@ -3,7 +3,12 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { ffmpegPreflight } from '../src/validation/local/ffmpeg.js';
-import { bundledPlaywright, DEFAULT_LOCAL_VALIDATION, substituteBrowserArgs } from '../src/validation/local/policy.js';
+import {
+  type BundledPlaywright,
+  bundledPlaywright,
+  DEFAULT_LOCAL_VALIDATION,
+  substituteBrowserArgs,
+} from '../src/validation/local/policy.js';
 import { recorderOffered, recordingStatus } from '../src/validation/recording.js';
 import type { ExtraMcpServer, Task } from '../src/types.js';
 
@@ -43,7 +48,7 @@ test('a project names the bundled server by token, beside its own flags', () => 
 });
 
 test('the ffmpeg revision is read off the bundled Playwright, not kept by hand', () => {
-  assert.match(FFMPEG_REVISION, /^\d+$/);
+  assert.match(FFMPEG_REVISION ?? '', /^\d+$/);
   assert.ok(existsSync(coreCli));
 });
 
@@ -72,11 +77,12 @@ test('what the harness cannot know is null, never missing', () => {
   assert.equal(recordingStatus(null, false, false), null, 'no task to read the offer off');
 });
 
-const host = (present: string[]) => ({
+const host = (present: string[], bundle: () => BundledPlaywright | string = () => found) => ({
   env: { PLAYWRIGHT_BROWSERS_PATH: '/pw' },
   platform: 'linux' as const,
   home: '/home/me',
   exists: (path: string) => present.includes(path),
+  bundle,
 });
 
 test('the preflight names the bundled install command when the matching ffmpeg is absent', () => {
@@ -94,11 +100,32 @@ test('the preflight is quiet where ffmpeg is there, or where it cannot know the 
   assert.equal(ffmpegPreflight(browser(['@playwright/mcp@0.0.1', '--caps', 'devtools']), host([])), null);
   assert.ok(ffmpegPreflight(browser(['{playwrightMcp}', '--caps', 'devtools']), host([])) !== null);
   assert.equal(ffmpegPreflight(browser(['{playwrightMcp}']), host([])), null, 'no recorder on offer');
-  const mentioned = browser(['@playwright/mcp@0.0.40', '--note={playwrightMcp}', '--caps', 'devtools']);
-  assert.equal(ffmpegPreflight(mentioned, host([])), null, 'only the token as the entry point counts');
+  const inCommand = { ...browser(['--caps', 'devtools']), command: '{playwrightMcp}' };
+  assert.ok(ffmpegPreflight(inCommand, host([])) !== null, 'the token counts wherever substitution fills it');
   assert.equal(ffmpegPreflight(null, host([])), null);
   const inNodeModules = { ...host([]), env: { PLAYWRIGHT_BROWSERS_PATH: '0' } };
   assert.equal(ffmpegPreflight(DEFAULT_LOCAL_VALIDATION.browser, inNodeModules), null);
+});
+
+test('a broken bundle is one message naming npm ci, recorder or not, and leaves the token unfilled', () => {
+  const broken = () => 'No playwright-mcp bin in /x/package.json';
+  for (const args of [['{playwrightMcp}'], ['{playwrightMcp}', '--caps', 'devtools']]) {
+    const message = ffmpegPreflight(browser(args), host([], broken));
+    assert.ok(message?.includes('npm ci') && message.includes('No playwright-mcp bin'));
+  }
+  const launched = substituteBrowserArgs(browser(['{playwrightMcp}']), { outputDir: '/o', profileDir: '/p' }, broken);
+  assert.deepEqual(launched.args, ['{playwrightMcp}'], 'never a throw at dispatch');
+});
+
+test('a bundle with no ffmpeg entry still launches, and only a recorder hears about it', () => {
+  const noFfmpeg = () => ({ ...found, ffmpegRevision: null });
+  assert.equal(ffmpegPreflight(browser(['{playwrightMcp}']), host([], noFfmpeg)), null);
+  assert.match(
+    ffmpegPreflight(browser(['{playwrightMcp}', '--caps', 'devtools']), host([], noFfmpeg)) ?? '',
+    /no ffmpeg build/,
+  );
+  const launched = substituteBrowserArgs(browser(['{playwrightMcp}']), { outputDir: '/o', profileDir: '/p' }, noFfmpeg);
+  assert.deepEqual(launched.args, [mcpCli]);
 });
 
 test('the cache is found where Playwright puts it on each platform', () => {
@@ -108,6 +135,7 @@ test('the cache is found where Playwright puts it on each platform', () => {
       env,
       platform,
       home: '/h',
+      bundle: () => found,
       exists: (path) => {
         asked = path;
         return true;

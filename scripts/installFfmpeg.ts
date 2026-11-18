@@ -5,6 +5,7 @@ import { bundledPlaywright } from '../src/validation/local/policy.js';
 
 const bundled = bundledPlaywright();
 if (typeof bundled === 'string') console.warn(`lubbdubb: the bundled @playwright/mcp is not usable — ${bundled}`);
+else if (bundled.ffmpegRevision === null) console.warn(`lubbdubb: the bundled Playwright names no ffmpeg build`);
 else {
   const { coreCli, ffmpegRevision } = bundled;
   const result = spawnSync(process.execPath, [coreCli, 'install', 'ffmpeg'], { stdio: 'inherit' });
