@@ -161,12 +161,29 @@ next `ask_wait` or a restart.
 1. Call `ask_wait`. `{ item: null }` → call it again, saying nothing; say "still waiting" at most
    once per session. An error (the harness restarted) → call it again. `superseded: true` → another
    wait took over, so this loop stops and says so in one line.
-2. An item → start a Claude Code **fork** for it, exactly as the `next` skill's side thread does
-   ([11](11-mcp-tools.md#the-next-ask-loop)): an ask runs as `/lubbdubb:next <id> only`, a pull request
-   as `/lubbdubb:pr <n>`. Then go back to step 1 at once — the fork holds the conversation, the main
-   chat keeps only its one-line outcome, so its context stays small.
-3. Where a fork cannot be started, work the item inline, then go back to step 1. While it does, the
+2. An item → hand it to a thread of its own, in this order of preference. Each runs one skill for the
+   one item and nothing else — an ask as `/lubbdubb:next <id> only`, a pull request as
+   `/lubbdubb:pr <n>` — told to talk it through with the operator, decide nothing, and end with one
+   line: what landed, or "left open".
+   - **A linked session**, where the Claude desktop app offers `start_session`
+     (`mcp__ccd_session__start_session`): a Claude Code session nested under the listen session in
+     the sidebar, which the operator opens and talks to. It is started fresh, in this checkout (no
+     worktree), titled "Talk through ask <id>" or "Talk through #<n>", with a background note that the
+     item came from this page through the listen loop and that the session holds the conversation for
+     that one item. A fork in the desktop app runs as a background task the operator cannot open,
+     which defeats "Talk it through" — so the linked session comes first.
+   - **A fork**, where the `Agent` tool can start one, exactly as the `next` skill's side thread does
+     ([11](11-mcp-tools.md#the-next-ask-loop)).
+
+   Then go back to step 1 at once — the thread holds the conversation, the main chat keeps only its
+   one-line outcome (repeated in one line when it arrives), so its context stays small. A linked
+   session reported blocked or waiting on the operator is said in one line with a link to it.
+
+3. Where neither can be started, work the item inline, then go back to step 1. While it does, the
    page reads `busy`.
+
+The loop decides nothing at any of the three: the item is a conversation the operator asked for, and
+the thread it lands in — session, fork or this chat — only acts on the operator's word.
 
 The operator can press Esc to stop the wait and talk to the chat; `/lubbdubb:listen` starts it again.
 

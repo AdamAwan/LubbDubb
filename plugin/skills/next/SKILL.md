@@ -135,32 +135,47 @@ What they can say at any point:
   `ask_skip` with `undo: true` brings one back.
 - **"stop"**, **"that's enough"** — stop. Say how many are left.
 - **"let's talk about this one"**, or a back-and-forth that is turning into a
-  discussion rather than a decision — offer to take it to a fork (below).
+  discussion rather than a decision — offer to take it to a side thread (below).
   It is an offer: if they would rather talk here, talk here.
 
 ### Talking one through on the side
 
 A long talk about one pull request or plan fills this loop's context with
-things no later ask needs. Where you can, put the talk in a **fork** — a thread
-under this chat that the operator opens and talks to, whose tool calls and
-conversation stay out of this one:
+things no later ask needs. Where you can, put the talk in a thread of its own
+that the operator opens and talks to, whose tool calls and conversation stay out
+of this one. Use the first of these you can:
 
-1. **Fork it.** `Agent` with `subagent_type: "fork"`, a short `description`
-   naming the ask ("Talk through #412") and a prompt saying: this fork is for
-   ask `<id>` only; talk it through with the operator as this skill says; send
-   their answer with `answerWith` once they give one, or send nothing if they
-   leave it; end with one line — what landed, or "left open". It inherits this
-   conversation, card and all, so it needs no more than that.
-2. **`ask_skip` it here**, so `ask_next` does not hand it back while the fork
-   has it.
-3. **Tell them where it is**: in the panel under the prompt — select its row
-   and press `Enter` to talk to it, `Esc` to come back.
-4. **Carry on with `ask_next`.** When the fork's line arrives, say it in one
-   line. If it came back "left open", `ask_skip` with `undo: true` puts the ask
-   back in the queue.
+1. **Start it.**
+   - **A linked session** — when `mcp__ccd_session__start_session` is available
+     (if it is deferred, load it with `ToolSearch`
+     `"select:mcp__ccd_session__start_session"`). First write a bold title line
+     and one sentence saying what you are starting. Then call it with
+     `initiation: "user_asked"`, `context: "fresh"`, `use_worktree: false`,
+     `title` "Talk through ask <id>", `prompt` `/lubbdubb:next <id> only` then
+     "Talk it through with the operator; do not decide. End with one line: what
+     landed, or 'left open'.", and a `background` note that this session holds
+     the conversation for that one ask, handed off from the `next` loop. It
+     starts fresh, so the prompt carries all it needs.
+   - **A fork** — otherwise, where `Agent` can fork. `subagent_type: "fork"`, a
+     short `description` naming the ask ("Talk through #412") and a prompt
+     saying: this fork is for ask `<id>` only; talk it through with the operator
+     as this skill says; send their answer with `answerWith` once they give one,
+     or send nothing if they leave it; end with one line — what landed, or "left
+     open". It inherits this conversation, card and all, so it needs no more
+     than that.
+2. **`ask_skip` it here**, so `ask_next` does not hand it back while the session
+   or fork has it.
+3. **Tell them where it is**, in one line: a linked session sits under this one
+   in the sidebar; a fork is in the panel under the prompt — select its row and
+   press `Enter` to talk to it, `Esc` to come back.
+4. **Carry on with `ask_next`.** Do not wait for it. When its line arrives — a
+   fork's result, a `<side-sessions-event>` or a linked-session note — say it in
+   one line. If a linked session is blocked or waiting on the operator, say so in
+   one line with a link to it: `[title](#local_<id>)`. If it came back "left
+   open", `ask_skip` with `undo: true` puts the ask back in the queue.
 
-**Where you cannot fork** — no `Agent` tool, or forks turned off — offer the
-same in a new chat instead: `ask_skip` it, give them
+**Where you cannot start either** — no `start_session`, and no `Agent` tool or
+forks turned off — offer the same in a new chat instead: `ask_skip` it, give them
 `/lubbdubb:next <id> only` as a link,
 `claude://code/new?q=<prompt>&folder=<this checkout's absolute path>` with the
 prompt URL-encoded, or as `claude "/lubbdubb:next <id> only"` for a second
@@ -221,7 +236,7 @@ terminal, and carry on.
   sent with `discussion_settle`, one call per question, each with the `issue` the
   question's file is for; show the wording before you send it. Where the
   questions want talking through rather than a one-line answer, hand off to
-  `/lubbdubb:discuss <n>` — a fork or a new chat, as for any discussion — and
+  `/lubbdubb:discuss <n>` — a linked session, a fork or a new chat, as for any discussion — and
   `ask_skip` it here. The row goes once none is open, on the next cycle.
 
 ### What not to do
