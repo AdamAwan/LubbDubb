@@ -103,6 +103,11 @@ export function standsFor(state: AppState, originRef: string | null): string | n
   return ref;
 }
 
+export function goalNumber(goalRef: string | null): number | null {
+  const m = goalRef === null ? null : /^issue:(\d+)$/.exec(goalRef);
+  return m ? Number(m[1]) : null;
+}
+
 /**
  * The issue a goal ref names — the world's copy, or a run retained after the ticket left the
  * world. Undefined for a ref with no goal behind it.
@@ -110,8 +115,8 @@ export function standsFor(state: AppState, originRef: string | null): string | n
  * @public shared with the goal page and the quick answers, which resolve a goal by it
  */
 export function goalIssue(state: AppState, ref: string): Issue | undefined {
-  const number = Number(/^issue:(\d+)$/.exec(ref)?.[1]);
-  if (!Number.isFinite(number)) return undefined;
+  const number = goalNumber(ref);
+  if (number === null) return undefined;
   return (
     state.world.issues.find((i) => i.number === number) ?? (state.retainedRuns ?? []).find((i) => i.number === number)
   );

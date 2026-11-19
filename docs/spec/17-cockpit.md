@@ -4080,8 +4080,10 @@ and the two are different obligations.
 
 So the rack **orders and bands** instead. The pull requests somebody handed you are drawn first, under
 an `Assigned to review` heading in the `ask` red the row grammar already speaks, then the ones they
-handed you that are no longer waiting on you under `Assigned, not waiting on you`, and the rest under
-`The fleet's`; each heading carries its own count, so how much is yours is read without counting rows.
+handed you that are no longer waiting on you under `Assigned, not waiting on you`, and the rest — the
+fleet's — [under the goal each one delivers](#grouped-by-goal-stacks-as-a-tree); each heading carries
+its own count, so how much is yours is read without counting rows. Only where no fleet pull request
+has a goal does the rest fall back to a single `The fleet's` band.
 
 **The heading names the obligation, not the possession.** It read `Yours` first, which is a claim of
 ownership over pull requests the fleet wrote and the fleet will land — the one thing they are not —
@@ -4126,6 +4128,41 @@ shape it had.
 `RowGroup` is a general field on the row model rather than a rack-only rule — a heading is drawn where
 `group.key` changes, so a card that interleaves two bands draws the heading twice, which is the honest
 rendering of rows ordered against their bands rather than a silent regrouping.
+→ `test/prRackGroups.test.ts`
+
+<a id="grouped-by-goal-stacks-as-a-tree"></a>
+
+### Grouped by goal, stacks as a tree
+
+A flat list answered neither question an operator brings to the fleet's pull requests: _which goal is
+this for_ (a `#390` reference at the row's end, read one row at a time) and _which of these are a
+stack_ (nothing on the row said so at all). So below the assignment bands the rack **groups by goal**.
+`rackByGoal` (`web/src/view/prRack.ts`) is the one place the grouping is computed: it reads each pull
+request's goal through `goalOfPr`, so a goal here is exactly the goal the rest of the cockpit names.
+
+- **Each goal is a heading** (`tone: 'title'`, `cn-group-title`): the goal's title in sentence case — a
+  title is not a label, so it does not take the bands' uppercase — with a `<Ref>` to the goal in the
+  heading's `refs` slot, and at the end the goal's track and `n of m merged`, the same `buildGoalTrack`
+  reading the Goals in flight card draws. A goal with no plan says how many pull requests are open
+  instead. The row drops its own goal reference (`prRow`'s `{ goal: false }`, which then skips the
+  lookup): the heading above it already says it. `RowGroup.label` stays plain text; anything that
+  links goes in `refs`, as on a row.
+- **Goals are ordered by number; pull requests with no goal come last**, under `No goal`. A ticketless
+  pull request is a first-class subject ([05](05-dispatcher.md)), but it answers neither question, so
+  it is the band an operator reads last.
+- **Inside a goal a stack is drawn as a tree, read off `state.stacks`.** What is stacked on what is
+  the server's `buildStacks` answer ([07](07-pull-requests.md)) — the same one the goal page's stack
+  positions read — never re-derived from `baseBranch` in the cockpit, so the rack and the goal page
+  cannot disagree about which pull requests are a stack. A rung is drawn directly beneath the rung
+  below it, and its row sets `PanelRowModel.depth`: `PanelRows` draws a `└` before the title,
+  indented one step per level below the first through the `--cn-depth` property (depth capped at four), so any card can draw
+  a tree without classes of its own. Its sub-line carries `on` with a `<Ref>` to the pull request it
+  builds on — `prRow`'s `on` option, so the row's own unwatched rule decides whether it is drawn. Roots, and siblings under one base, go in number order. A pull request stacked on another
+  goal's pull request is a root in its own goal, still with its `on` reference — the tree never
+  crosses a goal heading. An unwatched row keeps its no-sub-line rule, so it does not carry `on`.
+
+The assignment bands are not grouped by goal: they answer _is anything waiting on me_, which is a
+question about the operator, not the work, and they are mostly colleagues' pull requests with no goal.
 → `test/prRackGroups.test.ts`
 
 ### Rate, removed

@@ -7,8 +7,9 @@ import { BareButton } from '../components/button.js';
 export interface RowGroup {
   key: string;
   label: string;
+  refs?: ReactNode;
   note?: ReactNode;
-  tone?: 'ask' | 'quiet';
+  tone?: 'ask' | 'quiet' | 'title';
   control?: ReactNode;
   foot?: boolean;
 }
@@ -38,6 +39,7 @@ export interface PanelRowModel {
   live?: boolean;
   className?: string;
   hint?: string;
+  depth?: number;
 }
 
 function hasWords(row: PanelRowModel): boolean {
@@ -173,12 +175,17 @@ export function PanelRows({
 }
 
 export function GroupHead({ group }: { group: RowGroup }): JSX.Element {
-  const cls = ['cn-group', group.tone === 'ask' ? 'cn-group-ask' : '', group.foot === true ? 'cn-group-foot' : '']
+  const cls = [
+    'cn-group',
+    group.tone === undefined || group.tone === 'quiet' ? '' : `cn-group-${group.tone}`,
+    group.foot === true ? 'cn-group-foot' : '',
+  ]
     .filter((part) => part !== '')
     .join(' ');
   return (
     <div className={cls}>
-      {group.label}
+      <span className="cn-group-t">{group.label}</span>
+      {group.refs}
       {group.note !== undefined && <span className="cn-group-n">{group.note}</span>}
       {group.control}
     </div>
@@ -297,7 +304,14 @@ function Readings({ row, has }: { row: PanelRowModel; has: SlotsUsed }): JSX.Ele
 function Subject({ row, facts = true }: { row: PanelRowModel; facts?: boolean }): JSX.Element {
   const inner = (
     <>
-      <b className="cn-name">{row.title}</b>
+      <b className="cn-name">
+        {row.depth !== undefined && row.depth > 0 && (
+          <span className="cn-stack-tie" aria-hidden="true" style={{ '--cn-depth': row.depth - 1 } as CSSProperties}>
+            └
+          </span>
+        )}
+        {row.title}
+      </b>
       {facts && <Facts facts={row.facts} />}
     </>
   );

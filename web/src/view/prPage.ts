@@ -1,5 +1,5 @@
 import type { AppState, Issue, PrReviewThread, PrThreadState, PullRequest, TaskSummary } from '../types.js';
-import { closedPrs, goalOfPr } from './goalRefs.js';
+import { closedPrs, goalNumber as goalNumberOf, goalOfPr } from './goalRefs.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -34,7 +34,7 @@ export function buildPrPage(state: AppState, prNumber: number): PrPageView | nul
   if (pr === null) return null;
 
   const goalRef = goalOfPr(state, prNumber);
-  const goalNumber = goalRef === null ? null : Number(/^issue:(\d+)$/.exec(goalRef)?.[1] ?? NaN);
+  const goalNumber = goalNumberOf(goalRef);
   const goal = goalNumber === null ? null : (state.world.issues.find((i) => i.number === goalNumber) ?? null);
 
   const threads =

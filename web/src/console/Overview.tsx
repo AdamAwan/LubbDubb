@@ -4,7 +4,9 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import type { Issue, OpenPullRequest, QueueItem, SupplyState } from '../types.js';
 import { buildGoalPage, furthestEnvironment, type GoalTrack } from '../view/goalPage.js';
 import { buildGoalTrack } from '../view/goalStages.js';
-import { Ref } from '../components/refs.js';
+import { Ref, refLabel } from '../components/refs.js';
+import { goalIssue } from '../view/goalRefs.js';
+import { rackByGoal, type RackGoal, type RackRung } from '../view/prRack.js';
 import { BareButton } from '../components/button.js';
 import { StaleChip } from './goalChips.js';
 import { OverviewSwitch } from './overviews/OverviewSwitch.js';
@@ -392,9 +394,26 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const asking = open.filter(isAsking);
   const answered = open.filter((pr) => isAssigned(pr) && !isAsking(pr));
   const fleet = open.filter((pr) => !isAssigned(pr));
-  const grouped = asking.length + answered.length > 0;
   const marks = open.some((pr) => whoAsked(pr) !== null);
-  const ordered = grouped ? [...asking, ...answered, ...fleet] : open;
+  const goals = rackByGoal(view.state, fleet);
+  const byGoal = goals.some((g) => g.goal !== null);
+  const banded = asking.length + answered.length > 0;
+
+  const row = (pr: OpenPullRequest, group?: RowGroup, rung?: RackRung): PanelRowModel => {
+    const base = prRow(pr, view, actions, { goal: rung === undefined || !byGoal, on: rung?.base ?? null });
+    return {
+      ...base,
+      ...(marks ? { who: <Who name={whoAsked(pr)} /> } : {}),
+      ...(group === undefined ? {} : { group }),
+      ...(rung === undefined ? {} : { depth: rung.depth }),
+    };
+  };
+
+  const loneBand = banded ? fleetBand(fleet.length) : undefined;
+  const fleetRows = goals.flatMap((g) => {
+    const group = byGoal ? goalBand(g, view) : loneBand;
+    return g.rungs.map((rung) => row(rung.pr, group, rung));
+  });
 
   return (
     <section className="cn-card cn-span2 cn-lamp-mark cn-read-marks">
@@ -408,16 +427,45 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
       <PanelRows
         layout="stacked"
         words="subline"
-        rows={ordered.map((pr) => {
-          const row = prRow(pr, view, actions);
-          const who = marks ? { who: <Who name={whoAsked(pr)} /> } : {};
-          if (!grouped) return { ...row, ...who };
-          return { ...row, ...who, group: band(pr, asking.length, answered.length, fleet.length) };
-        })}
+        rows={[
+          ...asking.map((pr) => row(pr, askBand(asking.length))),
+          ...answered.map((pr) => row(pr, answeredBand(answered.length))),
+          ...fleetRows,
+        ]}
       />
     </section>
   );
 }
+
+function goalBand(g: RackGoal, view: CockpitView): RowGroup {
+  if (g.goal === null) return { key: 'goal:none', label: 'No goal', note: `${g.rungs.length}` };
+  const issue = goalIssue(view.state, g.goal);
+  const page = buildGoalPage(view.state, g.goal, view.needsYou, null);
+  const track = page === null ? null : buildGoalTrack(page.parts);
+  return {
+    key: `goal:${g.goal}`,
+    tone: 'title',
+    label: issue?.title ?? refLabel(g.goal),
+    refs: <Ref to={g.goal} title={`Open the goal these pull requests are delivering — ${refLabel(g.goal)}`} />,
+    note:
+      track === null || track.total === 0 ? (
+        `${g.rungs.length} open`
+      ) : (
+        <>
+          <Track track={track} />
+          {track.merged} of {track.total} merged
+        </>
+      ),
+  };
+}
+
+const askBand = (n: number): RowGroup => ({ key: 'asking', label: 'Assigned to review', note: `${n}`, tone: 'ask' });
+const answeredBand = (n: number): RowGroup => ({
+  key: 'answered',
+  label: 'Assigned, not waiting on you',
+  note: `${n}`,
+});
+const fleetBand = (n: number): RowGroup => ({ key: 'fleet', label: 'The fleet’s', note: `${n}` });
 
 function isAssigned(pr: OpenPullRequest): boolean {
   return pr.viewerAssignment !== undefined;
@@ -430,12 +478,6 @@ function isAsking(pr: OpenPullRequest): boolean {
 function whoAsked(pr: OpenPullRequest): string | null {
   const author = pr.author?.trim() ?? '';
   return pr.viewerAuthored === false && author !== '' ? author : null;
-}
-
-function band(pr: OpenPullRequest, asking: number, answered: number, fleet: number): RowGroup {
-  if (isAsking(pr)) return { key: 'asking', label: 'Assigned to review', note: `${asking}`, tone: 'ask' };
-  if (isAssigned(pr)) return { key: 'answered', label: 'Assigned, not waiting on you', note: `${answered}` };
-  return { key: 'fleet', label: 'The fleet’s', note: `${fleet}` };
 }
 
 export function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): PanelRowModel {
