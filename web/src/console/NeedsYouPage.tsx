@@ -15,7 +15,7 @@ import { Icon } from '../components/icons.js';
 import { HeadRow } from '../components/panel.js';
 import { Ref } from '../components/refs.js';
 import { Tag, type TagTone } from '../components/tag.js';
-import { relTime } from '../components/util.js';
+import { elapsed, relTime } from '../components/util.js';
 import { PanelRows, type PanelRowModel } from './PanelRow.js';
 import { prRow } from './prRow.js';
 import { openRow } from './queueRailOpens.js';
@@ -42,7 +42,7 @@ const REASON_TONE: Record<PrOnYouReason, TagTone> = {
 };
 
 /** Off to the overview, out of any goal opened over it. */
-export function openOverview(actions: CockpitActions): void {
+function openOverview(actions: CockpitActions): void {
   actions.selectGoal(null);
   actions.openTab('overview');
 }
@@ -61,10 +61,52 @@ export function NeedsYouPage({ view, actions }: { view: CockpitView; actions: Co
         </span>
         <ListenerStatus asks={view.needsYou} listener={listener} folder={folder} />
       </header>
+      <FleetStrip view={view} actions={actions} />
       <div className="cn-ny-cols">
         <AsksColumn view={view} actions={actions} />
         <PrsColumn view={view} actions={actions} prs={prs} />
       </div>
+    </div>
+  );
+}
+
+const STRIP_MAX = 6;
+
+/* The fleet, one quiet line: who is out and for how long, each a way into its agent. → docs/spec/44-needs-you.md#the-fleet-strip */
+function FleetStrip({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const shown = view.live.slice(0, STRIP_MAX);
+  const more = view.live.length - shown.length;
+  return (
+    <div className="cn-ny-fleet">
+      <span className="cn-ny-fleet-label">Fleet</span>
+      {view.live.length === 0 ? (
+        <span className="cn-ny-fleet-idle">no agents out</span>
+      ) : (
+        shown.map((agent) => {
+          const title = view.taskFor(agent)?.title ?? UNNAMED_RUN;
+          const age = elapsed(agent.startedAt, null, view.now);
+          return (
+            <BareButton
+              key={agent.id}
+              usage={{ counted: 'agent.view' }}
+              className={`cn-ny-agent cn-ny-agent-${agent.status}`}
+              onClick={() => actions.select(agent.id)}
+              title={`${title} — ${agent.status}, ${age} — open the agent`}
+            >
+              <i className="cn-ny-dot" />
+              <span>{title}</span>
+              <em>{age}</em>
+            </BareButton>
+          );
+        })
+      )}
+      {more > 0 && <span className="cn-ny-fleet-more">+{more}</span>}
+      <span className="cn-ny-fleet-tail">
+        {view.live.length} of {view.state.control.cap} · {view.upNext.length} queued
+      </span>
+      <BareButton usage={tabUsage('overview')} className="cn-ny-fleet-open" onClick={() => openOverview(actions)}>
+        Overview ›
+      </BareButton>
     </div>
   );
 }

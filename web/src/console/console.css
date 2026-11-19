@@ -7208,6 +7208,70 @@ button.cn-grow {
   font-size: 17px;
   color: var(--cn-fg);
 }
+.cn-ny-fleet {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--cn-line);
+  border-radius: 6px;
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.cn-ny-fleet-label {
+  text-transform: uppercase;
+  letter-spacing: var(--label-track);
+  margin-right: 2px;
+}
+.cn-ny-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 220px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--cn-fg-dim);
+}
+.cn-ny-agent:hover {
+  background: var(--cn-hover);
+  color: var(--cn-fg);
+}
+.cn-ny-agent span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cn-ny-agent em {
+  font-style: normal;
+  color: var(--cn-fg-faint);
+}
+.cn-ny-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cn-green);
+}
+.cn-ny-agent-starting .cn-ny-dot {
+  background: var(--cn-fg-faint);
+}
+.cn-ny-agent-waiting .cn-ny-dot {
+  background: var(--cn-amber);
+}
+.cn-ny-fleet-tail {
+  margin-left: auto;
+  flex: none;
+}
+.cn-ny-fleet-open {
+  flex: none;
+  color: var(--cn-fg-dim);
+}
+.cn-ny-fleet-open:hover {
+  color: var(--cn-fg);
+}
 .cn-ny-counts {
   font: 12px var(--cn-mono);
   color: var(--cn-fg-faint);
