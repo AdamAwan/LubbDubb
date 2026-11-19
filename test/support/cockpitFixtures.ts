@@ -4095,6 +4095,7 @@ export function buildFixtureState(): AppState {
         resumeAttempts: 0,
       },
     ],
+    agentProgress: [],
     endedAgents: 0,
     ejections: [
       {

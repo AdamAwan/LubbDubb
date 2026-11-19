@@ -23,7 +23,8 @@ import { environmentGroups } from '../environments/groups.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 import { once, type SnapshotOpts, baseReads, planReads, verdictReads, contextReads } from './stateReads.js';
 import { checkSetStanding, type CheckSetStanding } from '../validation/planApproval.js';
-import type { ValidationCheck, ValidationPlanRecord } from '../types.js';
+import type { AgentProgress, ValidationCheck, ValidationPlanRecord } from '../types.js';
+import { agentProgress } from '../agents/agentProgress.js';
 import { type IssueReadsOn, issueReads } from './stateIssueReads.js';
 import {
   buildEnvironmentHealth,
@@ -385,6 +386,7 @@ function fleetSection(
   CockpitState,
   | 'tasks'
   | 'agents'
+  | 'agentProgress'
   | 'endedAgents'
   | 'ejections'
   | 'readying'
@@ -402,6 +404,7 @@ function fleetSection(
   return {
     tasks: history().tasks,
     agents: history().agents,
+    agentProgress: liveAgentProgress(r),
     endedAgents: history().ended,
     ejections: r.ejectionViews(),
     readying: system.readying.list(),
@@ -417,10 +420,24 @@ function fleetSection(
   };
 }
 
+function liveAgentProgress(r: Reads): AgentProgress[] {
+  const { store, world, tasks } = r;
+  const live = r.agents().filter((a) => a.endedAt === null);
+  const ids = live.map((a) => a.id);
+  return agentProgress({
+    agents: live,
+    tasks,
+    jobs: r.jobs(),
+    world,
+    threadLabels: store.prThreadLabels.listThreadLabelsForAgents(ids),
+    agentsWithFiles: store.agents.agentsWithFiles(ids),
+  });
+}
+
 function queueSection(r: Reads): Pick<CockpitState, 'jobs' | 'schedules' | 'upcoming' | 'runway'> {
   const { system, store, config, world, control, allHumanTasks } = r;
   return {
-    jobs: store.jobs.listJobs(),
+    jobs: r.jobs(),
     schedules: store.schedules.listJobSchedules(),
     upcoming: system.harness.upcoming,
     runway: readRunway({

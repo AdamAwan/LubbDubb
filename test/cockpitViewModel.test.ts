@@ -13,6 +13,7 @@ function stateWith(over: Partial<AppState>): AppState {
     agents: [],
     parkedOnLimit: [],
     stallParks: [],
+    agentProgress: [],
     tasks: [],
     escalations: [],
     decisions: [],

@@ -42,6 +42,19 @@ export interface Agent {
   resumeAttempts: number;
 }
 
+/**
+ * How far along a live agent is, as the harness measures it — never a claim the agent makes.
+ * `count` is work items handled out of those there are; `stage` is which of a fixed run of stages
+ * it has reached. → docs/spec/11-mcp-tools.md#progress-the-harness-measures
+ */
+export interface AgentProgress {
+  agentId: string;
+  kind: 'count' | 'stage';
+  label: string;
+  done: number;
+  total: number;
+}
+
 export interface AgentFlag {
   id: string;
   agentId: string;

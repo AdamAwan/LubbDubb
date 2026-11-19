@@ -392,7 +392,8 @@ emitting.
   gaps between notes are long test runs and big refactors — the healthiest stretches — so reading age
   as "stuck" would punish honest use and turn an optional note into a heartbeat.
 - **One field.** There is no `stage` enum, because the only member that would imply an operator action
-  is `blocked`, and `escalate` already owns that and does it properly.
+  is `blocked`, and `escalate` already owns that and does it properly. How far along an agent is comes
+  from the harness instead — [below](#progress-the-harness-measures) — and never from this tool.
 - **Trimmed, not rejected.** An over-long note is collapsed to one line, cut to `MAX_NOTE_LENGTH`
   (200) with an ellipsis, and **stored**, with the trim reported back. The opposite of
   a raised claim, because a claim is testimony an operator acts on while a note is a status line
@@ -400,6 +401,30 @@ emitting.
 
 It routes through `AgentManager.recordProgress` for the `progress` event, which the `Hub` turns into a
 plain `dirty` (unlike `agent:tail`, the payload is already on the row the refetch brings).
+
+### Progress the harness measures
+
+Beside the note, a live agent can carry a **progress reading**: how far along it is, as the harness
+measures it from records it already keeps. The agent claims nothing new and calls no extra tool, so a
+reading cannot be fudged and cannot be forgotten. `agentProgress` (`src/agents/agentProgress.ts`)
+derives it per snapshot and it ships as `agentProgress` beside `agents`; nothing is stored. The origin
+is read through `standsFor`, so a crash recovery's requeue reads as the work it redoes.
+
+- **A comments agent (`pr:<n>:comments`) is a count:** threads it answered out of threads there are.
+  Answered is its own `pr_thread_labels` rows on that PR — written by every `reply_to_review` with a
+  thread. Still waiting is the PR's unhandled `unresolvedComments` minus those, so a thread answered
+  before the world refresh is not counted twice. No threads at all is no reading.
+- **Issue work (`issue:<n>`, `issue:<n>:part:<slug>`, `issue:<n>:validate-local-fix:<id>`, code tasks
+  only) is a stage** out of three: `Reading`, `Making changes` (the agent has a recorded file write),
+  `PR open` (an open PR has the task's branch).
+- **A PR fix (`pr:<n>:ci`, `:ci-gate`, `:mergeable`) is a stage** out of two: `Reading`, then
+  `Making changes`. Its PR is open before it starts, so "PR open" would say nothing; a push is not
+  observed.
+- **Everything else has no reading.** Planning, assessing, investigating and validation agents report
+  once at the end, so there is nothing to count while they run. A goal's own progress is its
+  `parts merged` reading ([17](17-cockpit.md)), not an agent's.
+- **A reading is never a verdict.** Like `notedAt`, nothing derives "stuck" or "done" from it: a count
+  at its total is the agent finishing up, and only the agent's end says it is done.
 
 ### `link_ticket`
 
