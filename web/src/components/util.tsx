@@ -179,3 +179,20 @@ export function waitedFor(sinceIso: string, now: number): string {
   const hours = Math.floor(Math.max(0, now - Date.parse(sinceIso)) / 3_600_000);
   return hours >= 24 ? `${Math.floor(hours / 24)}d` : `${hours}h`;
 }
+
+export async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(area);
+    area.select();
+    try {
+      if (!document.execCommand('copy')) throw new Error('the browser refused to copy');
+    } finally {
+      area.remove();
+    }
+  }
+}

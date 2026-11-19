@@ -3,9 +3,8 @@ import type { JSX } from 'react';
 import type { FaultReport, FaultReports } from '../types.js';
 import { Modal } from './Modal.js';
 import { Button, ButtonRow } from './button.js';
-import { ExtLink } from './util.js';
+import { copyText, ExtLink } from './util.js';
 import { Tag } from './tag.js';
-import { copyText } from './CodeBlock.js';
 
 // → docs/spec/17-cockpit.md
 

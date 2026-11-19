@@ -9,6 +9,7 @@ import { HARNESS_TREES, wordsOf } from './scrub.js';
 
 // → docs/spec/18-observability.md#reporting-a-fault-to-lubbdubb
 
+const READ_BATCH = 32;
 const RUNTIME = `node ${process.versions.node.split('.')[0]} · ${process.platform}`;
 
 export class FaultReporter {
@@ -34,11 +35,15 @@ async function harnessVocabulary(root: string): Promise<ReadonlySet<string>> {
   const words = new Set<string>(HARNESS_TREES);
   const src = join(root, 'src');
   const entries = await readdir(src, { recursive: true, withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isFile() || !/\.tsx?$/.test(entry.name)) continue;
-    const path = join(entry.parentPath, entry.name);
-    for (const w of wordsOf(relative(src, path))) words.add(w.toLowerCase());
-    for (const w of wordsOf(await readFile(path, 'utf8'))) words.add(w.toLowerCase());
+  const paths = entries
+    .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
+    .map((entry) => join(entry.parentPath, entry.name));
+  for (let i = 0; i < paths.length; i += READ_BATCH) {
+    const batch = paths.slice(i, i + READ_BATCH);
+    const texts = await Promise.all(batch.map((path) => readFile(path, 'utf8')));
+    batch.forEach((path, j) => {
+      for (const w of [...wordsOf(relative(src, path)), ...wordsOf(texts[j]!)]) words.add(w.toLowerCase());
+    });
   }
   return words;
 }

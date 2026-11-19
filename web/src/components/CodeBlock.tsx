@@ -1,6 +1,7 @@
 import type { JSX, ReactNode } from 'react';
 import { useState } from 'react';
 import { BareButton } from './button.js';
+import { copyText } from './util.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -86,21 +87,4 @@ function splitPipes(code: string): string[] {
   }
   out.push(current.trim());
   return out.filter((p) => p !== '');
-}
-
-export async function copyText(text: string): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('aria-hidden', 'true');
-    document.body.appendChild(area);
-    area.select();
-    try {
-      if (!document.execCommand('copy')) throw new Error('the browser refused to copy');
-    } finally {
-      area.remove();
-    }
-  }
 }
