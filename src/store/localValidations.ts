@@ -79,7 +79,7 @@ export class LocalValidationStore {
 
   latestLocalValidation(originRef: string): LocalValidation | null {
     const row = this.ctx
-      .prep(`SELECT * FROM local_validations WHERE origin_ref = ? ORDER BY requested_at DESC LIMIT 1`)
+      .prep(`SELECT * FROM local_validations WHERE origin_ref = ? ORDER BY requested_at DESC, rowid DESC LIMIT 1`)
       .get(originRef) as Row | undefined;
     return row ? toLocalValidation(row) : null;
   }
