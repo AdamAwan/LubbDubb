@@ -55,11 +55,14 @@ function tree(members: OpenPullRequest[], baseOf: ReadonlyMap<number, number>): 
     else pushTo(children, base, pr);
   }
   const out: RackRung[] = [];
+  const seen = new Set<number>();
   const walk = (pr: OpenPullRequest, depth: number): void => {
+    if (seen.has(pr.number)) return;
+    seen.add(pr.number);
     out.push({ pr, depth: Math.min(depth, MAX_DEPTH), base: baseOf.get(pr.number) ?? null });
     for (const child of children.get(pr.number) ?? []) walk(child, depth + 1);
   };
-  for (const pr of roots) walk(pr, 0);
+  for (const pr of [...roots, ...sorted]) walk(pr, 0);
   return out;
 }
 
