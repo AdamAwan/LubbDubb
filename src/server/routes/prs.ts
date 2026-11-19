@@ -2,12 +2,22 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { checked, PrNumberParams, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
+import { prAgents } from '../prAgents.js';
 
 // → docs/spec/16-http-api.md
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store } = system;
   registerAssignRoutes(app, { system, hub });
+
+  app.get('/api/prs/agents', () =>
+    prAgents({
+      agents: store.agents.listAgentsByStatus('starting', 'running', 'waiting'),
+      tasks: store.tasks.listTasks(),
+      job: (id) => store.jobs.getJob(id),
+      pullRequests: store.world.getWorldBaseline()?.pullRequests ?? [],
+    }),
+  );
 
   const ThreadParams = PrNumberParams.extend({ threadId: z.string().min(1, 'threadId is required') });
 

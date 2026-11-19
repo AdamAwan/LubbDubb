@@ -29,3 +29,14 @@ export interface WorkSubtreePayload {
   nodes: WorkNode[];
   refUrls: Record<string, string>;
 }
+
+export interface PrAgent {
+  id: string;
+  status: Agent['status'];
+  title: string;
+  waitingReason: string | null;
+}
+
+export interface PrAgentsPayload {
+  prs: { number: number; agents: PrAgent[] }[];
+}

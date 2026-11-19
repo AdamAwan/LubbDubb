@@ -42,6 +42,24 @@ export function prOriginNumber(originRef: string | null): number | null {
   return found === undefined ? null : Number(found);
 }
 
+const STANDS_FOR_DEPTH = 4;
+
+/** A `job:<id>` origin read through to the work it redoes. → docs/spec/17-cockpit.md#a-job-origin-stands-in-for-other-work */
+export function standsFor(
+  originRef: string | null,
+  job: (id: string) => { originRef: string | null } | null | undefined,
+): string | null {
+  let ref = originRef;
+  for (let hop = 0; ref !== null && hop < STANDS_FOR_DEPTH; hop++) {
+    const id = /^job:(.+)$/.exec(ref)?.[1];
+    if (id === undefined) return ref;
+    const next = job(id)?.originRef ?? null;
+    if (next === null) return ref;
+    ref = next;
+  }
+  return ref;
+}
+
 export function groupBy<T, K>(rows: readonly T[], key: (row: T) => K): Map<K, T[]> {
   const grouped = new Map<K, T[]>();
   for (const row of rows) {

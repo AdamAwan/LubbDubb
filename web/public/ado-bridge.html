@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>LubbDubb bridge</title>
+  </head>
+  <body>
+    <script>
+      (() => {
+        const token = (/[#&]t=([A-Za-z0-9_-]+)/.exec(location.hash) || [])[1] || '';
+        const trusted = (origin) =>
+          origin === 'https://dev.azure.com' || /^https:\/\/[a-z0-9-]+\.visualstudio\.com$/.test(origin);
+        addEventListener('message', async (event) => {
+          if (event.source !== parent || !trusted(event.origin)) return;
+          if (!event.data || event.data.type !== 'lubbdubb:pr-agents') return;
+          let reply;
+          try {
+            const res = await fetch('/api/prs/agents', { headers: { authorization: 'Bearer ' + token } });
+            reply = res.ok ? { ok: true, data: await res.json() } : { ok: false, error: 'HTTP ' + res.status };
+          } catch (err) {
+            reply = { ok: false, error: String(err) };
+          }
+          parent.postMessage({ type: 'lubbdubb:pr-agents', ...reply }, event.origin);
+        });
+      })();
+    </script>
+  </body>
+</html>

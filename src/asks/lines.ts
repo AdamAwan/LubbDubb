@@ -2,24 +2,11 @@ import type { Issue, PullRequest } from '../wire.js';
 import type { AskDestination } from './askRow.js';
 import type { AskInputs } from './queue.js';
 import { issueOriginNumber } from '../issueOrigins.js';
+import { standsFor } from '../primitives.js';
 
 // → docs/spec/17-cockpit.md#a-row-is-one-factual-line
 
-const STANDS_FOR_DEPTH = 4;
 const MAX_SUMMARY = 110;
-
-/** A `job:<id>` origin read through to the work it redoes. → docs/spec/17-cockpit.md#a-job-origin-stands-in-for-other-work */
-function standsFor(state: AskInputs, originRef: string | null): string | null {
-  let ref = originRef;
-  for (let hop = 0; ref !== null && hop < STANDS_FOR_DEPTH; hop++) {
-    const id = /^job:(.+)$/.exec(ref)?.[1];
-    if (id === undefined) return ref;
-    const job = state.jobs.find((j) => j.id === id);
-    if (!job || job.originRef === null) return ref;
-    ref = job.originRef;
-  }
-  return ref;
-}
 
 type PrGoalInputs = Pick<AskInputs, 'plans' | 'planParts' | 'archivedPullRequests'> & {
   world: Pick<AskInputs['world'], 'pullRequests' | 'closedPullRequests'> & {
@@ -64,7 +51,7 @@ export function goalIssue<I extends Pick<Issue, 'number'>>(
 }
 
 export function goalOf(ref: string | null | undefined, state: AskInputs): string | null {
-  const origin = standsFor(state, ref ?? null);
+  const origin = standsFor(ref ?? null, (id) => state.jobs.find((j) => j.id === id));
   const m = /^(issue:\d+)/.exec(origin ?? '');
   if (m?.[1]) return m[1];
   const pr = /^pr:(\d+)/.exec(origin ?? '');

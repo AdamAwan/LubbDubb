@@ -141,6 +141,7 @@ deliberately left unchecked, and why, is in
 | [42](spec/42-extensions.md)          | Extensions                 | A project's own code loaded at boot to answer named slots: the file, loading and its refusals, calling a slot, adding one                                            |
 | [43](spec/43-handled-for-you.md)     | Handled for you            | The small asks the harness answers itself, the fixed list of them, the record, the undo, and the page the rail opens — partly built                                  |
 | [44](spec/44-needs-you.md)           | Needs you                  | The new tab: the asks and the pull requests waiting on the operator, and the listen loop that hands one to a Claude chat                                             |
+| [45](spec/45-ado-overlay.md)         | The Azure DevOps overlay   | Experiment: a bookmarklet that badges the Azure DevOps pull request list with the agents on each, through a hidden bridge page                                       |
 
 ## Conventions used throughout
 
