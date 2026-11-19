@@ -3,7 +3,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Agent, ListenItem, ListenerView, PrOnYouReason } from '../types.js';
 import type { NeedRow } from '../view/needsYou.js';
-import { sameItem } from '../view/needsYouPage.js';
+import { prOnYouReasons, sameItem } from '../view/needsYouPage.js';
 import { prsOnYou, PR_REASON_LABEL, type PrOnYou } from '../view/prsOnYou.js';
 import { plural } from '../view/plural.js';
 import { askOnlyPrompt, listenPrompt, prPrompt } from '../cockpit/desktopLink.js';
@@ -226,29 +226,26 @@ function PrsColumn({
   prs: readonly PrOnYou[];
 }): JSX.Element {
   const open = view.state.world.pullRequests.length;
-  const reasonsOf = new Map(prs.map(({ pr, reasons }) => [pr.number, reasons]));
   const rows = goalPrRows(
     prs.map(({ pr }) => pr),
     view,
     actions,
-    {
-      dress: (pr, row) => {
-        const item: ListenItem = { kind: 'pr', number: pr.number };
-        return {
-          ...row,
-          chips: (
-            <span className="cn-ny-chips">
-              {(reasonsOf.get(pr.number) ?? []).map((reason) => (
-                <Tag key={reason} tone={REASON_TONE[reason]}>
-                  {PR_REASON_LABEL[reason]}
-                </Tag>
-              ))}
-            </span>
-          ),
-          action: <ClaudeButton item={item} view={view} actions={actions} />,
-          below: <SentLine item={item} view={view} />,
-        };
-      },
+    (pr, row) => {
+      const item: ListenItem = { kind: 'pr', number: pr.number };
+      return {
+        ...row,
+        chips: (
+          <span className="cn-ny-chips">
+            {prOnYouReasons(pr).map((reason) => (
+              <Tag key={reason} tone={REASON_TONE[reason]}>
+                {PR_REASON_LABEL[reason]}
+              </Tag>
+            ))}
+          </span>
+        ),
+        action: <ClaudeButton item={item} view={view} actions={actions} />,
+        below: <SentLine item={item} view={view} />,
+      };
     },
   );
   return (

@@ -11,7 +11,8 @@ import { OverviewSwitch } from './overviews/OverviewSwitch.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { GroupHead, PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
 import { prRow } from './prRow.js';
-import { goalPrRows, Track } from './prGoalRows.js';
+import { goalPrRows } from './prGoalRows.js';
+import { Track } from '../components/track.js';
 import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
@@ -376,10 +377,9 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
     ...dress(pr, prRow(pr, view, actions)),
     group,
   });
-  const fleetRows = goalPrRows(fleet, view, actions, {
-    dress,
-    ...(banded ? { lone: fleetBand(fleet.length) } : {}),
-  });
+  const fleetRows = goalPrRows(fleet, view, actions, dress).map((r) =>
+    r.group === undefined && banded ? { ...r, group: fleetBand(fleet.length) } : r,
+  );
 
   return (
     <section className="cn-card cn-span2 cn-lamp-mark cn-read-marks">
