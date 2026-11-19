@@ -322,6 +322,12 @@ Before the first cycle there is no baseline, and the route ships an **empty** wo
 this removes (boot while the provider throttles → the boot cycle fails → no baseline → every `dirty`
 refetches → each fan-out fails → recording the error broadcasts another `dirty`, unbounded).
 
+### `GET /api/prs/agents`
+
+`{ prs: [{ number, agents }] }` — the live agents grouped by the pull request each is on, for the
+Azure DevOps overlay's bridge page. An experiment; how an agent is matched to a pull request is
+[45](45-ado-overlay.md#which-pull-request-an-agent-is-on).
+
 ### `GET /api/handled` · `POST /api/handled/check` · `POST /api/handled/:id/undo|redo`
 
 The small asks the harness answered itself ([43](43-handled-for-you.md)). `GET` answers
