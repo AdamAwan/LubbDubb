@@ -1,11 +1,13 @@
 import { parseIssueOrigin } from '../issueOrigins.js';
-import { standsFor } from '../primitives.js';
+import { prState } from '../pr/prHealth.js';
+import { prOriginNumber, standsFor } from '../primitives.js';
 import type { Agent, AgentProgress, Job, PrThreadLabel, TaskSummary, WorldSnapshot } from '../types.js';
 
 // → docs/spec/11-mcp-tools.md#progress-the-harness-measures
 
 const ISSUE_WORK_STAGES = ['Reading', 'Making changes', 'PR open'] as const;
-const PR_FIX_STAGES = ['Reading', 'Making changes'] as const;
+const PR_FIX_STAGES = ISSUE_WORK_STAGES.slice(0, 2);
+const PR_FIX_CONCERNS = new Set(['ci', 'ci-gate', 'mergeable']);
 
 export interface AgentProgressInputs {
   agents: readonly Agent[];
@@ -39,18 +41,19 @@ function readingFor(
   origin: string | null,
   inputs: AgentProgressInputs,
 ): Reading | null {
-  const pr = /^pr:(\d+):(comments|ci|ci-gate|mergeable)$/.exec(origin ?? '');
-  if (pr !== null) {
-    const prNumber = Number(pr[1]);
-    if (pr[2] === 'comments') return threadCount(agent.id, prNumber, inputs);
-    return stage(PR_FIX_STAGES, inputs.agentsWithFiles.has(agent.id) ? 2 : 1);
+  const editing = inputs.agentsWithFiles.has(agent.id) ? 2 : 1;
+  const prNumber = prOriginNumber(origin);
+  if (prNumber !== null) {
+    const concern = origin!.split(':')[2] ?? '';
+    if (concern === 'comments') return threadCount(agent.id, prNumber, inputs);
+    return PR_FIX_CONCERNS.has(concern) ? stage(PR_FIX_STAGES, editing) : null;
   }
   const family = parseIssueOrigin(origin)?.family;
   if (family !== 'root' && family !== 'part' && family !== 'localValidationFix') return null;
   if (task.kind !== 'code') return null;
   const prOpen =
-    task.branch !== null && inputs.world.pullRequests.some((p) => p.branch === task.branch && p.state !== 'closed');
-  return stage(ISSUE_WORK_STAGES, prOpen ? 3 : inputs.agentsWithFiles.has(agent.id) ? 2 : 1);
+    task.branch !== null && inputs.world.pullRequests.some((p) => p.branch === task.branch && prState(p) === 'open');
+  return stage(ISSUE_WORK_STAGES, prOpen ? 3 : editing);
 }
 
 function threadCount(agentId: string, prNumber: number, inputs: AgentProgressInputs): Reading | null {

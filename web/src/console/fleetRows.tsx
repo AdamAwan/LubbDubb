@@ -23,7 +23,7 @@ export function agentLamp(agent: Agent, view: CockpitView): string {
 
 /** The harness's measure of how far along a live agent is, in words, or null where it has none. */
 export function agentProgressText(agent: Agent, view: CockpitView): string | null {
-  const p = view.state.agentProgress.find((row) => row.agentId === agent.id);
+  const p = view.progressByAgent.get(agent.id);
   if (p === undefined) return null;
   if (p.kind === 'stage') return `${p.label} · step ${String(p.done)} of ${String(p.total)}`;
   const count = `${String(p.done)}/${String(p.total)} ${p.label}`;

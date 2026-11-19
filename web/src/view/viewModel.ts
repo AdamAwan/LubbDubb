@@ -101,6 +101,7 @@ export interface CockpitView {
   proposalFor: ReadonlyMap<string, Proposal>;
   agentById: ReadonlyMap<string, Agent>;
   escalationByAgent: ReadonlyMap<string, Escalation>;
+  progressByAgent: ReadonlyMap<string, AppState['agentProgress'][number]>;
   limitParked: ReadonlySet<string>;
   stallExpiryByAgent: ReadonlyMap<string, string>;
   flagsByAgent: ReadonlyMap<string, AgentFlag[]>;
@@ -290,6 +291,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     escalationByAgent: new Map(
       openEscalations.flatMap((e) => (e.agentId ? ([[e.agentId, e]] as [string, Escalation][]) : [])),
     ),
+    progressByAgent: new Map(state.agentProgress.map((p) => [p.agentId, p])),
     limitParked: new Set(state.parkedOnLimit),
     stallExpiryByAgent: new Map(state.stallParks.map((p) => [p.agentId, p.expiresAt])),
     flagsByAgent: groupByAgent(state.flags),

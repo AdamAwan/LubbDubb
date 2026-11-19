@@ -427,17 +427,17 @@ function liveAgentProgress(r: Reads): AgentProgress[] {
   return agentProgress({
     agents: live,
     tasks,
-    jobs: store.jobs.listJobs(),
+    jobs: r.jobs(),
     world,
     threadLabels: store.prThreadLabels.listThreadLabelsForAgents(ids),
-    agentsWithFiles: new Set(store.agents.listFilesForAgents(ids).map((f) => f.agentId)),
+    agentsWithFiles: store.agents.agentsWithFiles(ids),
   });
 }
 
 function queueSection(r: Reads): Pick<CockpitState, 'jobs' | 'schedules' | 'upcoming' | 'runway'> {
   const { system, store, config, world, control, allHumanTasks } = r;
   return {
-    jobs: store.jobs.listJobs(),
+    jobs: r.jobs(),
     schedules: store.schedules.listJobSchedules(),
     upcoming: system.harness.upcoming,
     runway: readRunway({

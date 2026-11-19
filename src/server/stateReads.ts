@@ -69,6 +69,7 @@ export function baseReads(system: System, opts: SnapshotOpts | undefined) {
   const control = runtimeControl.snapshot();
   const flags = once(() => store.agents.listAllFlags());
   const attachments = once(() => store.jobs.listAllAttachments());
+  const jobs = once(() => store.jobs.listJobs());
   const humanTasks = store.humanTasks.listHumanTasks();
   const ejectionViews = (): EjectionView[] =>
     store.ejections.listEjections(EJECTION_ROWS).map((row) => ({
@@ -107,6 +108,7 @@ export function baseReads(system: System, opts: SnapshotOpts | undefined) {
     control,
     flags,
     attachments,
+    jobs,
     humanTasks,
     ejectionViews,
     allHumanTasks,

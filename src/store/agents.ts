@@ -335,6 +335,14 @@ export class AgentStore {
     return [...byGoal.values()];
   }
 
+  agentsWithFiles(agentIds: readonly string[]): Set<string> {
+    if (agentIds.length === 0) return new Set();
+    const rows = this.ctx.db
+      .prepare(`SELECT DISTINCT agent_id FROM agent_files WHERE agent_id IN (${agentIds.map(() => '?').join(',')})`)
+      .all(...agentIds) as { agent_id: string }[];
+    return new Set(rows.map((r) => r.agent_id));
+  }
+
   listFilesForAgents(agentIds: readonly string[]): AgentFile[] {
     if (agentIds.length === 0) return [];
     const rows = this.ctx.db
