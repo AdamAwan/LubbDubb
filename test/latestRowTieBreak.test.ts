@@ -10,6 +10,11 @@ test('the latest local validation is the newer of two requested in the same mill
     for (let i = 0; i < 20; i++) {
       store.localValidations.createLocalValidation({ originRef: 'issue:1', runId: `r${i}`, ref: 'b', commit: `${i}` });
       assert.equal(store.localValidations.latestLocalValidation('issue:1')?.commit, `${i}`);
+      assert.deepEqual(
+        store.localValidations.listLatestLocalValidations().map((v) => v.commit),
+        [`${i}`],
+        'the list names one latest per origin, the same one',
+      );
     }
   } finally {
     store.close();
