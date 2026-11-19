@@ -73,6 +73,8 @@ export function NeedsYouPage({ view, actions }: { view: CockpitView; actions: Co
 
 const STRIP_MAX = 6;
 
+const agentName = (agent: Agent, view: CockpitView): string => view.taskFor(agent)?.title ?? agent.id;
+
 function agentDoing(agent: Agent, view: CockpitView): string {
   if (view.escalationByAgent.has(agent.id)) return 'has an open ask';
   if (view.limitParked.has(agent.id)) return 'out of account limit';
@@ -97,7 +99,7 @@ function FleetStrip({ view, actions }: { view: CockpitView; actions: CockpitActi
         ) : (
           !open &&
           shown.map((agent) => {
-            const title = view.taskFor(agent)?.title ?? agent.id;
+            const title = agentName(agent, view);
             const age = elapsed(agent.startedAt, null, view.now);
             return (
               <BareButton
@@ -163,7 +165,7 @@ function FleetList({
           title="Open the agent"
         >
           <i className={`cn-lamp ${agentLamp(agent, view)}`} />
-          <span>{view.taskFor(agent)?.title ?? agent.id}</span>
+          <span>{agentName(agent, view)}</span>
           <span className="cn-ny-fleet-doing">{agent.note ?? agentDoing(agent, view)}</span>
           <em>{elapsed(agent.startedAt, null, view.now)}</em>
         </BareButton>
