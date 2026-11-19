@@ -18,6 +18,7 @@ import { Tag, type TagTone } from '../components/tag.js';
 import { elapsed, relTime } from '../components/util.js';
 import { PanelRows, type PanelRowModel } from './PanelRow.js';
 import { prRow } from './prRow.js';
+import { agentLamp } from './fleetRows.js';
 import { openRow } from './queueRailOpens.js';
 import {
   configDestination,
@@ -83,17 +84,17 @@ function FleetStrip({ view, actions }: { view: CockpitView; actions: CockpitActi
         <span className="cn-ny-fleet-idle">no agents out</span>
       ) : (
         shown.map((agent) => {
-          const title = view.taskFor(agent)?.title ?? UNNAMED_RUN;
+          const title = view.taskFor(agent)?.title ?? agent.id;
           const age = elapsed(agent.startedAt, null, view.now);
           return (
             <BareButton
               key={agent.id}
               usage={{ counted: 'agent.view' }}
-              className={`cn-ny-agent cn-ny-agent-${agent.status}`}
+              className="cn-ny-agent"
               onClick={() => actions.select(agent.id)}
-              title={`${title} — ${agent.status}, ${age} — open the agent`}
+              title={`${title} — ${view.escalationByAgent.has(agent.id) ? 'has an open ask' : agent.status}, ${age} — open the agent`}
             >
-              <i className="cn-ny-dot" />
+              <i className={`cn-lamp ${agentLamp(agent, view)}`} />
               <span>{title}</span>
               <em>{age}</em>
             </BareButton>

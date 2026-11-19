@@ -7248,19 +7248,6 @@ button.cn-grow {
   font-style: normal;
   color: var(--cn-fg-faint);
 }
-.cn-ny-dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--cn-green);
-}
-.cn-ny-agent-starting .cn-ny-dot {
-  background: var(--cn-fg-faint);
-}
-.cn-ny-agent-waiting .cn-ny-dot {
-  background: var(--cn-amber);
-}
 .cn-ny-fleet-tail {
   margin-left: auto;
   flex: none;
