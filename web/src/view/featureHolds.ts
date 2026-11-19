@@ -1,6 +1,6 @@
 import type { Agent, AppState, OpenPullRequest, PullRequest, TaskSummary } from '../types.js';
 import type { NeedKind, NeedRow } from './needsYou.js';
-import { closedPrs, goalOfPr, standsFor } from './goalRefs.js';
+import { closedPrs, goalNumber, goalOfPr, standsFor } from './goalRefs.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -63,11 +63,6 @@ function goalNumberOf(state: AppState, originRef: string | null): number | null 
   if (issue) return Number(issue[1]);
   const pr = prNumberOf(ref);
   return pr === null ? null : goalNumber(goalOfPr(state, pr));
-}
-
-function goalNumber(goalRef: string | null): number | null {
-  const m = goalRef === null ? null : /^issue:(\d+)$/.exec(goalRef);
-  return m ? Number(m[1]) : null;
 }
 
 function bySinceDesc(a: FeatureHold, b: FeatureHold): number {

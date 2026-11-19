@@ -33,7 +33,7 @@ export function prRow(
   { goal: withGoal = true }: { goal?: boolean } = {},
 ): PanelRowModel {
   const unwatched = pr.attention.status === 'unwatched';
-  const goal = goalOfPr(view.state, pr.number);
+  const goal = withGoal ? goalOfPr(view.state, pr.number) : null;
   const onIt = view.agentOnBranch.get(pr.branch);
   const watchLabel = view.state.config.watchLabel;
   return {
@@ -42,9 +42,7 @@ export function prRow(
     refs: (
       <>
         <Ref to={`pr:${pr.number}`} />
-        {withGoal && goal !== null && (
-          <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />
-        )}
+        {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
       </>
     ),
     open: { usage: { counted: 'pr.view' }, go: () => actions.selectPr(pr.number) },

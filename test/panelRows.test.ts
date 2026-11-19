@@ -142,16 +142,11 @@ test('a pull-request row keeps the court’s reasons and wears none of its words
   const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Build'));
   const rows = rack.split(ROW).slice(1);
   const open = state.world.pullRequests;
-  const drawn = [
-    ...open.filter((pr) => pr.attention.assignedToYou !== undefined),
-    ...open.filter((pr) => pr.viewerAssignment !== undefined && pr.attention.assignedToYou === undefined),
-    ...open.filter((pr) => pr.viewerAssignment === undefined),
-  ];
   assert.equal(rows.length, open.length, 'every open pull request is drawn');
   assert.ok(!rack.includes('cn-why-chip'), 'the rack drew a state word');
-  for (const [i, row] of rows.entries()) {
-    const pr = drawn[i];
-    assert.ok(pr, 'the fixtures line up with the rows');
+  for (const pr of open) {
+    const row = rows.find((r) => r.includes(`>${pr.title}</b>`) || r.includes(`</span>${pr.title}</b>`));
+    assert.ok(row, `#${pr.number} is not drawn`);
     assert.ok(!row.includes(`>${pr.attention.status}</button>`), `#${pr.number} still wears its court as a word`);
     const unwatched = pr.attention.status === 'unwatched';
     if (pr.attention.reasons.length > 0 && !unwatched) {

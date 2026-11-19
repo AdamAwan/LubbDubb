@@ -4650,6 +4650,34 @@ button.cn-grow {
   background: var(--cn-red-fill);
   color: var(--cn-red-ink);
 }
+.cn-group.cn-group-title {
+  color: var(--cn-fg);
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cn-group-title .cn-group-n {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cn-fg-faint);
+  font-family: var(--cn-mono);
+  font-size: 11px;
+}
+.cn-group-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cn-stack-tie {
+  color: var(--cn-fg-faint);
+  font-family: var(--cn-mono);
+  margin-right: 6px;
+  margin-left: calc(var(--cn-depth, 0) * 16px);
+}
 .cn-group-n {
   margin-left: auto;
   font-weight: 400;

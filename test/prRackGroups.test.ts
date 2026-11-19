@@ -13,9 +13,10 @@ import type { CockpitActions } from '../web/src/cockpit/actions.js';
 const { buildFixtureState } = await import('./support/cockpitFixtures.js');
 const { Overview } = await import('../web/src/console/Overview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
-const { goalIssue } = await import('../web/src/view/goalRefs.js');
+const { goalIssue, goalOfPr } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
 const { initials } = await import('../web/src/components/who.js');
+const { rackByGoal } = await import('../web/src/view/prRack.js');
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
@@ -102,9 +103,9 @@ test('an assignment the operator has answered keeps its band and its mark', () =
   const card = rack(render(view({ world })));
   assert.ok(!card.includes('cn-group-ask'), 'an answered request still wears the ask red');
   const band = card.indexOf('Assigned, not waiting on you');
-  const fleet = card.indexOf('The fleet');
+  const fleet = card.indexOf('cn-group cn-group-title');
   assert.ok(band > 0, 'the band went with the court');
-  assert.ok(fleet > band, 'the fleet’s band is drawn above the assigned one');
+  assert.ok(fleet > band, 'the fleet’s goals are drawn above the assigned band');
   for (const pr of answered) {
     const author = pr.author;
     assert.ok(author !== undefined && author !== '', 'and the provider must have reported who asked');
@@ -114,7 +115,7 @@ test('an assignment the operator has answered keeps its band and its mark', () =
   }
 });
 
-test('the rack draws no band and no marks when nothing is anybody else’s', () => {
+test('the rack draws no assignment band and no marks when nothing is anybody else’s', () => {
   const state = buildFixtureState();
   const world = {
     ...state.world,
@@ -126,9 +127,58 @@ test('the rack draws no band and no marks when nothing is anybody else’s', () 
     })),
   };
   const card = rack(render(view({ world })));
-  assert.ok(!card.includes('cn-group'), 'a band was drawn with nothing to separate');
+  assert.ok(!card.includes('cn-group-ask'), 'an ask band was drawn with nothing in it');
+  assert.ok(!card.includes('Assigned'), 'an assignment band was drawn with nothing in it');
   assert.ok(!card.includes('cn-who'), 'a column of who-asked marks was drawn with nobody in it');
   assert.ok(card.includes('cn-row cn-frow'), 'and the rows themselves are still drawn');
+});
+
+test('the fleet’s pull requests are grouped under their goal, a stack in base-first order', () => {
+  const state = buildFixtureState();
+  const payment = state.world.pullRequests.find((pr) => pr.branch === 'issue/390/payment');
+  const refunds = state.world.pullRequests.find((pr) => pr.branch === 'issue/390/refunds');
+  const loose = state.world.pullRequests.find(
+    (pr) => goalOfPr(state, pr.number) === null && pr.viewerAssignment === undefined,
+  );
+  assert.ok(payment && refunds && loose, 'the fixtures must carry a two-PR stack on #390 and a PR with no goal');
+
+  const card = rack(render(view()));
+  const goal = goalIssue(state, 'issue:390');
+  assert.ok(goal, 'the fixtures must carry goal #390');
+  const head = card.indexOf(`<span class="cn-group-t">${goal.title}</span>`);
+  assert.ok(head > 0, 'no heading names goal #390');
+  const bottom = card.indexOf(payment.title);
+  assert.ok(bottom > head, 'the stack is not drawn under its goal');
+  const top = card.indexOf(refunds.title);
+  assert.ok(bottom > 0 && top > bottom, 'the stack is not drawn base first');
+  assert.ok(
+    card.slice(bottom, top + refunds.title.length).includes('cn-stack-tie'),
+    'the stacked PR is not drawn under its base',
+  );
+  const none = card.indexOf('No goal');
+  assert.ok(none > top && card.indexOf(loose.title) > none, 'a PR with no goal is not drawn under "No goal", last');
+});
+
+test('rackByGoal nests a stack under its base and orders goals by number, no goal last', () => {
+  const state = buildFixtureState();
+  const fleet = state.world.pullRequests.filter((pr) => pr.viewerAssignment === undefined);
+  const groups = rackByGoal(state, fleet);
+  assert.equal(groups[groups.length - 1]?.goal, null, 'the PRs with no goal are not last');
+  const numbers = groups.flatMap((g) => (g.goal === null ? [] : [Number(g.goal.slice('issue:'.length))]));
+  assert.deepEqual(
+    numbers,
+    [...numbers].sort((a, b) => a - b),
+    'goals are not in number order',
+  );
+  const g390 = groups.find((g) => g.goal === 'issue:390');
+  assert.ok(g390, 'goal #390 has no group');
+  const refunds = g390.rungs.find((r) => r.pr.branch === 'issue/390/refunds');
+  const payment = g390.rungs.find((r) => r.pr.branch === 'issue/390/payment');
+  assert.equal(payment?.depth, 0);
+  assert.equal(refunds?.depth, 1);
+  assert.equal(refunds?.base, payment?.pr.number);
+  assert.ok(g390.rungs.indexOf(payment!) < g390.rungs.indexOf(refunds!), 'the base is not first');
+  assert.equal(groups.flatMap((g) => g.rungs).length, fleet.length, 'a pull request went missing or was drawn twice');
 });
 
 test('initials read a login, a display name and an address', () => {
