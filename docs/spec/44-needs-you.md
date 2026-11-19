@@ -31,7 +31,7 @@ top bar names it **Needs you** with a `new` tag. It is not the default home: the
 first tab until the operator decides otherwise.
 
 Whether the page is in front — its tab, with no goal or pull request opened over it — is one
-function, `needsYouInFront` (`web/src/view/needsYouPage.ts`), which both the shell and the top bar read.
+function, `needsYouInFront` (`web/src/view/needsYouPage.ts`), which the shell reads.
 On this tab the shell draws no queue rail — the page _is_ the queue, at full width, and the rail
 beside it would be the same list twice. Everywhere else the rail is where it has always been.
 
@@ -39,11 +39,21 @@ The page is, top to bottom:
 
 1. **The heading row**: `Needs you`, the counts (`7 asks · 6 pull requests`), and on the right the
    [listener status](#is-a-chat-listening).
-2. **Two columns** — the asks, then the pull requests — side by side at 1100px and wider, stacked
+2. **[The fleet strip](#the-fleet-strip)** — one thin line.
+3. **Two columns** — the asks, then the pull requests — side by side at 1100px and wider, stacked
    below that.
 
-The fleet is one line on the top bar while this tab is open — `Fleet: 5 out · 3 free · 4 queued` —
-and pressing it opens the overview. Running agents and goals in flight are not on this page.
+The top bar is the same here as on every other tab — the fleet control, cap and scan countdown stay
+where they are, because this page is where an operator answers, and answering often means pausing or
+widening the fleet.
+
+### The fleet strip
+
+The agents are visible here without being the subject: one bordered line under the heading, quieter
+than the cards. It names each live agent — its status lamp (the fleet's own, from `agentLamp`),
+its task title and how long it has been out — up to six, then `+N`; agents with an open ask come first, then waiting or limit-parked ones, so the six shown are the ones most likely to matter here. A toggle beside them (`+N ▾`, or `▾` when all fit) opens the strip into a list of every agent out — lamp, title, its latest note or state, and time out — each row opening that agent; `less ▴` folds it back. The toggle is local to the page and not kept in the address. Pressing one opens that agent's
+drawer. On the right, `out of cap · queued`, and `Overview ›` to the full fleet. With none out it
+says `no agents out`. Covered by `test/needsYouPage.test.ts`. Goals in flight are not on this page.
 
 ## From the orchestrator
 

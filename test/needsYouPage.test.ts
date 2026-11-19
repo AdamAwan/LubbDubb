@@ -89,13 +89,21 @@ test('the vivarium stays drawn on this tab, as on the cards overview', () => {
   assert.ok(render(v).includes('cn-viv'));
 });
 
-test('the fleet is one line on the bar while this tab is open, and only then', () => {
+test('the bar keeps the fleet controls on this tab, and the page carries a thin fleet strip', () => {
   const v = view('needs');
-  const line = `${v.live.length} out · ${Math.max(0, v.state.control.cap - v.live.length)} free · ${v.upNext.length} queued`;
-  assert.ok(render(v).includes(line));
-  assert.ok(!render(v).includes('fleet-control'));
-  assert.ok(!render(view('overview')).includes(line));
-  assert.ok(render(view('overview')).includes('fleet-control'));
+  const html = render(v);
+  assert.ok(html.includes('fleet-control'), 'the controls stay on the bar');
+  const strip = page(html);
+  assert.ok(strip.includes('class="cn-ny-fleet"'));
+  assert.ok(strip.includes(`${v.live.length} of ${v.state.control.cap} · ${v.upNext.length} queued`));
+  assert.ok(v.live.length > 0, 'the fixture world has agents out');
+  assert.ok(strip.includes('cn-ny-agent'), 'each live agent is named');
+  assert.ok(strip.includes('aria-expanded="false"'), 'the strip opens into a list');
+  const idle = view('needs', (state) => {
+    state.agents = [];
+  });
+  assert.ok(page(render(idle)).includes('no agents out'));
+  assert.ok(!render(view('overview')).includes('class="cn-ny-fleet"'));
 });
 
 test('the heading counts the asks and the pull requests, and the asks keep the rail tiers', () => {
