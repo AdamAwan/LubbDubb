@@ -13,6 +13,7 @@ export type * from './wire/appErrors.js';
 export type * from './wire/settings.js';
 export type * from './wire/pets.js';
 export type * from './wire/handled.js';
+export type * from './wire/observability.js';
 
 export type { SetupCheck, SetupFix } from './setup/reading.js';
 export type {

@@ -3,6 +3,7 @@ import type {
   TenantCommandOutput,
   GoalWatchDeclaration,
   EjectionOutcome,
+  FaultReports,
   FilingTargetProbe,
   InsightsWindow,
   IssueFiled,
@@ -230,6 +231,8 @@ export interface CockpitActions {
   raiseBug(issueNumber: number, summary: string, title?: string): Promise<void>;
 
   probeFilingTarget(): Promise<FilingTargetProbe>;
+
+  loadFaultReports(): Promise<FaultReports>;
 
   raiseIssue(title: string, body: string, watch: boolean): Promise<IssueFiled>;
 
