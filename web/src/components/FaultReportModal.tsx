@@ -5,6 +5,7 @@ import { Modal } from './Modal.js';
 import { Button, ButtonRow } from './button.js';
 import { ExtLink } from './util.js';
 import { Tag } from './tag.js';
+import { copyText } from './CodeBlock.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -68,7 +69,7 @@ function FaultReportCard({ report }: { report: FaultReport }): JSX.Element {
       </div>
     );
   const copy = (): void => {
-    void navigator.clipboard?.writeText(`${report.title}\n\n${report.body}`).then(
+    void copyText(`${report.title}\n\n${report.body}`).then(
       () => setCopied(true),
       () => setCopied(false),
     );

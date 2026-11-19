@@ -35,6 +35,7 @@ const VOCAB = new Set(
     .concat(['src', 'ts', 'harness', 'runcycle']),
 );
 const ROOT = '/opt/lubbdubb';
+const NEW_ISSUE = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 
 function entry(
   message: string,
@@ -47,11 +48,10 @@ function entry(
 const CTX = {
   root: ROOT,
   vocabulary: VOCAB,
-  instanceTerms: ['acme', 'widgets', '/home/adam/acme-widgets', 'adam-laptop'],
+  leaks: leakTerms(['acme', 'widgets', '/home/adam/acme-widgets', 'adam-laptop'], VOCAB),
   build: '0.1.0',
   runtime: 'node 22 · linux',
   now: '2026-11-19T00:00:00.000Z',
-  newIssueBase: 'https://github.com/AdamAwan/LubbDubb/issues/new',
 };
 
 test('a word survives scrubbing only if LubbDubb’s own source contains it', () => {
@@ -87,8 +87,8 @@ test('identical faults group, and nothing of the instance reaches the report', (
   assert.equal(reports[0]!.count, 2);
   for (const r of reports) {
     assert.equal(r.withheld, null);
-    assert.doesNotMatch(`${r.title}\n${r.body}\n${r.issueUrl?.slice(CTX.newIssueBase.length)}`, /acme|widgets|adam/i);
-    assert.ok(r.issueUrl?.startsWith(CTX.newIssueBase));
+    assert.doesNotMatch(`${r.title}\n${r.body}\n${r.issueUrl?.slice(NEW_ISSUE.length)}`, /acme|widgets|adam/i);
+    assert.ok(r.issueUrl?.startsWith(NEW_ISSUE));
   }
 });
 

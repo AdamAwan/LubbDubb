@@ -23,10 +23,13 @@ export function CodeBlock({ code, lang }: { code: string; lang: string }): JSX.E
         className="md-copy"
         title="Copy this exactly as the harness put it, however it is drawn here"
         onClick={() => {
-          void copyText(code).then(() => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1400);
-          });
+          void copyText(code).then(
+            () => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1400);
+            },
+            () => setCopied(false),
+          );
         }}
       >
         {copied ? 'Copied' : 'Copy'}
@@ -85,7 +88,7 @@ function splitPipes(code: string): string[] {
   return out.filter((p) => p !== '');
 }
 
-async function copyText(text: string): Promise<void> {
+export async function copyText(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -95,7 +98,7 @@ async function copyText(text: string): Promise<void> {
     document.body.appendChild(area);
     area.select();
     try {
-      document.execCommand('copy');
+      if (!document.execCommand('copy')) throw new Error('the browser refused to copy');
     } finally {
       area.remove();
     }

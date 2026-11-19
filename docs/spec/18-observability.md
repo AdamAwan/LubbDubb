@@ -118,7 +118,7 @@ copy ([17](17-cockpit.md)). Nothing is sent by the harness itself; the operator 
 presses.
 
 **The scrub is an allow-list.** A word survives only if it appears in LubbDubb's own source
-(`src/**/*.ts` under the install, read once and cached); every other word becomes `‹…›`. Quoted
+(`src/**/*.ts` under the install, read asynchronously once per process by `FaultReporter`; the build and the leak terms below are read afresh on every request, so a live-applied config change is checked for); every other word becomes `‹…›`. Quoted
 values, URLs, emails, paths and numbers are replaced by kind (`‹…›`, `‹url›`, `‹email›`, `‹path›`,
 `‹n›`) whatever they contain, because a quoted value is data even when its words are ours. A
 stack trace keeps only its first line's error class (a standard one, or a name from the source) and

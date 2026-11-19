@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 const WITHHELD = '‹…›';
 
+export const HARNESS_TREES = ['src', 'dist', 'web'];
+
 const MAX_MESSAGE = 400;
 const MAX_FRAMES = 12;
 
@@ -94,7 +96,7 @@ function harnessPath(location: string, root: string, vocabulary: ReadonlySet<str
   const rel = relative(root, absolute).split(sep).join('/');
   if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) return null;
   const parts = rel.split('/');
-  if (!['src', 'dist', 'web'].includes(parts[0]!) || parts.includes('node_modules')) return null;
+  if (!HARNESS_TREES.includes(parts[0]!) || parts.includes('node_modules')) return null;
   const known = parts.every((part) => part.split('.').every((w) => w === '' || isKnown(w, vocabulary)));
   return known ? rel : null;
 }

@@ -9,6 +9,15 @@ const execFileAsync = promisify(execFile);
 
 export const UPSTREAM_REPO = 'AdamAwan/LubbDubb';
 
+const NEW_ISSUE = `https://github.com/${UPSTREAM_REPO}/issues/new`;
+const MAX_URL = 7500;
+
+export function upstreamIssueUrl(title: string, body: string): string {
+  const titled = `${NEW_ISSUE}?title=${encodeURIComponent(title)}`;
+  const url = `${titled}&body=${encodeURIComponent(body)}`;
+  return url.length > MAX_URL ? titled : url;
+}
+
 export interface UpstreamIssues {
   describeTarget(): Promise<FilingTarget>;
   create(input: { title: string; body: string; labels: string[] }): Promise<{ number: number; url: string }>;

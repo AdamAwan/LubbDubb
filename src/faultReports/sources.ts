@@ -1,32 +1,49 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdir, readFile } from 'node:fs/promises';
 import { homedir, hostname } from 'node:os';
-import { join } from 'node:path';
-import { wordsOf } from './scrub.js';
+import { join, relative } from 'node:path';
+import { harnessBuild } from '../pool/harnessVersion.js';
+import type { ErrorLogEntry } from '../types.js';
+import type { FaultReport } from '../wire.js';
+import { composeFaultReports, leakTerms } from './compose.js';
+import { HARNESS_TREES, wordsOf } from './scrub.js';
 
 // → docs/spec/18-observability.md#reporting-a-fault-to-lubbdubb
 
-let cached: { root: string; words: ReadonlySet<string> } | null = null;
+const RUNTIME = `node ${process.versions.node.split('.')[0]} · ${process.platform}`;
 
-export function harnessVocabulary(root: string): ReadonlySet<string> {
-  if (cached?.root === root) return cached.words;
-  const words = new Set<string>();
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const path = join(dir, entry.name);
-      if (entry.isDirectory()) walk(path);
-      else if (/\.tsx?$/.test(entry.name)) {
-        for (const w of wordsOf(entry.name)) words.add(w.toLowerCase());
-        for (const w of wordsOf(readFileSync(path, 'utf8'))) words.add(w.toLowerCase());
-      }
-    }
-  };
-  walk(join(root, 'src'));
-  for (const w of ['src', 'dist', 'web', 'ts', 'js']) words.add(w);
-  cached = { root, words };
+export class FaultReporter {
+  private vocabulary: Promise<ReadonlySet<string>> | null = null;
+
+  constructor(
+    private readonly root: string,
+    private readonly config: unknown,
+  ) {}
+
+  async compose(entries: readonly ErrorLogEntry[], now: string): Promise<FaultReport[]> {
+    this.vocabulary ??= harnessVocabulary(this.root).catch((err: unknown) => {
+      this.vocabulary = null;
+      throw err;
+    });
+    const [vocabulary, build] = await Promise.all([this.vocabulary, harnessBuild(this.root)]);
+    const leaks = leakTerms(instanceTerms(this.config), vocabulary);
+    return composeFaultReports(entries, { root: this.root, vocabulary, leaks, build, runtime: RUNTIME, now });
+  }
+}
+
+async function harnessVocabulary(root: string): Promise<ReadonlySet<string>> {
+  const words = new Set<string>(HARNESS_TREES);
+  const src = join(root, 'src');
+  const entries = await readdir(src, { recursive: true, withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isFile() || !/\.tsx?$/.test(entry.name)) continue;
+    const path = join(entry.parentPath, entry.name);
+    for (const w of wordsOf(relative(src, path))) words.add(w.toLowerCase());
+    for (const w of wordsOf(await readFile(path, 'utf8'))) words.add(w.toLowerCase());
+  }
   return words;
 }
 
-export function instanceTerms(config: unknown): string[] {
+function instanceTerms(config: unknown): string[] {
   const out: string[] = [];
   const visit = (value: unknown): void => {
     if (typeof value === 'string') out.push(value);
