@@ -94,13 +94,13 @@ export class LocalRunStore {
 
   liveLocalRun(): LocalRun | null {
     const row = this.ctx
-      .prep(`SELECT * FROM local_runs WHERE status IN ${LIVE_SQL} ORDER BY started_at DESC LIMIT 1`)
+      .prep(`SELECT * FROM local_runs WHERE status IN ${LIVE_SQL} ORDER BY started_at DESC, rowid DESC LIMIT 1`)
       .get() as LocalRunRow | undefined;
     return row ? toLocalRun(row) : null;
   }
 
   currentLocalRun(): LocalRun | null {
-    const row = this.ctx.prep(`SELECT * FROM local_runs ORDER BY started_at DESC LIMIT 1`).get() as
+    const row = this.ctx.prep(`SELECT * FROM local_runs ORDER BY started_at DESC, rowid DESC LIMIT 1`).get() as
       LocalRunRow | undefined;
     return row ? toLocalRun(row) : null;
   }

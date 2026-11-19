@@ -79,7 +79,7 @@ export class LocalValidationStore {
 
   latestLocalValidation(originRef: string): LocalValidation | null {
     const row = this.ctx
-      .prep(`SELECT * FROM local_validations WHERE origin_ref = ? ORDER BY requested_at DESC LIMIT 1`)
+      .prep(`SELECT * FROM local_validations WHERE origin_ref = ? ORDER BY requested_at DESC, rowid DESC LIMIT 1`)
       .get(originRef) as Row | undefined;
     return row ? toLocalValidation(row) : null;
   }
@@ -87,11 +87,9 @@ export class LocalValidationStore {
   listLatestLocalValidations(): LocalValidation[] {
     const rows = this.ctx
       .prep(
-        `SELECT * FROM local_validations WHERE id IN (
-           SELECT id FROM local_validations lv
-             WHERE lv.requested_at = (SELECT MAX(requested_at) FROM local_validations
-                                        WHERE origin_ref = lv.origin_ref)
-         )`,
+        `SELECT * FROM local_validations lv
+           WHERE lv.id = (SELECT id FROM local_validations WHERE origin_ref = lv.origin_ref
+                            ORDER BY requested_at DESC, rowid DESC LIMIT 1)`,
       )
       .all() as Row[];
     return rows.map(toLocalValidation);
