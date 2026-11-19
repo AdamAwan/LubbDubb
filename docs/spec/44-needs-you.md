@@ -85,8 +85,8 @@ on its row:
 | `describe` | `No description`   | `body` is read and empty after trimming                               |
 
 The page's `prsOnYou` (`web/src/view/prsOnYou.ts`) holds only what is the page's own: the tag words
-and tones. The same keys drop a sent pull request's strip once it is off the page, and
-are `pr_read`'s `onYou`.
+and which pull requests are drawn; the tag tones are `REASON_TONE` in `NeedsYouPage.tsx`. The same
+keys drop a sent pull request's strip once it is off the page, and are `pr_read`'s `onYou`.
 
 They are **grouped by goal, a stack drawn as a tree**, exactly as the overview's rack draws the
 fleet's pull requests — the same `goalPrRows` builder

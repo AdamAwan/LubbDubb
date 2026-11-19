@@ -16,7 +16,7 @@ export function goalPrRows(
   prs: readonly OpenPullRequest[],
   view: CockpitView,
   actions: CockpitActions,
-  dress: (pr: OpenPullRequest, row: PanelRowModel) => PanelRowModel = (_pr, row) => row,
+  dress: (pr: OpenPullRequest, row: PanelRowModel) => PanelRowModel,
 ): PanelRowModel[] {
   const goals = rackByGoal(view.state, prs);
   const byGoal = goals.some((g) => g.goal !== null);
