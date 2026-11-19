@@ -11,6 +11,25 @@ export interface ErrorLogEntry {
 export type ErrorLogInput = Omit<ErrorLogEntry, 'id' | 'createdAt' | 'detail'> & { detail?: string | null };
 
 /**
+ * One group of the fault log, scrubbed to what may leave the machine for LubbDubb's author.
+ * → docs/spec/18-observability.md#reporting-a-fault-to-lubbdubb
+ */
+export interface FaultReport {
+  fingerprint: string;
+  source: ErrorLogEntry['source'];
+  count: number;
+  title: string;
+  body: string;
+  issueUrl: string | null;
+  withheld: string | null;
+}
+
+export interface FaultReports {
+  reports: FaultReport[];
+  unavailable: string | null;
+}
+
+/**
  * The fleet has work it could start and room to start it, and has started nothing for
  * `fleetStallCycles` pulses running. → docs/spec/04-harness-cycle.md#when-the-fleet-stops-dispatching
  */

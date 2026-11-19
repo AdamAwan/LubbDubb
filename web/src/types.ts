@@ -29,6 +29,8 @@ export type {
   EjectionOutcome,
   EjectionView,
   Escalation,
+  FaultReport,
+  FaultReports,
   FilingTargetProbe,
   EnvironmentGate,
   EnvironmentGateRelease,

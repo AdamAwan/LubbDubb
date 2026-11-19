@@ -108,7 +108,7 @@ offers no such control, and the day it does, the cell is where it is added.
 | `pet`            | `view` `expand` `filter` `edit` `abandon` `spend` `close`                                               |
 | `fleet`          | `view` `filter` `edit` `stop` `undo` `open`                                                             |
 | `queue`          | `view` `close`                                                                                          |
-| `fault`          | `view` `waive` `close`                                                                                  |
+| `fault`          | `view` `expand` `waive` `copy` `close` `open`                                                           |
 | `signal`         | `view` `close`                                                                                          |
 | `environment`    | `view` `expand` `edit` `close`                                                                          |
 | `record`         | `view` `expand` `close`                                                                                 |

@@ -27,6 +27,7 @@ import { register as registerControl } from './routes/control.js';
 import { register as registerEjections } from './routes/ejections.js';
 import { register as registerDiscussions } from './routes/discussions.js';
 import { register as registerEscalations } from './routes/escalations.js';
+import { register as registerFaultReports } from './routes/faultReports.js';
 import { register as registerFeatures } from './routes/features.js';
 import { register as registerHumanTasks } from './routes/humanTasks.js';
 import { register as registerHandled } from './routes/handled.js';
@@ -76,6 +77,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerDiscussions,
   registerEjections,
   registerEscalations,
+  registerFaultReports,
   registerFeatures,
   registerHandled,
   registerHumanTasks,

@@ -5611,7 +5611,11 @@ Four panels open from the bar, the ask panel opens from a queue row ([the rail](
   nothing in the harness reads the fault log back, so a clear costs nothing anything decides on, but it
   costs the only copy and for every cockpit rather than this one. One misclick between "leave" and
   "delete the only copy" is too few, and the only route to it must not depend on there being rows.
-  Amber, never red — the log blocks nothing.
+  Amber, never red — the log blocks nothing. Beside it, while there are rows, **Report to LubbDubb…**
+  opens `FaultReportModal`: each group of the log, scrubbed, with **Open as a GitHub issue** (LubbDubb's
+  own new-issue form, prefilled, so the operator reads it once more before it is filed) and **Copy to
+  send to the owner**. What may leave the machine is decided on the server, never here
+  ([18](18-observability.md#reporting-a-fault-to-lubbdubb)).
 - **Launch** — the shared `LaunchPanel` and `SchedulePanel` together, since a recurrence is the same
   act with a `when` attached: a firing writes the identical job the composer writes, into the identical
   queue drawn below both. There is no event injector: a real run against a fake provider is still a real

@@ -208,6 +208,7 @@ function filingActions(then: Then, refresh: Refresh) {
   return {
     raiseBug: (n, summary, title) => then(api.raiseBug(n, summary, title)),
     probeFilingTarget: () => api.probeFilingTarget(),
+    loadFaultReports: () => api.faultReports(),
     raiseIssue: async (title, body, watch) => {
       const filed = await api.raiseIssue(title, body, watch);
       await refresh(null);

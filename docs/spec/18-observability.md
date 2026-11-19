@@ -31,6 +31,7 @@ the money is still being spent — it acts on nothing and files a visible obliga
 
 - **Every caught failure is recorded through `errors.record`, whose event is `logged`, never `error`** — an unlistened `error` event throws, and recording a failure must never throw. → [§](#the-error-log) · `test/errorLog.test.ts`
 - **The stderr mirror writes one line per entry, flattening the header and indenting `detail`, while the stored entry keeps its exact text** so a newline in an outside value cannot forge a second log line. → [§](#the-stderr-mirror-sanitises-and-only-the-mirror-does) · `test/errorLog.test.ts`
+- **A fault report keeps a word only if LubbDubb's own source contains it, keeps only stack frames inside LubbDubb's tree, and is withheld whole when any instance term survives** — an allow-list, never a deny-list, because a scrubber that removes what it recognises sends everything it does not. → [§](#reporting-a-fault-to-lubbdubb) · `test/faultReports.test.ts`
 - **Only executed dispatches count as attempts for the re-dispatch cooldown** because a deferred one never ran. → [§](#the-decision-log) · `test/dispatchCooldown.test.ts`
 - **The first cycle over a fresh store records only the baseline**, never an "everything is new" flood of world events. → [§](#the-activity-feed) · `test/worldEvents.test.ts`
 - **Spend from the two delta tables is added in one place: `sumUsageCostSince` reads both, `listUsageEventsSince` the agents' alone** — a third source added anywhere else is money the cockpit states nowhere. → [§](#two-tables-of-deltas-added-in-one-place) · `test/localRun.test.ts`
@@ -106,6 +107,46 @@ agent id off a request path, a provider name and exception text off the world.
 The **stored** entry keeps its exact text. The store is structured rows rather than a line-oriented
 stream, and the cockpit renders the value as DOM text, where a newline forges nothing. Sanitising on
 the way in would corrupt the record to protect a transport that is not the record.
+
+### Reporting a fault to LubbDubb
+
+`src/faultReports/`. The fault log is about LubbDubb's own failures, so the person best placed to fix
+one is LubbDubb's author — but every entry is written from the operator's own world: repo names, issue
+titles, paths, hosts. `GET /api/errors/reports` turns the log into reports that are safe to hand over,
+and the cockpit's Faults panel offers each one as a prefilled issue on LubbDubb's tracker or as text to
+copy ([17](17-cockpit.md)). Nothing is sent by the harness itself; the operator reads the report and
+presses.
+
+**The scrub is an allow-list.** A word survives only if it appears in LubbDubb's own source
+(`src/**/*.ts` under the install, read once and cached); every other word becomes `‹…›`. Quoted
+values, URLs, emails, paths and numbers are replaced by kind (`‹…›`, `‹url›`, `‹email›`, `‹path›`,
+`‹n›`) whatever they contain, because a quoted value is data even when its words are ours. A
+stack trace keeps only its first line's error class (a standard one, or a name from the source) and
+the frames whose file sits under the install's `src/`, `dist/` or `web/`, as repo-relative paths with
+their function names — every other line of `detail`, output tails included, is dropped. A deny-list
+would be the wrong shape: it removes what it was taught to recognise and sends the rest.
+
+**A word that is both ours and theirs goes.** A project called `billing` reads as the source's own
+word `billing`. That is accepted rather than fought: such a word is common enough to sit in a public
+codebase, so on its own it identifies nothing.
+
+**Then a leak check fails closed.** Every string in the loaded config (keys and values), the host
+name, the home directory and `USER`/`LOGNAME`/`HOSTNAME`/`PWD` are split into words; each one of three
+or more characters that is _not_ a source word is an instance term. A composed report containing any
+of them is **withheld whole** — empty text, no URL, a reason — rather than trimmed, because a term that
+got past the scrub means the scrub is wrong, and a second guess at what else it missed is not a
+guarantee. It catches what the scrub does not touch: the build string, a frame path.
+
+**Grouping and the report.** Entries group on source, scrubbed message, error class and top frame,
+so one fault firing every cycle is one report with a count. The body carries the source and top
+frame, the count and how many days ago it was first seen, the build (`harnessBuild`) and the Node
+major and OS family, the scrubbed message and frames, and a **Where to start** list: the top frame's
+file, the spec that owns the source, and a note when values were withheld. That list is the review:
+it is derived, not an agent's, because an agent reading the raw log would know exactly what the
+report must not carry.
+
+**Off a git checkout there are no reports** — `unavailable` says so — because there is no source to
+check words against, and without one the allow-list would be empty or guessed.
 
 ## The decision log
 

@@ -443,6 +443,15 @@ The path served comes from the **stored row**, never from the request, and is re
 
 Runs a cycle. `{ ok: true, report }`.
 
+### `GET /api/errors/reports`
+
+The last 500 entries of the error log, grouped and scrubbed into `FaultReport`s for LubbDubb's own
+author: `{ reports, unavailable }`. Each report carries a `title`, a markdown `body`, an `issueUrl` on
+LubbDubb's new-issue form with both prefilled, or — when the leak check caught something — empty text,
+a null URL and a `withheld` reason. Read-only, and it files nothing: sending is the operator's press.
+`unavailable` says why there are no reports when LubbDubb is not running from a git checkout, since
+the scrub needs its own source to check words against. → [18](18-observability.md#reporting-a-fault-to-lubbdubb)
+
 ### `POST /api/errors/clear`
 
 Deletes the whole error log and returns `{ ok: true, cleared }` — how many rows went. Broadcasts a

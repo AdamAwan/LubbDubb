@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { JSX, ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsolePanel } from '../cockpit/actions.js';
@@ -20,6 +21,7 @@ import { TenantCommandsPanel } from '../components/TenantCommandsPanel.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { Modal } from '../components/Modal.js';
+import { FaultReportModal } from '../components/FaultReportModal.js';
 import { BareButton, Button, ButtonRow } from '../components/button.js';
 import type { ControlUsage } from '../types.js';
 import { panelClose } from '../cockpit/usage.js';
@@ -226,9 +228,20 @@ const FAULT_ROWS = 40;
 
 function FaultLog({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const { errors } = view.state;
+  const [reporting, setReporting] = useState(false);
   return (
     <>
       <ButtonRow>
+        {errors.length > 0 && (
+          <Button
+            ghost
+            usage="fault.expand"
+            title="Scrub these faults down to what is safe to send LubbDubb’s author, then open or copy them"
+            onClick={() => setReporting(true)}
+          >
+            Report to LubbDubb…
+          </Button>
+        )}
         <ConfirmButton
           ghost
           label="Clear"
@@ -253,6 +266,7 @@ function FaultLog({ view, actions }: { view: CockpitView; actions: CockpitAction
         ))}
         {errors.length > FAULT_ROWS && <p className="cn-empty">…{errors.length - FAULT_ROWS} older</p>}
       </div>
+      {reporting && <FaultReportModal load={actions.loadFaultReports} onClose={() => setReporting(false)} />}
     </>
   );
 }

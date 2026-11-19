@@ -183,6 +183,15 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'queue.view': { label: 'Opened Up next', blurb: 'The dispatch queue was reached' },
   'queue.close': { label: 'Closed Up next', blurb: 'The panel was shut' },
   'fault.view': { label: 'Opened the fault log', blurb: 'The recorded faults were reached' },
+  'fault.expand': {
+    label: 'Opened fault reports',
+    blurb: 'The scrubbed reports for LubbDubb’s author were drawn',
+  },
+  'fault.copy': { label: 'Copied a fault report', blurb: 'A scrubbed report was copied to send to LubbDubb’s author' },
+  'fault.open': {
+    label: 'Opened a fault report on GitHub',
+    blurb: 'A scrubbed report was opened as a new LubbDubb issue',
+  },
   'fault.waive': { label: 'Cleared the fault log', blurb: 'Every recorded fault was deleted' },
   'fault.close': { label: 'Closed the fault log', blurb: 'The panel was shut' },
   'signal.view': { label: 'Opened world signals', blurb: 'The feed the queue is decided off was reached' },

@@ -37,6 +37,8 @@ export type {
   DiscussionEntryState,
   DiscussionKind,
   Ejection,
+  FaultReport,
+  FaultReports,
   EjectionOutcome,
   EnvironmentGate,
   EnvironmentGateRelease,

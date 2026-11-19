@@ -36,6 +36,7 @@ import type {
   AppErrorPressPayload,
   AppErrorSearchPayload,
   AppErrorTriagePressPayload,
+  FaultReports,
   FilingTargetProbe,
   IssueFiled,
   PetCatalogue,
@@ -219,6 +220,7 @@ export const api = {
         ),
   pulse: () => post('/api/pulse'),
   clearErrors: () => post<{ ok: true; cleared: number }>('/api/errors/clear'),
+  faultReports: () => authFetch('/api/errors/reports').then((r) => json<FaultReports>(r)),
   answerEscalation: (id: string, response: string) => post(`/api/escalations/${id}/answer`, { response }),
   answerQuestions: (id: string, answers: (string | null)[]) => post(`/api/escalations/${id}/answer`, { answers }),
   dismissEscalation: (id: string, note?: string) =>
