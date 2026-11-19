@@ -400,15 +400,12 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const banded = asking.length + answered.length > 0;
 
   const row = (pr: OpenPullRequest, group?: RowGroup, rung?: RackRung): PanelRowModel => {
-    const base = prRow(pr, view, actions, { goal: rung === undefined || !byGoal });
+    const base = prRow(pr, view, actions, { goal: rung === undefined || !byGoal, on: rung?.base ?? null });
     return {
       ...base,
       ...(marks ? { who: <Who name={whoAsked(pr)} /> } : {}),
       ...(group === undefined ? {} : { group }),
       ...(rung === undefined ? {} : { depth: rung.depth }),
-      ...(rung?.base == null || base.spent === true
-        ? {}
-        : { facts: [...(base.facts ?? []), { label: 'on', value: <Ref to={`pr:${rung.base}`} /> }] }),
     };
   };
 

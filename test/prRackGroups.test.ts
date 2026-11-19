@@ -150,7 +150,7 @@ test('the fleet’s pull requests are grouped under their goal, a stack in base-
   const bottom = card.indexOf(payment.title);
   assert.ok(bottom > head, 'the stack is not drawn under its goal');
   const top = card.indexOf(refunds.title);
-  assert.ok(bottom > 0 && top > bottom, 'the stack is not drawn base first');
+  assert.ok(top > bottom, 'the stack is not drawn base first');
   assert.ok(
     card.slice(bottom, top + refunds.title.length).includes('cn-stack-tie'),
     'the stacked PR is not drawn under its base',

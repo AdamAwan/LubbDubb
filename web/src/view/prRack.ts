@@ -19,12 +19,10 @@ export function rackByGoal(state: AppState, prs: readonly OpenPullRequest[]): Ra
   const groups = new Map<string | null, OpenPullRequest[]>();
   for (const pr of prs) {
     const goal = goalOfPr(state, pr.number);
-    const members = groups.get(goal);
-    if (members === undefined) groups.set(goal, [pr]);
-    else members.push(pr);
+    pushTo(groups, goal, pr);
   }
   return [...groups.entries()]
-    .sort(([a], [b]) => goalOrder(a) - goalOrder(b) || (a === null ? 1 : b === null ? -1 : 0))
+    .sort(([a], [b]) => goalOrder(a) - goalOrder(b))
     .map(([goal, members]) => ({ goal, rungs: tree(members, baseOf) }));
 }
 
@@ -54,16 +52,19 @@ function tree(members: OpenPullRequest[], baseOf: ReadonlyMap<number, number>): 
   for (const pr of sorted) {
     const base = baseOf.get(pr.number);
     if (base === undefined || !inGroup.has(base)) roots.push(pr);
-    else children.set(base, [...(children.get(base) ?? []), pr]);
+    else pushTo(children, base, pr);
   }
   const out: RackRung[] = [];
-  const seen = new Set<number>();
   const walk = (pr: OpenPullRequest, depth: number): void => {
-    if (seen.has(pr.number)) return;
-    seen.add(pr.number);
     out.push({ pr, depth: Math.min(depth, MAX_DEPTH), base: baseOf.get(pr.number) ?? null });
     for (const child of children.get(pr.number) ?? []) walk(child, depth + 1);
   };
-  for (const pr of [...roots, ...sorted]) walk(pr, 0);
+  for (const pr of roots) walk(pr, 0);
   return out;
+}
+
+function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  const list = map.get(key);
+  if (list === undefined) map.set(key, [value]);
+  else list.push(value);
 }

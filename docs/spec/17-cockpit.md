@@ -4157,7 +4157,7 @@ request's goal through `goalOfPr`, so a goal here is exactly the goal the rest o
   below it, and its row sets `PanelRowModel.depth`: `PanelRows` draws a `└` before the title,
   indented one step per level below the first through the `--cn-depth` property (depth capped at four), so any card can draw
   a tree without classes of its own. Its sub-line carries `on` with a `<Ref>` to the pull request it
-  builds on. Roots, and siblings under one base, go in number order. A pull request stacked on another
+  builds on — `prRow`'s `on` option, so the row's own unwatched rule decides whether it is drawn. Roots, and siblings under one base, go in number order. A pull request stacked on another
   goal's pull request is a root in its own goal, still with its `on` reference — the tree never
   crosses a goal heading. An unwatched row keeps its no-sub-line rule, so it does not carry `on`.
 

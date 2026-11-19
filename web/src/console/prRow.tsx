@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { OpenPullRequest, PullRequest } from '../types.js';
@@ -30,7 +30,7 @@ export function prRow(
   pr: OpenPullRequest,
   view: CockpitView,
   actions: CockpitActions,
-  { goal: withGoal = true }: { goal?: boolean } = {},
+  { goal: withGoal = true, on = null }: { goal?: boolean; on?: number | null } = {},
 ): PanelRowModel {
   const unwatched = pr.attention.status === 'unwatched';
   const goal = withGoal ? goalOfPr(view.state, pr.number) : null;
@@ -47,7 +47,7 @@ export function prRow(
     ),
     open: { usage: { counted: 'pr.view' }, go: () => actions.selectPr(pr.number) },
     openTitle: `Open pull request #${pr.number} — its review threads, its checks and the work on its branch`,
-    facts: unwatched ? undefined : prFacts(pr, view.now),
+    facts: unwatched ? undefined : prFacts(pr, view.now, on),
     why: unwatched ? null : pr.attention.reasons.join(' '),
     lamp: onIt === undefined ? undefined : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
     reading: (
@@ -106,11 +106,12 @@ export function closedPrRow(pr: PullRequest, view: CockpitView, actions: Cockpit
   };
 }
 
-function prFacts(pr: OpenPullRequest, now: number): PanelRowModel['facts'] {
-  const facts: { label: string; value: string; alarm?: boolean }[] = [];
+function prFacts(pr: OpenPullRequest, now: number, on: number | null): PanelRowModel['facts'] {
+  const facts: { label: string; value: ReactNode; alarm?: boolean }[] = [];
   if (pr.mergeableState === 'dirty') facts.push({ label: 'merge', value: 'conflict', alarm: true });
   const since = pr.attention.reviewWaitingSince;
   if (since !== undefined) facts.push({ label: 'waiting', value: waitedFor(since, now) });
+  if (on !== null) facts.push({ label: 'on', value: <Ref to={`pr:${on}`} /> });
   return facts.length === 0 ? undefined : facts;
 }
 
