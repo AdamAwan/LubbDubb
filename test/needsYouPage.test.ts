@@ -98,6 +98,7 @@ test('the bar keeps the fleet controls on this tab, and the page carries a thin 
   assert.ok(strip.includes(`${v.live.length} of ${v.state.control.cap} · ${v.upNext.length} queued`));
   assert.ok(v.live.length > 0, 'the fixture world has agents out');
   assert.ok(strip.includes('cn-ny-agent'), 'each live agent is named');
+  assert.ok(strip.includes('aria-expanded="false"'), 'the strip opens into a list');
   const idle = view('needs', (state) => {
     state.agents = [];
   });

@@ -1,4 +1,4 @@
-import { useMemo, type JSX, type ReactNode } from 'react';
+import { useMemo, useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Agent, ListenItem, ListenerView, PrOnYouReason } from '../types.js';
@@ -73,55 +73,101 @@ export function NeedsYouPage({ view, actions }: { view: CockpitView; actions: Co
 
 const STRIP_MAX = 6;
 
+function agentDoing(agent: Agent, view: CockpitView): string {
+  if (view.escalationByAgent.has(agent.id)) return 'has an open ask';
+  if (view.limitParked.has(agent.id)) return 'out of account limit';
+  return agent.status === 'waiting' ? 'waiting' : 'running';
+}
+
 // → docs/spec/44-needs-you.md#the-fleet-strip
 function FleetStrip({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const [open, setOpen] = useState(false);
   const rank = (agent: Agent): number =>
     view.escalationByAgent.has(agent.id) ? 0 : view.limitParked.has(agent.id) || agent.status === 'waiting' ? 1 : 2;
-  const shown = [...view.live].sort((a, b) => rank(a) - rank(b)).slice(0, STRIP_MAX);
-  const more = view.live.length - shown.length;
+  const sorted = [...view.live].sort((a, b) => rank(a) - rank(b));
+  const shown = sorted.slice(0, STRIP_MAX);
+  const more = sorted.length - shown.length;
+  const toggle = open ? 'Fold the fleet back to one line' : 'Show every agent out, and what each is doing';
   return (
     <div className="cn-ny-fleet">
-      <span className="cn-ny-fleet-label">Fleet</span>
-      {view.live.length === 0 ? (
-        <span className="cn-ny-fleet-idle">no agents out</span>
-      ) : (
-        shown.map((agent) => {
-          const title = view.taskFor(agent)?.title ?? agent.id;
-          const age = elapsed(agent.startedAt, null, view.now);
-          const doing = view.escalationByAgent.has(agent.id)
-            ? 'has an open ask'
-            : view.limitParked.has(agent.id)
-              ? 'out of account limit'
-              : agent.status === 'waiting'
-                ? 'waiting'
-                : 'running';
-          return (
-            <BareButton
-              key={agent.id}
-              usage={{ counted: 'agent.view' }}
-              className="cn-ny-agent"
-              onClick={() => actions.select(agent.id)}
-              title={`${title} — ${doing}, ${age} — open the agent`}
-            >
-              <i className={`cn-lamp ${agentLamp(agent, view)}`} />
-              <span>{title}</span>
-              <em>{age}</em>
-            </BareButton>
-          );
-        })
-      )}
-      {more > 0 && <span className="cn-ny-fleet-more">+{more}</span>}
-      <span className="cn-ny-fleet-tail">
-        {view.live.length} of {view.state.control.cap} · {view.upNext.length} queued
-      </span>
-      <BareButton
-        usage={tabUsage('overview')}
-        className="cn-ny-fleet-open"
-        onClick={() => openOverview(actions)}
-        title="Open the overview — the fleet, its queue and the cap"
-      >
-        Overview ›
-      </BareButton>
+      <div className="cn-ny-fleet-line">
+        <span className="cn-ny-fleet-label">Fleet</span>
+        {sorted.length === 0 ? (
+          <span className="cn-ny-fleet-idle">no agents out</span>
+        ) : (
+          !open &&
+          shown.map((agent) => {
+            const title = view.taskFor(agent)?.title ?? agent.id;
+            const age = elapsed(agent.startedAt, null, view.now);
+            return (
+              <BareButton
+                key={agent.id}
+                usage={{ counted: 'agent.view' }}
+                className="cn-ny-agent"
+                onClick={() => actions.select(agent.id)}
+                title={`${title} — ${agentDoing(agent, view)}, ${age} — open the agent`}
+              >
+                <i className={`cn-lamp ${agentLamp(agent, view)}`} />
+                <span>{title}</span>
+                <em>{age}</em>
+              </BareButton>
+            );
+          })
+        )}
+        {sorted.length > 0 && (
+          <BareButton
+            usage={{ counted: 'fleet.view' }}
+            className="cn-ny-fleet-more"
+            aria-expanded={open}
+            onClick={() => setOpen((was) => !was)}
+            title={toggle}
+            aria-label={toggle}
+          >
+            {open ? 'less ▴' : more > 0 ? `+${String(more)} ▾` : '▾'}
+          </BareButton>
+        )}
+        <span className="cn-ny-fleet-tail">
+          {view.live.length} of {view.state.control.cap} · {view.upNext.length} queued
+        </span>
+        <BareButton
+          usage={tabUsage('overview')}
+          className="cn-ny-fleet-open"
+          onClick={() => openOverview(actions)}
+          title="Open the overview — the fleet, its queue and the cap"
+        >
+          Overview ›
+        </BareButton>
+      </div>
+      {open && <FleetList agents={sorted} view={view} actions={actions} />}
+    </div>
+  );
+}
+
+function FleetList({
+  agents,
+  view,
+  actions,
+}: {
+  agents: readonly Agent[];
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <div className="cn-ny-fleet-list">
+      {agents.map((agent) => (
+        <BareButton
+          key={agent.id}
+          usage={{ counted: 'agent.view' }}
+          className="cn-ny-fleet-row"
+          onClick={() => actions.select(agent.id)}
+          title="Open the agent"
+        >
+          <i className={`cn-lamp ${agentLamp(agent, view)}`} />
+          <span>{view.taskFor(agent)?.title ?? agent.id}</span>
+          <span className="cn-ny-fleet-doing">{agent.note ?? agentDoing(agent, view)}</span>
+          <em>{elapsed(agent.startedAt, null, view.now)}</em>
+        </BareButton>
+      ))}
     </div>
   );
 }

@@ -51,7 +51,7 @@ widening the fleet.
 
 The agents are visible here without being the subject: one bordered line under the heading, quieter
 than the cards. It names each live agent — its status lamp (the fleet's own, from `agentLamp`),
-its task title and how long it has been out — up to six, then `+N`; agents with an open ask come first, then waiting or limit-parked ones, so the six shown are the ones most likely to matter here. Pressing one opens that agent's
+its task title and how long it has been out — up to six, then `+N`; agents with an open ask come first, then waiting or limit-parked ones, so the six shown are the ones most likely to matter here. A toggle beside them (`+N ▾`, or `▾` when all fit) opens the strip into a list of every agent out — lamp, title, its latest note or state, and time out — each row opening that agent; `less ▴` folds it back. The toggle is local to the page and not kept in the address. Pressing one opens that agent's
 drawer. On the right, `out of cap · queued`, and `Overview ›` to the full fleet. With none out it
 says `no agents out`. Covered by `test/needsYouPage.test.ts`. Goals in flight are not on this page.
 
