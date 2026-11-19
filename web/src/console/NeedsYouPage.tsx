@@ -1,7 +1,7 @@
 import { useMemo, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { ListenItem, ListenerView, PrOnYouReason } from '../types.js';
+import type { Agent, ListenItem, ListenerView, PrOnYouReason } from '../types.js';
 import type { NeedRow } from '../view/needsYou.js';
 import { sameItem } from '../view/needsYouPage.js';
 import { prsOnYou, PR_REASON_LABEL, type PrOnYou } from '../view/prsOnYou.js';
@@ -73,9 +73,11 @@ export function NeedsYouPage({ view, actions }: { view: CockpitView; actions: Co
 
 const STRIP_MAX = 6;
 
-/* The fleet, one quiet line: who is out and for how long, each a way into its agent. → docs/spec/44-needs-you.md#the-fleet-strip */
+// → docs/spec/44-needs-you.md#the-fleet-strip
 function FleetStrip({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const shown = view.live.slice(0, STRIP_MAX);
+  const rank = (agent: Agent): number =>
+    view.escalationByAgent.has(agent.id) ? 0 : view.limitParked.has(agent.id) || agent.status === 'waiting' ? 1 : 2;
+  const shown = [...view.live].sort((a, b) => rank(a) - rank(b)).slice(0, STRIP_MAX);
   const more = view.live.length - shown.length;
   return (
     <div className="cn-ny-fleet">
@@ -86,13 +88,20 @@ function FleetStrip({ view, actions }: { view: CockpitView; actions: CockpitActi
         shown.map((agent) => {
           const title = view.taskFor(agent)?.title ?? agent.id;
           const age = elapsed(agent.startedAt, null, view.now);
+          const doing = view.escalationByAgent.has(agent.id)
+            ? 'has an open ask'
+            : view.limitParked.has(agent.id)
+              ? 'out of account limit'
+              : agent.status === 'waiting'
+                ? 'waiting'
+                : 'running';
           return (
             <BareButton
               key={agent.id}
               usage={{ counted: 'agent.view' }}
               className="cn-ny-agent"
               onClick={() => actions.select(agent.id)}
-              title={`${title} — ${view.escalationByAgent.has(agent.id) ? 'has an open ask' : agent.status}, ${age} — open the agent`}
+              title={`${title} — ${doing}, ${age} — open the agent`}
             >
               <i className={`cn-lamp ${agentLamp(agent, view)}`} />
               <span>{title}</span>
@@ -105,7 +114,12 @@ function FleetStrip({ view, actions }: { view: CockpitView; actions: CockpitActi
       <span className="cn-ny-fleet-tail">
         {view.live.length} of {view.state.control.cap} · {view.upNext.length} queued
       </span>
-      <BareButton usage={tabUsage('overview')} className="cn-ny-fleet-open" onClick={() => openOverview(actions)}>
+      <BareButton
+        usage={tabUsage('overview')}
+        className="cn-ny-fleet-open"
+        onClick={() => openOverview(actions)}
+        title="Open the overview — the fleet, its queue and the cap"
+      >
         Overview ›
       </BareButton>
     </div>

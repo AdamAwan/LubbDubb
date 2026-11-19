@@ -50,10 +50,10 @@ widening the fleet.
 ### The fleet strip
 
 The agents are visible here without being the subject: one bordered line under the heading, quieter
-than the cards. It names each live agent — its status lamp (the fleet's own `agentLamp`: red when it has an open ask, amber waiting, green otherwise — a starting agent reads as running),
-its task title and how long it has been out — up to six, then `+N`. Pressing one opens that agent's
+than the cards. It names each live agent — its status lamp (the fleet's own, from `agentLamp`),
+its task title and how long it has been out — up to six, then `+N`; agents with an open ask come first, then waiting or limit-parked ones, so the six shown are the ones most likely to matter here. Pressing one opens that agent's
 drawer. On the right, `out of cap · queued`, and `Overview ›` to the full fleet. With none out it
-says `no agents out`. Goals in flight are not on this page.
+says `no agents out`. Covered by `test/needsYouPage.test.ts`. Goals in flight are not on this page.
 
 ## From the orchestrator
 
