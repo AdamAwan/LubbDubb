@@ -39,11 +39,10 @@ async function harnessVocabulary(root: string): Promise<ReadonlySet<string>> {
     .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
     .map((entry) => join(entry.parentPath, entry.name));
   for (let i = 0; i < paths.length; i += READ_BATCH) {
-    const batch = paths.slice(i, i + READ_BATCH);
-    const texts = await Promise.all(batch.map((path) => readFile(path, 'utf8')));
-    batch.forEach((path, j) => {
-      for (const w of [...wordsOf(relative(src, path)), ...wordsOf(texts[j]!)]) words.add(w.toLowerCase());
-    });
+    const texts = await Promise.all(
+      paths.slice(i, i + READ_BATCH).map(async (path) => `${relative(src, path)}\n${await readFile(path, 'utf8')}`),
+    );
+    for (const w of texts.flatMap(wordsOf)) words.add(w.toLowerCase());
   }
   return words;
 }
