@@ -85,13 +85,16 @@ on its row:
 | `describe` | `No description`   | `body` is read and empty after trimming                               |
 
 The page's `prsOnYou` (`web/src/view/prsOnYou.ts`) holds only what is the page's own: the tag words
-and tones, and the sort. The same keys drop a sent pull request's strip once it is off the page, and
-are `pr_read`'s `onYou`.
+and which pull requests are drawn; the tag tones are `REASON_TONE` in `NeedsYouPage.tsx`. The same
+keys drop a sent pull request's strip once it is off the page, and are `pr_read`'s `onYou`.
 
-Sorted by the first reason in that order, then newest first — by number, since a pull request
-carries no opened-at time. The row is `prRow`
-(`web/src/console/prRow.tsx`) with the tags as its chips and the [Claude button](#the-claude-button)
-as its action. The card's header counts the drawn rows against every open one, and its foot links to
+They are **grouped by goal, a stack drawn as a tree**, exactly as the overview's rack draws the
+fleet's pull requests — the same `goalPrRows` builder
+([17](17-cockpit.md#grouped-by-goal-stacks-as-a-tree)), so the two pages cannot disagree about which
+goal a pull request is under or what it is stacked on. Goals go in number order, no goal last; inside
+a goal, base first, then number order. The row is `prRow` (`web/src/console/prRow.tsx`) with the tags
+as its chips, the [Claude button](#the-claude-button) as its action, and the sent strip as its
+`below`. The card's header counts the drawn rows against every open one, and its foot links to
 the full list — the overview's pull request card, which draws every open one.
 
 ## The Claude button

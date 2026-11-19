@@ -4140,6 +4140,17 @@ stack_ (nothing on the row said so at all). So below the assignment bands the ra
 `rackByGoal` (`web/src/view/prRack.ts`) is the one place the grouping is computed: it reads each pull
 request's goal through `goalOfPr`, so a goal here is exactly the goal the rest of the cockpit names.
 
+**One builder draws it, wherever pull requests are grouped.** `goalPrRows`
+(`web/src/console/prGoalRows.tsx`) turns a list of pull requests into the grouped, tree-drawn
+`PanelRowModel`s — goal headings, `depth`, the `on` reference — and every surface that groups pull
+requests by goal calls it: the rack here and the pull-request column of [Needs you](44-needs-you.md).
+A caller adds only what is its own through `dress` (the rack's who-asked mark; Needs you's reason
+tags, Claude button and sent strip). Where no pull request has a goal the rows come back with no
+heading; the rack puts its own `The fleet's` band on them only when the assignment bands are drawn
+above. Two copies of the grouping is how two pages come to disagree about which goal a pull request
+is under. A row that needs something drawn beneath it — Needs you's sent strip — sets
+`PanelRowModel.below`, which `PanelRows` draws after the row, so the row stays inside one grouped list.
+
 - **Each goal is a heading** (`tone: 'title'`, `cn-group-title`): the goal's title in sentence case — a
   title is not a label, so it does not take the bands' uppercase — with a `<Ref>` to the goal in the
   heading's `refs` slot, and at the end the goal's track and `n of m merged`, the same `buildGoalTrack`

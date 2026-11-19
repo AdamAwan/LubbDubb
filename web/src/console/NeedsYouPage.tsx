@@ -3,7 +3,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Agent, ListenItem, ListenerView, PrOnYouReason } from '../types.js';
 import type { NeedRow } from '../view/needsYou.js';
-import { sameItem } from '../view/needsYouPage.js';
+import { prOnYouReasons, sameItem } from '../view/needsYouPage.js';
 import { prsOnYou, PR_REASON_LABEL, type PrOnYou } from '../view/prsOnYou.js';
 import { plural } from '../view/plural.js';
 import { askOnlyPrompt, listenPrompt, prPrompt } from '../cockpit/desktopLink.js';
@@ -16,8 +16,8 @@ import { HeadRow } from '../components/panel.js';
 import { Ref } from '../components/refs.js';
 import { Tag, type TagTone } from '../components/tag.js';
 import { elapsed, relTime } from '../components/util.js';
-import { PanelRows, type PanelRowModel } from './PanelRow.js';
-import { prRow } from './prRow.js';
+import { PanelRows } from './PanelRow.js';
+import { goalPrRows } from './prGoalRows.js';
 import { agentLamp } from './fleetRows.js';
 import { openRow } from './queueRailOpens.js';
 import {
@@ -226,24 +226,28 @@ function PrsColumn({
   prs: readonly PrOnYou[];
 }): JSX.Element {
   const open = view.state.world.pullRequests.length;
-  const drawn = prs.map(({ pr, reasons }) => {
-    const item: ListenItem = { kind: 'pr', number: pr.number };
-    const row: PanelRowModel = {
-      ...prRow(pr, view, actions),
-      chips: (
-        <span className="cn-ny-chips">
-          {reasons.map((reason) => (
-            <Tag key={reason} tone={REASON_TONE[reason]}>
-              {PR_REASON_LABEL[reason]}
-            </Tag>
-          ))}
-        </span>
-      ),
-      action: <ClaudeButton item={item} view={view} actions={actions} />,
-    };
-    return { item, row };
-  });
-  const rail = drawn.map(({ row }) => row);
+  const rows = goalPrRows(
+    prs.map(({ pr }) => pr),
+    view,
+    actions,
+    (pr, row) => {
+      const item: ListenItem = { kind: 'pr', number: pr.number };
+      return {
+        ...row,
+        chips: (
+          <span className="cn-ny-chips">
+            {prOnYouReasons(pr).map((reason) => (
+              <Tag key={reason} tone={REASON_TONE[reason]}>
+                {PR_REASON_LABEL[reason]}
+              </Tag>
+            ))}
+          </span>
+        ),
+        action: <ClaudeButton item={item} view={view} actions={actions} />,
+        below: <SentLine item={item} view={view} />,
+      };
+    },
+  );
   return (
     <section className="cn-card cn-ny-col cn-lamp-mark cn-read-marks">
       <h3>
@@ -253,12 +257,7 @@ function PrsColumn({
         </i>
       </h3>
       {prs.length === 0 && <p className="cn-empty">No pull request is waiting on you.</p>}
-      {drawn.map(({ item, row }) => (
-        <div key={row.key} className="cn-ny-item">
-          <PanelRows layout="stacked" words="subline" rows={[row]} rail={rail} />
-          <SentLine item={item} view={view} />
-        </div>
-      ))}
+      <PanelRows layout="stacked" words="subline" rows={rows} />
       {open > 0 && (
         <BareButton usage={tabUsage('overview')} className="cn-ny-all" onClick={() => openOverview(actions)}>
           All {plural(open, 'open pull request')} →
