@@ -2,17 +2,16 @@ import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Issue, OpenPullRequest, QueueItem, SupplyState } from '../types.js';
-import { buildGoalPage, furthestEnvironment, type GoalTrack } from '../view/goalPage.js';
+import { buildGoalPage, furthestEnvironment } from '../view/goalPage.js';
 import { buildGoalTrack } from '../view/goalStages.js';
-import { Ref, refLabel } from '../components/refs.js';
-import { goalIssue } from '../view/goalRefs.js';
-import { rackByGoal, type RackGoal, type RackRung } from '../view/prRack.js';
+import { Ref } from '../components/refs.js';
 import { BareButton } from '../components/button.js';
 import { StaleChip } from './goalChips.js';
 import { OverviewSwitch } from './overviews/OverviewSwitch.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { GroupHead, PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
 import { prRow } from './prRow.js';
+import { goalPrRows, Track } from './prGoalRows.js';
 import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
@@ -361,32 +360,6 @@ const PICKUP_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
   appraisal: 'hold',
 };
 
-function Track({ track }: { track: GoalTrack }): JSX.Element {
-  const segs = [
-    ...Array<string>(track.merged).fill('cn-done'),
-    ...Array<string>(track.now).fill('cn-live'),
-    ...Array<string>(track.held).fill('cn-block'),
-    ...Array<string>(track.waiting).fill(''),
-  ];
-  return (
-    <span className="cn-track" title={trackTitle(track)}>
-      {segs.map((tone, i) => (
-        <i className={`cn-seg ${tone}`} key={i} />
-      ))}
-    </span>
-  );
-}
-
-function trackTitle(track: GoalTrack): string {
-  const parts = [
-    track.merged > 0 ? `${track.merged} merged` : '',
-    track.now > 0 ? `${track.now} in progress` : '',
-    track.held > 0 ? `${track.held} blocked` : '',
-    track.waiting > 0 ? `${track.waiting} not started` : '',
-  ].filter((part) => part !== '');
-  return `${track.total} ${track.total === 1 ? 'part' : 'parts'} — ${parts.join(', ')}`;
-}
-
 function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const open = view.state.world.pullRequests;
   const closed = view.state.world.closedPullRequests;
@@ -395,24 +368,17 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const answered = open.filter((pr) => isAssigned(pr) && !isAsking(pr));
   const fleet = open.filter((pr) => !isAssigned(pr));
   const marks = open.some((pr) => whoAsked(pr) !== null);
-  const goals = rackByGoal(view.state, fleet);
-  const byGoal = goals.some((g) => g.goal !== null);
   const banded = asking.length + answered.length > 0;
 
-  const row = (pr: OpenPullRequest, group?: RowGroup, rung?: RackRung): PanelRowModel => {
-    const base = prRow(pr, view, actions, { goal: rung === undefined || !byGoal, on: rung?.base ?? null });
-    return {
-      ...base,
-      ...(marks ? { who: <Who name={whoAsked(pr)} /> } : {}),
-      ...(group === undefined ? {} : { group }),
-      ...(rung === undefined ? {} : { depth: rung.depth }),
-    };
-  };
-
-  const loneBand = banded ? fleetBand(fleet.length) : undefined;
-  const fleetRows = goals.flatMap((g) => {
-    const group = byGoal ? goalBand(g, view) : loneBand;
-    return g.rungs.map((rung) => row(rung.pr, group, rung));
+  const dress = (pr: OpenPullRequest, base: PanelRowModel): PanelRowModel =>
+    marks ? { ...base, who: <Who name={whoAsked(pr)} /> } : base;
+  const row = (pr: OpenPullRequest, group: RowGroup): PanelRowModel => ({
+    ...dress(pr, prRow(pr, view, actions)),
+    group,
+  });
+  const fleetRows = goalPrRows(fleet, view, actions, {
+    dress,
+    ...(banded ? { lone: fleetBand(fleet.length) } : {}),
   });
 
   return (
@@ -435,28 +401,6 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
       />
     </section>
   );
-}
-
-function goalBand(g: RackGoal, view: CockpitView): RowGroup {
-  if (g.goal === null) return { key: 'goal:none', label: 'No goal', note: `${g.rungs.length}` };
-  const issue = goalIssue(view.state, g.goal);
-  const page = buildGoalPage(view.state, g.goal, view.needsYou, null);
-  const track = page === null ? null : buildGoalTrack(page.parts);
-  return {
-    key: `goal:${g.goal}`,
-    tone: 'title',
-    label: issue?.title ?? refLabel(g.goal),
-    refs: <Ref to={g.goal} title={`Open the goal these pull requests are delivering — ${refLabel(g.goal)}`} />,
-    note:
-      track === null || track.total === 0 ? (
-        `${g.rungs.length} open`
-      ) : (
-        <>
-          <Track track={track} />
-          {track.merged} of {track.total} merged
-        </>
-      ),
-  };
 }
 
 const askBand = (n: number): RowGroup => ({ key: 'asking', label: 'Assigned to review', note: `${n}`, tone: 'ask' });

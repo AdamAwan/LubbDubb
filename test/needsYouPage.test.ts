@@ -124,6 +124,26 @@ test('a pull request row carries its reasons as tags, counted against every open
   assert.ok(html.includes(`All ${v.state.world.pullRequests.length} open pull requests →`));
 });
 
+test('the pull requests are grouped under their goal and a stack drawn as a tree, as on the overview', () => {
+  const v = view('needs', (s) => {
+    for (const pr of s.world.pullRequests) {
+      if (pr.branch.startsWith('issue/390/')) pr.attention = { ...pr.attention, status: 'you' };
+    }
+  });
+  const prs = page(render(v)).split('Pull requests waiting on you')[1] ?? '';
+  const goal = goalIssue(v.state, 'issue:390');
+  assert.ok(goal, 'the fixtures must carry goal #390');
+  const head = prs.indexOf(`<span class="cn-group-t">${goal.title}</span>`);
+  assert.ok(head >= 0, 'no heading names goal #390');
+  const payment = v.state.world.pullRequests.find((pr) => pr.branch === 'issue/390/payment');
+  const refunds = v.state.world.pullRequests.find((pr) => pr.branch === 'issue/390/refunds');
+  assert.ok(payment && refunds, 'the fixtures must carry a two-PR stack on #390');
+  const bottom = prs.indexOf(payment.title);
+  const top = prs.indexOf(refunds.title);
+  assert.ok(head < bottom && bottom < top, 'the stack is not drawn base first under its goal');
+  assert.ok(prs.slice(bottom, top).includes('cn-stack-tie'), 'the stacked PR is not drawn under its base');
+});
+
 test('listening: a filled pill, and every Claude button sends', () => {
   const html = page(render(view('needs', (s) => (s.listener = { state: 'listening', on: null, queued: 0, sent: [] }))));
   assert.ok(html.includes('cn-ny-on">Claude is listening'));

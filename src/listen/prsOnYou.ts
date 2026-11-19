@@ -2,7 +2,7 @@ import type { OpenPullRequest } from '../wire.js';
 
 // → docs/spec/44-needs-you.md#pull-requests-waiting-on-you
 
-export const PR_ON_YOU_REASONS = ['review', 'call', 'comments', 'assign', 'describe'] as const;
+const PR_ON_YOU_REASONS = ['review', 'call', 'comments', 'assign', 'describe'] as const;
 
 export type PrOnYouReason = (typeof PR_ON_YOU_REASONS)[number];
 

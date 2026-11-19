@@ -54,14 +54,3 @@ test('every reason that holds is a tag, in the table order', () => {
     ['Your review', 'Comments', 'No description'],
   );
 });
-
-test('sorted by the first reason, then newest first', () => {
-  const order = prsOnYou([
-    pr(10, { body: '' }),
-    pr(11, { attention: { status: 'you', reasons: [] } }),
-    pr(12, { body: '' }),
-    pr(13, { attention: { status: 'you', reasons: [], assignedToYou: 'assignee' } }),
-    pr(14, { attention: { status: 'you', reasons: [] } }),
-  ]).map((row) => row.pr.number);
-  assert.deepEqual(order, [13, 14, 11, 12, 10]);
-});

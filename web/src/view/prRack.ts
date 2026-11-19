@@ -3,7 +3,7 @@ import { goalNumber, goalOfPr } from './goalRefs.js';
 
 // → docs/spec/17-cockpit.md#grouped-by-goal-stacks-as-a-tree
 
-export interface RackRung {
+interface RackRung {
   pr: OpenPullRequest;
   depth: number;
   base: number | null;

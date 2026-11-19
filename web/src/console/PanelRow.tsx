@@ -40,6 +40,7 @@ export interface PanelRowModel {
   className?: string;
   hint?: string;
   depth?: number;
+  below?: ReactNode;
 }
 
 function hasWords(row: PanelRowModel): boolean {
@@ -167,6 +168,7 @@ export function PanelRows({
             ) : (
               <StackedRow row={row} has={rails} columns={columns} line={line} strip={strip} sub={sub} />
             )}
+            {row.below}
           </Fragment>
         );
       })}
