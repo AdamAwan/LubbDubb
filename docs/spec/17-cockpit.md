@@ -3904,6 +3904,12 @@ card is the drift `PanelRowModel` exists to end, one level up.
   refs' reason. The control is drawn here as well as in the drawer and the rail because it is the
   answer to the question the row raises where the row is: an operator who can see the park and has to
   go looking for the way out of it is one who leaves the slot held.
+  A live row with a **progress reading** (the wire's `agentProgress`,
+  [11](11-mcp-tools.md#progress-the-harness-measures)) draws it as its own `progress` fact beside the
+  note, and the overview's slot tile draws it in the tile's foot: `3/5 comments handled`, or
+  `Making changes · step 2 of 3`. A count at its total reads `Finishing up · 5/5 comments handled`,
+  never "done" — the agent is still pushing and re-checking, and only the agent's end says it is done.
+  A row with no reading draws nothing in its place.
   **The name is the row's control and the refs sit beside it** (`cn-refs`), the tickets row's shape and
   for its reason: a link inside a button is a second destination for one click. A row draws **two**
   refs where there are two — the origin it was dispatched at (`pr:412`, `issue:212:part:x`), and, when

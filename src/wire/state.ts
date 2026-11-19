@@ -11,6 +11,7 @@ import type { RunwayReading } from '../supply/runway.js';
 import type {
   AccountRateLimits,
   Agent,
+  AgentProgress,
   AgentFlag,
   BugFiling,
   Decision,
@@ -215,6 +216,7 @@ export interface CockpitState {
   jobs: Job[];
   schedules: JobSchedule[];
   agents: Agent[];
+  agentProgress: AgentProgress[];
   endedAgents: number;
   ejections: EjectionView[];
   readying: ReadyingAction[];

@@ -5,7 +5,7 @@ import type { CockpitActions } from '../../cockpit/actions.js';
 import { Ref } from '../../components/refs.js';
 import { standsFor } from '../../view/goalRefs.js';
 import { elapsed } from '../../components/util.js';
-import { agentLamp } from '../fleetRows.js';
+import { agentLamp, agentProgressText } from '../fleetRows.js';
 import { BareButton } from '../../components/button.js';
 
 // → docs/spec/17-cockpit.md#what-the-fleet-is-doing-above-the-ask
@@ -128,6 +128,7 @@ function SlotTile({ agent, view, actions }: { agent: Agent; view: CockpitView; a
   const ref = standsFor(view.state, origin) ?? origin;
   const note = view.limitParked.has(agent.id) ? 'Out of account limit' : (agent.note ?? agent.status);
   const title = task?.title ?? agent.id;
+  const progress = agentProgressText(agent, view);
   const lamp = agentLamp(agent, view);
 
   return (
@@ -148,6 +149,7 @@ function SlotTile({ agent, view, actions }: { agent: Agent; view: CockpitView; a
         <span className="cn-ov-slot-note" title={note}>
           {note}
         </span>
+        {progress !== null && <span className="cn-ov-slot-for">{progress}</span>}
         {ref !== null && (
           <span className="cn-refs cn-ov-slot-refs">
             <Ref to={ref} />

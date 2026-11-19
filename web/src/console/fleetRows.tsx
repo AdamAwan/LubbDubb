@@ -21,11 +21,21 @@ export function agentLamp(agent: Agent, view: CockpitView): string {
   return agent.status === 'waiting' ? 'cn-wait' : 'cn-run';
 }
 
+/** The harness's measure of how far along a live agent is, in words, or null where it has none. */
+export function agentProgressText(agent: Agent, view: CockpitView): string | null {
+  const p = view.state.agentProgress.find((row) => row.agentId === agent.id);
+  if (p === undefined) return null;
+  if (p.kind === 'stage') return `${p.label} · step ${String(p.done)} of ${String(p.total)}`;
+  const count = `${String(p.done)}/${String(p.total)} ${p.label}`;
+  return p.done >= p.total ? `Finishing up · ${count}` : count;
+}
+
 export function agentRow(agent: Agent, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const task = view.taskFor(agent);
   const origin = task?.originRef ?? null;
   const done = agent.endedAt !== null;
   const limited = view.limitParked.has(agent.id);
+  const progress = agentProgressText(agent, view);
   return {
     key: agent.id,
     lamp: <i className={`cn-lamp ${agentLamp(agent, view)}`} />,
@@ -35,6 +45,7 @@ export function agentRow(agent: Agent, view: CockpitView, actions: CockpitAction
     refs: <OnWhat origin={origin} view={view} />,
     facts: [
       { label: 'doing', value: limited ? 'Out of account limit' : (agent.note ?? agent.status), alarm: limited },
+      ...(progress !== null ? [{ label: 'progress', value: progress }] : []),
       { label: 'for', value: elapsed(agent.startedAt, agent.endedAt, view.now) },
       ...(agent.costUsd !== null ? [{ label: 'cost', value: fmtUsd(agent.costUsd) }] : []),
     ],

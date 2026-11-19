@@ -47,6 +47,14 @@ export class PrThreadLabelStore {
     return { ...input, answeredAt };
   }
 
+  listThreadLabelsForAgents(agentIds: readonly string[]): PrThreadLabel[] {
+    if (agentIds.length === 0) return [];
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM pr_thread_labels WHERE agent_id IN (${agentIds.map(() => '?').join(',')})`)
+      .all(...agentIds) as Row[];
+    return rows.map(hydrate);
+  }
+
   listThreadLabelsSince(since: string): PrThreadLabel[] {
     const rows = this.ctx
       .prep(`SELECT * FROM pr_thread_labels WHERE answered_at >= ? ORDER BY answered_at ASC, rowid ASC`)

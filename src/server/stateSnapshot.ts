@@ -23,7 +23,8 @@ import { environmentGroups } from '../environments/groups.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 import { once, type SnapshotOpts, baseReads, planReads, verdictReads, contextReads } from './stateReads.js';
 import { checkSetStanding, type CheckSetStanding } from '../validation/planApproval.js';
-import type { ValidationCheck, ValidationPlanRecord } from '../types.js';
+import type { AgentProgress, ValidationCheck, ValidationPlanRecord } from '../types.js';
+import { agentProgress } from '../agents/agentProgress.js';
 import { type IssueReadsOn, issueReads } from './stateIssueReads.js';
 import {
   buildEnvironmentHealth,
@@ -385,6 +386,7 @@ function fleetSection(
   CockpitState,
   | 'tasks'
   | 'agents'
+  | 'agentProgress'
   | 'endedAgents'
   | 'ejections'
   | 'readying'
@@ -402,6 +404,7 @@ function fleetSection(
   return {
     tasks: history().tasks,
     agents: history().agents,
+    agentProgress: liveAgentProgress(r),
     endedAgents: history().ended,
     ejections: r.ejectionViews(),
     readying: system.readying.list(),
@@ -415,6 +418,20 @@ function fleetSection(
     usage: buildUsage(system, r.spend().unattributedCostUsd),
     runOutcomes: tallyRunOutcomes(r.agents()),
   };
+}
+
+function liveAgentProgress(r: Reads): AgentProgress[] {
+  const { store, world, tasks } = r;
+  const live = r.agents().filter((a) => a.endedAt === null);
+  const ids = live.map((a) => a.id);
+  return agentProgress({
+    agents: live,
+    tasks,
+    jobs: store.jobs.listJobs(),
+    world,
+    threadLabels: store.prThreadLabels.listThreadLabelsForAgents(ids),
+    agentsWithFiles: new Set(store.agents.listFilesForAgents(ids).map((f) => f.agentId)),
+  });
 }
 
 function queueSection(r: Reads): Pick<CockpitState, 'jobs' | 'schedules' | 'upcoming' | 'runway'> {
