@@ -852,6 +852,10 @@ agents started inside the same millisecond are ordinary — a fake clock in a te
 and SQLite's sorter promises nothing about equal keys, so two readings of the same rows could disagree
 on which agent is "the live one" a caller takes first.
 
+Every "latest row" reader that takes `ORDER BY <time> DESC LIMIT 1` breaks the tie on `rowid DESC`
+for the same reason: two rows stamped in one millisecond are ordinary, and without it the reader can
+hand back the older one — `latestLocalValidation` did, as an intermittent CI failure.
+
 `recordAgentUsage` writes the cumulative values onto the row **and** the cost delta into
 `usage_events`. It is the shape for a row with **one** session behind it; a local run's
 `addLocalRunUsage` adds instead, for the reason [23](23-local-runs.md#what-it-costs) gives. The three

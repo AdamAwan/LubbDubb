@@ -201,7 +201,9 @@ export class PrDescriptionStore {
    */
   partOfPullRequest(prNumber: number): string | null {
     const row = this.ctx
-      .prep(`SELECT origin_ref FROM pr_description_bodies WHERE pr_number=? ORDER BY opened_at DESC LIMIT 1`)
+      .prep(
+        `SELECT origin_ref FROM pr_description_bodies WHERE pr_number=? ORDER BY opened_at DESC, rowid DESC LIMIT 1`,
+      )
       .get(prNumber) as { origin_ref: string } | undefined;
     return row?.origin_ref ?? null;
   }
