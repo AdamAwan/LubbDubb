@@ -7224,6 +7224,9 @@ button.cn-grow {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
+  max-width: 1800px;
+  margin-inline: auto;
 }
 .cn-ny-head {
   display: flex;
@@ -7283,7 +7286,7 @@ button.cn-grow {
   background: color-mix(in srgb, var(--cn-violet) 85%, var(--cn-fg));
   color: var(--cn-on-accent);
 }
-/* ---------- Needs you: three columns, each scrolling on its own ----------
+/* ---------- Needs you: two columns, each scrolling on its own ----------
    → docs/spec/44-needs-you.md#where-it-sits */
 .cn-ny-cols {
   display: grid;
@@ -7295,23 +7298,12 @@ button.cn-grow {
   .cn-ny-cols {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
-  .cn-ny-fleet {
-    grid-column: 1 / -1;
-  }
-}
-@media (min-width: 1240px) {
-  .cn-ny-cols {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(240px, 300px);
-  }
-  .cn-ny-fleet {
-    grid-column: auto;
-  }
 }
 .cn-ny-col {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  max-height: calc(100vh - 150px);
+  max-height: calc(100vh - 340px);
 }
 .cn-ny-col > h3 {
   flex: none;
@@ -7326,7 +7318,7 @@ button.cn-grow {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
-  max-height: calc(100vh - 150px);
+  max-height: calc(100vh - 340px);
 }
 .cn-ny-prcol .cn-ny-prbox {
   flex: 1 1 50%;
@@ -7567,8 +7559,9 @@ button.cn-grow {
    → docs/spec/44-needs-you.md#the-fleet-panel */
 .cn-ny-fleet-sum {
   display: flex;
-  justify-content: space-between;
-  padding: 10px 12px 6px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
   font: 11.5px var(--cn-mono);
   color: var(--cn-fg-faint);
 }
@@ -7577,8 +7570,8 @@ button.cn-grow {
   color: var(--cn-fg);
 }
 .cn-ny-fleet-cap {
+  flex: 0 1 160px;
   height: 4px;
-  margin: 0 12px 10px;
   border-radius: 2px;
   background: var(--cn-line);
   overflow: hidden;
@@ -7588,11 +7581,13 @@ button.cn-grow {
   height: 100%;
   background: var(--cn-accent);
 }
-.cn-ny-fleet .cn-ny-scroll {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0 10px 8px;
+.cn-ny-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+  max-height: 138px;
+  overflow-y: auto;
+  padding: 0 10px 10px;
 }
 .cn .cn-ny-agent {
   display: grid;
@@ -7637,13 +7632,10 @@ button.cn-grow {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cn-ny-fleet-foot {
-  display: flex;
-  justify-content: flex-end;
-  padding: 4px 12px 10px;
-  font-size: 12px;
-}
 .cn .cn-ny-fleet-open {
+  margin-left: auto;
+  font-family: inherit;
+  font-size: 12px;
   color: var(--cn-fg-dim);
 }
 .cn .cn-ny-fleet-open:hover {

@@ -44,10 +44,10 @@ export function NeedsYouPage({ view, actions }: { view: CockpitView; actions: Co
         </span>
         <ListenerStatus asks={view.needsYou} listener={listener} folder={folder} />
       </header>
+      <FleetPanel view={view} actions={actions} />
       <div className="cn-ny-cols">
         <AsksColumn view={view} actions={actions} />
         <PrsColumn view={view} actions={actions} prs={prs} />
-        <FleetPanel view={view} actions={actions} />
       </div>
     </div>
   );
@@ -70,21 +70,29 @@ function FleetPanel({ view, actions }: { view: CockpitView; actions: CockpitActi
   const cap = view.state.control.cap;
   const fill = cap > 0 ? Math.min(100, Math.round((view.live.length / cap) * 100)) : 0;
   return (
-    <aside className="cn-card cn-ny-col cn-ny-fleet">
+    <section className="cn-card cn-ny-fleet">
       <div className="cn-ny-fleet-sum">
         <span>
           <b>{view.live.length}</b> of {cap} out
         </span>
         <span>{view.upNext.length} queued</span>
+        <div className="cn-ny-fleet-cap" aria-hidden="true">
+          <i style={{ width: `${String(fill)}%` }} />
+        </div>
+        <BareButton
+          usage={tabUsage('overview')}
+          className="cn-ny-fleet-open"
+          onClick={() => openOverview(actions)}
+          title="Open the overview — the fleet, its queue and the cap"
+        >
+          Overview ›
+        </BareButton>
       </div>
-      <div className="cn-ny-fleet-cap" aria-hidden="true">
-        <i style={{ width: `${String(fill)}%` }} />
-      </div>
-      <div className="cn-ny-scroll">
-        {sorted.length === 0 ? (
-          <p className="cn-empty">No agents out.</p>
-        ) : (
-          sorted.map((agent) => {
+      {sorted.length === 0 ? (
+        <p className="cn-empty">No agents out.</p>
+      ) : (
+        <div className="cn-ny-tiles">
+          {sorted.map((agent) => {
             const title = agentName(agent, view);
             const state = agentState(agent, view);
             const note = agent.note ?? (state === null ? 'running' : null);
@@ -105,20 +113,10 @@ function FleetPanel({ view, actions }: { view: CockpitView; actions: CockpitActi
                 </span>
               </BareButton>
             );
-          })
-        )}
-      </div>
-      <div className="cn-ny-fleet-foot">
-        <BareButton
-          usage={tabUsage('overview')}
-          className="cn-ny-fleet-open"
-          onClick={() => openOverview(actions)}
-          title="Open the overview — the fleet, its queue and the cap"
-        >
-          Overview ›
-        </BareButton>
-      </div>
-    </aside>
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 
