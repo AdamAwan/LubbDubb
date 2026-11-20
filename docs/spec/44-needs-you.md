@@ -19,6 +19,7 @@ part of this page **only**: no other surface sends anything to it.
 - **The rail and the overview's shapes are unchanged.** This page is a new tab; nothing about Focus mode or the queue rail moves, and of the Cards overview only the pull requests card changed — to the [pull-request card](17-cockpit.md#the-pull-request-card) this page draws too. → [§](#where-it-sits) · _no test_
 - **Every column scrolls on its own.** A long list in one column never pushes another out of view. → [§](#where-it-sits) · _no test_
 - **The asks are grouped by family, in the queue's order inside each.** `askFamilies` filters and never sorts; urgency is a tag, not the order. → [§](#from-the-orchestrator) · `test/needsYouPage.test.ts`
+- **An ask opens in place with the same body the ask panel draws.** The opened card renders `needBody`, never a second copy of an ask's actions, so the card and the panel cannot disagree about how an ask is closed. → [§](#opening-an-ask-in-place) · `test/needsYouPage.test.ts`
 - **Only this page sends to the listening chat.** `POST /api/listen/send` has one caller, `web/src/console/NeedsYouPage.tsx`; every other surface keeps its own buttons and its own deep links. → [§](#scope) · `test/needsYouPage.test.ts`
 - **Which pull requests are on the page is `prOnYouReasons`, one pure function the server and the page share.** A pull request is on the page when any one of its reasons holds, and a reason is read off fields the server already decided — never re-derived in the browser. The page, the pruning of `sent` and `pr_read`'s `onYou` all read its keys. → [§](#pull-requests-waiting-on-you) · `test/prsOnYou.test.ts`
 - **The page reads `listener.state`; it never guesses.** `listening`, `busy` and `off` are the server's, off whether a wait is open. → [§](#is-a-chat-listening) · `test/needsYouPage.test.ts`
@@ -113,6 +114,28 @@ There are no boxes on the card: references are plain links, and the two controls
 and the kind's verb — appear in the card's top-right corner on hover or focus, over the age, and are
 always shown where the device has no hover. The urgency tier, `Blocking`, the holding count and the
 agent's name are not drawn: the dot carries the first and the rest are one press away.
+
+### Opening an ask in place
+
+A press anywhere on the card opens it where it sits — the Needs you form of [a row opens in place](17-cockpit.md#a-row-opens-in-place) —
+so an ask is closed without leaving the page:
+picking a parent, OK-ing or declining a check set, answering a question. The opened card draws
+`needBody` (`web/src/console/NeedsBand.tsx`) — the very body the ask panel shows under its own header —
+below the headline. One card is open at a time, across every family; pressing the card's head again
+folds it. The open card is a local fold, not a place: it is not in the address bar, and a reload
+folds it.
+
+Opened, the card drops what the body now says for itself — the summary, the note and the kind's verb
+button — and keeps the headline, its reference and the Claude button. An ask whose `needBody` is null
+(a setup check, an ask that opens a goal or pull request) has nothing to draw in place; it opens to
+its full, unclamped text and keeps the verb button, which goes where it always went.
+
+The press lands on one button laid under the card's text (`cn-ny-askfold`); the text lets clicks
+through to it except on the references, the corner controls and the opened body, so a link or a
+control inside the card never also folds it. Anything new on the card that must take a press or a
+hover joins that list (`console.css`), or it silently stops answering. Unlike the goal page's
+`FoldLine`, which keeps its own fold and draws the whole `NeedsBand`, the page holds one open id for
+every card and draws the bare body, because the card already draws its own headline.
 
 The foot of the column is the **Handled for you** line, exactly as on the rail
 ([43](43-handled-for-you.md#on-the-rail)).

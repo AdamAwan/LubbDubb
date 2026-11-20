@@ -7428,10 +7428,13 @@ button.cn-grow {
   position: relative;
 }
 .cn-ny-ask .cn-qin {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 3px;
   padding: 10px 12px 10px 0;
+  pointer-events: none;
 }
 .cn-ny-asktop {
   display: flex;
@@ -7499,6 +7502,54 @@ button.cn-grow {
   gap: 6px;
   padding-left: 12px;
   background: var(--cn-panel-2);
+}
+/* → docs/spec/44-needs-you.md#opening-an-ask-in-place */
+.cn-ny-askfold {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.cn-ny-ask:not(.cn-ny-ask-open) .cn-ny-askfold:hover {
+  background: var(--cn-hover);
+}
+.cn-ny-askfold:focus-visible {
+  outline: 2px solid var(--cn-accent);
+  outline-offset: -2px;
+}
+.cn-ny-ask .cn-refs,
+.cn-ny-ask .cn-ny-acts,
+.cn-ny-ask .cn-ny-nowdot,
+.cn-ny-askmore {
+  pointer-events: auto;
+}
+.cn-ny-asktop .fold-caret {
+  width: 14px;
+  height: 14px;
+  border: 0;
+}
+.cn-ny-ask-open .cn-ny-body {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+.cn-ny-ask-open .cn-ny-why {
+  white-space: normal;
+}
+.cn-ny-askmore {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--cn-line);
+  font-size: 13px;
+}
+.cn-ny-askmore p {
+  margin: 0;
 }
 .cn-ny-sent {
   display: flex;
