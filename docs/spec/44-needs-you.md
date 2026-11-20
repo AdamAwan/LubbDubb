@@ -1,6 +1,6 @@
 # 44 — The Needs you page
 
-**Built.** The page — the `needs` tab, its three columns, the Claude button and the listener status —
+**Built.** The page — the `needs` tab, its fleet tiles and two columns, the Claude button and the listener status —
 and the server side under it: the listener (`src/listen/listener.ts`), the desktop tools `ask_wait`
 and `pr_read`, `POST /api/listen/send`, the snapshot's `listener`, and the `listen` and `pr` skills.
 
@@ -43,11 +43,14 @@ The page is, top to bottom:
 
 1. **The heading row**: `Needs you`, the counts (`7 asks · 6 pull requests`), and on the right the
    [listener status](#is-a-chat-listening).
-2. **Three columns** — the asks, the pull requests, and [the fleet](#the-fleet-panel) — side by side
-   at 1240px and wider; below that the asks and the pull requests stay side by side and the fleet
-   goes full width under them; below 760px all three stack.
+2. **[The fleet](#the-fleet-panel)** — a full-width row of agent tiles.
+3. **Two columns** — the asks and the pull requests — side by side at 760px and wider; below that
+   they stack.
 
-**Each column scrolls inside its own height** (`max-height: calc(100vh - 150px)`), with its heading
+The page is capped at 1800px wide and centred, for the same reason as the columns below — on an
+ultra-wide screen.
+
+**Each column scrolls inside its own height** (`max-height: calc(100vh - 340px)`, which leaves room for the top bar, the heading and two rows of fleet tiles), with its heading
 fixed above the scroll. That is the reason for the columns: with the asks and the pull requests in one
 list, a long run of asks pushed every pull request below the fold, and the operator went back to the
 overview to find them. Side by side, each column is narrow enough that a card reads as one block
@@ -59,13 +62,16 @@ widening the fleet.
 
 ### The fleet panel
 
-The third column. At its top, `n of cap out` and `n queued`, with a thin bar for how full the cap is.
-Under that, **one small card per live agent**: its status lamp (the fleet's own, from `agentLamp`), its
+A full-width card above the columns, so the fleet is the first thing seen without taking a column
+from the asks or the pull requests. Its top line is `n of cap out`, `n queued`, a thin bar for how
+full the cap is, and on the right `Overview ›`, to the full fleet. Under that, **one tile per live
+agent**, in a grid that fills the width and wraps (`auto-fill`, tiles at least 220px): its status lamp (the fleet's own, from `agentLamp`), its
 task title, how long it has been out, and a second line — a state chip where the agent is stopped
 (`question` red, `limit` or `waiting` amber) and its latest note, or `running`. Agents with an open ask
 come first, then waiting or limit-parked ones; an agent with an open ask also carries a red left edge.
-Pressing a card opens that agent's drawer. The panel scrolls like the other columns, so every agent
-out is listed — there is no fold. Its foot is `Overview ›`, to the full fleet. With none out it says
+Pressing a tile opens that agent's drawer. Every agent out is listed — there is no fold — but the
+grid shows two rows and scrolls past that, so a big fleet never pushes the columns below the
+screen. With none out it says
 `No agents out.` Covered by `test/needsYouPage.test.ts`. Goals in flight are not on this page.
 
 ## From the orchestrator
@@ -162,7 +168,7 @@ The page's `prsOnYou` (`web/src/view/prsOnYou.ts`) holds only what is the page's
 and which pull requests are drawn; the word's colour is `LEAD_TONE` in `web/src/console/PrCards.tsx`, drawn through the shared `cn-ink-*` classes the ask card's kind word uses too. The same
 keys drop a sent pull request's strip once it is off the page, and are `pr_read`'s `onYou`.
 
-They are drawn in **two boxes**, one above the other in the middle column, each scrolling in its
+They are drawn in **two boxes**, one above the other in the right-hand column, each scrolling in its
 own half: **Assigned to you** — somebody asked the operator to review it (`viewerAssignment` or
 `attention.assignedToYou`, `assignedToYou` in `web/src/view/prsOnYou.ts`) — and **Your pull
 requests**, the operator's own and the fleet's. Reviewing someone else's work and moving your own

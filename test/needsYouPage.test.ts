@@ -92,12 +92,14 @@ test('the vivarium stays drawn on this tab, as on the cards overview', () => {
   assert.ok(render(v).includes('cn-viv'));
 });
 
-test('the bar keeps the fleet controls on this tab, and the fleet is a column of its own', () => {
+test('the bar keeps the fleet controls on this tab, and the fleet is a row of tiles above the columns', () => {
   const v = view('needs');
   const html = render(v);
   assert.ok(html.includes('fleet-control'), 'the controls stay on the bar');
   const cols = page(html);
   assert.ok(cols.includes('cn-ny-fleet"'));
+  assert.ok(cols.indexOf('cn-ny-fleet"') < cols.indexOf('cn-ny-cols"'), 'the fleet sits above the columns');
+  assert.ok(!cols.slice(cols.indexOf('cn-ny-cols"')).includes('cn-ny-fleet"'), 'and is not one of them');
   assert.ok(cols.includes(`<b>${v.live.length}</b> of ${v.state.control.cap} out`));
   assert.ok(cols.includes(`${v.upNext.length} queued`));
   assert.ok(v.live.length > 0, 'the fixture world has agents out');
