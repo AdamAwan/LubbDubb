@@ -10,7 +10,7 @@ import { plural } from '../view/plural.js';
 import { askOnlyPrompt, listenPrompt, prPrompt } from '../cockpit/desktopLink.js';
 import { tabUsage } from '../cockpit/usage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
-import { BareButton, Button, type Destination } from '../components/button.js';
+import { BareButton, Button } from '../components/button.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { Icon } from '../components/icons.js';
 import { Ref } from '../components/refs.js';
@@ -18,11 +18,9 @@ import { Tag } from '../components/tag.js';
 import { FoldToggle } from '../components/collapsible.js';
 import { elapsed, relTime } from '../components/util.js';
 import { goalPrCards, PrCards } from './PrCards.js';
-import { KIND_LABEL, KIND_TONE } from '../view/askKinds.js';
-import { goalIssue } from '../view/goalRefs.js';
 import { agentLamp } from './fleetRows.js';
-import { openRow } from './queueRailOpens.js';
-import { configDestination, HandledLine, KIND_VERB, rowClass, subjectRef } from './QueueRail.js';
+import { HandledLine } from './QueueRail.js';
+import { AskCard, askRef } from './askCard.js';
 
 // → docs/spec/44-needs-you.md
 
@@ -133,6 +131,7 @@ function AsksColumn({ view, actions }: { view: CockpitView; actions: CockpitActi
   const asks = view.needsYou;
   const groups = askFamilies(asks);
   const [pressed, setPressed] = useState<ReadonlyMap<AskFamily, boolean>>(() => new Map());
+  const [expanded, setExpanded] = useState<string | null>(null);
   const isOpen = (group: AskFamilyGroup): boolean =>
     pressed.get(group.family) ?? group.rows.some((row) => row.urgency !== 'later');
   const setOpen = (family: AskFamily, open: boolean): void => setPressed((was) => new Map(was).set(family, open));
@@ -156,6 +155,8 @@ function AsksColumn({ view, actions }: { view: CockpitView; actions: CockpitActi
               group={group}
               open={isOpen(group)}
               onToggle={(open) => setOpen(group.family, open)}
+              expanded={expanded}
+              onExpand={(id) => setExpanded((was) => (was === id ? null : id))}
               view={view}
               actions={actions}
             />
@@ -198,12 +199,16 @@ function AskFamilyFold({
   group,
   open,
   onToggle,
+  expanded,
+  onExpand,
   view,
   actions,
 }: {
   group: AskFamilyGroup;
   open: boolean;
   onToggle: (open: boolean) => void;
+  expanded: string | null;
+  onExpand: (id: string) => void;
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
@@ -232,7 +237,9 @@ function AskFamilyFold({
                 <AskCard
                   row={row}
                   view={view}
-                  open={askOpen(row, actions)}
+                  expanded={expanded === row.id}
+                  onExpand={() => onExpand(row.id)}
+                  actions={actions}
                   claude={<ClaudeButton item={item} view={view} actions={actions} />}
                 />
                 <SentLine item={item} view={view} />
@@ -331,74 +338,6 @@ function PrBox({
   );
 }
 
-function askOpen(row: NeedRow, actions: CockpitActions): Destination | null {
-  if (row.check !== undefined) return configDestination(row.check, actions);
-  return row.opens === null ? null : openRow(row, actions);
-}
-
-/** The ask card's three parts: what it is about, the ask, and a note only where it adds something. */
-function askWords(row: NeedRow, view: CockpitView): { about: string | null; ask: string; why?: string } {
-  const goal = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
-  const about = goal?.title ?? row.agentLabel;
-  const ask = row.summary ?? row.title;
-  const note = row.note ?? row.check?.remedy;
-  return note === undefined || (about !== null && note.includes(about)) ? { about, ask } : { about, ask, why: note };
-}
-
-// → docs/spec/44-needs-you.md#the-ask-card
-function AskCard({
-  row,
-  view,
-  open,
-  claude,
-}: {
-  row: NeedRow;
-  view: CockpitView;
-  open: Destination | null;
-  claude: ReactNode;
-}): JSX.Element {
-  const ref = askRef(row);
-  const { about, ask, why } = askWords(row, view);
-  return (
-    <div className={rowClass(row, null, false, 'cn-ny-ask cn-plainrefs')}>
-      <i className="cn-stripe" />
-      <div className="cn-qin">
-        <AskTop row={row} now={view.now} />
-        <p className="cn-ny-about">
-          <span>{about ?? ask}</span>
-          {ref !== null && (
-            <span className="cn-refs">
-              <Ref to={ref} />
-            </span>
-          )}
-        </p>
-        {about !== null && <p className="cn-ny-body">{ask}</p>}
-        {why !== undefined && <p className="cn-ny-why">{why}</p>}
-        <span className="cn-ny-acts">
-          {claude}
-          {open !== null && (
-            <Button size="small" usage={open.usage} onClick={open.go}>
-              {row.verb ?? KIND_VERB[row.kind]}
-            </Button>
-          )}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function AskTop({ row, now }: { row: NeedRow; now: number }): JSX.Element {
-  return (
-    <div className="cn-ny-asktop">
-      <span className={`cn-ny-kind cn-ink-${KIND_TONE[row.kind]}`}>{KIND_LABEL[row.kind]}</span>
-      {row.raisedAt !== '' && <i className="cn-qage">{relTime(row.raisedAt, now)}</i>}
-      {row.urgency === 'now' && (
-        <i className="cn-ny-nowdot" title="Answer now — the fleet is stopped on this" aria-label="Answer now" />
-      )}
-    </div>
-  );
-}
-
 function ClaudeButton({
   item,
   view,
@@ -453,10 +392,6 @@ function SentStrip({ at, now }: { at: string; now: number }): JSX.Element {
       In your Claude chat · sent {relTime(at, now)}
     </div>
   );
-}
-
-function askRef(row: NeedRow): string | null {
-  return subjectRef(row) ?? (row.prNumber === undefined || row.prNumber === null ? null : `pr:${row.prNumber}`);
 }
 
 function OnItem({ item, asks }: { item: ListenItem | null; asks: readonly NeedRow[] }): ReactNode {

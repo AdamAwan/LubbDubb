@@ -248,3 +248,47 @@ test('only the Needs you page calls listenSend', () => {
   const callers = walk('web/src').filter((file) => !plumbing.has(file) && /\blistenSend\b/.test(repoText(file)));
   assert.deepEqual(callers, ['web/src/console/NeedsYouPage.tsx']);
 });
+
+test('an opened ask draws the ask panel’s own body in place of its summary and verb', async () => {
+  const { AskCard } = await import('../web/src/console/askCard.js');
+  const { needBody } = await import('../web/src/console/NeedsBand.js');
+  const v = view('needs');
+  const row = v.needsYou.find((r) => r.kind === 'placement');
+  assert.ok(row, 'the fixture holds a placement ask');
+  const draw = (children: React.ReactNode): string =>
+    decode(
+      renderToStaticMarkup(
+        createElement(RefLinks, {
+          refUrls: v.state.refUrls,
+          openGoal: () => undefined,
+          hasGoal: () => true,
+          openPr: () => undefined,
+          hasPr: () => true,
+          children,
+        }),
+      ),
+    );
+  const card = (expanded: boolean): string =>
+    draw(
+      createElement(AskCard, {
+        row,
+        view: v,
+        claude: null,
+        expanded,
+        onExpand: () => undefined,
+        actions,
+      }),
+    );
+  const folded = card(false);
+  assert.match(folded, /aria-expanded="false"/);
+  assert.doesNotMatch(folded, /cn-ny-askmore/);
+  assert.match(folded, /class="cn-ny-body"/);
+  assert.match(folded, />Pick a parent</);
+
+  const opened = card(true);
+  assert.match(opened, /aria-expanded="true"/);
+  assert.match(opened, /cn-ny-ask-open/);
+  assert.ok(opened.includes(draw(needBody(row, v, actions))), 'the body is the panel’s, verbatim');
+  assert.doesNotMatch(opened, /class="cn-ny-body"/);
+  assert.doesNotMatch(opened, />Pick a parent</);
+});
