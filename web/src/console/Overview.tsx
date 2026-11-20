@@ -10,8 +10,7 @@ import { StaleChip } from './goalChips.js';
 import { OverviewSwitch } from './overviews/OverviewSwitch.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { GroupHead, PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
-import { prRow } from './prRow.js';
-import { goalPrRows } from './prGoalRows.js';
+import { goalPrCards, PrCards, type PrCardModel } from './PrCards.js';
 import { Track } from '../components/track.js';
 import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
@@ -371,18 +370,18 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const marks = open.some((pr) => whoAsked(pr) !== null);
   const banded = asking.length + answered.length > 0;
 
-  const dress = (pr: OpenPullRequest, base: PanelRowModel): PanelRowModel =>
-    marks ? { ...base, who: <Who name={whoAsked(pr)} /> } : base;
-  const row = (pr: OpenPullRequest, group: RowGroup): PanelRowModel => ({
-    ...dress(pr, prRow(pr, view, actions)),
-    group,
+  const card = (base: PrCardModel): PrCardModel => ({
+    ...base,
+    watch: true,
+    ...(marks ? { who: <Who name={whoAsked(base.pr)} /> } : {}),
   });
-  const fleetRows = goalPrRows(fleet, view, actions, dress).map((r) =>
-    r.group === undefined && banded ? { ...r, group: fleetBand(fleet.length) } : r,
-  );
+  const fleetCards = goalPrCards(fleet, view).map((c) => {
+    const dressed = card(c);
+    return dressed.group === undefined && banded ? { ...dressed, group: fleetBand(fleet.length) } : dressed;
+  });
 
   return (
-    <section className="cn-card cn-span2 cn-lamp-mark cn-read-marks">
+    <section className="cn-card cn-span2">
       <h3>
         Pull requests <i className="cn-n">{open.length} open</i>
         {/* Quiet at zero rather than absent, so a bare zero doesn't dominate the
@@ -390,13 +389,13 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
         {merged !== null && <span className={merged === 0 ? 'cn-more cn-quiet' : 'cn-more'}>{merged} merged</span>}
       </h3>
       {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
-      <PanelRows
-        layout="stacked"
-        words="subline"
-        rows={[
-          ...asking.map((pr) => row(pr, askBand(asking.length))),
-          ...answered.map((pr) => row(pr, answeredBand(answered.length))),
-          ...fleetRows,
+      <PrCards
+        view={view}
+        actions={actions}
+        cards={[
+          ...asking.map((pr) => card({ pr, goal: true, group: askBand(asking.length) })),
+          ...answered.map((pr) => card({ pr, goal: true, group: answeredBand(answered.length) })),
+          ...fleetCards,
         ]}
       />
     </section>

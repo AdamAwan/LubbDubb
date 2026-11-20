@@ -20,6 +20,9 @@ const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalRefs.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
+const { askFamilies, FAMILY_LABEL } = await import('../web/src/view/askFamilies.js');
+const { prHeadline } = await import('../web/src/view/prHeadline.js');
+const { assignedToYou } = await import('../web/src/view/prsOnYou.js');
 
 type State = CockpitView['state'];
 
@@ -89,48 +92,87 @@ test('the vivarium stays drawn on this tab, as on the cards overview', () => {
   assert.ok(render(v).includes('cn-viv'));
 });
 
-test('the bar keeps the fleet controls on this tab, and the page carries a thin fleet strip', () => {
+test('the bar keeps the fleet controls on this tab, and the fleet is a column of its own', () => {
   const v = view('needs');
   const html = render(v);
   assert.ok(html.includes('fleet-control'), 'the controls stay on the bar');
-  const strip = page(html);
-  assert.ok(strip.includes('class="cn-ny-fleet"'));
-  assert.ok(strip.includes(`${v.live.length} of ${v.state.control.cap} · ${v.upNext.length} queued`));
+  const cols = page(html);
+  assert.ok(cols.includes('cn-ny-fleet"'));
+  assert.ok(cols.includes(`<b>${v.live.length}</b> of ${v.state.control.cap} out`));
+  assert.ok(cols.includes(`${v.upNext.length} queued`));
   assert.ok(v.live.length > 0, 'the fixture world has agents out');
-  assert.ok(strip.includes('cn-ny-agent'), 'each live agent is named');
-  assert.ok(strip.includes('aria-expanded="false"'), 'the strip opens into a list');
+  assert.equal(cols.split(/class="cn-ny-agent[ "]/).length - 1, v.live.length, 'every live agent is a card');
   const idle = view('needs', (state) => {
     state.agents = [];
   });
-  assert.ok(page(render(idle)).includes('no agents out'));
-  assert.ok(!render(view('overview')).includes('class="cn-ny-fleet"'));
+  assert.ok(page(render(idle)).includes('No agents out.'));
+  assert.ok(!render(view('overview')).includes('cn-ny-fleet"'));
 });
 
-test('the heading counts the asks and the pull requests, and the asks keep the rail tiers', () => {
+test('the heading counts the asks and the pull requests, and the asks are grouped by family', () => {
   const v = view('needs');
   const html = page(render(v));
   assert.ok(v.needsYou.length > 0, 'the fixture world has asks');
   assert.match(html, /<h2>Needs you<\/h2><span class="cn-ny-counts">\d+ asks? · \d+ pull requests?<\/span>/);
-  assert.ok(html.includes('Answer now') || html.includes('Yours to do'));
+  for (const group of askFamilies(v.needsYou)) {
+    assert.ok(html.includes(`${FAMILY_LABEL[group.family]} <i class="cn-n">${group.rows.length}</i>`));
+  }
+  const now = v.needsYou.filter((row) => row.urgency === 'now').length;
+  assert.equal(
+    html.split('cn-ny-nowdot" title="Answer now').length - 1,
+    now,
+    'every ask the fleet is stopped on says so on its card',
+  );
   assert.ok(html.includes('Handled for you'), 'the rail’s foot line is the column’s foot');
 });
 
-test('a pull request row carries its reasons as tags, counted against every open one', () => {
+test('askFamilies keeps the queue’s order inside a family and drops empty families', () => {
   const v = view('needs');
-  const html = page(render(v));
-  assert.ok(html.includes('Your review'), 'the fixture PR assigned to the operator');
-  assert.ok(html.includes('Comments'));
-  assert.match(html, /\d+ of \d+ open/);
-  assert.ok(html.includes(`All ${v.state.world.pullRequests.length} open pull requests →`));
+  const groups = askFamilies(v.needsYou);
+  assert.equal(
+    groups.reduce((n, g) => n + g.rows.length, 0),
+    v.needsYou.length,
+    'an ask was lost or drawn twice',
+  );
+  for (const group of groups) {
+    assert.ok(group.rows.length > 0);
+    const order = group.rows.map((row) => v.needsYou.indexOf(row));
+    assert.deepEqual(
+      order,
+      [...order].sort((a, b) => a - b),
+      `${group.family} re-sorted the queue`,
+    );
+  }
 });
 
-test('the pull requests are grouped under their goal and a stack drawn as a tree, as on the overview', () => {
+test('a pull request card leads with its first reason, and the column links every open one', () => {
+  const v = view('needs');
+  const html = page(render(v));
+  assert.ok(html.includes('cn-prcard-lead cn-ink-red">Your review<'), 'the fixture PR assigned to the operator');
+  assert.ok(html.includes('cn-prcard-lead cn-ink-blue">Comments<'));
+  assert.ok(html.includes(`All ${v.state.world.pullRequests.length} open →`));
+});
+
+test('the pull requests assigned to you and your own are two boxes', () => {
+  const v = view('needs');
+  const html = page(render(v));
+  const assigned = html.indexOf('Assigned to you');
+  const own = html.indexOf('Your pull requests');
+  assert.ok(assigned > 0 && own > assigned, 'the two boxes are not drawn, assigned first');
+  for (const pr of v.state.world.pullRequests) {
+    const at = html.indexOf(`>${prHeadline(pr.title)}</button>`);
+    if (at < 0) continue;
+    assert.equal(at < own, assignedToYou(pr), `#${pr.number} is in the wrong box`);
+  }
+});
+
+test('the pull requests are grouped under their goal and a stack drawn as one block, as on the overview', () => {
   const v = view('needs', (s) => {
     for (const pr of s.world.pullRequests) {
       if (pr.branch.startsWith('issue/390/')) pr.attention = { ...pr.attention, status: 'you' };
     }
   });
-  const prs = page(render(v)).split('Pull requests waiting on you')[1] ?? '';
+  const prs = page(render(v)).split('Your pull requests')[1] ?? '';
   const goal = goalIssue(v.state, 'issue:390');
   assert.ok(goal, 'the fixtures must carry goal #390');
   const head = prs.indexOf(`<span class="cn-group-t">${goal.title}</span>`);
@@ -138,10 +180,10 @@ test('the pull requests are grouped under their goal and a stack drawn as a tree
   const payment = v.state.world.pullRequests.find((pr) => pr.branch === 'issue/390/payment');
   const refunds = v.state.world.pullRequests.find((pr) => pr.branch === 'issue/390/refunds');
   assert.ok(payment && refunds, 'the fixtures must carry a two-PR stack on #390');
-  const bottom = prs.indexOf(payment.title);
-  const top = prs.indexOf(refunds.title);
+  const bottom = prs.indexOf(prHeadline(payment.title));
+  const top = prs.indexOf(prHeadline(refunds.title));
   assert.ok(head < bottom && bottom < top, 'the stack is not drawn base first under its goal');
-  assert.ok(prs.slice(bottom, top).includes('cn-stack-tie'), 'the stacked PR is not drawn under its base');
+  assert.ok(prs.slice(head, bottom).includes('cn-prstack'), 'the stack is not drawn as one block');
 });
 
 test('listening: a filled pill, and every Claude button sends', () => {

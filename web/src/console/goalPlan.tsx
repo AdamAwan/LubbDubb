@@ -131,7 +131,7 @@ function planBoard(page: GoalPageView, view: CockpitView, actions: CockpitAction
       .map((part) => (part.prNumber === null ? null : (prs.get(part.prNumber) ?? null)))
       .filter((pr): pr is PartPr => pr !== null),
     ...loose,
-  ].map((pr) => (pr.open ? prRow(pr.pr, view, actions, { goal: false }) : closedPrRow(pr.pr, view, actions)));
+  ].map((pr) => (pr.open ? prRow(pr.pr, view, actions) : closedPrRow(pr.pr, view, actions)));
   return { prs, loose, rail };
 }
 
@@ -338,7 +338,7 @@ function PartPrRow({
         rail={rail}
         /* The goal reference is the page this row is already on, and the rack's
            own `goal: false` reason applies here twice over. */
-        rows={[pr.open ? prRow(pr.pr, view, actions, { goal: false }) : closedPrRow(pr.pr, view, actions)]}
+        rows={[pr.open ? prRow(pr.pr, view, actions) : closedPrRow(pr.pr, view, actions)]}
       />
     </div>
   );

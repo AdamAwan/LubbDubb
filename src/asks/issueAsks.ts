@@ -1,5 +1,5 @@
 import type { AskDraft, AskInputs } from './queue.js';
-import { askLine, opensAt } from './lines.js';
+import { askTitle, opensAt } from './lines.js';
 import { issueSubtreeNumber } from '../issueOrigins.js';
 
 // → docs/spec/17-cockpit.md#the-queue-rail--needs-you
@@ -33,7 +33,7 @@ export function intakeRows(state: AskInputs): AskDraft[] {
       id: `intake:${base.goalRef}`,
       kind: 'intake',
       group: 'yours',
-      title: askLine('Held at intake', base.goalRef, state),
+      ...askTitle('Held at intake', base.goalRef, state),
       opens: opensAt(base.goalRef, state),
       raisedAt: issue.appraisal.decidedAt,
     });
@@ -57,7 +57,7 @@ export function questionRows(state: AskInputs): AskDraft[] {
       id: `questions:${base.goalRef}`,
       kind: 'questions',
       group: 'yours',
-      title: askLine('Waiting on open questions', base.goalRef, state),
+      ...askTitle('Waiting on open questions', base.goalRef, state),
       opens: opensAt(base.goalRef, state),
       raisedAt: '',
       note: reason,
@@ -78,7 +78,7 @@ export function findingsRows(state: AskInputs): AskDraft[] {
       id: `findings:${base.goalRef}`,
       kind: 'findings',
       group: 'blocking',
-      title: askLine('Investigated — the findings wait on your call', base.goalRef, state),
+      ...askTitle('Investigated — the findings wait on your call', base.goalRef, state),
       opens: opensAt(base.goalRef, state),
       raisedAt: investigation.decidedAt,
     });
@@ -97,7 +97,7 @@ export function profileRows(state: AskInputs): AskDraft[] {
       id: `profile:${base.goalRef}`,
       kind: 'profile',
       group: 'yours',
-      title: askLine(`Wants to run on “${appraisal.proposedProfile}”`, base.goalRef, state),
+      ...askTitle(`Wants to run on “${appraisal.proposedProfile}”`, base.goalRef, state),
       opens: opensAt(base.goalRef, state),
       raisedAt: appraisal.decidedAt,
     });
@@ -115,7 +115,7 @@ export function placementRows(state: AskInputs): AskDraft[] {
         id: `placement:${ask.field}:${base.goalRef}`,
         kind: 'placement',
         group: 'yours',
-        title: askLine(
+        ...askTitle(
           ask.field === 'parent'
             ? ask.proposedParent === null
               ? 'No parent Feature'

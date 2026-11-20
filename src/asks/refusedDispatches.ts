@@ -1,6 +1,6 @@
 import type { CockpitDecision } from '../wire.js';
 import type { AskDraft, AskInputs } from './queue.js';
-import { askLine, goalOf, opensAt } from './lines.js';
+import { askTitle, goalOf, opensAt } from './lines.js';
 
 // → docs/spec/17-cockpit.md#the-queue-rail--needs-you
 
@@ -69,7 +69,7 @@ export function refusedDispatchRows(state: AskInputs): AskDraft[] {
       kind: 'dispatch' as const,
       subject: { type: 'refused_dispatch' as const, key: r.key },
       group: 'yours' as const,
-      title: askLine(`Refused on ${r.pulses} pulses running — ${refusalLine(r.detail)}`, goalRef, state),
+      ...askTitle(`Refused on ${r.pulses} pulses running — ${refusalLine(r.detail)}`, goalRef, state),
       goalRef,
       originRef: r.originRef ?? r.branch,
       opens: opensAt(goalRef, state),

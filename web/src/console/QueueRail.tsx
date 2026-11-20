@@ -139,7 +139,7 @@ export function holdingLabel(holding: number): string {
   return `holding ${holding} ${holding === 1 ? 'part' : 'parts'}`;
 }
 
-export function KindTag({ kind }: { kind: NeedKind }): JSX.Element {
+function KindTag({ kind }: { kind: NeedKind }): JSX.Element {
   return (
     <Tag>
       {/* Hidden from the reading order on purpose: the word beside it is
@@ -423,7 +423,7 @@ function AssignGroupRow({
 }
 
 /** The rail's urgency headings and its fold, over any rows. → docs/spec/44-needs-you.md#from-the-orchestrator */
-export function RailTiers({
+function RailTiers({
   rows,
   draw,
 }: {

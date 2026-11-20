@@ -2,7 +2,7 @@ import type { Escalation, HumanTask, PlanPart, Proposal } from '../types.js';
 import type { SetupReading, SetupVerdict } from '../setup/reading.js';
 import type { AskKind } from './askRow.js';
 import type { AskDraft, AskInputs } from './queue.js';
-import { agentLabelOf, askLine, goalOf, oneLine, opensAt } from './lines.js';
+import { agentLabelOf, askTitle, goalOf, oneLine, opensAt } from './lines.js';
 
 // → docs/spec/17-cockpit.md#the-queue-rail--needs-you
 
@@ -135,7 +135,7 @@ export function escalationRows(state: AskInputs): AskDraft[] {
           proposalId: proposal?.id ?? null,
         },
         group: 'blocking' as const,
-        title: askLine(escalationSummary(e, proposal, originRef, state), goalRef, state),
+        ...askTitle(escalationSummary(e, proposal, originRef, state), goalRef, state),
         goalRef,
         originRef,
         opens: opensAt(goalRef, state),
@@ -159,7 +159,7 @@ export function humanTaskRows(state: AskInputs): AskDraft[] {
         kind: TASK_KIND[t.kind],
         subject: { type: 'human_task' as const, taskId: t.id },
         group: 'yours' as const,
-        title: askLine(oneLine(t.title), goalRef, state),
+        ...askTitle(oneLine(t.title), goalRef, state),
         goalRef,
         originRef: t.originRef ?? null,
         opens: opensAt(goalRef, state),
@@ -183,7 +183,7 @@ export function limitRows(state: AskInputs): AskDraft[] {
       kind: 'limit',
       subject: { type: 'parked_agent', agentId },
       group: 'blocking',
-      title: askLine(oneLine(agent.waitingReason ?? 'Parked: no usage allowance left right now.'), goalRef, state),
+      ...askTitle(oneLine(agent.waitingReason ?? 'Parked: no usage allowance left right now.'), goalRef, state),
       goalRef,
       originRef,
       opens: opensAt(goalRef, state),

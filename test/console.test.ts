@@ -1590,12 +1590,12 @@ test('an unwatched PR is drawn spent, not at the same weight as the ones being w
     ...v,
     state: { ...v.state, world: { ...v.state.world, pullRequests: [ignored, ...prs.slice(1)] } },
   });
-  const row = html.split('<div class="cn-row').find((chunk) => chunk.includes(ignored.title));
+  const row = html.split(/<div class="cn-prcard(?=[ "])/).find((chunk) => chunk.includes(ignored.title));
   assert.ok(row, 'the unwatched PR is still listed — one that vanishes is the other bug');
-  assert.ok(row.slice(0, row.indexOf('"')).includes('cn-spent'), 'the unwatched PR’s row carries the spent tone');
+  assert.ok(row.slice(0, row.indexOf('"', 1)).includes('cn-spent'), 'the unwatched PR’s card carries the spent tone');
   assert.ok(row.includes('Tag this PR'), 'the watch switch does not read as one that is off');
   assert.ok(!row.includes('>unwatched</button>'), 'the rack drew the court as a word again');
-  assert.ok(!row.includes('cn-rowsub'), 'an unwatched row spent a second line on what it is waiting for');
+  assert.ok(!row.includes('cn-prcard-l2'), 'an unwatched card spent a second line on what it is waiting for');
   assert.ok(!row.includes('the harness is leaving it alone'), 'the row drew a reason nobody will read');
 });
 

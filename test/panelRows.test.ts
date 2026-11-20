@@ -6,6 +6,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
+import { prHeadline } from '../web/src/view/prHeadline.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
 (globalThis as { React?: typeof React }).React = React;
@@ -42,6 +43,7 @@ function view(over: Partial<CockpitView['state']> = {}): CockpitView {
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
 const ROW = /class="cn-row[ "]/g;
+const CARD = /class="cn-prcard[ "]/g;
 
 const render = (v: CockpitView): string =>
   renderToStaticMarkup(
@@ -55,16 +57,16 @@ const render = (v: CockpitView): string =>
     }),
   );
 
-test('every pull-request row carries a way to the pull request it names', () => {
+test('every pull-request card carries a way to the pull request it names', () => {
   const html = render(view());
   const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Build'));
-  const rows = rack.split(ROW).slice(1);
+  const rows = rack.split(CARD).slice(1);
   assert.ok(rows.length > 0, 'no pull-request rows rendered');
   for (const row of rows) {
     const at = row.indexOf('cn-refs');
-    assert.ok(at > 0, 'a pull-request row has no refs slot at all');
+    assert.ok(at > 0, 'a pull-request card has no refs slot at all');
     const slot = row.slice(at);
-    assert.match(slot, /#\d+/, "a pull-request row's refs slot is empty");
+    assert.match(slot, /#\d+/, "a pull-request card's refs slot is empty");
   }
 });
 
@@ -101,7 +103,7 @@ test('every row of a card sits on that card’s own grid', () => {
     }
     checked += 1;
   }
-  assert.ok(checked >= 3, `only ${checked} cards drew rows — this test is about the ones that do`);
+  assert.ok(checked >= 2, `only ${checked} cards drew rows — this test is about the ones that do`);
 });
 
 test('a fleet row wears the state it is in, and the strongest one it is in', () => {
@@ -136,30 +138,30 @@ test('a fleet row wears the state it is in, and the strongest one it is in', () 
   assert.ok(!ranked.includes('blocked:amber'), 'and the row wears one word, not both');
 });
 
-test('a pull-request row keeps the court’s reasons and wears none of its words', () => {
+test('a pull-request card keeps the court’s reasons and wears none of its words', () => {
   const state = buildFixtureState();
   const html = render(view());
   const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Build'));
-  const rows = rack.split(ROW).slice(1);
+  const rows = rack.split(CARD).slice(1);
   const open = state.world.pullRequests;
   assert.equal(rows.length, open.length, 'every open pull request is drawn');
   assert.ok(!rack.includes('cn-why-chip'), 'the rack drew a state word');
   for (const pr of open) {
-    const row = rows.find((r) => r.includes(`>${pr.title}</b>`) || r.includes(`</span>${pr.title}</b>`));
+    const row = rows.find((r) => r.includes(`>${prHeadline(pr.title)}</button>`));
     assert.ok(row, `#${pr.number} is not drawn`);
     assert.ok(!row.includes(`>${pr.attention.status}</button>`), `#${pr.number} still wears its court as a word`);
     const unwatched = pr.attention.status === 'unwatched';
     if (pr.attention.reasons.length > 0 && !unwatched) {
-      assert.ok(row.includes('cn-said'), `#${pr.number} lost the court’s reasons with the word`);
+      assert.ok(row.includes('cn-prcard-said'), `#${pr.number} lost the court’s reasons with the word`);
     }
-    if (unwatched) assert.ok(!row.includes('cn-rowsub'), `#${pr.number} is unwatched and still drew a sub-line`);
+    if (unwatched) assert.ok(!row.includes('cn-prcard-l2'), `#${pr.number} is unwatched and still drew a sub-line`);
     const eye = row.indexOf('cn-eye');
-    const subject = row.indexOf('cn-grow');
+    const subject = row.indexOf('cn-prcard-title');
     assert.ok(eye > 0, `#${pr.number} draws no watch switch`);
     assert.ok(eye > subject, `#${pr.number} still draws its switch ahead of the subject`);
-    for (const mark of [/class="ck /, /class="ck-slot"/, /class="rv /, /class="pk /]) {
+    for (const mark of [/class="ck /, /class="rv /, /class="pk /]) {
       const found = mark.exec(row);
-      if (found !== null) assert.ok(eye < found.index, `#${pr.number} draws its switch behind the readings`);
+      if (found !== null) assert.ok(eye > found.index, `#${pr.number} draws its switch ahead of the readings`);
     }
   }
 });
@@ -175,9 +177,9 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
 
   const rowFor = (html: string, title: string): string => {
     const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Build'));
-    const found = rack.split(ROW).find((chunk) => chunk.includes(title));
-    assert.ok(found, `no row drew "${title}"`);
-    return found.slice(0, found.indexOf('cn-refs'));
+    const found = rack.split(CARD).find((chunk) => chunk.includes(title));
+    assert.ok(found, `no card drew "${title}"`);
+    return found.slice(found.indexOf('cn-prcard-marks'));
   };
 
   const html = render(view());
@@ -194,15 +196,20 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
   for (const pr of staffed) assert.match(rowFor(quiet, pr.title), /"ck /, `#${pr.number} lost its checks`);
 });
 
-test('the agent mark is the row’s first slot, on both racks', () => {
+test('the agent mark is the first slot of a goal row, and takes the checks’ place on a pull-request card', () => {
   const state = buildFixtureState();
   const html = render(view());
   const racks = {
     'Goals in flight': html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests')),
-    'Pull requests': html.slice(html.indexOf('Pull requests'), html.indexOf('Build')),
   };
 
-  assert.equal(html.split('cn-lamp-mark').length - 1, 2, 'the lamp column is widened on the wrong number of cards');
+  assert.equal(html.split('cn-lamp-mark').length - 1, 1, 'the lamp column is widened on the wrong number of cards');
+  const prs = html.slice(html.indexOf('Pull requests'), html.indexOf('Build'));
+  const staffedCards = prs.split(CARD).filter((card) => card.includes('cn-onit'));
+  assert.ok(staffedCards.length > 0, 'the fixtures must put an agent on a pull-request card');
+  for (const card of staffedCards) {
+    assert.ok(card.indexOf('cn-onit') > card.indexOf('cn-prcard-marks'), 'the agent mark left the readings');
+  }
 
   for (const [name, rack] of Object.entries(racks)) {
     const staffed = rack.split(ROW).filter((row) => row.includes('cn-onit'));

@@ -1,6 +1,6 @@
 import type { OpenPullRequest, ViewerAssignment } from '../wire.js';
 import type { AskDraft, AskInputs } from './queue.js';
-import { askLine, goalOf, goalOfPr, oneLine, opensAt, prAddress } from './lines.js';
+import { askTitle, goalOf, goalOfPr, oneLine, opensAt, prAddress } from './lines.js';
 import { ciNeedsAttention, isConflicted } from '../pr/prHealth.js';
 
 // → docs/spec/07-pull-requests.md
@@ -43,7 +43,7 @@ export function assignedPrRows(state: AskInputs): AskDraft[] {
       id: `assigned:pr:${pr.number}`,
       kind: 'assigned',
       subject: { type: 'pull_request', prNumber: pr.number },
-      title: askLine(assignedLine(pr), goalRef, state),
+      ...askTitle(assignedLine(pr), goalRef, state),
       ...(note === undefined ? {} : { note }),
       goalRef,
       originRef: `pr:${pr.number}`,
@@ -70,7 +70,7 @@ export function botPrRows(state: AskInputs): AskDraft[] {
       id: `bot_pr:pr:${pr.number}`,
       kind: 'bot_pr',
       subject: { type: 'pull_request', prNumber: pr.number },
-      title: askLine(
+      ...askTitle(
         oneLine(
           `${said[0]?.toUpperCase() ?? ''}${said.slice(1)} on ${title === '' ? `PR #${pr.number}` : `“${title}”`}`,
         ),
@@ -99,7 +99,7 @@ export function assignAskRows(state: AskInputs): AskDraft[] {
       id: `assign:pr:${pr.number}`,
       kind: 'assign',
       subject: { type: 'pull_request', prNumber: pr.number },
-      title: askLine(`PR #${pr.number} is ready — want to assign it to someone?`, goalRef, state),
+      ...askTitle(`PR #${pr.number} is ready — want to assign it to someone?`, goalRef, state),
       goalRef,
       originRef: `pr:${pr.number}`,
       opens: opensAt(goalRef, state),
@@ -123,7 +123,7 @@ export function undescribedPartRows(state: AskInputs): AskDraft[] {
       id: `describe:${waiting.originRef}`,
       kind: 'describe',
       subject: { type: 'part', originRef: waiting.originRef, prNumber: waiting.prNumber },
-      title: askLine(
+      ...askTitle(
         title === ''
           ? `Nobody has said what PR #${waiting.prNumber} does`
           : `Nobody has said what PR #${waiting.prNumber} does — “${oneLine(title)}”`,
@@ -152,7 +152,7 @@ export function descriptionFeedbackRows(state: AskInputs): AskDraft[] {
       id: `description:${feedback.versionId}`,
       kind: wrong ? 'description_wrong' : 'description_note',
       subject: { type: 'description_check', versionId: feedback.versionId, prNumber: feedback.prNumber },
-      title: askLine(
+      ...askTitle(
         wrong
           ? `Your description of PR #${feedback.prNumber} says ${count === 1 ? 'something' : `${count} things`} the diff does not do`
           : `The diff of PR #${feedback.prNumber} raises ${count === 1 ? 'something' : `${count} things`} your description does not`,

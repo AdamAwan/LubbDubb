@@ -19,3 +19,8 @@ export interface PrOnYou {
 export function prsOnYou(prs: readonly OpenPullRequest[]): PrOnYou[] {
   return prs.map((pr) => ({ pr, reasons: prOnYouReasons(pr) })).filter((row) => row.reasons.length > 0);
 }
+
+/** Somebody asked the operator to review it — as against the operator's own and the fleet's. */
+export function assignedToYou(pr: OpenPullRequest): boolean {
+  return pr.viewerAssignment !== undefined || pr.attention.assignedToYou !== undefined;
+}

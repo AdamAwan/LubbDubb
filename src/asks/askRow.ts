@@ -93,6 +93,8 @@ export interface AskRow {
    */
   standing: boolean;
   title: string;
+  /** The ask without the goal `title` appends, where the row was built by `askTitle`. */
+  summary?: string;
   goalRef: string | null;
   originRef: string | null;
   opens: AskDestination;

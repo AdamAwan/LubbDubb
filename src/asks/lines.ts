@@ -66,6 +66,15 @@ export function agentLabelOf(agentId: string | null, state: AskInputs): string |
   return line === '' ? null : line;
 }
 
+/** The row's title and, apart, the ask without its goal — what the cockpit's ask card draws as its body. */
+export function askTitle(
+  summary: string,
+  goalRef: string | null,
+  state: AskInputs,
+): { title: string; summary: string } {
+  return { title: askLine(summary, goalRef, state), summary };
+}
+
 export function askLine(summary: string, goalRef: string | null, state: AskInputs): string {
   const issue = goalRef === null ? undefined : goalIssue(state, goalRef);
   if (issue === undefined) return summary;
