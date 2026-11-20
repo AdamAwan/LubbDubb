@@ -1,6 +1,6 @@
 # 44 — The Needs you page
 
-**Built.** The page — the `needs` tab, its two columns, the Claude button and the listener status —
+**Built.** The page — the `needs` tab, its three columns, the Claude button and the listener status —
 and the server side under it: the listener (`src/listen/listener.ts`), the desktop tools `ask_wait`
 and `pr_read`, `POST /api/listen/send`, the snapshot's `listener`, and the `listen` and `pr` skills.
 
@@ -10,12 +10,15 @@ person. And most of the time the operator does not want to answer an ask with a 
 **talk it through with Claude**, in the Claude desktop app, where the conversation can flow.
 
 So this is a new cockpit tab, **Needs you**, beside the overview rather than replacing it. The
-overview stays where it is, untouched, until this page has proved itself. The listen loop below is
+overview stays where it is until this page has proved itself; the one thing the two share is the
+[pull-request card](17-cockpit.md#the-pull-request-card), so a pull request reads the same on both. The listen loop below is
 part of this page **only**: no other surface sends anything to it.
 
 ## Invariants
 
-- **The old overview and the rail are unchanged.** This page is a new tab; nothing about Cards, Focus mode or the queue rail moves. → [§](#where-it-sits) · _no test_
+- **The rail and the overview's shapes are unchanged.** This page is a new tab; nothing about Focus mode or the queue rail moves, and of the Cards overview only the pull requests card changed — to the [pull-request card](17-cockpit.md#the-pull-request-card) this page draws too. → [§](#where-it-sits) · _no test_
+- **Every column scrolls on its own.** A long list in one column never pushes another out of view. → [§](#where-it-sits) · _no test_
+- **The asks are grouped by family, in the queue's order inside each.** `askFamilies` filters and never sorts; urgency is a tag, not the order. → [§](#from-the-orchestrator) · `test/needsYouPage.test.ts`
 - **Only this page sends to the listening chat.** `POST /api/listen/send` has one caller, `web/src/console/NeedsYouPage.tsx`; every other surface keeps its own buttons and its own deep links. → [§](#scope) · `test/needsYouPage.test.ts`
 - **Which pull requests are on the page is `prOnYouReasons`, one pure function the server and the page share.** A pull request is on the page when any one of its reasons holds, and a reason is read off fields the server already decided — never re-derived in the browser. The page, the pruning of `sent` and `pr_read`'s `onYou` all read its keys. → [§](#pull-requests-waiting-on-you) · `test/prsOnYou.test.ts`
 - **The page reads `listener.state`; it never guesses.** `listening`, `busy` and `off` are the server's, off whether a wait is open. → [§](#is-a-chat-listening) · `test/needsYouPage.test.ts`
@@ -39,29 +42,77 @@ The page is, top to bottom:
 
 1. **The heading row**: `Needs you`, the counts (`7 asks · 6 pull requests`), and on the right the
    [listener status](#is-a-chat-listening).
-2. **[The fleet strip](#the-fleet-strip)** — one thin line.
-3. **Two columns** — the asks, then the pull requests — side by side at 1100px and wider, stacked
-   below that.
+2. **Three columns** — the asks, the pull requests, and [the fleet](#the-fleet-panel) — side by side
+   at 1240px and wider; below that the asks and the pull requests stay side by side and the fleet
+   goes full width under them; below 760px all three stack.
+
+**Each column scrolls inside its own height** (`max-height: calc(100vh - 150px)`), with its heading
+fixed above the scroll. That is the reason for the columns: with the asks and the pull requests in one
+list, a long run of asks pushed every pull request below the fold, and the operator went back to the
+overview to find them. Side by side, each column is narrow enough that a card reads as one block
+instead of a line stretched across the screen.
 
 The top bar is the same here as on every other tab — the fleet control, cap and scan countdown stay
 where they are, because this page is where an operator answers, and answering often means pausing or
 widening the fleet.
 
-### The fleet strip
+### The fleet panel
 
-The agents are visible here without being the subject: one bordered line under the heading, quieter
-than the cards. It names each live agent — its status lamp (the fleet's own, from `agentLamp`),
-its task title and how long it has been out — up to six, then `+N`; agents with an open ask come first, then waiting or limit-parked ones, so the six shown are the ones most likely to matter here. A toggle beside them (`+N ▾`, or `▾` when all fit) opens the strip into a list of every agent out — lamp, title, its latest note or state, and time out — each row opening that agent; `less ▴` folds it back. The toggle is local to the page and not kept in the address. Pressing one opens that agent's
-drawer. On the right, `out of cap · queued`, and `Overview ›` to the full fleet. With none out it
-says `no agents out`. Covered by `test/needsYouPage.test.ts`. Goals in flight are not on this page.
+The third column. At its top, `n of cap out` and `n queued`, with a thin bar for how full the cap is.
+Under that, **one small card per live agent**: its status lamp (the fleet's own, from `agentLamp`), its
+task title, how long it has been out, and a second line — a state chip where the agent is stopped
+(`question` red, `limit` or `waiting` amber) and its latest note, or `running`. Agents with an open ask
+come first, then waiting or limit-parked ones; an agent with an open ask also carries a red left edge.
+Pressing a card opens that agent's drawer. The panel scrolls like the other columns, so every agent
+out is listed — there is no fold. Its foot is `Overview ›`, to the full fleet. With none out it says
+`No agents out.` Covered by `test/needsYouPage.test.ts`. Goals in flight are not on this page.
 
 ## From the orchestrator
 
-The ask queue (`asks` on the snapshot, [17](17-cockpit.md#the-queue-rail--needs-you)) drawn at full
-width, in the rail's order and under the rail's tier headings — **Answer now**, **Yours to do**, and
-the **holding nothing** fold. Each row is the rail's row with room for its reason on the card rather
-than in a tooltip, and carries two controls: its kind's verb (`KIND_VERB`, which opens the ask where it
-is answered, as the rail's row does) and the [Claude button](#the-claude-button).
+The ask queue (`asks` on the snapshot, [17](17-cockpit.md#the-queue-rail--needs-you)) **grouped by
+what kind of thing it asks for**, not by urgency. `askFamilies` (`web/src/view/askFamilies.ts`) maps
+every kind to one of five families, in this order: **Questions** (an agent's question, open questions,
+a permission, a profile, a reply draft), **Decisions** (a plan, a merge, findings, intake, placement, a
+check plan, assignments, bot PRs), **Work to do** (bench work, close-outs, checks to run, watches),
+**Descriptions** (pull request descriptions to write or fix), and **Fleet and setup** (config,
+recovery, refusals, stalls, limits, runway, upgrades). The map is total over the kinds, so a new kind
+fails the typecheck until it is given a family. Inside a family the queue's own order is kept —
+`askFamilies` filters, it never sorts. Empty families are not drawn.
+
+Urgency is still on the page, but as a mark rather than the sort: an ask with `urgency: 'now'` carries
+a red **answer now** tag on its card, and its family's heading carries `n now`. Ordering the whole
+column by urgency put the operator's work in an order that did not match how they work through it —
+all the questions, then all the decisions. Under the column's heading a row of **family chips** names
+every family with its count, and a red dot where any of it is `now`, so the families below the first
+are in view however long the first is; pressing a chip opens that family and scrolls to it. The row is
+drawn only when there is more than one family. Each family is a fold; it opens on its own unless every ask
+in it holds nothing (`urgency: 'later'`), and that default follows the asks as they change; only a fold the operator pressed is remembered. The fold is per-visit state, not a `Place` field.
+
+Each row is the rail's row with room for its reason on the card rather than in a tooltip, and carries
+two controls: its kind's verb (`KIND_VERB`, which opens the ask where it is answered, as the rail's row
+does) and the [Claude button](#the-claude-button).
+
+### The ask card
+
+Each ask is a card of three parts, so the eye finds what it is about before reading what it asks:
+
+1. **A small top line**: the kind in its tone's colour (`Escalation`, `Plan`, …), the age on the right,
+   and a red dot after it when the ask is `urgency: 'now'`.
+2. **The headline**, bold: what the ask is about — its goal's title, else the run it came from
+   (`agentLabel`) — with its `<Ref>` beside it as a plain link. An ask with neither has its own text
+   as the headline and no body.
+3. **The body**: the ask itself, up to three lines.
+
+The server's `title` is one line, `<ask>[ for #n] · <goal title>`, for the rail and Claude Code. A row
+built by `askTitle` (`src/asks/lines.ts`) also carries `summary`, the ask without that suffix, and the
+card's body is `summary`, falling back to `title` on a row without one. The headline reads the goal's
+own title off the world, never out of the joined string. The ask's `note` (or a setup check's remedy) is a fourth, faint
+line only when it says something the headline does not.
+
+There are no boxes on the card: references are plain links, and the two controls — the Claude button
+and the kind's verb — appear in the card's top-right corner on hover or focus, over the age, and are
+always shown where the device has no hover. The urgency tier, `Blocking`, the holding count and the
+agent's name are not drawn: the dot carries the first and the rest are one press away.
 
 The foot of the column is the **Handled for you** line, exactly as on the rail
 ([43](43-handled-for-you.md#on-the-rail)).
@@ -73,8 +124,8 @@ different questions, and the operator asked for both.
 
 `prOnYouReasons` (`src/listen/prsOnYou.ts`) is the table, once: it answers a pull request's reasons as
 keys, in this order, and is re-exported as a runtime value from `src/wire.ts` so the page calls the same
-function the server does. A pull request is drawn when any of these hold, and each that holds is a tag
-on its row:
+function the server does. A pull request is drawn when any of these hold; the first that holds, in this order, is the word its
+card leads with:
 
 | Key        | Tag                | Read off                                                              |
 | ---------- | ------------------ | --------------------------------------------------------------------- |
@@ -84,18 +135,25 @@ on its row:
 | `assign`   | `Needs a reviewer` | `assignAsk` is set and not empty                                      |
 | `describe` | `No description`   | `body` is read and empty after trimming                               |
 
-The page's `prsOnYou` (`web/src/view/prsOnYou.ts`) holds only what is the page's own: the tag words
-and which pull requests are drawn; the tag tones are `REASON_TONE` in `NeedsYouPage.tsx`. The same
+The page's `prsOnYou` (`web/src/view/prsOnYou.ts`) holds only what is the page's own: the reason words
+and which pull requests are drawn; the word's colour is `LEAD_TONE` in `web/src/console/PrCards.tsx`, drawn through the shared `cn-ink-*` classes the ask card's kind word uses too. The same
 keys drop a sent pull request's strip once it is off the page, and are `pr_read`'s `onYou`.
 
-They are **grouped by goal, a stack drawn as a tree**, exactly as the overview's rack draws the
-fleet's pull requests — the same `goalPrRows` builder
+They are drawn in **two boxes**, one above the other in the middle column, each scrolling in its
+own half: **Assigned to you** — somebody asked the operator to review it (`viewerAssignment` or
+`attention.assignedToYou`, `assignedToYou` in `web/src/view/prsOnYou.ts`) — and **Your pull
+requests**, the operator's own and the fleet's. Reviewing someone else's work and moving your own
+along are different jobs. An empty box shrinks to its heading and one line.
+
+In each box they are **grouped by goal, a stack drawn as a block**, exactly as the overview's rack draws the
+fleet's pull requests — the same `goalPrCards` builder
 ([17](17-cockpit.md#grouped-by-goal-stacks-as-a-tree)), so the two pages cannot disagree about which
 goal a pull request is under or what it is stacked on. Goals go in number order, no goal last; inside
-a goal, base first, then number order. The row is `prRow` (`web/src/console/prRow.tsx`) with the tags
-as its chips, the [Claude button](#the-claude-button) as its action, and the sent strip as its
-`below`. The card's header counts the drawn rows against every open one, and its foot links to
-the full list — the overview's pull request card, which draws every open one.
+a goal, base first, then number order. Each is drawn as [the pull-request card](17-cockpit.md#the-pull-request-card)
+— the same card the overview's rack draws — with the [Claude button](#the-claude-button) (icon only)
+as its action and the sent strip below it. The card leads its second line with the **first** of its
+reasons as a coloured word; the rest are already said by its marks or its sentence. The column's
+heading counts the pull requests drawn, and links `All n open →` to the overview's rack.
 
 ## The Claude button
 

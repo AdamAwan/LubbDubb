@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { prHeadline } from '../web/src/view/prHeadline.js';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
@@ -176,12 +177,12 @@ test('the pull request rack is a way onto each pull request’s own page', () =>
 
   const pr = v.state.world.pullRequests[0];
   assert.ok(pr, 'the fixtures must carry an open pull request');
-  const named = rack.indexOf(`>${pr.title}<`);
+  const named = rack.indexOf(`>${prHeadline(pr.title)}<`);
   assert.notEqual(named, -1, 'the rack must name the pull request');
   assert.match(
     rack.slice(rack.lastIndexOf('<button', named), named),
-    /class="cn-grow"/,
-    'the row’s name is the control that opens the pull request’s page',
+    /class="cn-prcard-title"/,
+    'the card’s headline is the control that opens the pull request’s page',
   );
   assert.match(rack, new RegExp(`<button[^>]*class="ref-goal"[^>]*>PR ${pr.number}<`), 'and so does its ref');
   assert.match(

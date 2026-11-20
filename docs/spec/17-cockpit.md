@@ -4146,23 +4146,23 @@ stack_ (nothing on the row said so at all). So below the assignment bands the ra
 `rackByGoal` (`web/src/view/prRack.ts`) is the one place the grouping is computed: it reads each pull
 request's goal through `goalOfPr`, so a goal here is exactly the goal the rest of the cockpit names.
 
-**One builder draws it, wherever pull requests are grouped.** `goalPrRows`
-(`web/src/console/prGoalRows.tsx`) turns a list of pull requests into the grouped, tree-drawn
-`PanelRowModel`s — goal headings, `depth`, the `on` reference — and every surface that groups pull
+**One builder draws it, wherever pull requests are grouped.** `goalPrCards`
+(`web/src/console/PrCards.tsx`) turns a list of pull requests into grouped, tree-drawn
+`PrCardModel`s — goal headings, `depth`, the `on` reference — and every surface that groups pull
 requests by goal calls it: the rack here and the pull-request column of [Needs you](44-needs-you.md).
-A caller adds only what is its own through `dress` (the rack's who-asked mark; Needs you's reason
-tags, Claude button and sent strip). Where no pull request has a goal the rows come back with no
-heading; the rack puts its own `The fleet's` band on them only when the assignment bands are drawn
-above. Two copies of the grouping is how two pages come to disagree about which goal a pull request
-is under. A row that needs something drawn beneath it — Needs you's sent strip — sets
-`PanelRowModel.below`, which `PanelRows` draws after the row, so the row stays inside one grouped list.
+A caller adds only what is its own by spreading onto each model (the rack's who-asked mark and watch
+switch; Needs you's Claude button and sent strip). Where no pull request has a goal the cards come
+back with no heading; the rack puts its own `The fleet's` band on them only when the assignment bands
+are drawn above. Two copies of the grouping is how two pages come to disagree about which goal a pull
+request is under. A card that needs something drawn beneath it — Needs you's sent strip — sets
+`below`, which `PrCards` draws after the card, so it stays inside one grouped list.
 
 - **Each goal is a heading** (`tone: 'title'`, `cn-group-title`): the goal's title in sentence case — a
   title is not a label, so it does not take the bands' uppercase — with a `<Ref>` to the goal in the
   heading's `refs` slot, and at the end the goal's track and `n of m merged`, the same `buildGoalTrack`
   reading the Goals in flight card draws. A goal with no plan says how many pull requests are open
-  instead. The row drops its own goal reference (`prRow`'s `{ goal: false }`, which then skips the
-  lookup): the heading above it already says it. `RowGroup.label` stays plain text; anything that
+  instead. The card drops its own goal reference (`goal: false`, which then skips the lookup): the
+  heading above it already says it. `RowGroup.label` stays plain text; anything that
   links goes in `refs`, as on a row.
 - **Goals are ordered by number; pull requests with no goal come last**, under `No goal`. A ticketless
   pull request is a first-class subject ([05](05-dispatcher.md)), but it answers neither question, so
@@ -4171,16 +4171,52 @@ is under. A row that needs something drawn beneath it — Needs you's sent strip
   the server's `buildStacks` answer ([07](07-pull-requests.md)) — the same one the goal page's stack
   positions read — never re-derived from `baseBranch` in the cockpit, so the rack and the goal page
   cannot disagree about which pull requests are a stack. A rung is drawn directly beneath the rung
-  below it, and its row sets `PanelRowModel.depth`: `PanelRows` draws a `└` before the title,
-  indented one step per level below the first through the `--cn-depth` property (depth capped at four), so any card can draw
-  a tree without classes of its own. Its sub-line carries `on` with a `<Ref>` to the pull request it
-  builds on — `prRow`'s `on` option, so the row's own unwatched rule decides whether it is drawn. Roots, and siblings under one base, go in number order. A pull request stacked on another
+  below it, and its card sets `depth`: `PrCards` indents it one step per level through the
+  `--cn-depth` property (depth capped at four) and draws a corner line back to the card above
+  (`cn-prcard-stacked`). Its sub-line carries `on` with a `<Ref>` to the pull request it builds on, so
+  the card's own unwatched rule decides whether it is drawn. Roots, and siblings under one base, go in number order. A pull request stacked on another
   goal's pull request is a root in its own goal, still with its `on` reference — the tree never
   crosses a goal heading. An unwatched row keeps its no-sub-line rule, so it does not carry `on`.
 
 The assignment bands are not grouped by goal: they answer _is anything waiting on me_, which is a
 question about the operator, not the work, and they are mostly colleagues' pull requests with no goal.
 → `test/prRackGroups.test.ts`
+
+### The pull-request card
+
+The overview's rack and the pull-request column of [Needs you](44-needs-you.md) draw an open pull
+request as one card, `PrCard` in `web/src/console/PrCards.tsx`. It replaced the rack's `PanelRows`
+row there, which carried reason tags, a sub-line, three marks, a watch eye, a refs group and an action
+on one grid line — every one of them correct, and together a row an operator had to read slot by slot.
+The goal page keeps `prRow`: there the row sits among a plan's parts and is read one at a time.
+
+The card has the [ask card](44-needs-you.md#the-ask-card)'s shape:
+
+- **A small top line**: the first of the pull request's [Needs you reasons](44-needs-you.md#pull-requests-waiting-on-you)
+  as a coloured word (`Your review` red, `Your call` amber, `Comments` blue, `Needs a reviewer`
+  violet, `No description` grey), the pull request's `<Ref>` (and its goal's, where the card is not
+  under that goal's heading), then `merge conflict` and `waiting 3h` where they hold. On the right,
+  the marks: the checks (or the agent mark in their place where an agent is on the branch), the
+  fleet's review and the unanswered comments. An unwatched card says `not watched` instead.
+- **The headline**, bold: the title as the control that opens the pull request page, through
+  `prHeadline` (`web/src/view/prHeadline.ts`), which takes off the `#390 [2/3] feat(checkout): `
+  the fleet writes in front — the goal heading, the stack and the card say each of those. The full
+  title is the control's tooltip. The actions, where the caller gives any (the watch eye on the
+  overview, the Claude button on Needs you), sit at the headline's end and show on hover or focus.
+- **The body**: the court's own sentence (`attention.reasons`), up to two lines. An unwatched card
+  draws none.
+
+**A stack is drawn as one block.** Where two or more cards in one group are rungs of one stack
+(`state.stacks`, the server's `buildStacks` answer), `PrCards` draws them together at the place of
+the first, in a dashed box headed `Stack of n · merges from the bottom up`, each rung numbered by its
+position down a rail. With `ghosts` — Needs you passes it, since it lists only the pull requests on
+the operator — a rung not in the list is a slim row (number, title, `not waiting on you`) so the whole
+stack is in view; the overview lists every open pull request and draws only cards.
+
+An unwatched card is drawn at reduced opacity and comes back to near full on hover or focus, as a spent
+row does. The rack's assignment bands, its who-asked mark and its goal headings are unchanged; they
+are drawn around cards instead of rows. → `test/panelRows.test.ts`, `test/prRackGroups.test.ts`,
+`test/console.test.ts`
 
 ### Rate, removed
 

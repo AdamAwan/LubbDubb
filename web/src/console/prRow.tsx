@@ -2,9 +2,8 @@ import type { JSX, ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { OpenPullRequest, PullRequest } from '../types.js';
-import { goalOfPr } from '../view/goalRefs.js';
 import { AsyncButton } from '../components/AsyncButton.js';
-import { Ref, refLabel } from '../components/refs.js';
+import { Ref } from '../components/refs.js';
 import { waitedFor } from '../components/util.js';
 import type { PanelRowModel } from './PanelRow.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
@@ -17,37 +16,20 @@ import { Tag } from '../components/tag.js';
 
 /**
  * The one pull-request row. Every surface that draws a pull request as a row
- * draws this one: the rack on the overview, and each part of a goal's plan for
- * the pull request carrying it. Two readings of one pull request side by side is
- * how the same PR comes to wear two sets of marks nobody chose — the same rule
- * `CiMark` is one component for.
- *
- * `goal` is the only thing that varies: the rack says which goal a pull request
- * is delivering, and on the goal's own page that reference points at the page
- * the reader is already on.
+ * draws this one: each part of a goal's plan for the pull request carrying it.
+ * The overview and Needs you draw the card in `PrCards.tsx` instead. No goal
+ * reference: on the goal's own page it would point at the page already open.
  */
-export function prRow(
-  pr: OpenPullRequest,
-  view: CockpitView,
-  actions: CockpitActions,
-  { goal: withGoal = true, on = null }: { goal?: boolean; on?: number | null } = {},
-): PanelRowModel {
+export function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const unwatched = pr.attention.status === 'unwatched';
-  const goal = withGoal ? goalOfPr(view.state, pr.number) : null;
   const onIt = view.agentOnBranch.get(pr.branch);
-  const watchLabel = view.state.config.watchLabel;
   return {
     key: String(pr.number),
     title: pr.title,
-    refs: (
-      <>
-        <Ref to={`pr:${pr.number}`} />
-        {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
-      </>
-    ),
+    refs: <Ref to={`pr:${pr.number}`} />,
     open: { usage: { counted: 'pr.view' }, go: () => actions.selectPr(pr.number) },
     openTitle: `Open pull request #${pr.number} — its review threads, its checks and the work on its branch`,
-    facts: unwatched ? undefined : prFacts(pr, view.now, on),
+    facts: unwatched ? undefined : prFacts(pr, view.now),
     why: unwatched ? null : pr.attention.reasons.join(' '),
     lamp: onIt === undefined ? undefined : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
     reading: (
@@ -61,23 +43,7 @@ export function prRow(
         <CommentsMark comments={pr.unresolvedComments} reserve onOpen={() => actions.selectPr(pr.number)} />
       </>
     ),
-    toggle: (
-      <AsyncButton
-        usage="pr.edit"
-        className="cn-eye"
-        disabled={watchLabel === ''}
-        onClick={() => actions.setPrWatched(pr.number, unwatched)}
-        title={
-          watchLabel === ''
-            ? 'No watch label configured — the watch gate is off'
-            : unwatched
-              ? `Tag this PR "${watchLabel}" and let the harness work it`
-              : `Take the "${watchLabel}" tag off so the harness leaves this PR alone`
-        }
-      >
-        <Eye open={!unwatched} />
-      </AsyncButton>
-    ),
+    toggle: <WatchToggle pr={pr} view={view} actions={actions} />,
     spent: unwatched,
     live: onIt !== undefined,
   };
@@ -106,13 +72,42 @@ export function closedPrRow(pr: PullRequest, view: CockpitView, actions: Cockpit
   };
 }
 
-function prFacts(pr: OpenPullRequest, now: number, on: number | null): PanelRowModel['facts'] {
+function prFacts(pr: OpenPullRequest, now: number): PanelRowModel['facts'] {
   const facts: { label: string; value: ReactNode; alarm?: boolean }[] = [];
   if (pr.mergeableState === 'dirty') facts.push({ label: 'merge', value: 'conflict', alarm: true });
   const since = pr.attention.reviewWaitingSince;
   if (since !== undefined) facts.push({ label: 'waiting', value: waitedFor(since, now) });
-  if (on !== null) facts.push({ label: 'on', value: <Ref to={`pr:${on}`} /> });
   return facts.length === 0 ? undefined : facts;
+}
+
+export function WatchToggle({
+  pr,
+  view,
+  actions,
+}: {
+  pr: OpenPullRequest;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const unwatched = pr.attention.status === 'unwatched';
+  const watchLabel = view.state.config.watchLabel;
+  return (
+    <AsyncButton
+      usage="pr.edit"
+      className="cn-eye"
+      disabled={watchLabel === ''}
+      onClick={() => actions.setPrWatched(pr.number, unwatched)}
+      title={
+        watchLabel === ''
+          ? 'No watch label configured — the watch gate is off'
+          : unwatched
+            ? `Tag this PR "${watchLabel}" and let the harness work it`
+            : `Take the "${watchLabel}" tag off so the harness leaves this PR alone`
+      }
+    >
+      <Eye open={!unwatched} />
+    </AsyncButton>
+  );
 }
 
 function Eye({ open }: { open: boolean }): JSX.Element {

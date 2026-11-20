@@ -7236,101 +7236,6 @@ button.cn-grow {
   font-size: 17px;
   color: var(--cn-fg);
 }
-.cn-ny-fleet {
-  border: 1px solid var(--cn-line);
-  border-radius: 6px;
-  font: 11px var(--cn-mono);
-  color: var(--cn-fg-faint);
-}
-.cn-ny-fleet-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 4px 8px;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.cn-ny-fleet-more {
-  flex: none;
-  padding: 1px 6px;
-  border-radius: 4px;
-  color: var(--cn-fg-dim);
-}
-.cn-ny-fleet-more:hover {
-  background: var(--cn-hover);
-  color: var(--cn-fg);
-}
-.cn-ny-fleet-list {
-  display: flex;
-  flex-direction: column;
-  padding: 2px 4px 6px;
-  border-top: 1px solid var(--cn-line);
-}
-.cn-ny-fleet-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 2fr) minmax(0, 3fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 6px;
-  border-radius: 4px;
-  text-align: left;
-  color: var(--cn-fg-dim);
-}
-.cn-ny-fleet-row:hover {
-  background: var(--cn-hover);
-  color: var(--cn-fg);
-}
-.cn-ny-fleet-row span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cn-ny-fleet-doing {
-  color: var(--cn-fg-faint);
-}
-.cn-ny-fleet-row em {
-  font-style: normal;
-  color: var(--cn-fg-faint);
-}
-.cn-ny-fleet-label {
-  text-transform: uppercase;
-  letter-spacing: var(--label-track);
-  margin-right: 2px;
-}
-.cn-ny-agent {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  max-width: 220px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  color: var(--cn-fg-dim);
-}
-.cn-ny-agent:hover {
-  background: var(--cn-hover);
-  color: var(--cn-fg);
-}
-.cn-ny-agent span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cn-ny-agent em {
-  font-style: normal;
-  color: var(--cn-fg-faint);
-}
-.cn-ny-fleet-tail {
-  margin-left: auto;
-  flex: none;
-}
-.cn-ny-fleet-open {
-  flex: none;
-  color: var(--cn-fg-dim);
-}
-.cn-ny-fleet-open:hover {
-  color: var(--cn-fg);
-}
 .cn-ny-counts {
   font: 12px var(--cn-mono);
   color: var(--cn-fg-faint);
@@ -7378,16 +7283,136 @@ button.cn-grow {
   background: color-mix(in srgb, var(--cn-violet) 85%, var(--cn-fg));
   color: var(--cn-on-accent);
 }
+/* ---------- Needs you: three columns, each scrolling on its own ----------
+   → docs/spec/44-needs-you.md#where-it-sits */
 .cn-ny-cols {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
-@media (min-width: 1100px) {
+@media (min-width: 760px) {
   .cn-ny-cols {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
+  .cn-ny-fleet {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1240px) {
+  .cn-ny-cols {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(240px, 300px);
+  }
+  .cn-ny-fleet {
+    grid-column: auto;
+  }
+}
+.cn-ny-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: calc(100vh - 150px);
+}
+.cn-ny-col > h3 {
+  flex: none;
+}
+.cn-ny-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+.cn-ny-prcol {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  max-height: calc(100vh - 150px);
+}
+.cn-ny-prcol .cn-ny-prbox {
+  flex: 1 1 50%;
+  min-height: 0;
+  max-height: none;
+}
+.cn-ny-prcol .cn-ny-prbox-empty {
+  flex: none;
+}
+.cn .cn-ny-all {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  color: var(--cn-blue-ink);
+  cursor: pointer;
+}
+.cn .cn-ny-all:hover {
+  text-decoration: underline;
+}
+
+/* One ink per tone, for a word that names a kind or a reason in its colour. */
+.cn-ink-red {
+  color: var(--cn-red-ink);
+}
+.cn-ink-amber {
+  color: var(--cn-amber-ink);
+}
+.cn-ink-blue {
+  color: var(--cn-blue-ink);
+}
+.cn-ink-green {
+  color: var(--cn-green-ink);
+}
+.cn-ink-violet {
+  color: var(--cn-violet);
+}
+.cn-ink-grey {
+  color: var(--cn-fg-dim);
+}
+
+/* ---------- The asks: family chips, family folds, ask cards ----------
+   → docs/spec/44-needs-you.md#from-the-orchestrator */
+.cn-ny-chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 10px;
+  border-bottom: 1px solid var(--cn-line);
+}
+.cn .cn-ny-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--cn-line);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn .cn-ny-chip:hover,
+.cn .cn-ny-chip:focus-visible {
+  border-color: var(--cn-line-hi);
+  color: var(--cn-fg);
+}
+.cn-ny-chip b {
+  font: 600 12px var(--cn-mono);
+  color: var(--cn-fg);
+}
+.cn-ny-family {
+  scroll-margin-top: 4px;
+}
+.cn-ny-family-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 2px;
+}
+.cn-ny-family-head .fold-toggle {
+  font-weight: 600;
+  color: var(--cn-fg);
+}
+.cn-ny-family-now {
+  font-size: 11.5px;
+  color: var(--cn-red-ink);
 }
 .cn-ny-list {
   display: flex;
@@ -7395,38 +7420,85 @@ button.cn-grow {
   gap: 6px;
   padding: 4px 8px 0;
 }
-.cn-ny-list .cn-railsub {
-  padding: 8px 6px 2px;
-}
-.cn-ny-list .fold-toggle.cn-railmore {
-  margin: 8px 0 0;
-}
 .cn-ny-item {
   display: flex;
   flex-direction: column;
 }
-.cn-ny-ask .cn-qtitle {
-  display: block;
-  margin-bottom: 4px;
-  -webkit-line-clamp: unset;
-  line-clamp: none;
+.cn-ny-ask {
+  position: relative;
 }
-.cn-ny-why {
-  margin: 0 0 8px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--cn-fg-dim);
-}
-.cn-ny-acts {
+.cn-ny-ask .cn-qin {
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px 10px 0;
+}
+.cn-ny-asktop {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-ny-asktop .cn-qage {
   margin-left: auto;
 }
-.cn-ny-chips {
-  display: inline-flex;
-  gap: 4px;
-  flex-wrap: wrap;
+.cn-ny-kind {
+  font-weight: 600;
+}
+.cn-ny-nowdot {
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cn-red);
+}
+.cn-ny-about {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--cn-fg);
+}
+.cn-ny-about > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cn-ny-about .cn-refs {
+  font-weight: 400;
+}
+.cn-ny-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--cn-fg-dim);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+.cn-ny-why {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--cn-fg-faint);
+}
+.cn-ny-acts {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+  padding-left: 12px;
+  background: var(--cn-panel-2);
 }
 .cn-ny-sent {
   display: flex;
@@ -7439,16 +7511,348 @@ button.cn-grow {
   color: var(--cn-violet);
   background: var(--cn-violet-fill);
 }
-.cn .cn-ny-all {
-  align-self: flex-start;
-  margin: 10px 13px 12px;
+
+/* ---------- The fleet panel ----------
+   → docs/spec/44-needs-you.md#the-fleet-panel */
+.cn-ny-fleet-sum {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px 6px;
+  font: 11.5px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cn-ny-fleet-sum b {
+  font-size: 14px;
+  color: var(--cn-fg);
+}
+.cn-ny-fleet-cap {
+  height: 4px;
+  margin: 0 12px 10px;
+  border-radius: 2px;
+  background: var(--cn-line);
+  overflow: hidden;
+}
+.cn-ny-fleet-cap i {
+  display: block;
+  height: 100%;
+  background: var(--cn-accent);
+}
+.cn-ny-fleet .cn-ny-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 10px 8px;
+}
+.cn .cn-ny-agent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--cn-line);
+  border-radius: 6px;
+  text-align: left;
+  color: var(--cn-fg);
+}
+.cn .cn-ny-agent:hover {
+  background: var(--cn-hover);
+}
+.cn .cn-ny-agent-ask {
+  border-left: 3px solid var(--cn-red);
+}
+.cn-ny-agent-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cn-ny-agent em {
+  font: normal 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cn-ny-agent-doing {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+}
+.cn-ny-agent-doing > .tag {
+  flex: none;
+}
+.cn-ny-agent-doing > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cn-ny-fleet-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 12px 10px;
+  font-size: 12px;
+}
+.cn .cn-ny-fleet-open {
+  color: var(--cn-fg-dim);
+}
+.cn .cn-ny-fleet-open:hover {
+  color: var(--cn-fg);
+}
+
+/* ---------- The pull-request card, on the overview and on Needs you ----------
+   A small top line, a bold headline, the court's sentence as its body.
+   → docs/spec/17-cockpit.md#the-pull-request-card */
+.cn-prcards {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 10px;
+}
+.cn-prcards .cn-group,
+.cn-prcards .cn-group.cn-group-title {
+  margin-top: 6px;
+  padding: 8px 2px 2px;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--cn-fg-faint);
+}
+.cn-prcards .cn-group.cn-group-ask {
+  color: var(--cn-red-ink);
+}
+.cn-prcards .cn-group-title .cn-group-t {
+  font-weight: 400;
+  color: var(--cn-fg-dim);
+}
+.cn-prcard {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--cn-line);
+  border-radius: 6px;
+  background: var(--cn-panel-2);
+  transition: opacity 0.12s ease;
+}
+.cn-prcard.cn-spent {
+  opacity: 0.45;
+}
+.cn-prcard.cn-spent:hover,
+.cn-prcard.cn-spent:focus-within {
+  opacity: 0.85;
+}
+.cn-prcard-who {
+  flex: none;
+}
+.cn-prcard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.cn-prcard-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+.cn-prcard-l1 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11.5px;
+  white-space: nowrap;
+  color: var(--cn-fg-faint);
+}
+.cn-prcard-l1 .cn-refs {
+  gap: 8px;
+}
+.cn-prcard-lead {
+  font-weight: 600;
+}
+.cn-prcard-marks {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.cn-prcard-marks .ck.ck,
+.cn-prcard-marks .cm.cm {
+  border-color: transparent;
+  background: none;
+}
+.cn-prcard-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cn .cn-prcard-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: left;
+  color: var(--cn-fg);
+}
+.cn .cn-prcard-title:hover {
+  text-decoration: underline;
+}
+.cn-prcard-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.cn-prcard-said {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--cn-fg-dim);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* A stack: its rungs in merge order down a rail, numbered; the ones not in this list
+   are slim rows so the whole stack is in view. */
+.cn-prstack {
+  padding: 8px 10px 6px;
+  border: 1px dashed var(--cn-line-hi);
+  border-radius: 8px;
+}
+.cn-prstack-head {
+  margin-bottom: 6px;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-prstack-rungs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cn-prstack-rung {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.cn-prstack-rung + .cn-prstack-rung::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: -8px;
+  height: 14px;
+  border-left: 2px solid var(--cn-line-hi);
+}
+.cn-prstack-pos {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 8px;
+  border: 1px solid var(--cn-line-hi);
+  border-radius: 50%;
+  font: 600 11px var(--cn-mono);
+  color: var(--cn-fg-dim);
+  background: var(--cn-panel);
+}
+.cn-prstack-ghost .cn-prstack-pos {
+  margin-top: 2px;
+  color: var(--cn-fg-faint);
+}
+.cn-prstack-card {
+  flex: 1;
+  min-width: 0;
+}
+.cn-prstack-other {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 0;
+  font-size: 12.5px;
+  color: var(--cn-fg-faint);
+}
+.cn .cn-prstack-title {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  color: var(--cn-fg-dim);
+}
+.cn-prstack-other i {
+  flex: none;
+  font-size: 11px;
+  font-style: normal;
+}
+
+/* ---------- Quiet references, and controls that show on hover ----------
+   Needs you and the pull-request card draw references as plain links: the boxes are
+   what made a card of five things read as twenty. */
+.cn-plainrefs .ref-goal.ref-goal,
+.cn-plainrefs .ref-out.ref-out,
+.cn-plainrefs .ref-arm.ref-arm {
   padding: 0;
   border: 0;
   background: none;
-  font-size: 12px;
-  color: var(--cn-blue-ink);
-  cursor: pointer;
 }
-.cn .cn-ny-all:hover {
-  text-decoration: underline;
+.cn-plainrefs .ref-arm.ref-arm {
+  margin-left: 2px;
+  opacity: 0;
+}
+.cn-plainrefs .ref-pair:hover .ref-arm.ref-arm,
+.cn-plainrefs .ref-pair:focus-within .ref-arm.ref-arm {
+  opacity: 1;
+}
+.cn-plainrefs .cn-refs {
+  min-width: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+.cn-prcard-acts,
+.cn-ny-ask .cn-ny-acts {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.cn-prcard:hover .cn-prcard-acts,
+.cn-prcard:focus-within .cn-prcard-acts,
+.cn-ny-ask:hover .cn-ny-acts,
+.cn-ny-ask:focus-within .cn-ny-acts {
+  opacity: 1;
+}
+@media (hover: none) {
+  .cn-prcard-acts,
+  .cn-ny-ask .cn-ny-acts {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cn-prcard,
+  .cn-prcard-acts,
+  .cn-ny-ask .cn-ny-acts {
+    transition: none;
+  }
 }
