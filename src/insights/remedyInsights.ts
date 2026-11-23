@@ -1,4 +1,5 @@
-import type { Remedy, RemedyCause, RemedyGuard, RemedyKind, UsageEvent } from '../types.js';
+import type { Remedy, RemedyCause, RemedyGuard, RemedyKind, RetroMiss, UsageEvent } from '../types.js';
+import { RETRO_MISS_CAUSES } from '../retro/retro.js';
 import { roundUsd } from './issueSpend.js';
 import { CAUSES_BY_KIND, CAUSE_COPY, GUARD_COPY, GUARD_ORDER } from '../remedies/remedies.js';
 
@@ -45,6 +46,35 @@ interface RemedyRow {
   at: string;
 }
 
+interface RetroMissCauseTotal {
+  cause: RemedyCause;
+  label: string;
+  blurb: string;
+  misses: number;
+  undocumented: number;
+}
+
+interface RetroMissRow {
+  id: string;
+  /** The goal the retrospective wrote up, `issue:<n>`. */
+  ref: string;
+  path: string;
+  cause: RemedyCause;
+  causeLabel: string;
+  guard: RemedyGuard;
+  guardLabel: string;
+  summary: string;
+  at: string;
+}
+
+/** What retrospectives recorded as missed: a second source beside the remedies, never summed into their accounts. */
+export interface RetroMissInsights {
+  misses: number;
+  goals: number;
+  byCause: RetroMissCauseTotal[];
+  recent: RetroMissRow[];
+}
+
 export interface RemedyInsights {
   accounts: number;
   costUsd: number;
@@ -52,10 +82,12 @@ export interface RemedyInsights {
   byKind: RemedyKindHealth[];
   byGuard: RemedyGuardTotal[];
   recent: RemedyRow[];
+  retros: RetroMissInsights;
 }
 
 interface RemedyInput {
   remedies: readonly Remedy[];
+  retroMisses: readonly RetroMiss[];
   returnDispatches: readonly string[];
   usageEvents: readonly UsageEvent[];
 }
@@ -117,6 +149,38 @@ export function buildRemedyInsights(input: RemedyInput): RemedyInsights {
         summary: r.summary,
         checks: r.checks,
         at: r.createdAt,
+      })),
+    retros: buildRetroMissInsights(input.retroMisses),
+  };
+}
+
+function buildRetroMissInsights(misses: readonly RetroMiss[]): RetroMissInsights {
+  return {
+    misses: misses.length,
+    goals: new Set(misses.map((m) => m.originRef)).size,
+    byCause: RETRO_MISS_CAUSES.map((cause) => {
+      const rows = misses.filter((m) => m.cause === cause);
+      return {
+        cause,
+        label: CAUSE_COPY[cause].label,
+        blurb: CAUSE_COPY[cause].blurb,
+        misses: rows.length,
+        undocumented: rows.filter((m) => m.guard === 'undocumented').length,
+      };
+    }),
+    recent: [...misses]
+      .reverse()
+      .slice(0, RECENT_ROWS)
+      .map((m) => ({
+        id: m.id,
+        ref: m.originRef,
+        path: m.path,
+        cause: m.cause,
+        causeLabel: CAUSE_COPY[m.cause].label,
+        guard: m.guard,
+        guardLabel: GUARD_COPY[m.guard].label,
+        summary: m.summary,
+        at: m.createdAt,
       })),
   };
 }

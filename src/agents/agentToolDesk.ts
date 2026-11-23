@@ -11,6 +11,7 @@ import type {
   PrReviewThread,
   PrThreadLabel,
   Remedy,
+  RetroMissInput,
   ScratchEntry,
   Task,
 } from '../types.js';
@@ -214,6 +215,7 @@ export class AgentToolDesk implements AgentToolTarget {
     agentId: string,
     summary: string,
     document: string,
+    misses: readonly RetroMissInput[] | undefined,
   ): { ok: true; issueOrigin: string } | { ok: false; error: string } {
     return this.withCaller(agentId, (caller) => {
       const { task } = caller;
@@ -225,6 +227,7 @@ export class AgentToolDesk implements AgentToolTarget {
         document,
         agentId,
         taskId: task.id,
+        misses,
       });
       this.events.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
       return { ok: true, issueOrigin: origin.issueOrigin };

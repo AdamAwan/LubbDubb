@@ -1,5 +1,5 @@
 import type { ReviewAreaRule } from '../config/config.js';
-import { lessonGroups, LESSON_WINDOW_MS } from '../lessons/groups.js';
+import { goalsLeftOut, lessonGroups, LESSON_WINDOW_MS } from '../lessons/groups.js';
 import { CAUSE_COPY } from '../remedies/remedies.js';
 import type {
   LessonDraftStatus,
@@ -10,6 +10,7 @@ import type {
   RemedyCause,
   RemedyKind,
   LessonDraft,
+  RetroMiss,
 } from '../types.js';
 
 // → docs/spec/41-repo-lessons.md#did-it-work
@@ -35,6 +36,8 @@ export interface LessonRow {
   before: LessonPeriod | null;
   /** Null until 30 days have passed since the merge. */
   after: LessonPeriod | null;
+  /** Of each period's missed goals, how many a retrospective miss placed in the group; null with no period read. */
+  fromRetros: { before: number; after: number | null } | null;
   verdict: LessonVerdict | null;
 }
 
@@ -46,19 +49,24 @@ export interface LessonInsights {
   tooEarly: number;
 }
 
-/** A return dispatch as the reading counts it: the pull request it went back to, which kind of return, and when. */
-export interface ReturnDispatch {
-  prNumber: number;
-  kind: RemedyKind;
-  createdAt: string;
-}
+/**
+ * A return dispatch as the reading counts it: the pull request it went back to, which kind of return, and
+ * when. A retrospective written is a review return with no pull request: the occasion a retrospective miss is recorded on.
+ */
+export type ReturnDispatch = { kind: RemedyKind; createdAt: string } & (
+  { prNumber: number } | { prNumber: null; goal: string }
+);
 
 interface LessonInsightInput {
   drafts: readonly LessonDraft[];
   remedies: readonly Remedy[];
+  retroMisses: readonly RetroMiss[];
+  /** When retrospectives began recording misses; a lesson whose before side starts earlier reads none of their evidence on either side. */
+  retroSince: string | null;
   threadLabels: readonly PrThreadLabel[];
   goalOfPr: ReadonlyMap<number, string>;
   excludedPrs: ReadonlySet<number>;
+  excludedGoals: ReadonlySet<string>;
   reviewAreas: readonly ReviewAreaRule[];
   returnDispatches: readonly ReturnDispatch[];
   now: number;
@@ -104,31 +112,51 @@ function row(d: LessonDraft, input: LessonInsightInput): LessonRow {
     createdAt: d.createdAt,
   };
   if (d.status !== 'adopted' || d.settledAt === null)
-    return { ...base, mergedAt: null, before: null, after: null, verdict: null };
+    return { ...base, mergedAt: null, before: null, after: null, fromRetros: null, verdict: null };
   const merged = Date.parse(d.settledAt);
-  const before = period(d, input, merged - LESSON_WINDOW_MS, merged);
-  const after = input.now >= merged + LESSON_WINDOW_MS ? period(d, input, merged, merged + LESSON_WINDOW_MS) : null;
-  return { ...base, mergedAt: d.settledAt, before, after, verdict: verdict(before, after) };
+  const retros = input.retroSince !== null && merged - LESSON_WINDOW_MS >= Date.parse(input.retroSince);
+  const before = period(d, input, retros, merged - LESSON_WINDOW_MS, merged);
+  const after =
+    input.now >= merged + LESSON_WINDOW_MS ? period(d, input, retros, merged, merged + LESSON_WINDOW_MS) : null;
+  return {
+    ...base,
+    mergedAt: d.settledAt,
+    before: before.period,
+    after: after?.period ?? null,
+    fromRetros: { before: before.fromRetros, after: after?.fromRetros ?? null },
+    verdict: verdict(before.period, after?.period ?? null),
+  };
 }
 
-function period(d: LessonDraft, input: LessonInsightInput, start: number, end: number): LessonPeriod {
+function period(
+  d: LessonDraft,
+  input: LessonInsightInput,
+  retros: boolean,
+  start: number,
+  end: number,
+): { period: LessonPeriod; fromRetros: number } {
   const since = new Date(start).toISOString();
   const until = new Date(end).toISOString();
+  const inside = (createdAt: string) => createdAt >= since && createdAt < until;
+  const remedies = input.remedies.filter((r) => r.kind === d.kind && r.cause === d.cause && inside(r.createdAt));
+  const retroMisses = retros ? input.retroMisses.filter((m) => inside(m.createdAt)) : [];
   const group = lessonGroups({
-    remedies: input.remedies.filter(
-      (r) => r.kind === d.kind && r.cause === d.cause && r.createdAt >= since && r.createdAt < until,
-    ),
+    remedies,
+    retroMisses,
     threadLabels: input.threadLabels,
     goalOfPr: input.goalOfPr,
     excludedPrs: input.excludedPrs,
+    excludedGoals: input.excludedGoals,
     reviewAreas: input.reviewAreas,
     since,
   }).find((g) => g.key === d.groupKey);
   const misses = group?.goals.length ?? 0;
-  const returns = input.returnDispatches.filter(
-    (t) => t.kind === d.kind && t.createdAt >= since && t.createdAt < until && !input.excludedPrs.has(t.prNumber),
-  ).length;
-  return { misses, returns };
+  const fromRetros = new Set(group?.misses.filter((m) => m.source === 'retro').map((m) => m.goal)).size;
+  const leftOut = goalsLeftOut(input);
+  const counted = (t: ReturnDispatch) =>
+    t.prNumber === null ? retros && !leftOut.has(t.goal) : !input.excludedPrs.has(t.prNumber);
+  const returns = input.returnDispatches.filter((t) => t.kind === d.kind && inside(t.createdAt) && counted(t)).length;
+  return { period: { misses, returns }, fromRetros };
 }
 
 /** Misses per same-kind return dispatch; null when nothing missed and nothing came back, unbounded for a miss with no return to divide by. */

@@ -39,6 +39,24 @@ CREATE TABLE IF NOT EXISTS retrospectives (
   agent_id   TEXT NOT NULL,
   task_id    TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  misses_at  TEXT                     -- first retro_submit that answered misses; null never did
 );
+
+-- A retrospective's structured misses → docs/spec/41-repo-lessons.md#retrospective-misses
+CREATE TABLE IF NOT EXISTS retro_misses (
+  id         TEXT PRIMARY KEY,
+  origin_ref TEXT NOT NULL,           -- the retrospective's goal, "issue:12"
+  cause      TEXT NOT NULL,           -- a RemedyCause from the review vocabulary
+  guard      TEXT NOT NULL,           -- a RemedyGuard
+  path       TEXT NOT NULL,           -- repository-relative file the miss was about
+  summary    TEXT NOT NULL,
+  agent_id   TEXT NOT NULL,
+  task_id    TEXT NOT NULL,
+  created_at TEXT NOT NULL            -- the retrospective's first write
+);
+
+CREATE INDEX IF NOT EXISTS idx_retro_misses_created ON retro_misses(created_at);
+
+CREATE INDEX IF NOT EXISTS idx_retro_misses_origin ON retro_misses(origin_ref);
 `;

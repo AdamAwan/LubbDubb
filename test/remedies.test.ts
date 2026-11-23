@@ -158,6 +158,7 @@ test('cost is the filing agent’s spend, divided where it filed more than one',
     },
   ];
   const insights = buildRemedyInsights({
+    retroMisses: [],
     remedies,
     returnDispatches: ['t_1', 't_2', 't_3'],
     usageEvents: [{ agentId: 'a_1', costUsd: 10, at }],
@@ -176,7 +177,12 @@ test('a cause the fortnight never saw still draws, and the top check is named', 
     { ...input({ taskId: 't_1', checks: ['format:check', 'lint'] }), id: 'r1', createdAt: at, updatedAt: at },
     { ...input({ taskId: 't_2', summary: 'again', checks: ['format:check'] }), id: 'r2', createdAt: at, updatedAt: at },
   ];
-  const insights = buildRemedyInsights({ remedies, returnDispatches: ['t_1', 't_2'], usageEvents: [] });
+  const insights = buildRemedyInsights({
+    remedies,
+    retroMisses: [],
+    returnDispatches: ['t_1', 't_2'],
+    usageEvents: [],
+  });
   const ci = insights.byKind.find((k) => k.kind === 'ci');
   assert.ok(ci);
   assert.ok(ci.byCause.some((c) => c.cause === 'flake' && c.accounts === 0));
@@ -242,6 +248,7 @@ test('an account filed in the window by an older dispatch accounts for that disp
     { ...input({ taskId: 't_older', summary: 'from before the window' }), id: 'r1', createdAt: at, updatedAt: at },
   ];
   const insights = buildRemedyInsights({
+    retroMisses: [],
     remedies,
     returnDispatches: ['t_1', 't_2', 't_3', 't_4', 't_5'],
     usageEvents: [],

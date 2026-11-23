@@ -34,3 +34,20 @@ export interface Remedy {
 }
 
 export type RemedyInput = Omit<Remedy, 'id' | 'createdAt' | 'updatedAt'>;
+
+/** A miss a retrospective recorded for its goal: a remedy's vocabulary, placed by a file rather than a check. */
+export interface RetroMiss {
+  id: string;
+  /** The goal's root, `issue:<n>`. */
+  originRef: string;
+  cause: RemedyCause;
+  guard: RemedyGuard;
+  /** The repository-relative file the miss was about. */
+  path: string;
+  summary: string;
+  agentId: string;
+  taskId: string;
+  createdAt: string;
+}
+
+export type RetroMissInput = Pick<RetroMiss, 'cause' | 'guard' | 'path' | 'summary'>;

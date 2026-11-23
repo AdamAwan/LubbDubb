@@ -56,9 +56,11 @@ function thread(over: Partial<PrThreadLabel> & Pick<PrThreadLabel, 'prNumber' | 
 function inputs(over: Partial<LessonGroupInputs> = {}): LessonGroupInputs {
   return {
     remedies: [],
+    retroMisses: [],
     threadLabels: [],
     goalOfPr: new Map(),
     excludedPrs: new Set(),
+    excludedGoals: new Set(),
     reviewAreas: [
       { area: 'sql', path: '^src/store/' },
       { area: 'ui', path: '^web/src/' },

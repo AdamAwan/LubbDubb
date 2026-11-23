@@ -9,7 +9,8 @@ import {
 import { remedyOrigin } from '../remedies/remedies.js';
 import type { Store } from '../store/store.js';
 import type { LessonDraft } from '../types.js';
-import { lessonExcludedPrs } from './lessonDesk.js';
+import { RETRO_MISS_KIND } from '../retro/retro.js';
+import { lessonExcludedGoals, lessonExcludedPrs } from './lessonDesk.js';
 
 // → docs/spec/41-repo-lessons.md#did-it-work
 
@@ -35,23 +36,40 @@ export function readLessonInsights(
     return buildLessonInsights({
       drafts,
       remedies: [],
+      retroMisses: [],
+      retroSince: null,
       threadLabels: [],
       goalOfPr: new Map(),
       excludedPrs: new Set(),
+      excludedGoals: new Set(),
       reviewAreas: context.reviewAreas,
       returnDispatches: [],
       now: context.now,
     });
+  const world = store.world.getWorldBaseline();
+  const excludedGoals = lessonExcludedGoals(world, context.lessonLabel);
+  const excludedPrs = lessonExcludedPrs(world, all, context.lessonLabel);
+  const goalOfPr = prGoalIndex(store.graph.listWorkNodes());
   return buildLessonInsights({
     drafts,
     remedies: store.remedies.listRemediesSince(since),
+    retroMisses: store.scratch.listRetroMissesSince(since),
+    retroSince: store.scratch.firstMissesAt(),
     threadLabels: store.prThreadLabels.listThreadLabelsSince(since),
-    goalOfPr: prGoalIndex(store.graph.listWorkNodes()),
-    excludedPrs: lessonExcludedPrs(store.world.getWorldBaseline(), all, context.lessonLabel),
+    goalOfPr,
+    excludedPrs,
+    excludedGoals,
     reviewAreas: context.reviewAreas,
-    returnDispatches: returnDispatchesSince(store, since),
+    returnDispatches: [...returnDispatchesSince(store, since), ...retrospectivesSince(store, since)],
     now: context.now,
   });
+}
+
+/** Each retrospective written is a review return on its goal, without a pull request. */
+function retrospectivesSince(store: Store, since: string): ReturnDispatch[] {
+  return store.scratch
+    .listRetrospectivesWrittenSince(since)
+    .map((r) => ({ prNumber: null, goal: r.originRef, kind: RETRO_MISS_KIND, createdAt: r.createdAt }));
 }
 
 function returnDispatchesSince(store: Store, since: string): ReturnDispatch[] {

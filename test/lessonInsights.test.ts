@@ -71,9 +71,12 @@ function read(over: Partial<Parameters<typeof buildLessonInsights>[0]> = {}) {
   return buildLessonInsights({
     drafts: [draft()],
     remedies: [],
+    retroMisses: [],
+    retroSince: null,
     threadLabels: [],
     goalOfPr: new Map(),
     excludedPrs: new Set([90]),
+    excludedGoals: new Set(),
     reviewAreas: [],
     returnDispatches: [],
     now: MERGED + 31 * DAY,

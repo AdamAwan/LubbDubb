@@ -31,6 +31,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         }),
         remedies: buildRemedyInsights({
           remedies: store.remedies.listRemediesSince(since),
+          retroMisses: store.scratch.listRetroMissesSince(since),
           returnDispatches: tasks.filter((t) => t.createdAt >= since && isReturnOrigin(t.originRef)).map((t) => t.id),
           usageEvents,
         }),

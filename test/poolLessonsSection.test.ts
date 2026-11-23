@@ -73,8 +73,22 @@ function storeWithAdoptedLesson(clock: { at: number }): Store {
     where: 'lint',
     goals: ['issue:1', 'issue:2'],
     misses: [
-      { remedyId: 'r1', prNumber: 1, goal: 'issue:1', guard: 'undocumented', summary: 'lint went red' },
-      { remedyId: 'r2', prNumber: 2, goal: 'issue:2', guard: 'documented', summary: 'lint went red again' },
+      {
+        source: 'remedy',
+        remedyId: 'r1',
+        prNumber: 1,
+        goal: 'issue:1',
+        guard: 'undocumented',
+        summary: 'lint went red',
+      },
+      {
+        source: 'remedy',
+        remedyId: 'r2',
+        prNumber: 2,
+        goal: 'issue:2',
+        guard: 'documented',
+        summary: 'lint went red again',
+      },
     ],
     briefing: 'evidence',
   });

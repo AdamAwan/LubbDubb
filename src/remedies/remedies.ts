@@ -89,9 +89,19 @@ export interface RemedySubmission {
   summary: string;
 }
 
+/** How a refusal names what was submitted: a remedy's defaults, or a retrospective miss's. */
+interface RemedyWording {
+  subject: string;
+  summaryAsk: string;
+}
+
 export function validateRemedy(
   kind: RemedyKind,
   raw: unknown,
+  wording: RemedyWording = {
+    subject: ` for a ${kind === 'ci' ? 'CI failure' : 'review round'}`,
+    summaryAsk: 'what was wrong, and what fixed it',
+  },
 ): { ok: true; submission: RemedySubmission } | { ok: false; error: string } {
   const args = (raw ?? {}) as Record<string, unknown>;
   const cause = typeof args.cause === 'string' ? args.cause : '';
@@ -99,7 +109,7 @@ export function validateRemedy(
   if (!CAUSES.has(cause) || !allowed.includes(cause as RemedyCause)) {
     return {
       ok: false,
-      error: `cause must be one of ${allowed.join(', ')} for a ${kind === 'ci' ? 'CI failure' : 'review round'}`,
+      error: `cause must be one of ${allowed.join(', ')}${wording.subject}`,
     };
   }
   const guard = typeof args.guard === 'string' ? args.guard : '';
@@ -108,7 +118,7 @@ export function validateRemedy(
   }
   const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
   if (summary.length === 0) {
-    return { ok: false, error: 'summary is required — one line: what was wrong, and what fixed it' };
+    return { ok: false, error: `summary is required — one line: ${wording.summaryAsk}` };
   }
   if (summary.length > MAX_REMEDY_SUMMARY) {
     return { ok: false, error: `summary must be ${MAX_REMEDY_SUMMARY} characters or fewer` };

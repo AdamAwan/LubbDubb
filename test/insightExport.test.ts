@@ -292,6 +292,7 @@ test('the causes half leaves with its caveat, or does not leave at all', () => {
         at: '2026-08-20T09:00:00.000Z',
       },
     ],
+    retros: { misses: 0, goals: 0, byCause: [], recent: [] },
   });
 
   const causes = section(csv, 'Causes');

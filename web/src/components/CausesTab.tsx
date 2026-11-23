@@ -1,7 +1,6 @@
 import type { JSX } from 'react';
 import type {
   LessonInsights,
-  LessonRow,
   RemedyCauseTotal,
   RemedyInsights,
   RemedyKindHealth,
@@ -12,8 +11,10 @@ import { fmtUsd, relTime } from './util.js';
 import { fmtShare, share } from './insightsFormat.js';
 import { Ref } from './refs.js';
 import { HeadRow } from './panel.js';
-import { Tag, type TagTone } from './tag.js';
+import { Tag } from './tag.js';
 import { MethodNote } from './insightsMethod.js';
+import { RetroMisses, retroMissRows } from './RetroMisses.js';
+import { Lessons } from './LessonsSection.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -31,143 +32,10 @@ export function CausesTab({
   return (
     <div className="rl">
       <Causes remedies={remedies} windowLabel={windowLabel} />
+      {remedies.retros.misses > 0 && <RetroMisses retros={remedies.retros} windowLabel={windowLabel} />}
       {reviewLabels !== null && <ReviewComments labels={reviewLabels} windowLabel={windowLabel} />}
       {lessons !== null && lessons.drafts.length > 0 && <Lessons lessons={lessons} />}
     </div>
-  );
-}
-
-const STATUS_TONE: Record<LessonRow['status'], TagTone> = {
-  pending: 'grey',
-  dispatched: 'blue',
-  'pr-open': 'amber',
-  adopted: 'green',
-  declined: 'grey',
-  filed: 'violet',
-  nothing: 'grey',
-  unanswered: 'red',
-};
-
-const VERDICT: Record<NonNullable<LessonRow['verdict']>, { label: string; tone: TagTone }> = {
-  working: { label: 'working', tone: 'green' },
-  'not-working': { label: 'not working', tone: 'red' },
-  'too-early': { label: 'too early', tone: 'grey' },
-};
-
-function Lessons({ lessons }: { lessons: LessonInsights }): JSX.Element {
-  const adopted = lessons.drafts.filter((d) => d.status === 'adopted');
-  return (
-    <>
-      <p className="sp-sub">Repo lessons, since lessons began</p>
-      {adopted.length > 0 && (
-        <table className="sp-tbl wide">
-          <thead>
-            <tr>
-              <th>Did it work</th>
-              <th>Merged</th>
-              <th className="n">30 days before</th>
-              <th className="n">30 days after</th>
-              <th>Verdict</th>
-            </tr>
-          </thead>
-          <tbody>
-            {adopted.map((d) => (
-              <tr key={d.id}>
-                <td>
-                  <LessonName lesson={d} />
-                </td>
-                <td>{d.mergedAt === null ? <span className="dim">&mdash;</span> : relTime(d.mergedAt)}</td>
-                <td className="n">
-                  <LessonPeriodCell period={d.before} />
-                </td>
-                <td className="n">
-                  <LessonPeriodCell period={d.after} />
-                </td>
-                <td>{d.verdict !== null && <Tag tone={VERDICT[d.verdict].tone}>{VERDICT[d.verdict].label}</Tag>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-      <table className="sp-tbl wide">
-        <thead>
-          <tr>
-            <th>Draft</th>
-            <th>Status</th>
-            <th>Fix</th>
-            <th className="n">Goals</th>
-            <th>Opened</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lessons.drafts.map((d) => (
-            <tr key={d.id}>
-              <td>
-                <LessonName lesson={d} />
-              </td>
-              <td>
-                <Tag tone={STATUS_TONE[d.status]}>{d.status}</Tag>
-              </td>
-              <td>{d.fix ?? <span className="dim">&mdash;</span>}</td>
-              <td className="n">{d.goals}</td>
-              <td>{relTime(d.createdAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="sp-note">
-        {lessons.adopted} adopted &middot; {lessons.working} working &middot; {lessons.notWorking} not working &middot;{' '}
-        {lessons.tooEarly} too early to tell
-      </p>
-      <LessonMethodNote />
-    </>
-  );
-}
-
-function LessonMethodNote(): JSX.Element {
-  return (
-    <MethodNote>
-      <p>
-        <b>Not windowed by the bar above.</b> Every draft is listed, and each adopted lesson is read over the 30 days
-        either side of its merge, whatever window is chosen.
-      </p>
-      <p>
-        <b>A miss is a goal, and the rate is misses per return dispatch of the same kind</b> &mdash; CI fixes for a CI
-        lesson, review rounds for a review one &mdash; so a busier month does not read as a worse one. The after side
-        stays empty until 30 days have passed since the merge.
-      </p>
-      <p>
-        <b>Working</b> is no miss after the merge, or a lower rate than before. Anything else is <b>not working</b>: the
-        miss keeps coming back with the lesson in place.
-      </p>
-    </MethodNote>
-  );
-}
-
-function LessonName({ lesson }: { lesson: LessonRow }): JSX.Element {
-  return (
-    <>
-      <span className="nm" title={lesson.groupKey}>
-        {lesson.title ?? lesson.causeLabel}
-      </span>
-      <span className="bl mono">
-        {lesson.kind} &middot; {lesson.where}
-      </span>
-      {lesson.prRef !== null && <Ref to={lesson.prRef} />}
-      {lesson.ticketRef !== null && <Ref to={lesson.ticketRef} />}
-    </>
-  );
-}
-
-function LessonPeriodCell({ period }: { period: LessonRow['before'] }): JSX.Element {
-  if (period === null) return <span className="dim">&mdash;</span>;
-  return (
-    <span
-      title={`${period.misses} goal${period.misses === 1 ? '' : 's'} missed in ${period.returns} return dispatches`}
-    >
-      {period.misses} in {period.returns}
-      {period.returns > 0 ? ` (${fmtShare(period.misses, period.returns)})` : ''}
-    </span>
   );
 }
 
@@ -302,7 +170,8 @@ function ReviewMethodNote(): JSX.Element {
 }
 
 export function causeRows(remedies: RemedyInsights | null): (string | number | null)[][] {
-  if (remedies === null || remedies.accounts === 0) return [];
+  if (remedies === null) return [];
+  if (remedies.accounts === 0) return retroMissRows(remedies);
   return [
     ['Causes'],
     ['Accounts filed', remedies.accounts],
@@ -338,8 +207,10 @@ export function causeRows(remedies: RemedyInsights | null): (string | number | n
     ['When (ISO)', 'Kind', 'PR', 'Cause', 'Guard', 'Checks', 'Summary'],
     ...remedies.recent.map((r) => [r.at, r.kind, r.prNumber, r.cause, r.guard, r.checks.join(' '), r.summary]),
     [`The ${remedies.recent.length} most recent of ${remedies.accounts} accounts.`],
+    ...(remedies.retros.misses > 0 ? [[], ...retroMissRows(remedies)] : []),
   ];
 }
+
 function Causes({ remedies, windowLabel }: { remedies: RemedyInsights; windowLabel: string }): JSX.Element {
   return (
     <>

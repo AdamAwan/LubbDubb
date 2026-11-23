@@ -1115,6 +1115,13 @@ classifiers above are both refused, and for the same reason.
   act on each. This is the axis that answers _how do we get fewer of these_, and it is why the record
   is two enums rather than one.
 
+**The review taxonomy and the guards have a second writer.** A retrospective records its goal's
+misses in the same vocabulary — review's causes, all four guards, and the file a miss was about —
+when it is written ([41](41-repo-lessons.md#retrospective-misses)). So a change to `CAUSES_BY_KIND.review`
+or `GUARD_ORDER` changes what `retro_submit` accepts too. Those misses are not remedies: they are not
+an account of a return, carry no cost and are never summed into `accounts`; the Causes tab draws them
+in a section of their own, **From retrospectives** (`RemedyInsights.retros`).
+
 **The kind, the pull request and the checks are never claimed.** `remedyOrigin` resolves the first
 two from the caller's own task origin and refuses every other caller by name; the checks come from
 `Task.ciChecks`, which is what the harness dispatched that agent about. A `kind` an agent could

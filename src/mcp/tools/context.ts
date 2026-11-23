@@ -15,6 +15,7 @@ import type {
   PlanPart,
   PrThreadLabel,
   Remedy,
+  RetroMissInput,
   FeatureSequenceEdge,
   ScratchEntry,
   ShortfallCause,
@@ -127,6 +128,7 @@ export interface AgentToolTarget {
     agentId: string,
     summary: string,
     document: string,
+    misses: readonly RetroMissInput[] | undefined,
   ): { ok: true; issueOrigin: string } | { ok: false; error: string };
   recordRemedy(
     agentId: string,
