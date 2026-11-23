@@ -165,7 +165,7 @@ function toDraft(r: DraftRow): LessonDraft {
     cause: r.cause as RemedyCause,
     where: r.place,
     goals: parseArray<string>(r.goals),
-    misses: parseArray<LessonMiss>(r.misses),
+    misses: parseArray<unknown>(r.misses).map(withSource),
     status: r.status as LessonDraftStatus,
     taskId: r.task_id,
     fix: r.fix as LessonFix | null,
@@ -177,6 +177,12 @@ function toDraft(r: DraftRow): LessonDraft {
     createdAt: r.created_at,
     settledAt: r.settled_at,
   };
+}
+
+/** A draft written before retrospective misses carried no `source`; every miss it holds is a remedy. */
+function withSource(raw: unknown): LessonMiss {
+  const miss = raw as Partial<LessonMiss>;
+  return (miss.source === undefined ? { ...miss, source: 'remedy' } : miss) as LessonMiss;
 }
 
 function parseArray<T>(raw: string): T[] {

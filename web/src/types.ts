@@ -137,6 +137,7 @@ export type {
   ReviewAreaTotal,
   ReviewLabelInsights,
   RemedyKindHealth,
+  RetroMissInsights,
   RunOutcomeTotal,
   RunPhaseHealth,
   RunRepeat,

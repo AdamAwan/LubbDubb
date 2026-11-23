@@ -7299,7 +7299,13 @@ flake this window" is a reading, and a table that dropped its own zero rows coul
 total rather than in a footnote — every share in it is a share of what was _reported_, and
 `unaccounted` is what says how much that is.
 
-Below the accounts sits **Review threads**, the same window again
+Below the accounts, where any were recorded in the window, sits **From retrospectives**
+([41](41-repo-lessons.md#retrospective-misses)): the misses goal retrospectives recorded, by cause with
+their undocumented share, then the most recent with their goal as a `<Ref>` and the file. It is a
+section of its own and never summed into the accounts above — a retrospective miss is not a return to
+a pull request and has no cost — and its note says so.
+
+Below that sits **Review threads**, the same window again
 ([18](18-observability.md#which-part-of-the-code-a-review-thread-was-about)). It answers a question the
 cause tables cannot: how much of the fleet's review time goes on **code comments**, and where in the
 tree. One row for everything answered and one per configured area, each carrying the thread count, how
@@ -7319,7 +7325,8 @@ is tables throughout for that reason.
 Last comes **Repo lessons** ([41](41-repo-lessons.md#did-it-work)), drawn only once a draft exists, and
 **not windowed by the bar** — the method note says so, because it is the one block on the tab the
 window does not move. Two tables. **Did it work** lists each adopted lesson with its merge, the group's
-misses and the same-kind return dispatches over the 30 days before and after, and a verdict tag —
+misses (marked _from retros_ where a retrospective recorded some) and the same-kind return dispatches
+— with a review lesson's retrospectives written — over the 30 days before and after, and a verdict tag —
 _working_, _not working_ or _too early_ — where the after side is a dash until 30 days have passed.
 Below it, every draft with its status, fix and goal count. Each row carries its lesson pull request or
 ticket as a `<Ref>`, beside the name rather than inside it ([links](#links)). The tags use the existing

@@ -7,6 +7,7 @@ import { isActiveTask } from '../tasks.js';
 import type { LessonDraft, PullRequest, WorldSnapshot } from '../types.js';
 import { lessonBriefing, lessonMisses } from './evidence.js';
 import { prState } from '../pr/prHealth.js';
+import { issueOriginRef } from '../issueOrigins.js';
 import { lessonCandidates, LESSON_WINDOW_MS, type LessonGroupInputs } from './groups.js';
 import { isLessonBranch, lessonMarker, lessonWorkItemNumber } from './lessonOrigin.js';
 import { othersLessonPrs, type LessonPrReading } from './lessonPrs.js';
@@ -85,12 +86,15 @@ export class LessonDesk {
     if (drafts.filter((d) => d.status === 'pr-open').length >= MAX_OPEN_LESSON_PRS) return;
     const since = new Date(this.now() - LESSON_WINDOW_MS).toISOString();
     const remedies = store.remedies.listRemediesSince(since);
+    const retroMisses = store.scratch.listRetroMissesSince(since);
     const goalOfPr = prGoalIndex(store.graph.listWorkNodes());
     const input: LessonGroupInputs = {
       remedies,
+      retroMisses,
       threadLabels: store.prThreadLabels.listThreadLabelsSince(since),
       goalOfPr,
       excludedPrs: lessonExcludedPrs(world, drafts, this.deps.lessonLabel),
+      excludedGoals: lessonExcludedGoals(world, this.deps.lessonLabel),
       reviewAreas: this.deps.reviewAreas,
       since,
     };
@@ -102,7 +106,7 @@ export class LessonDesk {
       (c) => !open.some((pr) => pr.body?.includes(lessonMarker(c.key)) === true),
     );
     if (candidate === undefined) return;
-    const misses = lessonMisses(candidate.remedyIds, remedies, goalOfPr);
+    const misses = lessonMisses(candidate, { remedies, retroMisses }, goalOfPr);
     store.lessons.openDraft({
       groupKey: candidate.key,
       kind: candidate.kind,
@@ -127,6 +131,14 @@ export function lessonExcludedPrs(
   for (const pr of [...(world?.pullRequests ?? []), ...(world?.closedPullRequests ?? [])])
     if (leftOut(pr)) out.add(pr.number);
   for (const d of drafts) if (d.prNumber !== null) out.add(d.prNumber);
+  return out;
+}
+
+/** A lesson ticket the fleet took on is a goal of its own; what its retrospective recorded is about a lesson. */
+export function lessonExcludedGoals(world: Pick<WorldSnapshot, 'issues'> | null, lessonLabel: string): Set<string> {
+  const out = new Set<string>();
+  for (const issue of world?.issues ?? [])
+    if (issue.labels.includes(lessonLabel)) out.add(issueOriginRef('root', issue.number));
   return out;
 }
 

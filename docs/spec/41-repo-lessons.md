@@ -13,8 +13,15 @@ miss comes back on the next goal with the next agent paying for it again. The pr
 ([18](18-observability.md#the-note-a-later-dispatch-carries)) helps the next agent on the same check,
 but only _after_ the miss. Nothing stops it.
 
+Remedies only see what made the fleet go back to a pull request. A goal can pay for a miss that never
+turned a check red or drew a review round — a confusing area the agents read three times, a fact
+nobody wrote down that an agent worked out for itself, a plan that had to be redone — and only its
+**retrospective** saw it. So a retrospective is the second source: when it is written it records
+zero or more structured [retrospective misses](#retrospective-misses), in a remedy's vocabulary, and
+the grouping counts them beside the remedies.
+
 A **repo lesson** is the fix for a miss the fleet keeps repeating, drafted by the fleet and ruled on
-by the operator as an ordinary pull request review: noticed from the remedies, drafted by one agent,
+by the operator as an ordinary pull request review: noticed from the remedies and retrospective misses, drafted by one agent,
 and landed — or not — on the repository the fleet works on. It exists only as a merged change to that
 repository. There is no store of lessons.
 
@@ -29,13 +36,14 @@ adopted or published.
 ## Invariants
 
 - **`lessons.minGoals` is `2` by default, `0` drafts nothing however often a miss repeats, and `1` is refused at load.** One miss is noise, and `0` is the one way to stop lessons opening pull requests on the operator's repository. → [§](#configuration) · `test/config.test.ts`
-- **A group is counted in distinct goals, never in remedies or pull requests; a pull request the work graph roots in no goal stands as its own `pr:<n>`.** Two rounds on one goal are one miss, and counting them twice drafts a lesson from a single bad afternoon. → [§](#counting-goals) · `test/lessonGroups.test.ts`
-- **Only `documented` and `undocumented` remedies are grouped, and the causes `other`, `defect`, `flake`, `environment` and `inherited` never are.** Those are misses no edit to the repository's guidance prevents, and a lesson drafted from one is noise the operator has to decline. → [§](#the-group) · `test/lessonGroups.test.ts`
-- **Remedies on a bot-authored pull request or on a lesson pull request are left out.** A dependency bot's churn is not the fleet's work, and a lesson learnt from a lesson's own review loops. → [§](#what-is-left-out) · `test/lessonGroups.test.ts`
+- **A group is counted in distinct goals, never in remedies, retrospective misses or pull requests; a pull request the work graph roots in no goal stands as its own `pr:<n>`, and a remedy and a retrospective miss on the same goal are one goal.** Two rounds on one goal are one miss, and counting them twice drafts a lesson from a single bad afternoon — or from one goal that both came back and wrote it up. → [§](#counting-goals) · `test/retroLessons.test.ts`
+- **A retrospective miss is chosen from fixed lists when the retrospective is written — a review cause, a guard and a file — and never extracted from the document afterwards; it joins the `review/<cause>/<area>` group its file falls in.** Prose read back by a classifier is a second opinion and a second store of claims; an enum chosen at the moment of writing is the writer's own account, on the same terms as a remedy. → [§](#retrospective-misses) · `test/retroLessons.test.ts`
+- **Only `documented` and `undocumented` remedies and retrospective misses are grouped, and the causes `other`, `defect`, `flake`, `environment` and `inherited` never are.** Those are misses no edit to the repository's guidance prevents, and a lesson drafted from one is noise the operator has to decline. → [§](#the-group) · `test/lessonGroups.test.ts`
+- **Remedies on a bot-authored pull request or on a lesson pull request are left out, and so are retrospective misses on a goal behind such a pull request or on a lesson ticket the fleet took on.** A dependency bot's churn is not the fleet's work, and a lesson learnt from a lesson's own review loops. → [§](#what-is-left-out) · `test/lessonGroups.test.ts`
 - **A review remedy is placed only by threads its own task changed code for and that are anchored to a file; with none it joins no group.** A defended thread is not a miss, and an unanchored one has no place to be about. → [§](#where-a-check-or-a-review-area) · `test/lessonGroups.test.ts`
 - **An `adopted` or `filed` group is never redrafted; a `declined`, `nothing` or `unanswered` one only once misses since it settled span `max(goals.length, minGoals)` goals.** Without the bar a declined lesson comes back on the next miss, and the operator's no is overruled by the pulse. → [§](#the-redraft-rule) · `test/lessonGroups.test.ts`
 - **A lesson edits the repository the fleet works on, never LubbDubb's own.** The lessons are about the code the agents were fixing, and that is where its engineers read. → [§](#where-a-lesson-lands) · _no test_
-- **Nothing about a lesson is injected into any agent's prompt, and nothing from the pool is dispatched on.** Blanket context is skimmed rather than read, and other fleets' prose is not knowledge about this repository. → [§](#why-the-claim-store-failed) · _no test_
+- **Nothing about a lesson, and nothing a retrospective said, is injected into any agent's prompt, and nothing from the pool is dispatched on.** The retrospective agent is _asked_ for its misses, by a note appended below its template; no agent is handed what any retrospective recorded, except the lesson draft's own briefing. Blanket context is skimmed rather than read, and other fleets' prose is not knowledge about this repository. → [§](#why-the-claim-store-failed) · _no test_
 - **A lesson pull request cites the pull requests behind it as full URLs, never `#n` and never with a closing keyword.** On Azure DevOps `#n` links an existing goal's work item, which would adopt the lesson into that goal. The one work item it is linked to is its own Task, filed for it alone. → [§](#the-outcome) · `test/repoLessons.test.ts`
 - **A lesson pull request says why it exists: what happened and where in plain words, the cause's label and blurb, every miss's report one line each under its pull request, and the drafting agent's `summary` and `reason` under their own heading.** A reviewer handed a cause slug and a list of links has to open every one to learn what the fleet kept getting wrong, and the ruling is a merge, so a lesson they cannot follow is a lesson declined or waved through unread. → [§](#the-body) · `test/repoLessons.test.ts`
 - **With `lessons.parentWorkItem` set, a lesson pull request is linked to exactly one Task filed for it under that parent, with the lesson label and never the watch label; unset, none is filed. The parent is refused when it does not exist or carries the watch label, and a failure to file or link costs only the link.** Azure DevOps branch policy can demand a linked work item, and one filed for the lesson alone adopts it into no goal; the watch label would dispatch for it. → [§](#the-lessons-own-work-item) · `test/repoLessons.test.ts`
@@ -46,8 +54,8 @@ adopted or published.
 - **A lesson is concluded only by `lesson_conclude`, from the draft's own task: `open_pr` on a lesson origin refuses and says so, and there is no `body` argument.** A pull request opened by hand carries no marker, label or evidence, and nothing would ever settle its draft. → [§](#the-prompt) · `test/repoLessons.test.ts`
 - **A lesson ticket carries the lesson label and never the watch label.** Filing it must not also dispatch for it: the operator decides whether the fleet takes a refactor on. → [§](#a-pull-request-or-a-ticket) · `test/repoLessons.test.ts`
 - **A draft whose agent's task ended without concluding settles `unanswered`; a lesson pull request merged is `adopted`, closed is `declined`.** A draft nothing settles holds its group for ever. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
-- **An adopted lesson is read as its group's misses — in distinct goals, by `lessonGroups` — per same-kind return dispatch, over the 30 days before its merge and the 30 after; the after side is null, and the verdict `too early`, until those 30 days have passed.** A partial month after compared with a whole one before reads every young lesson as working. → [§](#did-it-work) · `test/lessonInsights.test.ts`
-- **The pool carries an adopted lesson as counts and its pull request's URL — never its title, free text or `where` — and nothing from another fleet's lesson is drafted on, briefed from or put in a prompt.** Prose and check names do not cross; a link and a count are read by a person, who decides. → [§](#across-fleets) · `test/poolLessonsSection.test.ts`
+- **An adopted lesson is read as its group's misses — in distinct goals, by `lessonGroups`, retrospective misses included for a review lesson — per same-kind return dispatch (plus, for a review lesson, per retrospective written), over the 30 days before its merge and the 30 after; the after side is null, and the verdict `too early`, until those 30 days have passed.** A partial month after compared with a whole one before reads every young lesson as working. → [§](#did-it-work) · `test/lessonInsights.test.ts`
+- **The pool carries an adopted lesson as counts and its pull request's URL — never its title, free text, `where`, a retrospective's words or a file path — and nothing from another fleet's lesson or retrospective is drafted on, briefed from or put in a prompt.** Prose and check names do not cross; a link and a count are read by a person, who decides. → [§](#across-fleets) · `test/poolLessonsSection.test.ts`
 - **The lessons reading is not bounded by the Insights page's window.** Its periods are fixed to each merge, and a window that cut one would compare unequal stretches. → [§](#did-it-work) · `test/lessonInsights.test.ts`
 
 ## What it is not
@@ -100,9 +108,9 @@ reason to turn is a knob somebody turns for no reason.
 
 ## Noticing a repeat miss
 
-`lessonGroups` folds the window's remedies into groups; `lessonCandidates` keeps the groups a lesson
-may be drafted for now. Both are pure and take plain data — the remedies, the thread labels, the
-pull-request-to-goal index, the pull requests to leave out, the `reviewAreas` rules and the window's
+`lessonGroups` folds the window's remedies and [retrospective misses](#retrospective-misses) into groups; `lessonCandidates` keeps the groups a lesson
+may be drafted for now. Both are pure and take plain data — the remedies, the retrospective misses, the thread labels, the
+pull-request-to-goal index, the pull requests and goals to leave out, the `reviewAreas` rules and the window's
 start, and for candidates the group's past drafts and `minGoals` — so the whole decision is testable
 without a store.
 
@@ -112,7 +120,7 @@ A group is keyed **`${kind}/${cause}/${where}`**: what kind of return it was, wh
 where. The grain is the narrowest one at which "the same miss twice" is still plausibly the same
 miss — `ci/missed_gate/lint` is one lesson; `ci/missed_gate` across every check is several.
 
-Only remedies whose guard is **`documented`** or **`undocumented`** are grouped. `local_check` means a
+Only remedies and retrospective misses whose guard is **`documented`** or **`undocumented`** are grouped. `local_check` means a
 check the agent could have run caught it, which is a gate the fleet already has; `unpreventable` says
 nothing could. Both guards are kept per miss and tallied as **per-guard counts** wherever a lesson is
 shown — one tally, `lessonGuardCounts` (`src/lessons/evidence.ts`), for the evidence and the pool —
@@ -137,11 +145,58 @@ repository's guidance.
   anchored to no file is about no place, so neither places anything; a review remedy left with no
   anchored, code-changing thread **joins no group**.
 
+- **A retrospective miss** is placed by the file it names, exactly as a review thread is
+  ([retrospective misses](#retrospective-misses)), and joins the **`review`** group there.
+
 **A path no area rule matches falls back to its first two directories** — `services/billing` for
 `services/billing/invoice/total.cs`, `app` for `app/main.py`, `.` for a file at the root. The default
 `reviewAreas` describe LubbDubb's own layout (`^src/store/`, `^web/src/`), so on most repositories a
 fleet works on, nothing would match, and without the fallback every review remedy there would group
 nowhere. Two directories is the grain a `CLAUDE.md` is usually kept at.
+
+### Retrospective misses
+
+When the retrospective agent calls `retro_submit` ([05](05-dispatcher.md#issue-retro--the-retrospective))
+it may pass **`misses`**: up to five, each a **`cause`**, a **`guard`**, the repository-relative
+**`path`** of a file the miss was about, and a one-line **`summary`**. They are kept in `retro_misses`
+(`src/store/schema/scratch.ts`, `store.scratch`), one row each against the goal's `issue:<n>`. A rewrite that
+passes `misses` — an empty list included — replaces its goal's misses whole; one that leaves it out
+keeps them, so revising a summary never erases the evidence. Every miss is **dated by the
+retrospective's first write**, never by the rewrite: a rewrite after a lesson settled would otherwise
+read old misses as new ones past it, redrafting a declined lesson or calling an adopted one not working.
+The rows carry the writing agent and task of the call that last gave them. `validateRetroMisses`
+(`src/retro/retro.ts`) reuses `validateRemedy` over review's vocabulary and adds the path: it refuses
+anything off the lists, a path that is absolute, a directory, climbs out with `..` or holds a backtick
+or control character, and a sixth miss. The retrospective's `misses_at` records the last call that
+answered the question, null on one written before misses existed. The ask is a note **appended** below the rendered `issue-retro` template
+(`retroMissAskNote`), never a placeholder — an override that never learned of misses still asks — and
+the `PromptId` is unchanged.
+
+**The vocabulary is a remedy's, unextended.** The cause is one of **review's** causes
+(`RETRO_MISS_CAUSES` is `CAUSES_BY_KIND.review`), the guard any of the four. A retrospective miss is
+placed by a file, and review is the area-placed kind; CI's causes name a check, which a write-up of a
+whole goal has no business choosing. The examples that motivated it already have names: a confusing
+area is `clarity`, a fact nobody wrote down is `convention` with `undocumented`, a plan redone is
+`approach`, a document left behind is `docs`. A new cause would have been a new column on the Causes
+tab that remedies never fill, and a new kind would never share a group with a remedy, which is the
+point. `defect` and `other` are offered because the lists are the remedy's; they never group, as for a
+remedy.
+
+**Chosen, never extracted.** The claim store failed partly on prose read back as knowledge
+([why](#why-the-claim-store-failed)); nothing reads the retrospective's document to find misses, and
+nothing would be trusted that did. What the writing agent picked from the lists at the moment it
+wrote is the whole record, on the same terms as a remedy — the agent's word, acted on only through
+the distinct-goal threshold and a pull request a person reviews. It is **not a store of lessons**: a
+row says a goal paid for something, not what the repository should say about it.
+
+**The kind is `review`, the key unchanged.** A retrospective miss joins `review/<cause>/<area>`, so a
+review round on one goal and a retrospective on another that met the same confusion in the same area
+are one group — and the key, and with it every fleet's branch tag ([across
+fleets](#across-fleets)), means what it did. The evidence words say which source a group's misses came
+from rather than reading `review` as "a reviewer asked" ([the body](#the-body)).
+
+**What the retrospective agent is told to leave out**: a miss a CI fix or a review round on the same
+goal already accounted for. If it lists one anyway, it costs nothing — the goal is counted once.
 
 ### A remedy's goal
 
@@ -158,7 +213,9 @@ that one: the window is 30 days, a closed pull request leaves the world after `c
 
 ### Counting goals
 
-A group is counted in **distinct goals**. A pull request the graph roots in no goal — a brief's job,
+A group is counted in **distinct goals**, whichever source each miss came from: a retrospective miss's
+goal is the `issue:<n>` it was written against, a remedy's is read from the graph, and the two on one
+goal are **one** goal. A pull request the graph roots in no goal — a brief's job,
 a pull request the fleet adopted, one recorded before the graph knew it — counts as **its own unit,
 `pr:<n>`**, so it is neither dropped nor folded into somebody else's goal. Two pull requests on one
 goal, or four CI rounds on one pull request, are **one** miss: one goal that went wrong in one way,
@@ -171,9 +228,15 @@ probably for one reason. Two goals is a pattern.
   bot's update going red is about the dependency, not about what the repository tells an agent.
 - Remedies on a **lesson** pull request: the lesson's own review would otherwise feed the next
   lesson about itself.
+- Retrospective misses on a goal **behind one of those pull requests** (`goalOf` of each), and on a
+  goal whose issue carries the **lesson label** — a lesson ticket the fleet was let take on
+  (`lessonExcludedGoals`, `src/lessons/lessonDesk.ts`). A retrospective has no pull request of its
+  own, so it is left out by its goal.
 
-The fold takes both as one set of pull request numbers; which pull requests are which is the
-caller's reading of the world.
+The fold takes the pull requests as one set of numbers and the lesson tickets as a set of goals;
+which are which is the caller's reading of the world. A lesson ticket that has left the world is no
+longer recognised, and its retrospective's misses count; the cost is one goal of noise, which the
+threshold absorbs.
 
 ### The limits of the grouping
 
@@ -189,7 +252,7 @@ The grouping is coarse in two ways, both accepted:
 
 ### The window
 
-30 days, `LESSON_WINDOW_MS`. A remedy older than that is not counted, and a group whose misses have
+30 days, `LESSON_WINDOW_MS`. A remedy or retrospective miss older than that is not counted, and a group whose misses have
 stopped stops being a candidate as they age out.
 
 ## The redraft rule
@@ -204,8 +267,8 @@ rows of `lesson_drafts` ([the record](#the-record-and-the-desk)).
 - **`adopted` and `filed` are final.** The lesson is merged, or a ticket for it exists and the
   operator decides whether the fleet takes it on. A group that keeps missing after an adopted lesson is
   a lesson that is [not working](#did-it-work), which is a reading for the operator, not a redraft.
-- **`declined`, `nothing` and `unanswered` are eligible again** once the misses **after the latest
-  settled draft** span at least **`max(goals.length, minGoals)`** goals. The same number of _new_ misses
+- **`declined`, `nothing` and `unanswered` are eligible again** once the misses — remedies and
+  retrospective misses alike — **after the latest settled draft** span at least **`max(goals.length, minGoals)`** goals. The same number of _new_ misses
   as the first draft rested on: a declined lesson does not come back on the next single miss, and the
   operator's no is overruled only by as much evidence again as it was drafted on.
 
@@ -268,9 +331,11 @@ if a note is the right fix, at the nearest directory that would have been read.
 `docs/prompt-templates/repo-lesson.md`. The template carries `{cause}`, `{where}` and `{goals}`, the
 preference order, the pull-request-or-ticket rule, the repository it may edit, `escalate` for an
 undecidable contradiction, and that it finishes with `lesson_conclude` — **never by opening a pull
-request by hand**. The evidence — the group's remedy summaries, their pull requests and the
-retrospectives of their goals — is **appended** as the briefing, never interpolated
-([05](05-dispatcher.md#prompt-templates)).
+request by hand**. The evidence — the group's remedy summaries and their pull requests, its
+retrospective misses and their files, and the retrospectives of their goals — is **appended** as the
+briefing, never interpolated ([05](05-dispatcher.md#prompt-templates)). The briefing (`lessonBriefing`,
+`src/lessons/evidence.ts`) says how many misses came from each source, and under each goal lists
+them apart: **From remedies** and **From the retrospective**. A goal may have both.
 
 `open_pr` called from a lesson origin refuses with "call `lesson_conclude`" (`resolveOpenPr`,
 `src/mcp/openPr.ts`), never "open it yourself": a lesson pull request opened by hand carries no
@@ -312,12 +377,18 @@ reviewer opening every pull request behind it. `lessonPrBody` (`src/lessons/evid
 order:
 
 1. **What happened, in plain words** — `CI failed in the \`lint\` check`, or `review asked for changes
-   in code under \`src/api/\``; the cause as its Causes-tab label and blurb (`CAUSE_COPY`,
+   in code under \`src/api/\``, `goal retrospectives recorded a miss in code under \`src/api/\``, or
+both of the last two joined; how many misses came from remedies and how many from retrospectives;
+the cause as its Causes-tab label and blurb (`CAUSE_COPY`,
 [18](18-observability.md#causes-why-the-fleet-came-back)) rather than its slug; the
 guard tallies; and the fix chosen, in words (`FIX_COPY`, `src/lessons/fixes.ts`, which the tool's
 description of `fix` also reads).
-2. **What the agents reported** — every miss, one line each, sorted by pull request: its link, its
-   guard's Causes-tab label (`GUARD_COPY`), and its remedy summary folded onto one line. These are the reports the drafting
+2. **What the agents reported** — every miss, one line each, under its source's own heading. Remedies,
+   sorted by pull request: its link, its guard's Causes-tab label (`GUARD_COPY`), and its summary
+   folded onto one line. Retrospective misses, sorted by goal: the goal's issue link, the file, the
+   guard's label and the summary. The path is printed as is inside a code span, where nothing links; the
+   refused backtick is what keeps it there. A section with no misses is
+   left out. These are the reports the drafting
    agent was briefed with; before they were in the body only their links were, and a link says nothing
    until it is opened.
 3. **The lesson agent's account** — `summary` as _What changed_ and `reason` as _Why this fix_, under
@@ -387,7 +458,7 @@ request.
 ## The record and the desk
 
 `lesson_drafts` (`src/store/schema/lessons.ts`, `src/store/lessons.ts`, reached as `store.lessons`)
-holds one row per draft: the group key, the goals and remedies it was drafted on, its status —
+holds one row per draft: the group key, the goals and the misses it was drafted on, its status —
 `pending`, `dispatched`, `pr-open`, `adopted`, `declined`, `filed`, `nothing` or `unanswered` — and
 when it settled. Partial unique indexes hold **one draft `pending` or `dispatched` at a time** and
 **one live draft per group**. It records the life of a draft, never a lesson: what the lesson says is
@@ -410,7 +481,9 @@ desk, so below `graph` and `environments`. Each pulse it:
   nothing opens. The pull requests
   left out of the fold are read off the same world: every bot-authored one, every one on a `lesson/`
   branch or carrying the lesson label, and every one a draft recorded. The draft keeps the misses it
-  was made on — remedy, pull request, goal, guard, summary — and the briefing, assembled once: the
+  was made on — each with its `source`, `remedy` (remedy, pull request) or `retro` (retrospective miss,
+  file), and its goal, guard and summary; a row written before retrospective misses existed reads as
+  all remedies — and the briefing, assembled once: the
   misses grouped by goal under each goal's retrospective summary.
 
 The settling runs whatever `minGoals` says; opening runs only when it is on.
@@ -430,7 +503,8 @@ remedy, but with lessons on a desk does read the table and can put an agent to w
 `guard` are asserted by an agent and now trigger a dispatch. They still gate no work, and what keeps an
 agent's word safe to act on is the threshold of distinct goals, the cap on open lesson pull requests, and that the only thing it
 can cause is a pull request (or a ticket) a person reviews. Spec 18 and the remedies schema comment say
-so. The remedy ask a returning agent is handed (`remedyAskNote`) names the repo-lesson consequence
+so. A [retrospective miss](#retrospective-misses) is an agent's word on the same terms and under the
+same three bounds. The remedy ask a returning agent is handed (`remedyAskNote`) names the repo-lesson consequence
 **only where lessons are on** — on a fleet with them off it would be a promise about a feature that is
 not running. The `report_remedy` tool description is fleet-wide and stays neutral: it says other
 features may act on these accounts, without naming one.
@@ -446,12 +520,25 @@ merge**: `buildLessonInsights` (`src/insights/lessonInsights.ts`), served on the
   lesson pull request merged ([the record](#the-record-and-the-desk)). The harness keeps no merge time
   of its own for a pull request that roots in no goal, and a pulse is well inside the 30-day grain.
 - **Misses** are the group's distinct goals in each period, folded by `lessonGroups` — the same
-  grouping, exclusions and fallbacks that drafted it, never a second one — over the remedies filed in
-  `[merge − 30 days, merge)` and `[merge, merge + 30 days)`. The 30 days is `LESSON_WINDOW_MS`.
+  grouping, exclusions and fallbacks that drafted it, never a second one — over the remedies filed and,
+  for a review lesson, the retrospective misses recorded in `[merge − 30 days, merge)` and
+  `[merge, merge + 30 days)`. The 30 days is `LESSON_WINDOW_MS`. The Causes tab's row also carries
+  **`fromRetros`**, per period how many of those goals a retrospective miss placed in the group, drawn
+  as _from retros_ beside the count. It sits on the row, not on `LessonPeriod`, so the pool's period
+  never carries it ([across fleets](#across-fleets)).
 - **The rate** is misses per **return dispatch of the same kind** in the same period — tasks with
   origin `pr:<n>:ci` for a CI lesson, `pr:<n>:comments` for a review one, parsed once per task by
   `remedyOrigin` (`src/lessons/lessonReading.ts`) — leaving out the same bot and lesson pull requests
-  the grouping does. A raw count would read a quiet month as a lesson that worked; dividing by how
+  the grouping does — **plus, for a review lesson, every retrospective written in the period** that
+  answered the misses question (`misses_at` set) and is on a goal the grouping does not leave out
+  (`goalsLeftOut`, `src/lessons/groups.ts`, the one set both sides read), read as a review return with
+  no pull request (`ReturnDispatch.prNumber` null). A retrospective written before misses existed is
+  not counted: it could not have recorded one, and counting it would grow an old lesson's denominator
+  after the fact.
+  Retrospective misses join only review groups (`RETRO_MISS_KIND`), so a CI lesson's two sides are as
+  they were. A retrospective is the occasion on which a
+  retrospective miss can be recorded, as a return is for a remedy; leaving it out would read a review
+  lesson whose misses came only from retrospectives as unbounded, and so as never working. A raw count would read a quiet month as a lesson that worked; dividing by how
   often the fleet came back at all is what makes the two sides comparable. A period is carried as its
   two counts, `{ misses, returns }` (`LessonPeriod`, the same shape the pool publishes), and the rate
   is derived by one helper, `missRate` (`src/insights/lessonInsights.ts`): with **no return dispatch
@@ -460,8 +547,9 @@ merge**: `buildLessonInsights` (`src/insights/lessonInsights.ts`), served on the
   back, so nothing came back for this. **A miss with no return dispatch to divide by is unbounded,
   never zero** — the two counts are taken on different dates, so a remedy filed just after the merge
   for a return created just before it lands alone in the after period, and reading that as zero would
-  call a lesson whose miss came back working. The pool's effect is null for an unbounded period. Each period folds only the remedies of the draft's own kind and
-  cause inside its 30 days; no other remedy can reach its group.
+  call a lesson whose miss came back working. The pool's effect is null for an unbounded period. Each period folds only the remedies — and, for a review lesson, the
+  retrospective misses — of the draft's own kind and cause inside its 30 days; nothing else can reach
+  its group.
 - **The after side is null until 30 days have passed** since the merge, and the verdict is then
   **too early**. A partial month compared with a whole one reads every young lesson as working.
 - **Working** is no miss in the after period, or a lower rate after than before (a null rate counting
@@ -513,7 +601,10 @@ repositories.
 **Different repositories: the pool carries what landed, as counts.** The daily digest
 ([28](28-cross-fleet-pool.md#the-digest-arm)) gains a `lessons` section — no new kind, no version
 bump — one row per adopted lesson: `kind`, `cause`, `guards`, `fix`, the pull request's URL, when it
-merged, and the group's misses before and after, as counts. **No title, no free text and no `where`**:
+merged, and the group's misses before and after, as counts. Retrospective misses are in those counts
+and in `guards` as numbers, and nothing else of them crosses: not their files, not their summaries, not
+the retrospective, and not the Causes tab's `fromRetros` split, which is on the row rather than the
+period. **No title, no free text and no `where`**:
 a title is prose crossing the pool, and check names do not cross projects
 ([28](28-cross-fleet-pool.md#check-names-cross-within-a-project-and-never-between)). Mirrored rows are
 replaced and expired with the digest they came in, and deduplicated by URL. The counts are the [did it

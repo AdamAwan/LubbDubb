@@ -43,7 +43,16 @@ function remedy(prNumber: number, createdAt = '2026-06-10T00:00:00.000Z'): Remed
 }
 
 function inputs(remedies: Remedy[]): LessonGroupInputs {
-  return { remedies, threadLabels: [], goalOfPr: new Map(), excludedPrs: new Set(), reviewAreas: [], since: SINCE };
+  return {
+    remedies,
+    retroMisses: [],
+    threadLabels: [],
+    goalOfPr: new Map(),
+    excludedPrs: new Set(),
+    excludedGoals: new Set(),
+    reviewAreas: [],
+    since: SINCE,
+  };
 }
 
 function theirs(state: LessonPullRequest['state'], closedAt: string | null = null, key = KEY): LessonPullRequest {

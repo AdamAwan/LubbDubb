@@ -1359,7 +1359,7 @@ nothing a human can do about a report that did not happen that they cannot do by
 
 ### What the agent is handed
 
-Two things, both **appended** to the rendered `issue-retro` prompt rather than interpolated into it —
+Three things, all **appended** to the rendered `issue-retro` prompt rather than interpolated into it —
 `loadPromptTemplates` rejects only _unknown_ placeholders, so a `{dossier}` token would be silently
 dropped by exactly the overrides that customised most:
 
@@ -1373,6 +1373,11 @@ dropped by exactly the overrides that customised most:
    spend. It **reads rows the
    pulse already wrote and derives no verdicts**: a fold that computed one would be a second opinion
    about a decision made somewhere else.
+3. **The ask for misses** (`retroMissAskNote`, `src/retro/retro.ts`), added by the rule itself right
+   below the template: pass `misses` to `retro_submit`, each a cause, a guard and a file the goal paid
+   for, and an empty list when there were none. It is what lets a retrospective feed a repo lesson
+   ([41](41-repo-lessons.md#retrospective-misses)), and it names that consequence only where lessons
+   are on, as the remedy ask does.
 
 ### What it is bounded by
 
@@ -1445,7 +1450,8 @@ like everything else, so it does not reopen the boundary above, and the escalati
 request or a stack ref rather than a goal stay out as they should.
 
 The agent submits with `retro_submit`; the summary is required, the document is trimmed rather than
-refused, and the write upserts on the issue so a revision is one row. Nothing is posted to the
+refused, and the write upserts on the issue so a revision is one row. Its `misses` are validated
+against fixed lists and replace the goal's earlier ones in the same transaction. Nothing is posted to the
 tracker and nothing is scheduled from what it says.
 
 ## `validation-plan` — writing the check set

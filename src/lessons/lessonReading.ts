@@ -9,7 +9,9 @@ import {
 import { remedyOrigin } from '../remedies/remedies.js';
 import type { Store } from '../store/store.js';
 import type { LessonDraft } from '../types.js';
-import { lessonExcludedPrs } from './lessonDesk.js';
+import { RETRO_MISS_KIND } from '../retro/retro.js';
+import { goalsLeftOut } from './groups.js';
+import { lessonExcludedGoals, lessonExcludedPrs } from './lessonDesk.js';
 
 // → docs/spec/41-repo-lessons.md#did-it-work
 
@@ -35,23 +37,40 @@ export function readLessonInsights(
     return buildLessonInsights({
       drafts,
       remedies: [],
+      retroMisses: [],
       threadLabels: [],
       goalOfPr: new Map(),
       excludedPrs: new Set(),
+      excludedGoals: new Set(),
       reviewAreas: context.reviewAreas,
       returnDispatches: [],
       now: context.now,
     });
+  const world = store.world.getWorldBaseline();
+  const excludedGoals = lessonExcludedGoals(world, context.lessonLabel);
+  const excludedPrs = lessonExcludedPrs(world, all, context.lessonLabel);
+  const goalOfPr = prGoalIndex(store.graph.listWorkNodes());
+  const leftOut = goalsLeftOut({ excludedGoals, excludedPrs, goalOfPr });
   return buildLessonInsights({
     drafts,
     remedies: store.remedies.listRemediesSince(since),
+    retroMisses: store.scratch.listRetroMissesSince(since),
     threadLabels: store.prThreadLabels.listThreadLabelsSince(since),
-    goalOfPr: prGoalIndex(store.graph.listWorkNodes()),
-    excludedPrs: lessonExcludedPrs(store.world.getWorldBaseline(), all, context.lessonLabel),
+    goalOfPr,
+    excludedPrs,
+    excludedGoals,
     reviewAreas: context.reviewAreas,
-    returnDispatches: returnDispatchesSince(store, since),
+    returnDispatches: [...returnDispatchesSince(store, since), ...retrospectivesSince(store, since, leftOut)],
     now: context.now,
   });
+}
+
+/** Each retrospective written is a review return without a pull request, those the grouping leaves out excepted. */
+function retrospectivesSince(store: Store, since: string, excludedGoals: ReadonlySet<string>): ReturnDispatch[] {
+  return store.scratch
+    .listRetrospectivesWrittenSince(since)
+    .filter((r) => !excludedGoals.has(r.originRef))
+    .map((r) => ({ prNumber: null, kind: RETRO_MISS_KIND, createdAt: r.createdAt }));
 }
 
 function returnDispatchesSince(store: Store, since: string): ReturnDispatch[] {

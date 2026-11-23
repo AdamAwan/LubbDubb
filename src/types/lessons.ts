@@ -12,13 +12,27 @@ export type LessonOutcome = 'pull_request' | 'ticket' | 'nothing';
 export type LessonFix = (typeof LESSON_FIXES)[number];
 
 /** One remedy a draft was made on, as the evidence cites it. */
-export interface LessonMiss {
+interface RemedyLessonMiss {
+  source: 'remedy';
   remedyId: string;
   prNumber: number;
   goal: string;
   guard: RemedyGuard;
   summary: string;
 }
+
+/** One retrospective miss a draft was made on: its goal's own account, placed by a file rather than a pull request. */
+interface RetroLessonMiss {
+  source: 'retro';
+  retroMissId: string;
+  goal: string;
+  path: string;
+  guard: RemedyGuard;
+  summary: string;
+}
+
+/** One account a draft was made on, and which kind of evidence it is. */
+export type LessonMiss = RemedyLessonMiss | RetroLessonMiss;
 
 /** The life of one draft: never what the lesson says, which lives in the repository. */
 export interface LessonDraft {

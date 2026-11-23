@@ -1,5 +1,5 @@
 import { issueWatchGateReason } from '../issuePickup.js';
-import { retroOrigin } from '../../retro/retro.js';
+import { retroMissAskNote, retroOrigin } from '../../retro/retro.js';
 import { issueOrigin } from '../../plans/planning.js';
 import type { RawAction, StageContext } from './context.js';
 
@@ -29,11 +29,12 @@ export function issueRetro(s: StageContext): void {
       action: {
         type: 'dispatch_desk_agent',
         title,
-        prompt: s.templates.render('issue-retro', {
-          number: issue.number,
-          title: issue.title,
-          body: issue.body,
-        }),
+        prompt:
+          s.templates.render('issue-retro', {
+            number: issue.number,
+            title: issue.title,
+            body: issue.body,
+          }) + retroMissAskNote(s.lessonsOn),
         originRef: origin,
         originTitle: issue.title,
         originSummary: issue.body,
