@@ -166,8 +166,9 @@ retrospective's first write**, never by the rewrite: a rewrite after a lesson se
 read old misses as new ones past it, redrafting a declined lesson or calling an adopted one not working.
 The rows carry the writing agent and task of the call that last gave them. `validateRetroMisses`
 (`src/retro/retro.ts`) reuses `validateRemedy` over review's vocabulary and adds the path: it refuses
-anything off the lists, a path that is absolute, a directory, climbs out with `..` or holds a backtick
-or control character, and a sixth miss. The retrospective's `misses_at` records the last call that
+anything off the lists, a path that is absolute, a directory, climbs out with `..` or holds a backtick,
+a glob character or a control character, and a sixth miss — in a retrospective's words, not a review
+round's. The retrospective's `misses_at` records the last call that
 answered the question, null on one written before misses existed. The ask is a note **appended** below the rendered `issue-retro` template
 (`retroMissAskNote`), never a placeholder — an override that never learned of misses still asks — and
 the `PromptId` is unchanged.
@@ -535,6 +536,10 @@ merge**: `buildLessonInsights` (`src/insights/lessonInsights.ts`), served on the
   no pull request (`ReturnDispatch.prNumber` null). A retrospective written before misses existed is
   not counted: it could not have recorded one, and counting it would grow an old lesson's denominator
   after the fact.
+  And a lesson whose before side starts earlier than the first retrospective that answered the question
+  (`firstMissesAt`) reads **no** retrospective evidence on either side: one side counting retrospectives
+  and the other not would compare two different measures, and call a lesson merged around the change
+  not working on the extra source alone.
   Retrospective misses join only review groups (`RETRO_MISS_KIND`), so a CI lesson's two sides are as
   they were. A retrospective is the occasion on which a
   retrospective miss can be recorded, as a return is for a remedy; leaving it out would read a review

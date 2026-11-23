@@ -171,7 +171,7 @@ function ReviewMethodNote(): JSX.Element {
 
 export function causeRows(remedies: RemedyInsights | null): (string | number | null)[][] {
   if (remedies === null) return [];
-  if (remedies.accounts === 0) return retroMissRows(remedies);
+  if (remedies.accounts === 0) return retroMissRows(remedies).slice(1);
   return [
     ['Causes'],
     ['Accounts filed', remedies.accounts],

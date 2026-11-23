@@ -140,6 +140,12 @@ export class ScratchStore {
     return rows.map((r) => ({ originRef: r.origin_ref, createdAt: r.created_at }));
   }
 
+  /** When the first retrospective answered the misses question; null before any has. */
+  firstMissesAt(): string | null {
+    const row = this.ctx.prep(`SELECT MIN(misses_at) AS at FROM retrospectives`).get() as { at: string | null };
+    return row.at;
+  }
+
   listRetrospectiveOrigins(): string[] {
     const rows = this.ctx.prep(`SELECT origin_ref FROM retrospectives`).all() as { origin_ref: string }[];
     return rows.map((r) => r.origin_ref);

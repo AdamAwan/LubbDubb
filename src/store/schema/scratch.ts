@@ -40,15 +40,10 @@ CREATE TABLE IF NOT EXISTS retrospectives (
   task_id    TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  misses_at  TEXT                     -- last retro_submit that answered misses; null never did (before misses existed)
+  misses_at  TEXT                     -- last retro_submit that answered misses; null never did
 );
 
--- What a retrospective said went wrong, as a remedy's two enums plus the file it
--- was about: zero or more rows per retrospective, chosen by the writing agent at
--- retro_submit and replaced whole when the retrospective is rewritten. Never
--- extracted from the document afterwards. LessonDesk groups them beside remedies
--- (docs/spec/41-repo-lessons.md#retrospective-misses); nothing else reads them
--- but the Causes tab.
+-- A retrospective's structured misses → docs/spec/41-repo-lessons.md#retrospective-misses
 CREATE TABLE IF NOT EXISTS retro_misses (
   id         TEXT PRIMARY KEY,
   origin_ref TEXT NOT NULL,           -- the retrospective's goal, "issue:12"
@@ -58,7 +53,7 @@ CREATE TABLE IF NOT EXISTS retro_misses (
   summary    TEXT NOT NULL,
   agent_id   TEXT NOT NULL,
   task_id    TEXT NOT NULL,
-  created_at TEXT NOT NULL            -- the retrospective's first write, so a rewrite never re-dates a miss
+  created_at TEXT NOT NULL            -- the retrospective's first write
 );
 
 CREATE INDEX IF NOT EXISTS idx_retro_misses_created ON retro_misses(created_at);

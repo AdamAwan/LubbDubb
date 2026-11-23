@@ -92,7 +92,7 @@ function validateRetroMiss(
   args: Record<string, unknown>,
 ): { ok: true; miss: RetroMissInput } | { ok: false; error: string } {
   const remedy = validateRemedy(RETRO_MISS_KIND, args);
-  if (!remedy.ok) return remedy;
+  if (!remedy.ok) return { ok: false, error: retroWording(remedy.error) };
   const path = retroMissPath(args.path);
   if (path === null) {
     return {
@@ -105,16 +105,23 @@ function validateRetroMiss(
   return { ok: true, miss: { ...remedy.submission, path } };
 }
 
+/** A remedy's refusal, reworded for a miss a goal paid for rather than a review round that came back. */
+function retroWording(error: string): string {
+  if (error.startsWith('summary is required'))
+    return 'summary is required — one line: what was missed, and what it cost the goal';
+  return error.replace(/ for a review round$/, '');
+}
+
 function retroMissPath(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const path = raw.trim().replace(/\\/g, '/').replace(/^\.\//, '');
   if (path === '' || path.length > MAX_RETRO_MISS_PATH || path.startsWith('/') || path.endsWith('/')) return null;
-  if (/^[a-z]+:/i.test(path) || [...path].some((c) => c === '`' || c.charCodeAt(0) < 0x20)) return null;
+  if (/^[a-z]+:/i.test(path) || [...path].some((c) => '`*?[]'.includes(c) || c.charCodeAt(0) < 0x20)) return null;
   if (path.split('/').some((s) => s === '..' || s === '.' || s === '')) return null;
   return path;
 }
 
-/** Appended below the rendered `issue-retro` template, so an override that never learned of `misses` still asks for them. */
+/** Appended below the rendered `issue-retro` template. → docs/spec/41-repo-lessons.md#retrospective-misses */
 export function retroMissAskNote(lessonsOn: boolean): string {
   const lessons = lessonsOn
     ? 'The same miss on several goals is what a later agent drafts a fix to the repository from, for a person ' +

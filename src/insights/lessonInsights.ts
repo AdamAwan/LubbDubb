@@ -61,6 +61,8 @@ interface LessonInsightInput {
   drafts: readonly LessonDraft[];
   remedies: readonly Remedy[];
   retroMisses: readonly RetroMiss[];
+  /** When retrospectives began recording misses; a lesson whose before side starts earlier reads none of their evidence on either side. */
+  retroSince: string | null;
   threadLabels: readonly PrThreadLabel[];
   goalOfPr: ReadonlyMap<number, string>;
   excludedPrs: ReadonlySet<number>;
@@ -112,8 +114,10 @@ function row(d: LessonDraft, input: LessonInsightInput): LessonRow {
   if (d.status !== 'adopted' || d.settledAt === null)
     return { ...base, mergedAt: null, before: null, after: null, fromRetros: null, verdict: null };
   const merged = Date.parse(d.settledAt);
-  const before = period(d, input, merged - LESSON_WINDOW_MS, merged);
-  const after = input.now >= merged + LESSON_WINDOW_MS ? period(d, input, merged, merged + LESSON_WINDOW_MS) : null;
+  const retros = input.retroSince !== null && merged - LESSON_WINDOW_MS >= Date.parse(input.retroSince);
+  const before = period(d, input, retros, merged - LESSON_WINDOW_MS, merged);
+  const after =
+    input.now >= merged + LESSON_WINDOW_MS ? period(d, input, retros, merged, merged + LESSON_WINDOW_MS) : null;
   return {
     ...base,
     mergedAt: d.settledAt,
@@ -127,6 +131,7 @@ function row(d: LessonDraft, input: LessonInsightInput): LessonRow {
 function period(
   d: LessonDraft,
   input: LessonInsightInput,
+  retros: boolean,
   start: number,
   end: number,
 ): { period: LessonPeriod; fromRetros: number } {
@@ -134,7 +139,7 @@ function period(
   const until = new Date(end).toISOString();
   const inside = (createdAt: string) => createdAt >= since && createdAt < until;
   const remedies = input.remedies.filter((r) => r.kind === d.kind && r.cause === d.cause && inside(r.createdAt));
-  const retroMisses = input.retroMisses.filter((m) => inside(m.createdAt));
+  const retroMisses = retros ? input.retroMisses.filter((m) => inside(m.createdAt)) : [];
   const group = lessonGroups({
     remedies,
     retroMisses,
@@ -149,7 +154,7 @@ function period(
   const fromRetros = new Set(group?.misses.filter((m) => m.source === 'retro').map((m) => m.goal)).size;
   const leftOut = goalsLeftOut(input);
   const counted = (t: ReturnDispatch) =>
-    t.prNumber === null ? !leftOut.has(t.goal) : !input.excludedPrs.has(t.prNumber);
+    t.prNumber === null ? retros && !leftOut.has(t.goal) : !input.excludedPrs.has(t.prNumber);
   const returns = input.returnDispatches.filter((t) => t.kind === d.kind && inside(t.createdAt) && counted(t)).length;
   return { period: { misses, returns }, fromRetros };
 }

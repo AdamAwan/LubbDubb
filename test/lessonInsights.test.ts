@@ -72,6 +72,7 @@ function read(over: Partial<Parameters<typeof buildLessonInsights>[0]> = {}) {
     drafts: [draft()],
     remedies: [],
     retroMisses: [],
+    retroSince: null,
     threadLabels: [],
     goalOfPr: new Map(),
     excludedPrs: new Set([90]),

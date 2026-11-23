@@ -338,27 +338,39 @@ test('did it work reads a review lesson’s retro misses, labelled, with retrosp
     createdAt: at(-2),
     settledAt: at(0),
   };
-  const insights = buildLessonInsights({
-    drafts: [draft],
-    remedies: [],
-    retroMisses: [retroMiss('issue:1', -10), retroMiss('issue:2', -5), retroMiss('issue:3', 5)],
-    threadLabels: [],
-    goalOfPr: new Map(),
-    excludedPrs: new Set([90]),
-    excludedGoals: new Set(['issue:99']),
-    reviewAreas: [],
-    returnDispatches: [-10, -5, -3, -1, 5, 6].map((days) => ({
-      prNumber: null,
-      goal: days === -1 ? 'issue:99' : `issue:${days}`,
-      kind: 'review' as const,
-      createdAt: at(days),
-    })),
-    now: MERGED + 31 * DAY_MS,
-  });
+  const read = (retroSince: string | null) =>
+    buildLessonInsights({
+      drafts: [draft],
+      remedies: [],
+      retroMisses: [retroMiss('issue:1', -10), retroMiss('issue:2', -5), retroMiss('issue:3', 5)],
+      threadLabels: [],
+      goalOfPr: new Map(),
+      excludedPrs: new Set([90]),
+      excludedGoals: new Set(['issue:99']),
+      reviewAreas: [],
+      returnDispatches: [-10, -5, -3, -1, 5, 6].map((days) => ({
+        prNumber: null,
+        goal: days === -1 ? 'issue:99' : `issue:${days}`,
+        kind: 'review' as const,
+        createdAt: at(days),
+      })),
+      now: MERGED + 31 * DAY_MS,
+      retroSince,
+    });
+  const insights = read(at(-40));
   const row = insights.drafts[0]!;
   assert.deepEqual(row.before, { misses: 2, returns: 3 });
   assert.deepEqual(row.after, { misses: 1, returns: 2 });
   assert.deepEqual(row.fromRetros, { before: 2, after: 1 });
+  const straddled = read(at(-5)).drafts[0]!;
+  assert.deepEqual(
+    [straddled.before, straddled.after],
+    [
+      { misses: 0, returns: 0 },
+      { misses: 0, returns: 0 },
+    ],
+    'a lesson whose before side predates misses reads retro evidence on neither side',
+  );
   assert.equal(row.verdict, 'working');
 });
 
