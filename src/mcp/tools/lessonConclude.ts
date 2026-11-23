@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LESSON_FIXES } from '../../lessons/fixes.js';
+import { FIX_COPY, LESSON_FIXES } from '../../lessons/fixes.js';
 import { toolError } from '../protocol.js';
 import { toolSchema } from '../schema.js';
 import type { ToolFactory } from './context.js';
@@ -18,9 +18,7 @@ const LessonConcludeArgs = z.object({
     .enum(LESSON_FIXES)
     .optional()
     .describe(
-      'Required unless the outcome is nothing. code: the cause removed in the code. guard: a lint rule, type or ' +
-        'test that fails when the miss is made. contradiction: code and docs disagreed and one was corrected. ' +
-        'note: a line in the nearest CLAUDE.md or document.',
+      'Required unless the outcome is nothing. ' + LESSON_FIXES.map((fix) => `${fix}: ${FIX_COPY[fix]}.`).join(' '),
     ),
   title: z
     .string()

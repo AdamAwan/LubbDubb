@@ -1,6 +1,7 @@
 import { goalOf } from '../graph/prGoals.js';
-import { CAUSE_COPY } from '../remedies/remedies.js';
-import type { LessonDraft, LessonFix, LessonMiss, Remedy, RemedyGuard, RemedyKind } from '../types.js';
+import { CAUSE_COPY, GUARD_COPY } from '../remedies/remedies.js';
+import { FIX_COPY } from './fixes.js';
+import type { LessonDraft, LessonFix, LessonMiss, Remedy, RemedyKind } from '../types.js';
 import { lessonMarker } from './lessonOrigin.js';
 
 // → docs/spec/41-repo-lessons.md#the-outcome
@@ -51,59 +52,47 @@ export function lessonBriefing(
   return lines.join('\n');
 }
 
+/** What the drafting agent said when it concluded. */
+type LessonSaid = { fix: LessonFix; summary: string; reason: string };
+
 /**
  * The lesson pull request's whole body: the evidence the harness holds, then the drafting agent's own
  * account under its own heading. Every pull request is cited as a full URL — never `#n`, which on Azure
  * DevOps links a work item, and never with a closing keyword; agent text is defanged to keep it so.
  */
-export function lessonPrBody(
-  draft: LessonDraft,
-  said: { fix: LessonFix; summary: string; reason: string },
-  refUrl: RefUrl,
-): string {
-  return [lessonEvidence(draft, said.fix, refUrl), agentAccount(said), lessonMarker(draft.groupKey)]
-    .filter((part) => part !== '')
-    .join('\n\n');
+export function lessonPrBody(draft: LessonDraft, said: LessonSaid, refUrl: RefUrl): string {
+  return paragraphs(lessonEvidence(draft, said.fix, refUrl), agentAccount(said), lessonMarker(draft.groupKey));
 }
 
 /** A ticket's body: the agent's account of the change it would take, then the same evidence. */
-export function lessonTicketBody(
-  draft: LessonDraft,
-  said: { fix: LessonFix; summary: string; reason: string },
-  refUrl: RefUrl,
-): string {
-  const why = defang(said.reason.trim());
-  return lessonBody(said.summary, why === '' ? '' : `Why a ticket: ${why}`, lessonEvidence(draft, said.fix, refUrl));
+export function lessonTicketBody(draft: LessonDraft, said: LessonSaid, refUrl: RefUrl): string {
+  const why = agentText(said.reason);
+  return paragraphs(
+    agentText(said.summary),
+    why === '' ? '' : `Why a ticket: ${why}`,
+    lessonEvidence(draft, said.fix, refUrl),
+  );
 }
 
 /** The lesson's own work item: what the change is, the pull request it is in, then the evidence. */
 export function lessonTaskBody(
   draft: LessonDraft,
-  said: { fix: LessonFix; summary: string },
+  said: Pick<LessonSaid, 'fix' | 'summary'>,
   prUrl: string | null,
   refUrl: RefUrl,
 ): string {
-  const where = prUrl === null ? '' : `The lesson pull request: ${prUrl}`;
-  return lessonBody(said.summary, where, lessonEvidence(draft, said.fix, refUrl));
+  return paragraphs(
+    agentText(said.summary),
+    prUrl === null ? '' : `The lesson pull request: ${prUrl}`,
+    lessonEvidence(draft, said.fix, refUrl),
+  );
 }
 
-function lessonBody(summary: string, middle: string, evidence: string): string {
-  return [defang(summary.trim()), middle, evidence].filter((part) => part !== '').join('\n\n');
+function paragraphs(...parts: string[]): string {
+  return parts.filter((part) => part !== '').join('\n\n');
 }
 
 const KIND_WORDS: Record<RemedyKind, string> = { ci: 'CI failed', review: 'review asked for changes' };
-
-const FIX_WORDS: Record<LessonFix, string> = {
-  code: 'remove the cause in the code',
-  guard: 'add a lint rule, type or test that catches it',
-  contradiction: 'fix code and docs that disagreed',
-  note: 'write it down in the nearest doc',
-};
-
-const MISS_GUARD_WORDS: Partial<Record<RemedyGuard, string>> = {
-  documented: 'written down, missed anyway',
-  undocumented: 'written down nowhere',
-};
 
 function whereWords(draft: LessonDraft): string {
   if (draft.kind === 'ci') return `the \`${draft.where}\` check`;
@@ -115,29 +104,28 @@ function lessonEvidence(draft: LessonDraft, fix: LessonFix, refUrl: RefUrl): str
   const cause = CAUSE_COPY[draft.cause];
   const prLink = (n: number) => refUrl(`pr:${String(n)}`) ?? `pull request ${String(n)}`;
   const misses = [...draft.misses].sort((a, b) => a.prNumber - b.prNumber);
-  return [
+  return paragraphs(
     `A repo lesson: on ${String(draft.goals.length)} goals, the fleet had to go back to a pull request for the ` +
       'same reason.',
     [
       `- What happened: ${KIND_WORDS[draft.kind]} in ${whereWords(draft)}`,
       `- Cause: ${cause.label}. ${cause.blurb}.`,
-      `- Written down nowhere: ${String(undocumented)}. Written down, missed anyway: ${String(documented)}.`,
-      `- The fix chosen: ${FIX_WORDS[fix]}`,
+      `- ${GUARD_COPY.undocumented.label}: ${String(undocumented)}. ${GUARD_COPY.documented.label}: ${String(documented)}.`,
+      `- The fix chosen: ${FIX_COPY[fix]}`,
     ].join('\n'),
     [
       '### What the agents reported',
       '',
       ...misses.map((m) => {
-        const guard = MISS_GUARD_WORDS[m.guard];
-        return `- ${prLink(m.prNumber)}${guard === undefined ? '' : ` (${guard})`}: ${defang(oneLine(m.summary))}`;
+        return `- ${prLink(m.prNumber)} (${GUARD_COPY[m.guard].label}): ${agentText(oneLine(m.summary))}`;
       }),
     ].join('\n'),
-  ].join('\n\n');
+  );
 }
 
 function agentAccount(said: { summary: string; reason: string }): string {
-  const summary = defang(said.summary.trim());
-  const reason = defang(said.reason.trim());
+  const summary = agentText(said.summary);
+  const reason = agentText(said.reason);
   if (summary === '' && reason === '') return '';
   return [
     '### The lesson agent’s account',
@@ -146,6 +134,10 @@ function agentAccount(said: { summary: string; reason: string }): string {
     ...(summary === '' ? [] : ['', `**What changed:** ${summary}`]),
     ...(reason === '' ? [] : ['', `**Why this fix:** ${reason}`]),
   ].join('\n');
+}
+
+function agentText(text: string): string {
+  return defang(text.trim());
 }
 
 function oneLine(text: string): string {

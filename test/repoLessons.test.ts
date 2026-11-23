@@ -480,10 +480,10 @@ test('a lesson pull request says why: plain cause and place, every report, and t
   );
   assert.match(body, /CI failed in the `build` check/);
   assert.match(body, /Cause: Contract drift\. The change broke a caller/);
-  assert.match(body, /Written down nowhere: 1\. Written down, missed anyway: 1\./);
-  assert.match(body, /The fix chosen: add a lint rule, type or test/);
-  const first = body.indexOf('pull/31 (written down nowhere): New route not registered');
-  const second = body.indexOf('pull/32 (written down, missed anyway): Forgot the registry entry');
+  assert.match(body, /Written down nowhere: 1\. Already written down: 1\./);
+  assert.match(body, /The fix chosen: a lint rule, type or test/);
+  const first = body.indexOf('pull/31 (Written down nowhere): New route not registered');
+  const second = body.indexOf('pull/32 (Already written down): Forgot the registry entry');
   assert.ok(first > 0 && second > first, 'every report, one line each, in pull request order');
   assert.match(body, /### The lesson agent’s account/);
   assert.match(body, /\*\*What changed:\*\* Added a test that fails on an unregistered route\./);

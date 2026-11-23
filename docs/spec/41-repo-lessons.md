@@ -313,10 +313,11 @@ order:
 
 1. **What happened, in plain words** — `CI failed in the \`lint\` check`, or `review asked for changes
    in code under \`src/api/\``; the cause as its Causes-tab label and blurb (`CAUSE_COPY`,
-   [18](18-observability.md#causes-why-the-fleet-came-back)) rather than its slug; the
-   written-down-nowhere and missed-anyway tallies; and the fix chosen, in words.
+[18](18-observability.md#causes-why-the-fleet-came-back)) rather than its slug; the
+guard tallies; and the fix chosen, in words (`FIX_COPY`, `src/lessons/fixes.ts`, which the tool's
+description of `fix` also reads).
 2. **What the agents reported** — every miss, one line each, sorted by pull request: its link, its
-   guard in words, and its remedy summary folded onto one line. These are the reports the drafting
+   guard's Causes-tab label (`GUARD_COPY`), and its remedy summary folded onto one line. These are the reports the drafting
    agent was briefed with; before they were in the body only their links were, and a link says nothing
    until it is opened.
 3. **The lesson agent's account** — `summary` as _What changed_ and `reason` as _Why this fix_, under
