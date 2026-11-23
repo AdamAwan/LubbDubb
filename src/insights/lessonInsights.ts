@@ -1,7 +1,6 @@
 import type { ReviewAreaRule } from '../config/config.js';
-import { lessonGroups, LESSON_WINDOW_MS } from '../lessons/groups.js';
+import { goalsLeftOut, lessonGroups, LESSON_WINDOW_MS } from '../lessons/groups.js';
 import { CAUSE_COPY } from '../remedies/remedies.js';
-import { RETRO_MISS_KIND } from '../retro/retro.js';
 import type {
   LessonDraftStatus,
   LessonFix,
@@ -54,11 +53,9 @@ export interface LessonInsights {
  * A return dispatch as the reading counts it: the pull request it went back to, which kind of return, and
  * when. A retrospective written is a review return with no pull request: the occasion a retrospective miss is recorded on.
  */
-export interface ReturnDispatch {
-  prNumber: number | null;
-  kind: RemedyKind;
-  createdAt: string;
-}
+export type ReturnDispatch = { kind: RemedyKind; createdAt: string } & (
+  { prNumber: number } | { prNumber: null; goal: string }
+);
 
 interface LessonInsightInput {
   drafts: readonly LessonDraft[];
@@ -137,8 +134,7 @@ function period(
   const until = new Date(end).toISOString();
   const inside = (createdAt: string) => createdAt >= since && createdAt < until;
   const remedies = input.remedies.filter((r) => r.kind === d.kind && r.cause === d.cause && inside(r.createdAt));
-  const retroMisses =
-    d.kind === RETRO_MISS_KIND ? input.retroMisses.filter((m) => m.cause === d.cause && inside(m.createdAt)) : [];
+  const retroMisses = input.retroMisses.filter((m) => inside(m.createdAt));
   const group = lessonGroups({
     remedies,
     retroMisses,
@@ -151,9 +147,10 @@ function period(
   }).find((g) => g.key === d.groupKey);
   const misses = group?.goals.length ?? 0;
   const fromRetros = new Set(group?.misses.filter((m) => m.source === 'retro').map((m) => m.goal)).size;
-  const returns = input.returnDispatches.filter(
-    (t) => t.kind === d.kind && inside(t.createdAt) && (t.prNumber === null || !input.excludedPrs.has(t.prNumber)),
-  ).length;
+  const leftOut = goalsLeftOut(input);
+  const counted = (t: ReturnDispatch) =>
+    t.prNumber === null ? !leftOut.has(t.goal) : !input.excludedPrs.has(t.prNumber);
+  const returns = input.returnDispatches.filter((t) => t.kind === d.kind && inside(t.createdAt) && counted(t)).length;
   return { period: { misses, returns }, fromRetros };
 }
 

@@ -10,7 +10,6 @@ import { remedyOrigin } from '../remedies/remedies.js';
 import type { Store } from '../store/store.js';
 import type { LessonDraft } from '../types.js';
 import { RETRO_MISS_KIND } from '../retro/retro.js';
-import { goalsLeftOut } from './groups.js';
 import { lessonExcludedGoals, lessonExcludedPrs } from './lessonDesk.js';
 
 // → docs/spec/41-repo-lessons.md#did-it-work
@@ -50,7 +49,6 @@ export function readLessonInsights(
   const excludedGoals = lessonExcludedGoals(world, context.lessonLabel);
   const excludedPrs = lessonExcludedPrs(world, all, context.lessonLabel);
   const goalOfPr = prGoalIndex(store.graph.listWorkNodes());
-  const leftOut = goalsLeftOut({ excludedGoals, excludedPrs, goalOfPr });
   return buildLessonInsights({
     drafts,
     remedies: store.remedies.listRemediesSince(since),
@@ -60,17 +58,16 @@ export function readLessonInsights(
     excludedPrs,
     excludedGoals,
     reviewAreas: context.reviewAreas,
-    returnDispatches: [...returnDispatchesSince(store, since), ...retrospectivesSince(store, since, leftOut)],
+    returnDispatches: [...returnDispatchesSince(store, since), ...retrospectivesSince(store, since)],
     now: context.now,
   });
 }
 
-/** Each retrospective written is a review return without a pull request, those the grouping leaves out excepted. */
-function retrospectivesSince(store: Store, since: string, excludedGoals: ReadonlySet<string>): ReturnDispatch[] {
+/** Each retrospective written is a review return on its goal, without a pull request. */
+function retrospectivesSince(store: Store, since: string): ReturnDispatch[] {
   return store.scratch
     .listRetrospectivesWrittenSince(since)
-    .filter((r) => !excludedGoals.has(r.originRef))
-    .map((r) => ({ prNumber: null, kind: RETRO_MISS_KIND, createdAt: r.createdAt }));
+    .map((r) => ({ prNumber: null, goal: r.originRef, kind: RETRO_MISS_KIND, createdAt: r.createdAt }));
 }
 
 function returnDispatchesSince(store: Store, since: string): ReturnDispatch[] {

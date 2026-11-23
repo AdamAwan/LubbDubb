@@ -345,10 +345,11 @@ test('did it work reads a review lesson’s retro misses, labelled, with retrosp
     threadLabels: [],
     goalOfPr: new Map(),
     excludedPrs: new Set([90]),
-    excludedGoals: new Set(),
+    excludedGoals: new Set(['issue:99']),
     reviewAreas: [],
-    returnDispatches: [-10, -5, -3, 5, 6].map((days) => ({
+    returnDispatches: [-10, -5, -3, -1, 5, 6].map((days) => ({
       prNumber: null,
+      goal: days === -1 ? 'issue:99' : `issue:${days}`,
       kind: 'review' as const,
       createdAt: at(days),
     })),

@@ -3,7 +3,16 @@ import { issueOriginNumber } from '../issueOrigins.js';
 import { sentence } from '../primitives.js';
 import { CAUSE_COPY, GUARD_COPY } from '../remedies/remedies.js';
 import { FIX_COPY } from './fixes.js';
-import type { LessonDraft, LessonFix, LessonMiss, Remedy, RemedyKind, RetroMiss } from '../types.js';
+import type {
+  LessonDraft,
+  LessonFix,
+  LessonMiss,
+  Remedy,
+  RemedyKind,
+  RemedyLessonMiss,
+  RetroLessonMiss,
+  RetroMiss,
+} from '../types.js';
 import { lessonMarker } from './lessonOrigin.js';
 
 // → docs/spec/41-repo-lessons.md#the-outcome
@@ -88,12 +97,9 @@ function section(title: string, lines: readonly string[]): string {
   return lines.length === 0 ? '' : [title, '', ...lines].join('\n');
 }
 
-type RemedyMiss = Extract<LessonMiss, { source: 'remedy' }>;
-type RetroMissCited = Extract<LessonMiss, { source: 'retro' }>;
-
-function bySource(misses: readonly LessonMiss[]): { remedies: RemedyMiss[]; retros: RetroMissCited[] } {
-  const remedies: RemedyMiss[] = [];
-  const retros: RetroMissCited[] = [];
+function bySource(misses: readonly LessonMiss[]): { remedies: RemedyLessonMiss[]; retros: RetroLessonMiss[] } {
+  const remedies: RemedyLessonMiss[] = [];
+  const retros: RetroLessonMiss[] = [];
   for (const miss of misses) {
     if (miss.source === 'remedy') remedies.push(miss);
     else retros.push(miss);
