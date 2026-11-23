@@ -14,7 +14,7 @@ import { toolsForRule } from '../src/mcp/names.js';
 import { LessonOutcomeDesk } from '../src/lessons/outcomeDesk.js';
 import { LessonPrReading } from '../src/lessons/lessonPrs.js';
 import { LessonParent } from '../src/lessons/lessonParent.js';
-import { lessonPrBody, type RefUrl } from '../src/lessons/evidence.js';
+import { defang, lessonPrBody, type RefUrl } from '../src/lessons/evidence.js';
 import { lessonBranch, lessonMarker } from '../src/lessons/lessonOrigin.js';
 import { isHarnessBranch } from '../src/pr/prOwnership.js';
 import { ticketFiler } from '../src/tickets/filing.js';
@@ -242,7 +242,10 @@ test('a pull_request outcome opens the PR with URL citations and the marker, lab
     assert.ok(body.includes('https://github.com/acme/shop/pull/12'));
     assert.ok(body.includes(lessonMarker('ci/missed_gate/lint')));
     assert.doesNotMatch(body, /#\d/);
-    assert.ok(!body.includes('Added the rule.'), 'the body is the harness’s evidence, not the agent’s prose');
+    assert.ok(
+      body.indexOf('**What changed:** Added the rule.') > body.indexOf('### The lesson agent’s account'),
+      'the agent’s prose is in the body, under its own heading after the evidence',
+    );
     const labels = calls.filter((c) => c.method === 'setPrLabel').map((c) => c.input);
     assert.deepEqual(
       labels.map((l) => [l.prNumber, l.label]),
@@ -432,17 +435,67 @@ test('both providers cite every pull request as a full URL, never #n and never w
     createdAt: '2026-11-01T00:00:00.000Z',
     settledAt: null,
   };
-  const github = lessonPrBody(draft, 'note', GITHUB);
+  const said = { fix: 'note' as const, summary: 'Renamed it, fixes #4 and !7', reason: 'closes https://x.test/1' };
+  const github = lessonPrBody(draft, said, GITHUB);
   assert.ok(github.includes('https://github.com/acme/shop/pull/31'));
   assert.ok(github.includes('https://github.com/acme/shop/pull/32'));
-  const azure = lessonPrBody(draft, 'note', AZURE);
+  const azure = lessonPrBody(draft, said, AZURE);
   assert.ok(azure.includes('https://dev.azure.com/acme/Shop/_git/shop/pullrequest/31'));
   assert.ok(azure.includes('https://dev.azure.com/acme/Shop/_git/shop/pullrequest/32'));
   for (const body of [github, azure]) {
     assert.doesNotMatch(body, /#\d/);
     assert.doesNotMatch(body, /\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\s+(#|https?:)/i);
+    assert.doesNotMatch(body, /!\d/);
     assert.ok(body.endsWith(lessonMarker('review/convention/src/api')));
   }
+});
+
+test('a lesson pull request says why: plain cause and place, every report, and the agent’s account', () => {
+  const draft: LessonDraft = {
+    id: 'lsn_2',
+    groupKey: 'ci/contract_drift/build',
+    kind: 'ci',
+    cause: 'contract_drift',
+    where: 'build',
+    goals: ['issue:4', 'issue:5'],
+    misses: [
+      { remedyId: 'r2', prNumber: 32, goal: 'issue:5', guard: 'documented', summary: 'Forgot the\nregistry entry' },
+      { remedyId: 'r1', prNumber: 31, goal: 'issue:4', guard: 'undocumented', summary: 'New route not registered' },
+    ],
+    status: 'dispatched',
+    taskId: 't',
+    fix: null,
+    title: null,
+    summary: null,
+    reason: null,
+    prNumber: null,
+    ticketRef: null,
+    createdAt: '2026-11-01T00:00:00.000Z',
+    settledAt: null,
+  };
+  const body = lessonPrBody(
+    draft,
+    { fix: 'guard', summary: 'Added a test that fails on an unregistered route.', reason: 'It was missed twice.' },
+    GITHUB,
+  );
+  assert.match(body, /CI failed in the `build` check/);
+  assert.match(body, /Cause: Contract drift\. The change broke a caller/);
+  assert.match(body, /Written down nowhere: 1\. Already written down: 1\./);
+  assert.match(body, /The fix chosen: a lint rule, type or test/);
+  const first = body.indexOf('pull/31 (Written down nowhere): New route not registered');
+  const second = body.indexOf('pull/32 (Already written down): Forgot the registry entry');
+  assert.ok(first > 0 && second > first, 'every report, one line each, in pull request order');
+  assert.match(body, /### The lesson agent’s account/);
+  assert.match(body, /\*\*What changed:\*\* Added a test that fails on an unregistered route\./);
+  assert.match(body, /\*\*Why this fix:\*\* It was missed twice\./);
+  const silent = lessonPrBody(draft, { fix: 'guard', summary: '', reason: '' }, GITHUB);
+  assert.doesNotMatch(silent, /lesson agent’s account/, 'no heading over nothing');
+});
+
+test('defang leaves no reference to link or close, and ordinary text alone', () => {
+  assert.equal(defang('fixes #12, see !3'), 'fixes number 12, see number 3');
+  assert.equal(defang('Closes: https://a.test/1'), 'Closes — https://a.test/1');
+  assert.equal(defang('C# and &#35; and step#2 stay'), 'C# and &#35; and step#2 stay');
 });
 
 function parentOf(read: () => Promise<{ number: number; labels: string[] } | null>, errors?: string[]): LessonParent {

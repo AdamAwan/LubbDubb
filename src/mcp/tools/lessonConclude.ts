@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LESSON_FIXES } from '../../lessons/fixes.js';
+import { FIX_COPY, LESSON_FIXES } from '../../lessons/fixes.js';
 import { toolError } from '../protocol.js';
 import { toolSchema } from '../schema.js';
 import type { ToolFactory } from './context.js';
@@ -18,9 +18,7 @@ const LessonConcludeArgs = z.object({
     .enum(LESSON_FIXES)
     .optional()
     .describe(
-      'Required unless the outcome is nothing. code: the cause removed in the code. guard: a lint rule, type or ' +
-        'test that fails when the miss is made. contradiction: code and docs disagreed and one was corrected. ' +
-        'note: a line in the nearest CLAUDE.md or document.',
+      'Required unless the outcome is nothing. ' + LESSON_FIXES.map((fix) => `${fix}: ${FIX_COPY[fix]}.`).join(' '),
     ),
   title: z
     .string()
@@ -33,14 +31,15 @@ const LessonConcludeArgs = z.object({
     .string()
     .optional()
     .describe(
-      'What you changed, or for a ticket the change you would make and where. Kept on the lesson record and, for a ' +
-        'ticket, written into it; a pull request’s description is the evidence the harness renders, not this.',
+      'What you changed, or for a ticket the change you would make and where. Shown to the reviewer in the pull ' +
+        'request or ticket, so write it for someone who has not read the evidence. Kept on the lesson record.',
     ),
   reason: z
     .string()
     .optional()
     .describe(
-      'Why this fix and not the ones above it in the order — and for nothing, why nothing. Required for nothing.',
+      'Why this fix and not the ones above it in the order — and for nothing, why nothing. Shown to the reviewer ' +
+        'in the pull request. Required for nothing.',
     ),
 });
 
@@ -48,7 +47,8 @@ export const lessonConclude: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Finish a repo lesson. Call it once, at the end: it is the only way a lesson pull request is opened, a lesson ' +
     'ticket filed, or a lesson settled with nothing. There is no body argument: the harness writes the pull ' +
-    'request’s description from the evidence you were handed, links every pull request behind it, labels it as a ' +
+    'request’s description from the evidence you were handed and your summary and reason, links every pull ' +
+    'request behind it, labels it as a ' +
     'lesson and watches it. For a pull request, commit and push your branch first — the harness never pushes.',
   inputSchema: toolSchema(LessonConcludeArgs),
   handler: async (args) => {

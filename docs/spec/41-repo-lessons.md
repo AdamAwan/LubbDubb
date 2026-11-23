@@ -37,6 +37,7 @@ adopted or published.
 - **A lesson edits the repository the fleet works on, never LubbDubb's own.** The lessons are about the code the agents were fixing, and that is where its engineers read. → [§](#where-a-lesson-lands) · _no test_
 - **Nothing about a lesson is injected into any agent's prompt, and nothing from the pool is dispatched on.** Blanket context is skimmed rather than read, and other fleets' prose is not knowledge about this repository. → [§](#why-the-claim-store-failed) · _no test_
 - **A lesson pull request cites the pull requests behind it as full URLs, never `#n` and never with a closing keyword.** On Azure DevOps `#n` links an existing goal's work item, which would adopt the lesson into that goal. The one work item it is linked to is its own Task, filed for it alone. → [§](#the-outcome) · `test/repoLessons.test.ts`
+- **A lesson pull request says why it exists: what happened and where in plain words, the cause's label and blurb, every miss's report one line each under its pull request, and the drafting agent's `summary` and `reason` under their own heading.** A reviewer handed a cause slug and a list of links has to open every one to learn what the fleet kept getting wrong, and the ruling is a merge, so a lesson they cannot follow is a lesson declined or waved through unread. → [§](#the-body) · `test/repoLessons.test.ts`
 - **With `lessons.parentWorkItem` set, a lesson pull request is linked to exactly one Task filed for it under that parent, with the lesson label and never the watch label; unset, none is filed. The parent is refused when it does not exist or carries the watch label, and a failure to file or link costs only the link.** Azure DevOps branch policy can demand a linked work item, and one filed for the lesson alone adopts it into no goal; the watch label would dispatch for it. → [§](#the-lessons-own-work-item) · `test/repoLessons.test.ts`
 - **A pull request on a `lesson/` branch is never parented to an issue in the work graph, whatever work item is linked to it.** A lesson that rooted in a goal would hand its merge to that goal's landings and be counted as that goal's work. → [§](#the-lessons-own-work-item) · `test/repoLessons.test.ts`
 - **One draft is out at a time, at most two lesson pull requests are open, and a group with an open pull request carrying its marker is not drafted.** Each open lesson is watched, so its CI and review are fleet work nobody has asked for yet. → [§](#the-record-and-the-desk) · `test/repoLessons.test.ts`
@@ -279,10 +280,9 @@ marker, no label and no evidence, and nothing would ever settle it.
 
 `lesson_conclude` takes `outcome` (`pull_request`, `ticket` or `nothing`), `fix` (`code`, `guard`,
 `contradiction` or `note` — `LESSON_FIXES` in `src/lessons/fixes.ts`, the one list the tool's enum,
-the `LessonFix` type and the pool reader derive from), `title`, `summary` and `reason`. There is **no `body` argument**: the pull
-request's body is the harness-rendered evidence, so the description rule
-([07](07-pull-requests.md)) holds unchanged — the agent's `summary` and `reason` are kept on the draft
-and are not in it. The side effects sit behind the `LessonOutcomeDesk` seam
+the `LessonFix` type and the pool reader derive from), `title`, `summary` and `reason`. There is **no `body` argument**: the harness
+renders the pull request's body ([the body](#the-body)), and the agent's `summary` and `reason` are kept
+on the draft and placed in it under their own heading. The side effects sit behind the `LessonOutcomeDesk` seam
 (`src/lessons/outcomeDesk.ts`), and the bodies are rendered by `src/lessons/evidence.ts`. The tool is
 fenced to the draft's own task — the origin must parse and the draft's `task_id` must be the caller's
 — and answers once: a draft no longer `dispatched` refuses a second call. A title naming a pull
@@ -304,6 +304,32 @@ request or work item (`#n`, `!n`) is refused, for the citation rule below.
   `searchKey: lesson:<groupKey>`, carried on `IssueCreateInput` rather than in a prompt — under
   `lessons.parentWorkItem` when it is set; settles the draft `filed`.
 - **`nothing`** — settles the draft `nothing` with the reason.
+
+### The body
+
+The body is what the operator rules on, so it has to say **why the lesson exists** without the
+reviewer opening every pull request behind it. `lessonPrBody` (`src/lessons/evidence.ts`) writes, in
+order:
+
+1. **What happened, in plain words** — `CI failed in the \`lint\` check`, or `review asked for changes
+   in code under \`src/api/\``; the cause as its Causes-tab label and blurb (`CAUSE_COPY`,
+[18](18-observability.md#causes-why-the-fleet-came-back)) rather than its slug; the
+guard tallies; and the fix chosen, in words (`FIX_COPY`, `src/lessons/fixes.ts`, which the tool's
+description of `fix` also reads).
+2. **What the agents reported** — every miss, one line each, sorted by pull request: its link, its
+   guard's Causes-tab label (`GUARD_COPY`), and its remedy summary folded onto one line. These are the reports the drafting
+   agent was briefed with; before they were in the body only their links were, and a link says nothing
+   until it is opened.
+3. **The lesson agent's account** — `summary` as _What changed_ and `reason` as _Why this fix_, under
+   a heading that says an agent wrote them. Omitted when both are empty: no heading over nothing.
+4. The marker.
+
+The ticket and the Task bodies carry the same evidence (1 and 2) after the agent's summary.
+
+All agent-written text — the remedy summaries and the drafting agent's — is passed through `defang`
+first: a `#n` or `!n` becomes `number n`, and a closing keyword directly before a URL loses its
+reach (`fixes — https://…`). The harness cites pull requests itself; agent prose that named one would
+otherwise break the rule below.
 
 The body cites every pull request behind the group as a **full URL**, from the connector's ref URL —
 never `#n` and never with a closing keyword. On Azure DevOps `#n` links an existing goal's work item,
