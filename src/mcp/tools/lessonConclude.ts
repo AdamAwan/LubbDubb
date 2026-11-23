@@ -33,14 +33,15 @@ const LessonConcludeArgs = z.object({
     .string()
     .optional()
     .describe(
-      'What you changed, or for a ticket the change you would make and where. Kept on the lesson record and, for a ' +
-        'ticket, written into it; a pull request’s description is the evidence the harness renders, not this.',
+      'What you changed, or for a ticket the change you would make and where. Shown to the reviewer in the pull ' +
+        'request or ticket, so write it for someone who has not read the evidence. Kept on the lesson record.',
     ),
   reason: z
     .string()
     .optional()
     .describe(
-      'Why this fix and not the ones above it in the order — and for nothing, why nothing. Required for nothing.',
+      'Why this fix and not the ones above it in the order — and for nothing, why nothing. Shown to the reviewer ' +
+        'in the pull request. Required for nothing.',
     ),
 });
 
@@ -48,7 +49,8 @@ export const lessonConclude: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Finish a repo lesson. Call it once, at the end: it is the only way a lesson pull request is opened, a lesson ' +
     'ticket filed, or a lesson settled with nothing. There is no body argument: the harness writes the pull ' +
-    'request’s description from the evidence you were handed, links every pull request behind it, labels it as a ' +
+    'request’s description from the evidence you were handed and your summary and reason, links every pull ' +
+    'request behind it, labels it as a ' +
     'lesson and watches it. For a pull request, commit and push your branch first — the harness never pushes.',
   inputSchema: toolSchema(LessonConcludeArgs),
   handler: async (args) => {

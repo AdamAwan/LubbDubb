@@ -144,7 +144,7 @@ export class LessonOutcomeDesk {
           branch,
           base: this.deps.defaultBranch,
           title: input.title,
-          body: lessonPrBody(draft, input.fix, this.deps.refUrl),
+          body: lessonPrBody(draft, input, this.deps.refUrl),
         })
       ).ref;
     } catch (err) {
