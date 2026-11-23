@@ -246,8 +246,10 @@ test('retro_submit refuses a miss off the fixed lists, and a rewrite replaces th
       [dated[0]],
       'a rewrite never re-dates a miss',
     );
+    const first = system.store.scratch.firstMissesAt();
     await submit(system, 1, []);
     assert.equal(system.store.scratch.listRetroMissesSince('1970-01-01').length, 0, 'replaced whole');
+    assert.equal(system.store.scratch.firstMissesAt(), first, 'a rewrite never moves when misses began');
     system.store.scratch.recordRetrospective({
       originRef: 'issue:9',
       summary: 's',

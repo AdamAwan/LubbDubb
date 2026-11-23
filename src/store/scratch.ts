@@ -115,7 +115,7 @@ export class ScratchStore {
          ON CONFLICT(origin_ref) DO UPDATE SET
            summary=excluded.summary, document=excluded.document, agent_id=excluded.agent_id,
            task_id=excluded.task_id, updated_at=excluded.updated_at,
-           misses_at=COALESCE(excluded.misses_at, misses_at)`,
+           misses_at=COALESCE(misses_at, excluded.misses_at)`,
       )
       .run({ ...row, missesAt });
   }

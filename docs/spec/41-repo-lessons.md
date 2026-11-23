@@ -168,8 +168,7 @@ The rows carry the writing agent and task of the call that last gave them. `vali
 (`src/retro/retro.ts`) reuses `validateRemedy` over review's vocabulary and adds the path: it refuses
 anything off the lists, a path that is absolute, a directory, climbs out with `..` or holds a backtick,
 a glob character or a control character, and a sixth miss — in a retrospective's words, not a review
-round's. The retrospective's `misses_at` records the last call that
-answered the question, null on one written before misses existed. The ask is a note **appended** below the rendered `issue-retro` template
+round's. The retrospective's `misses_at` records the first call that answered the question — never moved by a rewrite, since the reading dates its start from it, null on one written before misses existed. The ask is a note **appended** below the rendered `issue-retro` template
 (`retroMissAskNote`), never a placeholder — an override that never learned of misses still asks — and
 the `PromptId` is unchanged.
 

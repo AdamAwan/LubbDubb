@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS retrospectives (
   task_id    TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  misses_at  TEXT                     -- last retro_submit that answered misses; null never did
+  misses_at  TEXT                     -- first retro_submit that answered misses; null never did
 );
 
 -- A retrospective's structured misses → docs/spec/41-repo-lessons.md#retrospective-misses

@@ -171,7 +171,7 @@ function ReviewMethodNote(): JSX.Element {
 
 export function causeRows(remedies: RemedyInsights | null): (string | number | null)[][] {
   if (remedies === null) return [];
-  if (remedies.accounts === 0) return retroMissRows(remedies).slice(1);
+  if (remedies.accounts === 0) return retroMissRows(remedies);
   return [
     ['Causes'],
     ['Accounts filed', remedies.accounts],
@@ -207,7 +207,7 @@ export function causeRows(remedies: RemedyInsights | null): (string | number | n
     ['When (ISO)', 'Kind', 'PR', 'Cause', 'Guard', 'Checks', 'Summary'],
     ...remedies.recent.map((r) => [r.at, r.kind, r.prNumber, r.cause, r.guard, r.checks.join(' '), r.summary]),
     [`The ${remedies.recent.length} most recent of ${remedies.accounts} accounts.`],
-    ...retroMissRows(remedies),
+    ...(remedies.retros.misses > 0 ? [[], ...retroMissRows(remedies)] : []),
   ];
 }
 

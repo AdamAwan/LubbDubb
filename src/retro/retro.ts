@@ -91,8 +91,11 @@ export function validateRetroMisses(
 function validateRetroMiss(
   args: Record<string, unknown>,
 ): { ok: true; miss: RetroMissInput } | { ok: false; error: string } {
-  const remedy = validateRemedy(RETRO_MISS_KIND, args);
-  if (!remedy.ok) return { ok: false, error: retroWording(remedy.error) };
+  const remedy = validateRemedy(RETRO_MISS_KIND, args, {
+    subject: '',
+    summaryAsk: 'what was missed, and what it cost the goal',
+  });
+  if (!remedy.ok) return remedy;
   const path = retroMissPath(args.path);
   if (path === null) {
     return {
@@ -103,13 +106,6 @@ function validateRetroMiss(
     };
   }
   return { ok: true, miss: { ...remedy.submission, path } };
-}
-
-/** A remedy's refusal, reworded for a miss a goal paid for rather than a review round that came back. */
-function retroWording(error: string): string {
-  if (error.startsWith('summary is required'))
-    return 'summary is required — one line: what was missed, and what it cost the goal';
-  return error.replace(/ for a review round$/, '');
 }
 
 function retroMissPath(raw: unknown): string | null {

@@ -75,7 +75,6 @@ export function retroMissRows(remedies: RemedyInsights): (string | number | null
   const { retros } = remedies;
   if (retros.misses === 0) return [];
   return [
-    [],
     ['From retrospectives'],
     ['Misses recorded', retros.misses],
     ['Goals', retros.goals],
