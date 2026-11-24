@@ -1,6 +1,7 @@
 import type {
   AppErrorGroup,
   AppErrorLink,
+  AppErrorOnGoal,
   AppErrorRead,
   AppErrorReadStatus,
   AppErrorSpike,
@@ -25,6 +26,8 @@ export interface AppErrorGroupView extends AppErrorGroup {
   triage: AppErrorTriage | null;
   /** The goals an operator said this error is not from ("Not it"); neither its link nor a guess counts on them. */
   dismissed: string[];
+  /** The goal this error is put on, with any "Not it" applied; null when none. → docs/spec/39-app-errors.md#on-the-goal */
+  onGoal: AppErrorOnGoal | null;
 }
 
 export interface AppErrorEnvironmentView {

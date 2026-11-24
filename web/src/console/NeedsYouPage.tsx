@@ -134,16 +134,14 @@ function SentLine({ item, view }: { item: ListenItem; view: CockpitView }): JSX.
 
 const NO_PROBLEMS: readonly ErrorProblem[] = [];
 
+/** A family, with the app errors that stand in "Something's wrong". */
+type ProblemGroup = AskFamilyGroup<ErrorProblem>;
+
 /** The app errors that stand in "Something's wrong", read off the Errors tab's one poll. → docs/spec/44-needs-you.md#somethings-wrong */
 function AsksWithErrors({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const { reading, reload } = useAppErrors();
   const problems = useMemo(() => (reading === null ? NO_PROBLEMS : needsYouProblems(reading)), [reading]);
   return <AsksColumn view={view} actions={actions} problems={problems} onPressed={reload} />;
-}
-
-/** How many a family holds, the app errors standing in "Something's wrong" included. */
-function familySize(group: AskFamilyGroup, problems: readonly ErrorProblem[]): number {
-  return group.rows.length + (group.family === 'wrong' ? problems.length : 0);
 }
 
 function AsksColumn({
@@ -158,11 +156,11 @@ function AsksColumn({
   onPressed: () => void;
 }): JSX.Element {
   const asks = view.needsYou;
-  const groups = askFamilies(asks, problems.length);
+  const groups = askFamilies(asks, { wrong: problems });
   const total = asks.length + problems.length;
   const [pressed, setPressed] = useState<ReadonlyMap<AskFamily, boolean>>(() => new Map());
   const [expanded, setExpanded] = useState<string | null>(null);
-  const isOpen = (group: AskFamilyGroup): boolean =>
+  const isOpen = (group: ProblemGroup): boolean =>
     pressed.get(group.family) ?? (group.family === 'wrong' || group.rows.some((row) => row.urgency !== 'later'));
   const setOpen = (family: AskFamily, open: boolean): void => setPressed((was) => new Map(was).set(family, open));
   const jump = (family: AskFamily): void => {
@@ -174,7 +172,7 @@ function AsksColumn({
       <h3>
         From the orchestrator <i className="cn-n">{total}</i>
       </h3>
-      {groups.length > 1 && <FamilyChips groups={groups} problems={problems} onJump={jump} />}
+      {groups.length > 1 && <FamilyChips groups={groups} onJump={jump} />}
       <div className="cn-ny-scroll">
         {total === 0 ? (
           <p className="cn-empty">Nothing is waiting on you.</p>
@@ -183,7 +181,6 @@ function AsksColumn({
             <AskFamilyFold
               key={group.family}
               group={group}
-              problems={group.family === 'wrong' ? problems : NO_PROBLEMS}
               onPressed={onPressed}
               open={isOpen(group)}
               onToggle={(open) => setOpen(group.family, open)}
@@ -203,11 +200,9 @@ function AsksColumn({
 // → docs/spec/44-needs-you.md#from-the-orchestrator
 function FamilyChips({
   groups,
-  problems,
   onJump,
 }: {
-  groups: readonly AskFamilyGroup[];
-  problems: readonly ErrorProblem[];
+  groups: readonly ProblemGroup[];
   onJump: (family: AskFamily) => void;
 }): JSX.Element {
   return (
@@ -221,7 +216,7 @@ function FamilyChips({
           title={`Go to ${FAMILY_LABEL[group.family]}${group.now > 0 ? ` — ${String(group.now)} to answer now` : ''}`}
         >
           <span>{FAMILY_LABEL[group.family]}</span>
-          <b>{familySize(group, problems)}</b>
+          <b>{group.size}</b>
           {group.now > 0 && <i className="cn-ny-nowdot" aria-label={`${String(group.now)} to answer now`} />}
         </BareButton>
       ))}
@@ -231,7 +226,6 @@ function FamilyChips({
 
 function AskFamilyFold({
   group,
-  problems,
   onPressed,
   open,
   onToggle,
@@ -240,8 +234,7 @@ function AskFamilyFold({
   view,
   actions,
 }: {
-  group: AskFamilyGroup;
-  problems: readonly ErrorProblem[];
+  group: ProblemGroup;
   onPressed: () => void;
   open: boolean;
   onToggle: (open: boolean) => void;
@@ -260,7 +253,7 @@ function AskFamilyFold({
           hint={false}
           label={
             <>
-              {FAMILY_LABEL[group.family]} <i className="cn-n">{familySize(group, problems)}</i>
+              {FAMILY_LABEL[group.family]} <i className="cn-n">{group.size}</i>
             </>
           }
         />
@@ -284,7 +277,7 @@ function AskFamilyFold({
               </div>
             );
           })}
-          {problems.map((p) => (
+          {group.extra.map((p) => (
             <div key={`${p.environment}/${p.key}`} className="cn-ny-item">
               <ErrorProblemItem problem={p} compact={false} onPressed={onPressed} actions={actions} />
             </div>

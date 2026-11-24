@@ -123,7 +123,6 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
     checked({ body: DismissBody }, ({ body, reply }) => {
       const outcome = dismissAppErrorGoal(store.appErrorTickets, body.key, body.goalRef, new Date().toISOString());
       if (!outcome.ok) return reply.code(outcome.status).send({ error: outcome.error });
-      hub.broadcast({ type: 'world:changed' });
       return { ok: true, goalRef: outcome.goalRef } satisfies AppErrorDismissPayload;
     }),
   );

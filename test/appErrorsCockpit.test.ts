@@ -21,6 +21,13 @@ import {
   type ErrorLink as AppErrorLink,
 } from '../web/src/view/appErrors.js';
 import { decode } from './support/html.js';
+import { withGoals } from '../src/appErrors/onGoal.js';
+import type { AppErrorDismissal } from '../src/types.js';
+
+/** The payload as the server ships it: each group's goal folded on, "Not it"s applied. */
+function problemsOf(data: AppErrorsPayload, goalRef: string | null = null, dismissed: AppErrorDismissal[] = []) {
+  return errorProblems(withGoals(data, dismissed), goalRef);
+}
 
 (globalThis as { React?: typeof React }).React = React;
 
@@ -55,6 +62,7 @@ function group(environment: string, over: Partial<AppErrorGroupView> = {}): AppE
     tracker: null,
     triage: null,
     dismissed: [],
+    onGoal: null,
     ...over,
   };
 }
@@ -274,7 +282,7 @@ test('a group the evidence could not pin draws why, the goals it tied, and never
   assert.match(out, /#42/);
   assert.match(out, /#7/);
   assert.match(out, /candidates: 3/);
-  assert.deepEqual(errorProblems(data, 'issue:42'), [], 'a tie is not counted on either goal');
+  assert.deepEqual(problemsOf(data, 'issue:42'), [], 'a tie is not counted on either goal');
 });
 
 test('a window that could not be decided says so, and its candidates are unknown', () => {
@@ -369,12 +377,12 @@ test('with nothing declared the page says how to declare it', () => {
 
 test('the goal counts the moved groups linked to it, and not a hint', () => {
   const data = payload();
-  const onGoal = errorProblems(data, 'issue:42');
+  const onGoal = problemsOf(data, 'issue:42');
   assert.deepEqual(
     onGoal.map((p) => [p.environment, p.basis, p.how]),
     [['liveEu', 'linked', ['frame-match']]],
   );
-  assert.deepEqual(errorProblems(data, 'issue:7'), []);
+  assert.deepEqual(problemsOf(data, 'issue:7'), []);
   const link = (over: Partial<AppErrorLink>): AppErrorLink => ({
     goalRef: 'issue:42',
     how: [],
@@ -388,7 +396,7 @@ test('the goal counts the moved groups linked to it, and not a hint', () => {
   assert.equal(countsOnGoal(link({ how: ['frame-match'] })), true);
   assert.equal(countsOnGoal(link({ goalRef: null, tied: ['issue:42', 'issue:7'] })), false, 'no goal, nothing counted');
   data.environments[0]!.groups[0]!.state = 'steady';
-  assert.deepEqual(errorProblems(data, 'issue:42'), []);
+  assert.deepEqual(problemsOf(data, 'issue:42'), []);
 });
 
 function triaged(confidence: 'low' | 'medium' | 'high'): AppErrorGroupView['triage'] {
@@ -408,9 +416,9 @@ test('a guess counts on the goal it names only where no link counts the error el
   const data = payload();
   const g = data.environments[0]!.groups[0]!;
   g.triage = triaged('high');
-  assert.deepEqual(errorProblems(data, 'issue:7'), [], 'the deterministic link on #42 wins');
+  assert.deepEqual(problemsOf(data, 'issue:7'), [], 'the deterministic link on #42 wins');
   g.link = null;
-  const [guess] = errorProblems(data, 'issue:7');
+  const [guess] = problemsOf(data, 'issue:7');
   assert.equal(guess?.basis, 'guess');
   assert.equal(guess?.confidence, 'high');
 });
@@ -419,32 +427,31 @@ test('"Not it" takes the error off that goal, and a guess may then stand', () =>
   const data = payload();
   const g = data.environments[0]!.groups[0]!;
   g.triage = triaged('medium');
-  g.dismissed = ['issue:42'];
-  assert.deepEqual(errorProblems(data, 'issue:42'), []);
-  assert.equal(errorProblems(data, 'issue:7')[0]?.basis, 'guess');
-  g.dismissed = ['issue:42', 'issue:7'];
-  assert.deepEqual(errorProblems(data), []);
+  const not = (goalRef: string): AppErrorDismissal => ({ key: g.key, goalRef, at: '2026-10-20T11:00:00.000Z' });
+  assert.deepEqual(problemsOf(data, 'issue:42', [not('issue:42')]), []);
+  assert.equal(problemsOf(data, 'issue:7', [not('issue:42')])[0]?.basis, 'guess');
+  assert.deepEqual(problemsOf(data, null, [not('issue:42'), not('issue:7')]), []);
 });
 
 test('Needs you asks about unhandled problems, never a low guess, once per key', () => {
   const data = payload();
   const g = data.environments[0]!.groups[0]!;
   g.tracker = { status: 'none', ticketRef: null, note: null };
-  assert.equal(needsYouProblems(data).length, 1);
+  assert.equal(needsYouProblems(withGoals(data, [])).length, 1);
   g.tracker = { status: 'open', ticketRef: 'issue:77', note: null };
-  assert.equal(needsYouProblems(data).length, 0, 'a bug is open: handled');
+  assert.equal(needsYouProblems(withGoals(data, [])).length, 0, 'a bug is open: handled');
   g.tracker = null;
   g.link = null;
   g.triage = triaged('low');
-  assert.equal(needsYouProblems(data).length, 0, 'a low guess stays on the Errors tab');
+  assert.equal(needsYouProblems(withGoals(data, [])).length, 0, 'a low guess stays on the Errors tab');
   g.triage = triaged('medium');
-  assert.equal(needsYouProblems(data).length, 1);
+  assert.equal(needsYouProblems(withGoals(data, [])).length, 1);
 });
 
 test('a problem offers what its tracker search answers; a guess is filed by confirming it', () => {
   const data = payload();
   const g = data.environments[0]!.groups[0]!;
-  const presses = (): string[] => problemPresses(errorProblems(data)[0]!);
+  const presses = (): string[] => problemPresses(problemsOf(data)[0]!);
   assert.deepEqual(presses(), ['not-it'], 'never searched: nothing to file against yet');
   g.tracker = { status: 'none', ticketRef: null, note: null };
   assert.deepEqual(presses(), ['file', 'not-it']);
@@ -468,7 +475,7 @@ test('the goal strip says how many and where, shrinks once handled, and draws no
     html(
       createElement(ProblemStrip, {
         watches: [],
-        problems: errorProblems(data, 'issue:42'),
+        problems: problemsOf(data, 'issue:42'),
         onPressed: () => undefined,
         actions: noActions,
       }),

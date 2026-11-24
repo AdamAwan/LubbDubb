@@ -1531,7 +1531,7 @@ for a search that failed (unless `unsearched: true`) or a tracker that refused t
 ### `POST /api/app-errors/dismiss`
 
 **Not it** ([39](39-app-errors.md#not-it)). Takes `{key, goalRef}` — an `err:` key and an `issue:<n>`
-goal, or a 400 — stores that the error is not the goal's, broadcasts `world:changed` and answers
+goal, or a 400 — stores that the error is not the goal's and answers
 `AppErrorDismissPayload` (`{ok, goalRef}`). It searches and files nothing, so it needs no tracker.
 Never a `WorldEvent`.
 

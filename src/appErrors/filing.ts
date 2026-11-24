@@ -39,8 +39,8 @@ export async function fileAppErrorBug(deps: AppErrorFilingDeps, request: FileReq
   const group = findGroup(await deps.current(), request.environment, request.fingerprint);
   if (group === null)
     return { ok: false, status: 404, error: `no error group ${request.fingerprint} is held on ${request.environment}` };
-  const relation = request.confirmGuess ? guessRelation(group) : linkRelation(group);
-  if (relation === null)
+  const related = relation(group, request.confirmGuess);
+  if (related === null)
     return { ok: false, status: 409, error: `the triage agent named no goal for ${group.key} that is not ruled out` };
   if (!deps.tracker.claim(group.key)) return { ok: false, status: 409, error: `${group.key} is already being filed` };
   try {
@@ -58,7 +58,7 @@ export async function fileAppErrorBug(deps: AppErrorFilingDeps, request: FileReq
       body: deps.prompts.render('app-error-ticket-body', bodyVars(group)),
       bug: true,
       labels: request.investigate ? investigateLabels(deps.watch.labelPrefix) : [],
-      ...relation,
+      ...related,
       searchKey: group.key,
     });
     deps.tracker.record({
@@ -143,24 +143,16 @@ function investigateLabels(prefix: string): string[] {
 }
 
 /**
- * A link made by a route hint alone is a reason to look, not a claim the work caused the error; nor is a
- * link to a goal the operator said is not it.
+ * What a bug is related to: the goal the error is put on by its link — a hint alone or a "Not it" goal
+ * is not a claim the goal caused it — or, once the operator confirms it, by the triage agent's guess.
+ * Null when a confirmation has no guess to confirm.
  */
-function linkRelation(group: AppErrorGroupView): { relatedTo?: number } {
-  const link = group.link;
-  if (link === null || !link.how.some((how) => how !== 'route-hint')) return {};
-  if (link.goalRef !== null && group.dismissed.includes(link.goalRef)) return {};
-  const story = issueOriginNumber('root', link.goalRef);
+function relation(group: AppErrorGroupView, confirmGuess: boolean): { relatedTo?: number } | null {
+  const on = group.onGoal;
+  if (confirmGuess && on?.basis !== 'guess') return null;
+  if (on === null || on.basis !== (confirmGuess ? 'guess' : 'linked')) return {};
+  const story = issueOriginNumber('root', on.goalRef);
   return story === null ? {} : { relatedTo: story };
-}
-
-/** The triage agent's goal, once the operator has said yes to it; null when there is no such guess to confirm. */
-function guessRelation(group: AppErrorGroupView): { relatedTo: number } | null {
-  const triage = group.triage;
-  if (triage?.verdict !== 'caused-by' || triage.goalRef === null || group.dismissed.includes(triage.goalRef))
-    return null;
-  const story = issueOriginNumber('root', triage.goalRef);
-  return story === null ? null : { relatedTo: story };
 }
 
 /**

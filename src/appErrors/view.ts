@@ -68,6 +68,7 @@ export function appErrorsView(input: AppErrorsViewInput): AppErrorsPayload {
           tracker: null,
           triage: null,
           dismissed: [],
+          onGoal: null,
         };
       })
       .sort(byState);

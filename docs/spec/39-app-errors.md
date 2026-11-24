@@ -627,7 +627,7 @@ flood the tracker.
 **Not it** (`POST /api/app-errors/dismiss`, `{key, goalRef}`) is the operator saying the error under
 `key` was not caused by that goal. It is stored in `app_error_dismissals` by key — so it holds on
 every environment the error is seen on and across every later read — and folded onto each group as
-`dismissed` (`withDismissals`, `src/appErrors/tracker.ts`). It changes no link and no verdict: the
+`dismissed` (`withGoals`, `src/appErrors/onGoal.ts`). It changes no link and no verdict: the
 deterministic link is still computed and drawn on the Errors tab as it was. What it changes is what
 counts — a dismissed goal is counted on nothing ([on the goal](#on-the-goal)), asked about in nothing
 ([44](44-needs-you.md#somethings-wrong)) and related to by no bug. With the link dismissed, a triage
@@ -915,6 +915,11 @@ linked for (`steady`, `gone`, ignored); otherwise always an object, even when no
 `dismissed: string[]` — the goals an operator said ["Not it"](#not-it) to for this group's key; empty
 for none.
 
+`onGoal: {goalRef, basis} | null` — the goal the group is [put on](#on-the-goal), `basis` `linked` or
+`guess`, with every "Not it" applied. Computed by the server last of the folds (`withGoals`), because
+it reads the link and the triage verdict; the presses and the cockpit both read it, so the rule is
+written once.
+
 `tracker: AppErrorTracker | null` — `status` (`none`, `open`, `closed`, `unknown`), the ticket that
 answers for the key, and a note, folded on from `app_error_tickets` by `withTrackers` on every read
 ([the search](#the-search)). Null where the key has never been searched — no tracker, or a group that
@@ -1013,7 +1018,7 @@ liveUs`), and an environment in no group is a band of one under its own name. Ea
 
 The goal header draws a **problem strip** (`web/src/console/goalProblems.tsx`,
 [17](17-cockpit.md#something-wrong-on-the-goal)) under its identity row, one row per moved error put on
-the goal (`errorProblems`, `web/src/view/appErrors.ts`), beside the goal's regressed watch checks
+the goal — the group's `onGoal`, drawn by `errorProblems` (`web/src/view/appErrors.ts`) — beside the goal's regressed watch checks
 ([29](29-post-deploy-watch.md#what-a-finding-does)). An error is put on a goal when any environment's
 group in `new`, `returned` or `spiking` links to it — **or the triage agent said it was `caused-by` that
 goal** and the deterministic link does not count the group on any goal. **A goal in the group's

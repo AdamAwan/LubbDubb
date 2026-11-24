@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+import { useMemo, type JSX } from 'react';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { CockpitView } from '../view/viewModel.js';
 import type { NeedRow } from '../view/needsYou.js';
@@ -9,6 +9,8 @@ import { Icon } from '../components/icons.js';
 import { Tag } from '../components/tag.js';
 import { useAppErrors } from '../components/useAppErrors.js';
 import { tabUsage } from '../cockpit/usage.js';
+import { familyOf } from '../view/askFamilies.js';
+import { plural } from '../view/plural.js';
 
 // → docs/spec/17-cockpit.md#something-wrong-on-the-goal, docs/spec/39-app-errors.md#on-the-goal
 
@@ -25,7 +27,7 @@ export function GoalProblems({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element | null {
-  const watches = view.needsYou.filter((row) => row.kind === 'watch' && row.goalRef === goalRef);
+  const watches = view.needsYou.filter((row) => familyOf(row.kind) === 'wrong' && row.goalRef === goalRef);
   return view.state.config.appErrors ? (
     <WithErrors goalRef={goalRef} watches={watches} actions={actions} />
   ) : (
@@ -43,8 +45,12 @@ function WithErrors({
   actions: CockpitActions;
 }): JSX.Element | null {
   const { reading, reload } = useAppErrors();
-  const problems = reading === null ? [] : errorProblems(reading, goalRef);
+  const problems = useMemo(() => (reading === null ? [] : errorProblems(reading, goalRef)), [reading, goalRef]);
   return <ProblemStrip watches={watches} problems={problems} onPressed={reload} actions={actions} />;
+}
+
+function problemsSaid(n: number, where: readonly string[]): string {
+  return `${plural(n, 'problem')}${where.length > 0 ? ` on ${where.join(', ')}` : ''}`;
 }
 
 /** @public the seam the strip is rendered through in `test/appErrorsCockpit.test.ts` */
@@ -68,10 +74,7 @@ export function ProblemStrip({
     return (
       <div className="cn-gprob cn-gprob-calm">
         <Icon name="check" size={14} />
-        <span>
-          {total} problem{total === 1 ? '' : 's'}
-          {where.length > 0 && ` on ${where.join(', ')}`}, all handled
-        </span>
+        <span>{problemsSaid(total, where)}, all handled</span>
       </div>
     );
   const guessesOnly = watches.length === 0 && open.every((p) => p.basis === 'guess');
@@ -79,10 +82,7 @@ export function ProblemStrip({
     <section className={`cn-gprob${guessesOnly ? ' cn-gprob-guess' : ''}`} aria-label="Something's wrong">
       <div className="cn-gprob-head">
         <Icon name="alert" size={14} />
-        <b>
-          {owed} problem{owed === 1 ? '' : 's'}
-          {where.length > 0 && ` on ${where.join(', ')}`} since this arrived
-        </b>
+        <b>{problemsSaid(owed, where)} since this arrived</b>
         {total > owed && <span className="cn-gprob-handled">· {total - owed} handled</span>}
         <BareButton usage={tabUsage('needs')} className="cn-gprob-open" onClick={() => actions.openTab('needs')}>
           Open in Needs you

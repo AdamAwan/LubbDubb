@@ -8,6 +8,7 @@ export type ErrorLink = NonNullable<AppErrorGroupView['link']>;
 type ErrorLinkHow = ErrorLink['how'][number];
 export type ErrorTracker = NonNullable<AppErrorGroupView['tracker']>;
 export type ErrorTriage = NonNullable<AppErrorGroupView['triage']>;
+type ErrorOnGoal = NonNullable<AppErrorGroupView['onGoal']>;
 export type ErrorReading = NonNullable<AppErrorEnvironmentView['reading']>;
 
 /** The three states that say something moved. The other two are folded away by default. */
@@ -198,7 +199,7 @@ export interface ErrorProblem {
   state: ErrorState;
   count: number;
   goalRef: string;
-  basis: 'linked' | 'guess';
+  basis: ErrorOnGoal['basis'];
   /** How the link was made; empty for a guess. */
   how: ErrorLinkHow[];
   confidence: ErrorTriage['confidence'];
@@ -206,21 +207,8 @@ export interface ErrorProblem {
   tracker: ErrorTracker | null;
 }
 
-/** Whether the deterministic link counts this group on some goal the operator has not ruled out. */
-function linkedGoal(g: AppErrorGroupView): string | null {
-  const link = g.link;
-  if (link?.goalRef == null || !countsOnGoal(link) || g.dismissed.includes(link.goalRef)) return null;
-  return link.goalRef;
-}
-
-/** The goal the triage agent named as the cause, unless the operator ruled it out. */
-function guessedGoal(g: AppErrorGroupView): string | null {
-  const t = g.triage;
-  if (t?.verdict !== 'caused-by' || t.goalRef === null || g.dismissed.includes(t.goalRef)) return null;
-  return t.goalRef;
-}
-
-function problemOf(env: AppErrorEnvironmentView, g: AppErrorGroupView, goal: string, guess: boolean): ErrorProblem {
+function problemOf(env: AppErrorEnvironmentView, g: AppErrorGroupView, on: ErrorOnGoal): ErrorProblem {
+  const guess = on.basis === 'guess' ? g.triage : null;
   return {
     key: g.key,
     fingerprint: g.fingerprint,
@@ -229,24 +217,21 @@ function problemOf(env: AppErrorEnvironmentView, g: AppErrorGroupView, goal: str
     title: g.title,
     state: g.state,
     count: g.count,
-    goalRef: goal,
-    basis: guess ? 'guess' : 'linked',
-    how: guess ? [] : (g.link?.how ?? []),
-    confidence: guess ? (g.triage?.confidence ?? null) : null,
-    reason: guess ? (g.triage?.reason ?? null) : null,
+    goalRef: on.goalRef,
+    basis: on.basis,
+    how: on.basis === 'linked' ? (g.link?.how ?? []) : [],
+    confidence: guess?.confidence ?? null,
+    reason: guess?.reason ?? null,
     tracker: g.tracker,
   };
 }
 
-/** Every moved group put on a goal, per environment; only `goalRef`'s when one is named. */
+/** Every moved group put on a goal (`onGoal`, the server's), per environment; only `goalRef`'s when one is named. */
 export function errorProblems(payload: AppErrorsPayload, goalRef: string | null = null): ErrorProblem[] {
   return payload.environments.flatMap((env) =>
-    env.groups.flatMap((g): ErrorProblem[] => {
-      if (!isMoved(g.state)) return [];
-      const linked = linkedGoal(g);
-      const goal = linked ?? guessedGoal(g);
-      if (goal === null || (goalRef !== null && goal !== goalRef)) return [];
-      return [problemOf(env, g, goal, linked === null)];
+    env.groups.flatMap((g) => {
+      const on = g.onGoal;
+      return on === null || (goalRef !== null && on.goalRef !== goalRef) ? [] : [problemOf(env, g, on)];
     }),
   );
 }

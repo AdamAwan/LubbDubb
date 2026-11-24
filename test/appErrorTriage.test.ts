@@ -58,6 +58,7 @@ function view(over: Partial<AppErrorGroupView> = {}): AppErrorGroupView {
     tracker: null,
     triage: null,
     dismissed: [],
+    onGoal: null,
     ...over,
   };
 }

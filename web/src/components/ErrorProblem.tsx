@@ -15,21 +15,14 @@ function problemBasis(p: ErrorProblem): string {
   return p.how.map((how) => HOW_SAID[how]).join(' + ');
 }
 
-const PRESS_LABEL: Record<ProblemPress, string> = {
-  file: 'File bug',
-  confirm: 'Yes, file bug',
-  reopen: 'Reopen',
-  'file-anyway': 'File bug anyway',
-  'not-it': 'Not it',
-};
-
-const PRESS_USAGE = {
-  file: 'app-error.create',
-  confirm: 'app-error.create',
-  reopen: 'app-error.undo',
-  'file-anyway': 'app-error.create',
-  'not-it': 'app-error.close',
-} as const satisfies Record<ProblemPress, string>;
+const PRESS: Record<ProblemPress, { label: string; usage: 'app-error.create' | 'app-error.undo' | 'app-error.close' }> =
+  {
+    file: { label: 'File bug', usage: 'app-error.create' },
+    confirm: { label: 'Yes, file bug', usage: 'app-error.create' },
+    reopen: { label: 'Reopen', usage: 'app-error.undo' },
+    'file-anyway': { label: 'File bug anyway', usage: 'app-error.create' },
+    'not-it': { label: 'Not it', usage: 'app-error.close' },
+  };
 
 async function press(p: ErrorProblem, which: ProblemPress): Promise<void> {
   if (which === 'not-it') await api.dismissAppErrorGoal(p.key, p.goalRef);
@@ -84,7 +77,7 @@ function ProblemPresses({ problem, onPressed }: { problem: ErrorProblem; onPress
       {problemPresses(problem).map((which) => (
         <AsyncButton
           key={which}
-          usage={PRESS_USAGE[which]}
+          usage={PRESS[which].usage}
           tone={which === 'file' || which === 'confirm' ? 'primary' : undefined}
           ghost={which === 'not-it'}
           size="small"
@@ -93,7 +86,7 @@ function ProblemPresses({ problem, onPressed }: { problem: ErrorProblem; onPress
             onPressed();
           }}
         >
-          {PRESS_LABEL[which]}
+          {PRESS[which].label}
         </AsyncButton>
       ))}
     </>
