@@ -145,8 +145,8 @@ function investigateLabels(prefix: string): string[] {
 /** → docs/spec/39-app-errors.md#the-presses */
 function relation(group: AppErrorGroupView, confirmGuess: boolean): { relatedTo?: number } | null {
   const on = group.onGoal;
-  if (confirmGuess && on === null) return null;
-  if (on === null || (on.basis === 'guess' && !confirmGuess)) return {};
+  if (on === null) return confirmGuess ? null : {};
+  if (on.basis === 'guess' && !confirmGuess) return {};
   const story = issueOriginNumber('root', on.goalRef);
   return story === null ? {} : { relatedTo: story };
 }

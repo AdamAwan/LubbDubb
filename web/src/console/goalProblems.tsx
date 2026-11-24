@@ -49,7 +49,8 @@ function WithErrors({
   return <ProblemStrip watches={watches} problems={problems} onPressed={reload} actions={actions} />;
 }
 
-function problemsSaid(n: number, where: readonly string[]): string {
+function problemsSaid(n: number, on: readonly ErrorProblem[]): string {
+  const where = [...new Set(on.map((p) => p.environment))];
   return `${plural(n, 'problem')}${where.length > 0 ? ` on ${where.join(', ')}` : ''}`;
 }
 
@@ -69,12 +70,11 @@ export function ProblemStrip({
   if (total === 0) return null;
   const open = problems.filter((p) => !problemHandled(p));
   const owed = watches.length + open.length;
-  const whereOf = (ps: readonly ErrorProblem[]): string[] => [...new Set(ps.map((p) => p.environment))];
   if (owed === 0)
     return (
       <div className="cn-gprob cn-gprob-calm">
         <Icon name="check" size={14} />
-        <span>{problemsSaid(total, whereOf(problems))}, all handled</span>
+        <span>{problemsSaid(total, problems)}, all handled</span>
       </div>
     );
   const guessesOnly = watches.length === 0 && open.every((p) => p.basis === 'guess');
@@ -82,7 +82,7 @@ export function ProblemStrip({
     <section className={`cn-gprob${guessesOnly ? ' cn-gprob-guess' : ''}`} aria-label="Something's wrong">
       <div className="cn-gprob-head">
         <Icon name="alert" size={14} />
-        <b>{problemsSaid(owed, whereOf(open))} since this arrived</b>
+        <b>{problemsSaid(owed, open)} since this arrived</b>
         {total > owed && <span className="cn-gprob-handled">· {total - owed} handled</span>}
         <BareButton usage={tabUsage('needs')} className="cn-gprob-open" onClick={() => actions.openTab('needs')}>
           Open in Needs you
