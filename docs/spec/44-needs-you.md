@@ -118,8 +118,9 @@ share a family, first in the column and open by default.
   agent's reason under _Is this goal the cause?_ — then where, the goal, and the presses
   ([39](39-app-errors.md#on-the-goal)): **File bug** or **Yes, file bug**, **Not it**, and
   **Open errors**. A filed bug or a Not it takes the card off on the poll that follows the press.
-- `askFamilies` keeps the family while only app errors stand in it (`extraWrong`), the column's and the
-  family's counts include them, and its chip counts them too.
+- `askFamilies` takes what stands in a family from outside the queue as `extras` and gives each group
+  its `extra` and `size`, so the family is kept while only app errors stand in it, and the column's,
+  the family's and the chip's counts include them.
 - Being off the queue, an app error is not an ask: `ask_next`, `attention_read`, the rail and the
   listen loop do not see it. The page and the goal strip are where it is answered.
 

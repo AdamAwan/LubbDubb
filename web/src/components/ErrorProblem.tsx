@@ -31,7 +31,7 @@ async function press(p: ErrorProblem, which: ProblemPress): Promise<void> {
     await api.fileAppErrorBug(p.environment, p.fingerprint, {
       investigate: false,
       unsearched: which === 'file-anyway',
-      confirmGuess: p.basis === 'guess',
+      confirmGuess: which === 'confirm',
     });
 }
 

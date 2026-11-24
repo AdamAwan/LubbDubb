@@ -4,10 +4,6 @@ import { MOVED } from './states.js';
 
 // → docs/spec/39-app-errors.md#on-the-goal, docs/spec/39-app-errors.md#not-it
 
-/**
- * The goal a moved group is put on: its link's, where the link counts (some `how` beyond a route hint) and
- * the operator has not said "Not it" to it; else the triage agent's `caused-by` goal, likewise not ruled out.
- */
 function onGoalOf(group: AppErrorGroupView, dismissed: readonly string[]): AppErrorOnGoal | null {
   if (!MOVED.has(group.state)) return null;
   const link = group.link;
@@ -19,10 +15,7 @@ function onGoalOf(group: AppErrorGroupView, dismissed: readonly string[]): AppEr
   return null;
 }
 
-/**
- * Folds each group's "Not it"s on, by key so they hold on every environment, and with them the goal the
- * group is put on. Last of the folds, since it reads the link and the triage verdict.
- */
+/** Each group's "Not it"s, by key, and the goal it is put on. */
 export function withGoals(payload: AppErrorsPayload, dismissals: readonly AppErrorDismissal[]): AppErrorsPayload {
   const byKey = new Map<string, string[]>();
   for (const d of dismissals) {

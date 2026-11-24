@@ -40,7 +40,7 @@ interface CurrentAppErrorsDeps {
 }
 
 /**
- * The one builder of the linked payload — the Errors tab's, every goal badge's, every press's and the
+ * The one builder of the linked payload — the Errors tab's, every goal strip's, every press's and the
  * triage desk's. A linked pass is reused while nothing it was built from has moved.
  */
 export class CurrentAppErrors {

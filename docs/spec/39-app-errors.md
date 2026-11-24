@@ -596,7 +596,9 @@ routes map what they answer through one `pressRoute`.
 - **Yes, file bug** (`file-bug` with `confirmGuess: true`) — File bug on an error only the
   [triage agent's guess](#agent-triage) put on a goal. It files exactly as File bug, and relates the bug
   to the goal the agent named: the operator's yes is what makes the guess a claim. With no `caused-by`
-  verdict naming a goal not ruled out, it refuses with a 409 and files nothing.
+  verdict naming a goal not ruled out, it refuses with a 409 and files nothing. If the error has meanwhile
+  been linked to a goal by evidence, it files related to that goal, as File bug would. Every other file
+  press on a guess — **File bug anyway** included — relates it to nothing.
 - **Investigate** (`POST /api/app-errors/file-bug` with `investigate: true`). Files exactly as File
   bug — or reuses the open one found — and puts on the **watch tag and the investigate label**
   ([38](38-bug-investigation.md#the-label)): at filing, as `labels` on the create; on a found ticket,

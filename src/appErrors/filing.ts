@@ -142,15 +142,11 @@ function investigateLabels(prefix: string): string[] {
   return [watchLabelFor(prefix), investigateLabelFor(prefix)].filter((label) => label !== '');
 }
 
-/**
- * What a bug is related to: the goal the error is put on by its link — a hint alone or a "Not it" goal
- * is not a claim the goal caused it — or, once the operator confirms it, by the triage agent's guess.
- * Null when a confirmation has no guess to confirm.
- */
+/** → docs/spec/39-app-errors.md#the-presses */
 function relation(group: AppErrorGroupView, confirmGuess: boolean): { relatedTo?: number } | null {
   const on = group.onGoal;
-  if (confirmGuess && on?.basis !== 'guess') return null;
-  if (on === null || on.basis !== (confirmGuess ? 'guess' : 'linked')) return {};
+  if (confirmGuess && on === null) return null;
+  if (on === null || (on.basis === 'guess' && !confirmGuess)) return {};
   const story = issueOriginNumber('root', on.goalRef);
   return story === null ? {} : { relatedTo: story };
 }
