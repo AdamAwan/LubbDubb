@@ -185,44 +185,107 @@ export function countsOnGoal(link: ErrorLink): boolean {
 }
 
 /**
- * What the goal card says about one environment: the moved groups linked to this goal there, and among
- * them the ones only the triage agent named it for — counted, but said as its guess.
+ * One moved error put on a goal: by the deterministic link, or — where nothing deterministic counts it on
+ * any goal — by the triage agent's guess. A goal the operator said "Not it" to is never the one.
+ * → docs/spec/39-app-errors.md#on-the-goal
  */
-export interface GoalErrorLine {
+export interface ErrorProblem {
+  key: string;
+  fingerprint: string;
   environment: string;
   band: string;
+  title: string;
+  state: ErrorState;
   count: number;
+  goalRef: string;
+  basis: 'linked' | 'guess';
+  /** How the link was made; empty for a guess. */
   how: ErrorLinkHow[];
-  guessed: number;
+  confidence: ErrorTriage['confidence'];
+  reason: string | null;
+  tracker: ErrorTracker | null;
 }
 
-/** Whether the deterministic link counts this group on some goal. */
-function countsOnAnyGoal(link: ErrorLink | null): boolean {
-  return link !== null && link.goalRef !== null && countsOnGoal(link);
+/** Whether the deterministic link counts this group on some goal the operator has not ruled out. */
+function linkedGoal(g: AppErrorGroupView): string | null {
+  const link = g.link;
+  if (link?.goalRef == null || !countsOnGoal(link) || g.dismissed.includes(link.goalRef)) return null;
+  return link.goalRef;
 }
 
-/** Whether the triage agent named this goal as the group's cause. */
-function triagedTo(triage: ErrorTriage | null, goalRef: string): boolean {
-  return triage?.verdict === 'caused-by' && triage.goalRef === goalRef;
+/** The goal the triage agent named as the cause, unless the operator ruled it out. */
+function guessedGoal(g: AppErrorGroupView): string | null {
+  const t = g.triage;
+  if (t?.verdict !== 'caused-by' || t.goalRef === null || g.dismissed.includes(t.goalRef)) return null;
+  return t.goalRef;
 }
 
-export function goalErrorLines(payload: AppErrorsPayload, goalRef: string): GoalErrorLine[] {
-  return payload.environments.flatMap((env) => {
-    const moved = env.groups.filter((g) => isMoved(g.state));
-    const linked = new Set(moved.filter((g) => g.link?.goalRef === goalRef && countsOnGoal(g.link)));
-    const guessed = moved.filter((g) => !countsOnAnyGoal(g.link) && triagedTo(g.triage, goalRef));
-    if (linked.size + guessed.length === 0) return [];
-    const how = [...new Set([...linked].flatMap((g) => g.link?.how ?? []))];
-    return [
-      {
-        environment: env.environment,
-        band: env.band,
-        count: linked.size + guessed.length,
-        how,
-        guessed: guessed.length,
-      },
-    ];
+function problemOf(env: AppErrorEnvironmentView, g: AppErrorGroupView, goal: string, guess: boolean): ErrorProblem {
+  return {
+    key: g.key,
+    fingerprint: g.fingerprint,
+    environment: env.environment,
+    band: env.band,
+    title: g.title,
+    state: g.state,
+    count: g.count,
+    goalRef: goal,
+    basis: guess ? 'guess' : 'linked',
+    how: guess ? [] : (g.link?.how ?? []),
+    confidence: guess ? (g.triage?.confidence ?? null) : null,
+    reason: guess ? (g.triage?.reason ?? null) : null,
+    tracker: g.tracker,
+  };
+}
+
+/** Every moved group put on a goal, per environment; only `goalRef`'s when one is named. */
+export function errorProblems(payload: AppErrorsPayload, goalRef: string | null = null): ErrorProblem[] {
+  return payload.environments.flatMap((env) =>
+    env.groups.flatMap((g): ErrorProblem[] => {
+      if (!isMoved(g.state)) return [];
+      const linked = linkedGoal(g);
+      const goal = linked ?? guessedGoal(g);
+      if (goal === null || (goalRef !== null && goal !== goalRef)) return [];
+      return [problemOf(env, g, goal, linked === null)];
+    }),
+  );
+}
+
+/** A bug is open for it: somebody has it, so it is drawn as handled and asks nothing. */
+export function problemHandled(p: ErrorProblem): boolean {
+  return p.tracker?.status === 'open';
+}
+
+/**
+ * What Needs you asks about: the unhandled ones, linked or guessed with at least medium confidence, one
+ * per error key — filing is per key, so a fault seen in two regions is one ask.
+ * → docs/spec/44-needs-you.md#somethings-wrong
+ */
+export function needsYouProblems(payload: AppErrorsPayload): ErrorProblem[] {
+  const seen = new Set<string>();
+  return errorProblems(payload).filter((p) => {
+    if (problemHandled(p) || (p.basis === 'guess' && p.confidence === 'low') || seen.has(p.key)) return false;
+    seen.add(p.key);
+    return true;
   });
+}
+
+/** What a problem offers, by what the tracker search found. `confirm` is File bug on a guess: yes, it is this goal's. */
+export type ProblemPress = 'file' | 'confirm' | 'reopen' | 'file-anyway' | 'not-it';
+
+export function problemPresses(p: ErrorProblem): ProblemPress[] {
+  switch (p.tracker?.status) {
+    case undefined:
+      return ['not-it'];
+    case 'open':
+      return [];
+    case 'closed':
+      return ['reopen', 'not-it'];
+    case 'unknown':
+      return ['file-anyway', 'not-it'];
+    case 'none':
+      return [p.basis === 'guess' ? 'confirm' : 'file', 'not-it'];
+  }
 }
 
 /** How the triage agent's verdict is said on a row. */

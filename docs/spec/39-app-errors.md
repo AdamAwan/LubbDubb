@@ -32,6 +32,7 @@ them. Two things are **not yet built**, and each section that names them says so
 - **The key is carried by the ticket as `searchKey` on `IssueCreateInput`, never by a prompt or a template token.** A bug filed without it is invisible to every other fleet, with nothing red. → [§](#the-key-on-the-ticket) · `test/appErrorTracker.test.ts`
 - **A failed tracker search is `unknown`, never `none`, and a press whose search fails does not file unless the operator says file anyway.** Filing over an unread lock may file a duplicate. → [§](#the-search) · `test/appErrorTracker.test.ts`
 - **A link made by a route hint alone relates a filed bug to nothing.** A relation on the tracker claims the goal caused the error; a hint is only a reason to look. → [§](#the-presses) · `test/appErrorTracker.test.ts`
+- **A triage guess relates a filed bug only when the operator confirms it (`confirmGuess`), and a "Not it" goal is related by nothing and counted by nothing.** A relation is a person's claim, never the agent's, and an operator who said no must not be asked again. → [§](#not-it) · `test/appErrorTracker.test.ts`
 - **No reading, group, link, tracker cache or triage verdict is a `WorldEvent` or a dispatch input.** `deliveryHold` expires a delivery verdict on any world event matching the goal, un-parking delivered goals. → [§](#what-it-is-not) · _no test_
 
 ## What it is not
@@ -204,7 +205,9 @@ and day counts are written in one transaction; the prune is a second, once per d
 
 A fourth, `app_error_tickets`, is the [tracker lock](#the-tracker-lock)'s cache, one row per key and
 owned by `AppErrorTicketStore` (`src/store/appErrorTickets.ts`) — its own module, because it is keyed
-on the key rather than on an environment and nothing about a read writes it. Three more —
+on the key rather than on an environment and nothing about a read writes it. The same module owns
+`app_error_dismissals`, one row per `(key, goal)` an operator said ["Not it"](#not-it) to — keyed on the
+key for the same reason, kept as long as the key's ticket row. Three more —
 `app_error_triage_runs`, `app_error_triages` and `app_error_detail_reads` — are
 [agent triage](#agent-triage)'s, owned by `AppErrorTriageStore` (`src/store/appErrorTriage.ts`).
 
@@ -568,7 +571,7 @@ table the route reads, and nothing under `src/dispatcher/` does.
 
 ### The presses
 
-All four are operator-pressed routes ([16](16-http-api.md)), each **searching again right before it
+The four tracker presses are operator-pressed routes ([16](16-http-api.md)), each **searching again right before it
 writes**, so the window in which two fleets can both file is seconds rather than a read interval. All
 refuse with a 409 when no tracker is configured, and record what they did in the cache before
 answering, so the row redraws without waiting for a search. Each is `src/appErrors/filing.ts`, and the
@@ -588,7 +591,12 @@ routes map what they answer through one `pressRoute`.
   ([in the cockpit](#in-the-cockpit)) — an operation that looks like a goal's area is a reason to look,
   and a relation on the tracker is a claim the goal caused the error.
   It carries **no watch tag**: filing is a record, and the operator watches it from the Tickets tab like
-  any ticket they want the fleet on.
+  any ticket they want the fleet on. A link to a goal the operator said ["Not it"](#not-it) to relates
+  the bug to nothing.
+- **Yes, file bug** (`file-bug` with `confirmGuess: true`) — File bug on an error only the
+  [triage agent's guess](#agent-triage) put on a goal. It files exactly as File bug, and relates the bug
+  to the goal the agent named: the operator's yes is what makes the guess a claim. With no `caused-by`
+  verdict naming a goal not ruled out, it refuses with a 409 and files nothing.
 - **Investigate** (`POST /api/app-errors/file-bug` with `investigate: true`). Files exactly as File
   bug — or reuses the open one found — and puts on the **watch tag and the investigate label**
   ([38](38-bug-investigation.md#the-label)): at filing, as `labels` on the create; on a found ticket,
@@ -613,6 +621,18 @@ create is a 502 with its reason, and recorded through `errors.record`.
 
 **Filing is always a click.** An automatic filer on a weekly live deploy of a week's changes would
 flood the tracker.
+
+### Not it
+
+**Not it** (`POST /api/app-errors/dismiss`, `{key, goalRef}`) is the operator saying the error under
+`key` was not caused by that goal. It is stored in `app_error_dismissals` by key — so it holds on
+every environment the error is seen on and across every later read — and folded onto each group as
+`dismissed` (`withDismissals`, `src/appErrors/tracker.ts`). It changes no link and no verdict: the
+deterministic link is still computed and drawn on the Errors tab as it was. What it changes is what
+counts — a dismissed goal is counted on nothing ([on the goal](#on-the-goal)), asked about in nothing
+([44](44-needs-you.md#somethings-wrong)) and related to by no bug. With the link dismissed, a triage
+guess naming another goal may then stand. A `goalRef` that is not `issue:<n>` is a 400. It searches
+nothing and files nothing, so it is not a tracker press and needs no tracker.
 
 ### Why there is no Watch press
 
@@ -796,8 +816,9 @@ A key outside the run is refused, naming the run's keys. A verdict is stored **p
 
 **Advice beside the link.** The deterministic `link` is still computed per request and never touched
 by a verdict; the triage is a separate `triage` field on the row, folded on afresh on every read
-(`withTriage`) like the tracker cache. No rule reads a verdict, no bug is filed or related from one, and
-Investigate's offer still reads the link alone. It **counts on the goal header**, marked as the agent's
+(`withTriage`) like the tracker cache. No rule reads a verdict, no bug is filed from one, a bug is
+related to its goal only once the operator presses [Yes, file bug](#the-presses), and Investigate's
+offer still reads the link alone. It **counts on the goal header**, marked as the agent's
 guess ([in the cockpit](#in-the-cockpit)), because a goal header that never mentions what the only
 reader of the code concluded is the silence the operator complained of.
 
@@ -890,6 +911,9 @@ linked for (`steady`, `gone`, ignored); otherwise always an object, even when no
 | `why`        | one sentence for a person — "OrderService.cs changed only by #412, of 11 goals in the deploy window 1a2b3c4..5d6e7f8." |
 | `candidates` | how many goals the window held; **null when the window could not be decided**, which is never the same as `0`          |
 | `tied`       | the goals the frames narrowed to and nothing separated, when that is why there is no goal; empty otherwise             |
+
+`dismissed: string[]` — the goals an operator said ["Not it"](#not-it) to for this group's key; empty
+for none.
 
 `tracker: AppErrorTracker | null` — `status` (`none`, `open`, `closed`, `unknown`), the ticket that
 answers for the key, and a note, folded on from `app_error_tickets` by `withTrackers` on every read
@@ -985,19 +1009,44 @@ liveUs`), and an environment in no group is a band of one under its own name. Ea
   link names no goal — no link at all, or a link whose `goalRef` is null (undecided, tied, or no
   evidence) — because a group whose link names a goal already says where to look.
 
-**On the goal**, the header's identity row carries _N new errors on test since this arrived_
-(`web/src/console/goalErrors.tsx`) when any environment's group in `new`, `returned` or `spiking` links
-to that goal — **or the triage agent said it was `caused-by` that goal** (`triagedTo`) and the
-deterministic link does not already count the group on a different goal (`countsElsewhere`), counted once
-and marked: _(2 the triage agent's guess)_, and on hover _N linked by frame match and M by the triage
-agent's guess_ — with how each link was made on hover; pressing it opens the Errors tab on that
-environment's band, with the show filter and search cleared so a filter left from an earlier visit
-cannot hide the errors it counted. It counts per environment rather than per band, so a fault seen in two regions is
-two there and one row on the tab. **A link made only by hint is not counted** (`countsOnGoal`): an
-operation that looks like the goal's area is a reason to look, not a claim the work caused the error,
-so a link whose every `how` is `route-hint` is left out (`countsOnGoal`: some `how` that is not
-`route-hint`). A link with `goalRef: null` carries no `how` and is counted on no goal — not on any of its `tied` goals either, since a tie is exactly the evidence not choosing. It fetches only where `CockpitConfig.appErrors` is
-true, so a deployment that reads no errors pays nothing on every goal page.
+### On the goal
+
+The goal header draws a **problem strip** (`web/src/console/goalProblems.tsx`,
+[17](17-cockpit.md#something-wrong-on-the-goal)) under its identity row, one row per moved error put on
+the goal (`errorProblems`, `web/src/view/appErrors.ts`), beside the goal's regressed watch checks
+([29](29-post-deploy-watch.md#what-a-finding-does)). An error is put on a goal when any environment's
+group in `new`, `returned` or `spiking` links to it — **or the triage agent said it was `caused-by` that
+goal** and the deterministic link does not count the group on any goal. **A goal in the group's
+`dismissed` is never the one**: a dismissed link counts nowhere, which is what lets a guess naming
+another goal stand. **A link made only by hint is not counted** (`countsOnGoal`: some `how` that is not
+`route-hint`): an operation that looks like the goal's area is a reason to look, not a claim the work
+caused the error. A link with `goalRef: null` carries no `how` and is counted on no goal — not on any of
+its `tied` goals either, since a tie is exactly the evidence not choosing. It counts per environment
+rather than per band, so a fault seen in two regions is two rows here and one row on the tab.
+
+Each row says first **how the error was put on the goal** — the link's `how` (_frame match_) in red, or
+_agent's guess · high_ in amber — because a stack trace and a guess are not the same evidence, then
+its title and count, and the presses its tracker search answers (`problemPresses`):
+
+| Found          | Linked                               | Guessed                       |
+| -------------- | ------------------------------------ | ----------------------------- |
+| `none`         | **File bug**, **Not it**             | **Yes, file bug**, **Not it** |
+| `open`         | _handled_, the bug, nothing to press | the same                      |
+| `closed`       | **Reopen**, **Not it**               | the same                      |
+| `unknown`      | **File bug anyway**, **Not it**      | the same                      |
+| never searched | **Not it**                           | the same                      |
+
+No Investigate: every row here names a goal, which is where to look ([the presses](#the-presses)). A
+guess carries the agent's reason under _Is this goal the cause?_. A row whose bug is open is
+**handled**: grey, naming the bug. Once every row is handled the strip shrinks to one grey line —
+_N problems on liveUk, all handled_ — and with nothing at all it draws nothing. A strip holding only
+guesses is amber and dashed rather than red. Errors are fetched only where `CockpitConfig.appErrors` is
+true, so a deployment that reads no errors pays nothing on every goal page; the watch rows are drawn
+regardless.
+
+The unhandled ones, linked or guessed at `medium` confidence or above, are also asked about in Needs
+you ([44](44-needs-you.md#somethings-wrong)); a `low` guess is drawn on the goal and the Errors tab
+only.
 
 ## Not yet built
 

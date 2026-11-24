@@ -33,6 +33,7 @@ import type {
   HandledPayload,
   AppErrorsPayload,
   AppErrorDetail,
+  AppErrorDismissPayload,
   AppErrorPressPayload,
   AppErrorSearchPayload,
   AppErrorTriagePressPayload,
@@ -197,8 +198,13 @@ export const api = {
     authFetch(`/api/app-errors/detail?${new URLSearchParams({ environment, fingerprint }).toString()}`).then((r) =>
       json<AppErrorDetail>(r),
     ),
-  fileAppErrorBug: (environment: string, fingerprint: string, opts: { investigate: boolean; unsearched: boolean }) =>
-    post<AppErrorPressPayload>('/api/app-errors/file-bug', { environment, fingerprint, ...opts }),
+  fileAppErrorBug: (
+    environment: string,
+    fingerprint: string,
+    opts: { investigate: boolean; unsearched: boolean; confirmGuess?: boolean },
+  ) => post<AppErrorPressPayload>('/api/app-errors/file-bug', { environment, fingerprint, ...opts }),
+  dismissAppErrorGoal: (key: string, goalRef: string) =>
+    post<AppErrorDismissPayload>('/api/app-errors/dismiss', { key, goalRef }),
   reopenAppErrorTicket: (key: string) => post<AppErrorPressPayload>('/api/app-errors/reopen', { key }),
   searchAppErrorKey: (key: string) => post<AppErrorSearchPayload>('/api/app-errors/search', { key }),
   triageAppError: (environment: string, fingerprint: string) =>

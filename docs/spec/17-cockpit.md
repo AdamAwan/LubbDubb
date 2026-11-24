@@ -2360,6 +2360,20 @@ forty-first pair cannot be written. The `--label-*` tokens are themeable like ev
 is also something an operator can move: they carry `kind: 'metric'`, the grammar for a decimal length
 or a bare weight, because `space`'s whole-number form would refuse the sheet's own `10.5px`.
 
+### Something wrong on the goal
+
+Under the identity row the header draws a **problem strip** (`GoalProblems`,
+`web/src/console/goalProblems.tsx`) when anything on an environment is not working as this goal said
+it would: its `watch` asks — declared checks that read regressed
+([29](29-post-deploy-watch.md#the-bench-row)), each with **Raise bug or settle**, which opens the ask
+— and the moved app errors put on it, each with its presses
+([39](39-app-errors.md#on-the-goal)). It is red, full width and names how many and where — _2 problems
+on liveUk since this arrived · 1 handled_ — with **Open in Needs you**, because a small chip between
+the title and the controls is what nobody saw. A strip of guesses only is amber and dashed; once every
+row is handled it shrinks to one grey line; with nothing, it draws nothing. It replaced the identity
+row's error badge. The same items stand in Needs you's **Something's wrong** family
+([44](44-needs-you.md#somethings-wrong)).
+
 ### The header's controls
 
 The run's state, what steers the work, and what happens somewhere other than this goal — **in three

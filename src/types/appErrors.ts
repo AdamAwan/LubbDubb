@@ -144,3 +144,10 @@ export interface AppErrorTicketSearch {
   detail: string | null;
   checkedAt: string;
 }
+
+/** An operator's "Not it": the error under `key` was not caused by `goalRef`. → docs/spec/39-app-errors.md#not-it */
+export interface AppErrorDismissal {
+  key: string;
+  goalRef: string;
+  at: string;
+}

@@ -1327,7 +1327,8 @@ import it, which is asserted structurally, so a watch **cannot** spend an agent 
 - **A `human_tasks` row** on the goal, naming the check, what it expected, what it read, why the
   check was declared and the query that read it ([13](13-jobs-and-tickets.md#human-tasks)). One row
   per watch that settled or is settling regressed, never one per reading.
-- **The goal page**, which draws every check on every environment whether or not anything is wrong.
+- **The goal page**, which draws every check on every environment whether or not anything is wrong,
+  and puts a regressed one on the header's problem strip ([17](17-cockpit.md#something-wrong-on-the-goal)).
 - **A bug**, through the filing job that already exists (`src/tickets/bugFiling.ts`), behind an operator's
   click. The reading rides as the operator's own report, so the fleet is handed the numbers rather
   than a paraphrase, and the bug is related back to the goal by `IssueCreateInput` rather than by a

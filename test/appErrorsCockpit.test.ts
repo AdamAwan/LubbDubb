@@ -11,7 +11,9 @@ import {
   bandRows,
   countsOnGoal,
   filteredRows,
-  goalErrorLines,
+  errorProblems,
+  needsYouProblems,
+  problemPresses,
   shownRows,
   sortedRows,
   stateCounts,
@@ -24,7 +26,7 @@ import { decode } from './support/html.js';
 
 const { AppErrorsView } = await import('../web/src/components/AppErrorsPage.js');
 const { DetailBody } = await import('../web/src/components/AppErrorDetail.js');
-const { GoalErrorBadge } = await import('../web/src/console/goalErrors.js');
+const { ProblemStrip } = await import('../web/src/console/goalProblems.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 
 const NOW = Date.parse('2026-10-20T12:00:00.000Z');
@@ -52,6 +54,7 @@ function group(environment: string, over: Partial<AppErrorGroupView> = {}): AppE
     link: null,
     tracker: null,
     triage: null,
+    dismissed: [],
     ...over,
   };
 }
@@ -271,7 +274,7 @@ test('a group the evidence could not pin draws why, the goals it tied, and never
   assert.match(out, /#42/);
   assert.match(out, /#7/);
   assert.match(out, /candidates: 3/);
-  assert.deepEqual(goalErrorLines(data, 'issue:42'), [], 'a tie is not counted on either goal');
+  assert.deepEqual(errorProblems(data, 'issue:42'), [], 'a tie is not counted on either goal');
 });
 
 test('a window that could not be decided says so, and its candidates are unknown', () => {
@@ -364,12 +367,14 @@ test('with nothing declared the page says how to declare it', () => {
   assert.match(out, /No environment declares an <code>errors<\/code> block/);
 });
 
-test('the goal card counts the moved groups linked to it, and not a hint', () => {
+test('the goal counts the moved groups linked to it, and not a hint', () => {
   const data = payload();
-  assert.deepEqual(goalErrorLines(data, 'issue:42'), [
-    { environment: 'liveEu', band: 'prod', count: 1, how: ['frame-match'], guessed: 0 },
-  ]);
-  assert.deepEqual(goalErrorLines(data, 'issue:7'), []);
+  const onGoal = errorProblems(data, 'issue:42');
+  assert.deepEqual(
+    onGoal.map((p) => [p.environment, p.basis, p.how]),
+    [['liveEu', 'linked', ['frame-match']]],
+  );
+  assert.deepEqual(errorProblems(data, 'issue:7'), []);
   const link = (over: Partial<AppErrorLink>): AppErrorLink => ({
     goalRef: 'issue:42',
     how: [],
@@ -383,15 +388,104 @@ test('the goal card counts the moved groups linked to it, and not a hint', () =>
   assert.equal(countsOnGoal(link({ how: ['frame-match'] })), true);
   assert.equal(countsOnGoal(link({ goalRef: null, tied: ['issue:42', 'issue:7'] })), false, 'no goal, nothing counted');
   data.environments[0]!.groups[0]!.state = 'steady';
-  assert.deepEqual(goalErrorLines(data, 'issue:42'), []);
+  assert.deepEqual(errorProblems(data, 'issue:42'), []);
 });
 
-test('the goal card badge says how many and where, and draws nothing for none', () => {
-  const lines = goalErrorLines(payload(), 'issue:42');
-  const out = html(createElement(GoalErrorBadge, { lines, actions: noActions }));
-  assert.match(out, /1 new error on liveEu since this arrived/);
-  assert.match(out, /linked by frame match/);
-  assert.equal(html(createElement(GoalErrorBadge, { lines: [], actions: noActions })), '');
+function triaged(confidence: 'low' | 'medium' | 'high'): AppErrorGroupView['triage'] {
+  return {
+    verdict: 'caused-by',
+    goalRef: 'issue:7',
+    confidence,
+    reason: '#7 made the mode optional.',
+    at: '2026-10-20T11:00:00.000Z',
+    queued: false,
+    detailReadAt: null,
+    detailQuery: null,
+  };
+}
+
+test('a guess counts on the goal it names only where no link counts the error elsewhere', () => {
+  const data = payload();
+  const g = data.environments[0]!.groups[0]!;
+  g.triage = triaged('high');
+  assert.deepEqual(errorProblems(data, 'issue:7'), [], 'the deterministic link on #42 wins');
+  g.link = null;
+  const [guess] = errorProblems(data, 'issue:7');
+  assert.equal(guess?.basis, 'guess');
+  assert.equal(guess?.confidence, 'high');
+});
+
+test('"Not it" takes the error off that goal, and a guess may then stand', () => {
+  const data = payload();
+  const g = data.environments[0]!.groups[0]!;
+  g.triage = triaged('medium');
+  g.dismissed = ['issue:42'];
+  assert.deepEqual(errorProblems(data, 'issue:42'), []);
+  assert.equal(errorProblems(data, 'issue:7')[0]?.basis, 'guess');
+  g.dismissed = ['issue:42', 'issue:7'];
+  assert.deepEqual(errorProblems(data), []);
+});
+
+test('Needs you asks about unhandled problems, never a low guess, once per key', () => {
+  const data = payload();
+  const g = data.environments[0]!.groups[0]!;
+  g.tracker = { status: 'none', ticketRef: null, note: null };
+  assert.equal(needsYouProblems(data).length, 1);
+  g.tracker = { status: 'open', ticketRef: 'issue:77', note: null };
+  assert.equal(needsYouProblems(data).length, 0, 'a bug is open: handled');
+  g.tracker = null;
+  g.link = null;
+  g.triage = triaged('low');
+  assert.equal(needsYouProblems(data).length, 0, 'a low guess stays on the Errors tab');
+  g.triage = triaged('medium');
+  assert.equal(needsYouProblems(data).length, 1);
+});
+
+test('a problem offers what its tracker search answers; a guess is filed by confirming it', () => {
+  const data = payload();
+  const g = data.environments[0]!.groups[0]!;
+  const presses = (): string[] => problemPresses(errorProblems(data)[0]!);
+  assert.deepEqual(presses(), ['not-it'], 'never searched: nothing to file against yet');
+  g.tracker = { status: 'none', ticketRef: null, note: null };
+  assert.deepEqual(presses(), ['file', 'not-it']);
+  g.tracker = { status: 'open', ticketRef: 'issue:77', note: null };
+  assert.deepEqual(presses(), []);
+  g.tracker = { status: 'closed', ticketRef: 'issue:77', note: null };
+  assert.deepEqual(presses(), ['reopen', 'not-it']);
+  g.tracker = { status: 'unknown', ticketRef: null, note: 'x' };
+  assert.deepEqual(presses(), ['file-anyway', 'not-it']);
+  g.tracker = { status: 'none', ticketRef: null, note: null };
+  g.link = null;
+  g.triage = triaged('high');
+  assert.deepEqual(presses(), ['confirm', 'not-it']);
+});
+
+test('the goal strip says how many and where, shrinks once handled, and draws nothing for none', () => {
+  const data = payload();
+  const g = data.environments[0]!.groups[0]!;
+  g.tracker = { status: 'none', ticketRef: null, note: null };
+  const strip = (): string =>
+    html(
+      createElement(ProblemStrip, {
+        watches: [],
+        problems: errorProblems(data, 'issue:42'),
+        onPressed: () => undefined,
+        actions: noActions,
+      }),
+    );
+  const out = strip();
+  assert.match(out, /1 problem on liveEu since this arrived/);
+  assert.match(out, /frame match/);
+  assert.match(out, />File bug</);
+  assert.match(out, />Not it</);
+  g.tracker = { status: 'open', ticketRef: 'issue:77', note: null };
+  const calm = strip();
+  assert.match(calm, /1 problem on liveEu, all handled/);
+  assert.doesNotMatch(calm, />File bug</);
+  assert.equal(
+    html(createElement(ProblemStrip, { watches: [], problems: [], onPressed: () => undefined, actions: noActions })),
+    '',
+  );
 });
 
 test('a row opens onto its message and stack, or its frames when no stack was reported', () => {

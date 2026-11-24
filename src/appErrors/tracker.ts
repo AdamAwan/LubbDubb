@@ -3,7 +3,13 @@ import { utcDay, withDeadline } from '../primitives.js';
 import { parseIssueOrigin } from '../issueOrigins.js';
 import type { ActionSink, IssueKeyHit, IssueKeySink } from '../sink/actionSink.js';
 import type { AppErrorTicketStore } from '../store/appErrorTickets.js';
-import type { AppErrorRead, AppErrorState, AppErrorTicketSearch, AppErrorTracker } from '../types.js';
+import type {
+  AppErrorDismissal,
+  AppErrorRead,
+  AppErrorState,
+  AppErrorTicketSearch,
+  AppErrorTracker,
+} from '../types.js';
 import type { AppErrorGroupView, AppErrorsPayload } from '../wire.js';
 import { groupId } from './link.js';
 import { MOVED } from './states.js';
@@ -66,6 +72,19 @@ export function withTrackers(payload: AppErrorsPayload, searches: readonly AppEr
     environments: payload.environments.map((env) => ({
       ...env,
       groups: env.groups.map((g) => ({ ...g, tracker: trackerOf(byKey.get(g.key), g.state) })),
+    })),
+  };
+}
+
+/** Folds each group's "Not it"s on, by key, so every environment the error is seen on reads them. */
+export function withDismissals(payload: AppErrorsPayload, dismissals: readonly AppErrorDismissal[]): AppErrorsPayload {
+  const byKey = new Map<string, string[]>();
+  for (const d of dismissals) byKey.set(d.key, [...(byKey.get(d.key) ?? []), d.goalRef]);
+  return {
+    ...payload,
+    environments: payload.environments.map((env) => ({
+      ...env,
+      groups: env.groups.map((g) => ({ ...g, dismissed: byKey.get(g.key) ?? [] })),
     })),
   };
 }

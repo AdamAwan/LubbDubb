@@ -1,11 +1,12 @@
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
-import { issueOriginNumber } from '../issueOrigins.js';
+import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { requestInvestigation, type IssueWatchContext } from '../issueWatch.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { TicketFiler } from '../tickets/filing.js';
 import type { AppErrorTicketSearch } from '../types.js';
 import { investigateLabelFor, watchLabelFor } from '../watchLabels.js';
 import type { AppErrorGroupView, AppErrorPressPayload, AppErrorsPayload } from '../wire.js';
+import type { AppErrorTicketStore } from '../store/appErrorTickets.js';
 import type { AppErrorTrackerDesk } from './tracker.js';
 
 // → docs/spec/39-app-errors.md#the-presses
@@ -29,6 +30,8 @@ interface FileRequest {
   investigate: boolean;
   /** The operator files knowing the search could not answer: the lock is off for this one press. */
   unsearched: boolean;
+  /** The operator confirms the triage agent's guess: the bug is related to the goal it named. */
+  confirmGuess: boolean;
 }
 
 export async function fileAppErrorBug(deps: AppErrorFilingDeps, request: FileRequest): Promise<PressOutcome> {
@@ -36,6 +39,9 @@ export async function fileAppErrorBug(deps: AppErrorFilingDeps, request: FileReq
   const group = findGroup(await deps.current(), request.environment, request.fingerprint);
   if (group === null)
     return { ok: false, status: 404, error: `no error group ${request.fingerprint} is held on ${request.environment}` };
+  const relation = request.confirmGuess ? guessRelation(group) : linkRelation(group);
+  if (relation === null)
+    return { ok: false, status: 409, error: `the triage agent named no goal for ${group.key} that is not ruled out` };
   if (!deps.tracker.claim(group.key)) return { ok: false, status: 409, error: `${group.key} is already being filed` };
   try {
     const found = await searchAgain(deps, group.key, request.unsearched);
@@ -52,7 +58,7 @@ export async function fileAppErrorBug(deps: AppErrorFilingDeps, request: FileReq
       body: deps.prompts.render('app-error-ticket-body', bodyVars(group)),
       bug: true,
       labels: request.investigate ? investigateLabels(deps.watch.labelPrefix) : [],
-      ...relatedTo(group),
+      ...relation,
       searchKey: group.key,
     });
     deps.tracker.record({
@@ -136,12 +142,42 @@ function investigateLabels(prefix: string): string[] {
   return [watchLabelFor(prefix), investigateLabelFor(prefix)].filter((label) => label !== '');
 }
 
-/** A link made by a route hint alone is a reason to look, not a claim the work caused the error. */
-function relatedTo(group: AppErrorGroupView): { relatedTo?: number } {
+/**
+ * A link made by a route hint alone is a reason to look, not a claim the work caused the error; nor is a
+ * link to a goal the operator said is not it.
+ */
+function linkRelation(group: AppErrorGroupView): { relatedTo?: number } {
   const link = group.link;
   if (link === null || !link.how.some((how) => how !== 'route-hint')) return {};
+  if (link.goalRef !== null && group.dismissed.includes(link.goalRef)) return {};
   const story = issueOriginNumber('root', link.goalRef);
   return story === null ? {} : { relatedTo: story };
+}
+
+/** The triage agent's goal, once the operator has said yes to it; null when there is no such guess to confirm. */
+function guessRelation(group: AppErrorGroupView): { relatedTo: number } | null {
+  const triage = group.triage;
+  if (triage?.verdict !== 'caused-by' || triage.goalRef === null || group.dismissed.includes(triage.goalRef))
+    return null;
+  const story = issueOriginNumber('root', triage.goalRef);
+  return story === null ? null : { relatedTo: story };
+}
+
+/**
+ * The operator's "Not it": the error is not this goal's. Stored by key, so it holds on every environment
+ * and every later read. → docs/spec/39-app-errors.md#not-it
+ */
+export function dismissAppErrorGoal(
+  store: Pick<AppErrorTicketStore, 'dismiss'>,
+  key: string,
+  goalRef: string,
+  at: string,
+): { ok: true; goalRef: string } | { ok: false; status: 400; error: string } {
+  const story = issueOriginNumber('root', goalRef);
+  if (story === null) return { ok: false, status: 400, error: `${goalRef} is not a goal (issue:<n>)` };
+  const ref = issueOriginRef('root', story);
+  store.dismiss(key, ref, at);
+  return { ok: true, goalRef: ref };
 }
 
 function findGroup(payload: AppErrorsPayload, environment: string, fingerprint: string): AppErrorGroupView | null {

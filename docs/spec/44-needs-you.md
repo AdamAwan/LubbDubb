@@ -78,9 +78,11 @@ screen. With none out it says
 
 The ask queue (`asks` on the snapshot, [17](17-cockpit.md#the-queue-rail--needs-you)) **grouped by
 what kind of thing it asks for**, not by urgency. `askFamilies` (`web/src/view/askFamilies.ts`) maps
-every kind to one of five families, in this order: **Questions** (an agent's question, open questions,
+every kind to one of six families, in this order: **Something's wrong** (a watch check that read
+regressed, and — from outside the queue — app errors put on a goal; [below](#somethings-wrong)),
+**Questions** (an agent's question, open questions,
 a permission, a profile, a reply draft), **Decisions** (a plan, a merge, findings, intake, placement, a
-check plan, assignments, bot PRs), **Work to do** (bench work, close-outs, checks to run, watches),
+check plan, assignments, bot PRs), **Work to do** (bench work, close-outs, checks to run, taking a watch reading, unseen stories),
 **Descriptions** (pull request descriptions to write or fix), and **Fleet and setup** (config,
 recovery, refusals, stalls, limits, runway, upgrades). The map is total over the kinds, so a new kind
 fails the typecheck until it is given a family. Inside a family the queue's own order is kept —
@@ -93,7 +95,33 @@ all the questions, then all the decisions. Under the column's heading a row of *
 every family with its count, and a red dot where any of it is `now`, so the families below the first
 are in view however long the first is; pressing a chip opens that family and scrolls to it. The row is
 drawn only when there is more than one family. Each family is a fold; it opens on its own unless every ask
-in it holds nothing (`urgency: 'later'`), and that default follows the asks as they change; only a fold the operator pressed is remembered. The fold is per-visit state, not a `Place` field.
+in it holds nothing (`urgency: 'later'`) — **Something's wrong** always opens on its own, since a watch
+ask is `later` and the family exists to be seen — and that default follows the asks as they change; only a fold the operator pressed is remembered. The fold is per-visit state, not a `Place` field.
+
+### Something's wrong
+
+A declared watch check that read regressed ([29](29-post-deploy-watch.md#the-bench-row)) and an app
+error put on a goal ([39](39-app-errors.md#on-the-goal)) are the same thing to the operator — _something
+on an environment is not working as it should, and it is probably this work_ — and both were hidden:
+the watch among the chores of Work to do, the error behind a small badge on the goal header. So they
+share a family, first in the column and open by default.
+
+- **Watch findings** are the queue's own `watch` asks, drawn as every ask is, with **Raise a bug** and
+  **It's fine** in their body.
+- **App errors are not in the queue.** The linked payload is too heavy for the snapshot
+  ([39](39-app-errors.md#where-it-is-computed)), so the page reads the Errors tab's one poll
+  (`useAppErrors`) — only where `CockpitConfig.appErrors` is true — and draws `needsYouProblems`
+  (`web/src/view/appErrors.ts`) in the family after the watch asks: the moved errors put on a goal with
+  no bug open, linked or guessed at `medium` confidence or above, **one per key** since filing is per
+  key. A `low` guess stays on the goal and the Errors tab. Each card says first how the error was put
+  on the goal — the link's `how` in red, or _agent's guess · high_ in amber and dashed, with the
+  agent's reason under _Is this goal the cause?_ — then where, the goal, and the presses
+  ([39](39-app-errors.md#on-the-goal)): **File bug** or **Yes, file bug**, **Not it**, and
+  **Open errors**. A filed bug or a Not it takes the card off on the poll that follows the press.
+- `askFamilies` keeps the family while only app errors stand in it (`extraWrong`), the column's and the
+  family's counts include them, and its chip counts them too.
+- Being off the queue, an app error is not an ask: `ask_next`, `attention_read`, the rail and the
+  listen loop do not see it. The page and the goal strip are where it is answered.
 
 Each row is the rail's row with room for its reason on the card rather than in a tooltip, and carries
 two controls: its kind's verb (`KIND_VERB`, which opens the ask where it is answered, as the rail's row

@@ -4,7 +4,7 @@ import type { EnvironmentReading, GoalLanding } from '../types.js';
 import type { AppErrorsPayload } from '../wire.js';
 import { appErrorProject } from './key.js';
 import type { AppErrorLinker } from './linker.js';
-import { withTrackers } from './tracker.js';
+import { withDismissals, withTrackers } from './tracker.js';
 import { withTriage } from './triage.js';
 import { appErrorsView } from './view.js';
 
@@ -78,7 +78,10 @@ export class CurrentAppErrors {
       answered = await linker.link(linked, { landings, readings, nodes, now });
       this.held = answered ? { key, builtAt: now, payload: linked } : null;
     }
-    const tracked = withTrackers(linked, store.appErrorTickets.listSearches());
+    const tracked = withDismissals(
+      withTrackers(linked, store.appErrorTickets.listSearches()),
+      store.appErrorTickets.listDismissals(),
+    );
     const payload = withTriage(tracked, {
       triages: store.appErrorTriage.listTriages(),
       reads: store.appErrorTriage.listDetailReads(),

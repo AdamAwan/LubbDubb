@@ -23,6 +23,8 @@ export interface AppErrorGroupView extends AppErrorGroup {
   tracker: AppErrorTracker | null;
   /** The triage agent's word on this episode, kept apart from the deterministic `link`. */
   triage: AppErrorTriage | null;
+  /** The goals an operator said this error is not from ("Not it"); neither its link nor a guess counts on them. */
+  dismissed: string[];
 }
 
 export interface AppErrorEnvironmentView {
@@ -75,4 +77,10 @@ export interface AppErrorTriagePressPayload {
 export interface AppErrorSearchPayload {
   ok: true;
   search: AppErrorTicketSearch;
+}
+
+/** What a "Not it" stored: the goal the error is no longer counted on, as the harness spells it. */
+export interface AppErrorDismissPayload {
+  ok: true;
+  goalRef: string;
 }
