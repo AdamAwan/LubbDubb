@@ -150,6 +150,8 @@ test('the briefing carries each environmentâ€™s query and link, and each groupâ€
     link: null,
     tracker: null,
     triage: null,
+    dismissed: [],
+    onGoal: null,
   } satisfies AppErrorGroupView;
   const brief = triageBriefing([{ group, anchor: group.firstSeen, candidates: [] }], {
     readings: [

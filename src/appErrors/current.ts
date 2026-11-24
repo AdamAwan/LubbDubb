@@ -4,6 +4,7 @@ import type { EnvironmentReading, GoalLanding } from '../types.js';
 import type { AppErrorsPayload } from '../wire.js';
 import { appErrorProject } from './key.js';
 import type { AppErrorLinker } from './linker.js';
+import { withGoals } from './onGoal.js';
 import { withTrackers } from './tracker.js';
 import { withTriage } from './triage.js';
 import { appErrorsView } from './view.js';
@@ -39,7 +40,7 @@ interface CurrentAppErrorsDeps {
 }
 
 /**
- * The one builder of the linked payload — the Errors tab's, every goal badge's, every press's and the
+ * The one builder of the linked payload — the Errors tab's, every goal strip's, every press's and the
  * triage desk's. A linked pass is reused while nothing it was built from has moved.
  */
 export class CurrentAppErrors {
@@ -79,11 +80,12 @@ export class CurrentAppErrors {
       this.held = answered ? { key, builtAt: now, payload: linked } : null;
     }
     const tracked = withTrackers(linked, store.appErrorTickets.listSearches());
-    const payload = withTriage(tracked, {
+    const triaged = withTriage(tracked, {
       triages: store.appErrorTriage.listTriages(),
       reads: store.appErrorTriage.listDetailReads(),
       open: store.appErrorTriage.openRunNow(),
     });
+    const payload = withGoals(triaged, store.appErrorTickets.listDismissals());
     return { payload, answered };
   }
 

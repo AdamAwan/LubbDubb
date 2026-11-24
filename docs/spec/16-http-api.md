@@ -1514,8 +1514,10 @@ Errors tab fetches it when a row's fold is opened; the poll above carries only `
 ### `POST /api/app-errors/file-bug`, `/reopen`, `/search`
 
 The Errors tab's tracker presses ([39](39-app-errors.md#the-presses)). `file-bug` takes
-`{environment, fingerprint, investigate?, unsearched?}` — `investigate: true` is the row's Investigate,
+`{environment, fingerprint, investigate?, unsearched?, confirmGuess?}` — `investigate: true` is the row's Investigate,
 which files exactly as File bug and also asks for an investigation; there is no separate route for it.
+`confirmGuess: true` is **Yes, file bug**: the bug is related to the goal the triage agent named, and
+with no such guess the press is a 409 ([39](39-app-errors.md#the-presses)).
 `reopen` and `search` take `{key}` (an `err:` key, or a 400). Each searches the tracker for the key
 again before it writes; an open ticket found is answered with `reused: true` rather than filed twice.
 `file-bug` and `reopen` answer `AppErrorPressPayload` (`{ok, ticketRef, reused, investigation}`) through
@@ -1525,6 +1527,13 @@ Refusals: **409** with no tracker configured, a tracker that cannot search or re
 reopen, or a press already running for the key; **404** for a group the store does not hold; **502**
 for a search that failed (unless `unsearched: true`) or a tracker that refused the write. Never a
 `WorldEvent`.
+
+### `POST /api/app-errors/dismiss`
+
+**Not it** ([39](39-app-errors.md#not-it)). Takes `{key, goalRef}` — an `err:` key and an `issue:<n>`
+goal, or a 400 — stores that the error is not the goal's and answers
+`AppErrorDismissPayload` (`{ok, goalRef}`). It searches and files nothing, so it needs no tracker.
+Never a `WorldEvent`.
 
 ### `POST /api/app-errors/triage`
 

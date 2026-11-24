@@ -12,4 +12,13 @@ CREATE TABLE IF NOT EXISTS app_error_tickets (
   detail     TEXT,
   checked_at TEXT NOT NULL
 );
+
+-- An operator's "Not it": this error was not caused by this goal
+-- (docs/spec/39-app-errors.md#not-it). Read by no rule.
+CREATE TABLE IF NOT EXISTS app_error_dismissals (
+  error_key    TEXT NOT NULL,
+  goal_ref     TEXT NOT NULL,
+  dismissed_at TEXT NOT NULL,
+  PRIMARY KEY (error_key, goal_ref)
+);
 `;

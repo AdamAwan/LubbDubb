@@ -144,3 +144,16 @@ export interface AppErrorTicketSearch {
   detail: string | null;
   checkedAt: string;
 }
+
+/** The goal a moved error is put on, and whether by its link or only by the triage agent's guess. */
+export interface AppErrorOnGoal {
+  goalRef: string;
+  basis: 'linked' | 'guess';
+}
+
+/** An operator's "Not it": the error under `key` was not caused by `goalRef`. → docs/spec/39-app-errors.md#not-it */
+export interface AppErrorDismissal {
+  key: string;
+  goalRef: string;
+  at: string;
+}

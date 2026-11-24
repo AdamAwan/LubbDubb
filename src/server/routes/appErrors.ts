@@ -2,11 +2,13 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type {
   AppErrorDetail,
+  AppErrorDismissPayload,
   AppErrorSearchPayload,
   AppErrorsPayload,
   AppErrorTriagePressPayload,
 } from '../../wire.js';
 import {
+  dismissAppErrorGoal,
   fileAppErrorBug,
   reopenAppErrorTicket,
   type AppErrorFilingDeps,
@@ -24,6 +26,7 @@ const GroupBody = z.object({
   fingerprint: requiredText('fingerprint is required'),
   investigate: z.boolean({ error: 'investigate must be a boolean' }).optional(),
   unsearched: z.boolean({ error: 'unsearched must be a boolean' }).optional(),
+  confirmGuess: z.boolean({ error: 'confirmGuess must be a boolean' }).optional(),
 });
 
 const GroupQuery = z.object({
@@ -31,9 +34,14 @@ const GroupQuery = z.object({
   fingerprint: requiredText('fingerprint is required'),
 });
 
-const KeyBody = z.object({
-  key: requiredText('key is required').refine((key) => key.startsWith('err:'), 'key must be an app error key (err:…)'),
-});
+const ErrorKey = requiredText('key is required').refine(
+  (key) => key.startsWith('err:'),
+  'key must be an app error key (err:…)',
+);
+
+const KeyBody = z.object({ key: ErrorKey });
+
+const DismissBody = z.object({ key: ErrorKey, goalRef: requiredText('goalRef is required') });
 
 export function register(app: FastifyInstance, ctx: RouteContext): void {
   const { system, hub } = ctx;
@@ -86,6 +94,7 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
           ...body,
           investigate: body.investigate ?? false,
           unsearched: body.unsearched ?? false,
+          confirmGuess: body.confirmGuess ?? false,
         }),
       ),
     ),
@@ -106,6 +115,15 @@ export function register(app: FastifyInstance, ctx: RouteContext): void {
         return reply.code(409).send({ error: 'no tracker this deployment files into can be searched by key' });
       const search = (await system.appErrorTracker.search([body.key])).get(body.key)!;
       return { ok: true, search } satisfies AppErrorSearchPayload;
+    }),
+  );
+
+  app.post(
+    '/api/app-errors/dismiss',
+    checked({ body: DismissBody }, ({ body, reply }) => {
+      const outcome = dismissAppErrorGoal(store.appErrorTickets, body.key, body.goalRef, new Date().toISOString());
+      if (!outcome.ok) return reply.code(outcome.status).send({ error: outcome.error });
+      return { ok: true, goalRef: outcome.goalRef } satisfies AppErrorDismissPayload;
     }),
   );
 

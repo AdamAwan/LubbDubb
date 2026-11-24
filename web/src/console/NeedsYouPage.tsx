@@ -21,6 +21,9 @@ import { goalPrCards, PrCards } from './PrCards.js';
 import { agentLamp } from './fleetRows.js';
 import { HandledLine } from './QueueRail.js';
 import { AskCard, askRef } from './askCard.js';
+import { ErrorProblemItem } from '../components/ErrorProblem.js';
+import { useAppErrors } from '../components/useAppErrors.js';
+import { needsYouProblems, type ErrorProblem } from '../view/appErrors.js';
 
 // → docs/spec/44-needs-you.md
 
@@ -46,7 +49,11 @@ export function NeedsYouPage({ view, actions }: { view: CockpitView; actions: Co
       </header>
       <FleetPanel view={view} actions={actions} />
       <div className="cn-ny-cols">
-        <AsksColumn view={view} actions={actions} />
+        {view.state.config.appErrors ? (
+          <AsksWithErrors view={view} actions={actions} />
+        ) : (
+          <AsksColumn view={view} actions={actions} problems={NO_PROBLEMS} onPressed={() => undefined} />
+        )}
         <PrsColumn view={view} actions={actions} prs={prs} />
       </div>
     </div>
@@ -125,13 +132,36 @@ function SentLine({ item, view }: { item: ListenItem; view: CockpitView }): JSX.
   return at === undefined ? null : <SentStrip at={at} now={view.now} />;
 }
 
-function AsksColumn({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+const NO_PROBLEMS: readonly ErrorProblem[] = [];
+
+/** A family, with the app errors that stand in "Something's wrong". */
+type ProblemGroup = AskFamilyGroup<ErrorProblem>;
+
+/** The app errors that stand in "Something's wrong", read off the Errors tab's one poll. → docs/spec/44-needs-you.md#somethings-wrong */
+function AsksWithErrors({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const { reading, reload } = useAppErrors();
+  const problems = useMemo(() => (reading === null ? NO_PROBLEMS : needsYouProblems(reading)), [reading]);
+  return <AsksColumn view={view} actions={actions} problems={problems} onPressed={reload} />;
+}
+
+function AsksColumn({
+  view,
+  actions,
+  problems,
+  onPressed,
+}: {
+  view: CockpitView;
+  actions: CockpitActions;
+  problems: readonly ErrorProblem[];
+  onPressed: () => void;
+}): JSX.Element {
   const asks = view.needsYou;
-  const groups = askFamilies(asks);
+  const groups = askFamilies(asks, { wrong: problems });
+  const total = asks.length + problems.length;
   const [pressed, setPressed] = useState<ReadonlyMap<AskFamily, boolean>>(() => new Map());
   const [expanded, setExpanded] = useState<string | null>(null);
-  const isOpen = (group: AskFamilyGroup): boolean =>
-    pressed.get(group.family) ?? group.rows.some((row) => row.urgency !== 'later');
+  const isOpen = (group: ProblemGroup): boolean =>
+    pressed.get(group.family) ?? (group.family === 'wrong' || group.rows.some((row) => row.urgency !== 'later'));
   const setOpen = (family: AskFamily, open: boolean): void => setPressed((was) => new Map(was).set(family, open));
   const jump = (family: AskFamily): void => {
     setOpen(family, true);
@@ -140,17 +170,18 @@ function AsksColumn({ view, actions }: { view: CockpitView; actions: CockpitActi
   return (
     <section className="cn-card cn-ny-col">
       <h3>
-        From the orchestrator <i className="cn-n">{asks.length}</i>
+        From the orchestrator <i className="cn-n">{total}</i>
       </h3>
       {groups.length > 1 && <FamilyChips groups={groups} onJump={jump} />}
       <div className="cn-ny-scroll">
-        {asks.length === 0 ? (
+        {total === 0 ? (
           <p className="cn-empty">Nothing is waiting on you.</p>
         ) : (
           groups.map((group) => (
             <AskFamilyFold
               key={group.family}
               group={group}
+              onPressed={onPressed}
               open={isOpen(group)}
               onToggle={(open) => setOpen(group.family, open)}
               expanded={expanded}
@@ -171,7 +202,7 @@ function FamilyChips({
   groups,
   onJump,
 }: {
-  groups: readonly AskFamilyGroup[];
+  groups: readonly ProblemGroup[];
   onJump: (family: AskFamily) => void;
 }): JSX.Element {
   return (
@@ -185,7 +216,7 @@ function FamilyChips({
           title={`Go to ${FAMILY_LABEL[group.family]}${group.now > 0 ? ` — ${String(group.now)} to answer now` : ''}`}
         >
           <span>{FAMILY_LABEL[group.family]}</span>
-          <b>{group.rows.length}</b>
+          <b>{group.size}</b>
           {group.now > 0 && <i className="cn-ny-nowdot" aria-label={`${String(group.now)} to answer now`} />}
         </BareButton>
       ))}
@@ -195,6 +226,7 @@ function FamilyChips({
 
 function AskFamilyFold({
   group,
+  onPressed,
   open,
   onToggle,
   expanded,
@@ -202,7 +234,8 @@ function AskFamilyFold({
   view,
   actions,
 }: {
-  group: AskFamilyGroup;
+  group: ProblemGroup;
+  onPressed: () => void;
   open: boolean;
   onToggle: (open: boolean) => void;
   expanded: string | null;
@@ -211,7 +244,7 @@ function AskFamilyFold({
   actions: CockpitActions;
 }): JSX.Element {
   return (
-    <div className="cn-ny-family" id={`cn-ny-family-${group.family}`}>
+    <div className={`cn-ny-family cn-ny-family-${group.family}`} id={`cn-ny-family-${group.family}`}>
       <div className="cn-ny-family-head">
         <FoldToggle
           subject="escalation"
@@ -220,7 +253,7 @@ function AskFamilyFold({
           hint={false}
           label={
             <>
-              {FAMILY_LABEL[group.family]} <i className="cn-n">{group.rows.length}</i>
+              {FAMILY_LABEL[group.family]} <i className="cn-n">{group.size}</i>
             </>
           }
         />
@@ -244,6 +277,11 @@ function AskFamilyFold({
               </div>
             );
           })}
+          {group.extra.map((p) => (
+            <div key={`${p.environment}/${p.key}`} className="cn-ny-item">
+              <ErrorProblemItem problem={p} compact={false} onPressed={onPressed} actions={actions} />
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -190,6 +190,76 @@ test('a link made by a route hint alone is not a relation: the bug is filed rela
   assert.doesNotMatch(bug.body, /Related to/, 'a hint is a reason to look, not a claim the goal caused it');
 });
 
+test('"Not it" is stored by key, shown on the row, and a bug filed after it is related to nothing', async () => {
+  const landed = 'c'.repeat(40);
+  const git = new FakeGitObserver().setChangedFiles(landed, ['src/Orders/OrderService.cs']);
+  const soon = new Date(Date.now() + 60_000).toISOString();
+  const { system } = build({ gitObserver: git, errors: errorsOn('Orders.Submit', 5, soon, soon) });
+  system.store.environments.recordGoalLanding({ prNumber: 1, goalRef: 'issue:412', sha: landed, mergedAt: null });
+  system.store.environments.recordEnvironmentReach({
+    sha: landed,
+    environment: 'test',
+    status: 'reached',
+    detail: null,
+  });
+  await system.harness.runCycle();
+  assert.equal((await errorsTab(system)).link?.goalRef, 'issue:412');
+
+  const bad = await press(system, '/api/app-errors/dismiss', { key: KEY, goalRef: 'nonsense' });
+  assert.equal(bad.status, 400);
+  const dismissed = await press(system, '/api/app-errors/dismiss', { key: KEY, goalRef: 'issue:412' });
+  assert.equal(dismissed.status, 200);
+  const group = await errorsTab(system);
+  assert.deepEqual(group.dismissed, ['issue:412']);
+  assert.equal(group.link?.goalRef, 'issue:412', 'the deterministic link itself is untouched');
+
+  const filed = await press(system, '/api/app-errors/file-bug', { environment: 'test', fingerprint: 'Orders.Submit' });
+  assert.equal(filed.status, 200);
+  const bug = (await issues(system)).find((i) => `issue:${i.number}` === filed.body.ticketRef)!;
+  assert.doesNotMatch(bug.body, /Related to/, 'the operator said it is not #412’s');
+});
+
+test('confirming the triage agent’s guess files the bug related to the goal it named, and only then', async () => {
+  const { system } = build();
+  await system.harness.runCycle();
+  const refused = await press(system, '/api/app-errors/file-bug', {
+    environment: 'test',
+    fingerprint: 'Orders.Submit',
+    confirmGuess: true,
+  });
+  assert.equal(refused.status, 409, 'no guess to confirm');
+
+  const group = await errorsTab(system);
+  system.store.appErrorTriage.recordVerdict({
+    environment: 'test',
+    fingerprint: 'Orders.Submit',
+    state: group.state,
+    anchor: group.firstSeen,
+    key: KEY,
+    verdict: 'caused-by',
+    goalRef: 'issue:412',
+    confidence: 'high',
+    reason: 'OrderService.cs:118 is the null check #412 removed.',
+    runId: 'run-1',
+  });
+  assert.equal((await errorsTab(system)).triage?.goalRef, 'issue:412');
+
+  const plain = await press(system, '/api/app-errors/file-bug', { environment: 'test', fingerprint: 'Orders.Submit' });
+  const unrelated = (await issues(system)).find((i) => `issue:${i.number}` === plain.body.ticketRef)!;
+  assert.doesNotMatch(unrelated.body, /Related to/, 'a guess is never a relation on its own');
+  system.connector.inject({ kind: 'issue_state', number: Number(plain.body.ticketRef.split(':')[1]), state: 'closed' });
+
+  const confirmed = await press(system, '/api/app-errors/file-bug', {
+    environment: 'test',
+    fingerprint: 'Orders.Submit',
+    confirmGuess: true,
+  });
+  assert.equal(confirmed.status, 200);
+  assert.equal(confirmed.body.reused, false);
+  const bug = (await issues(system)).find((i) => `issue:${i.number}` === confirmed.body.ticketRef)!;
+  assert.match(bug.body, /Related to #412\./);
+});
+
 test('a closed bug under a moved key reads closed and back, and Reopen reopens it', async () => {
   const { system } = build();
   await system.harness.runCycle();

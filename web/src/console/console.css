@@ -7899,3 +7899,118 @@ button.cn-grow {
     transition: none;
   }
 }
+
+/* Something's wrong — the goal's problem strip and the Needs you problem card.
+   → docs/spec/17-cockpit.md#something-wrong-on-the-goal */
+.cn-gprob {
+  margin: 8px 0 4px;
+  border: 1px solid var(--cn-red-line);
+  background: var(--cn-red-bg);
+  border-radius: var(--cn-r);
+  overflow: hidden;
+}
+.cn-gprob-guess {
+  border-color: var(--cn-amber-line);
+  border-style: dashed;
+  background: var(--cn-amber-bg);
+}
+.cn-gprob-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--cn-red-ink);
+}
+.cn-gprob-guess .cn-gprob-head {
+  color: var(--cn-amber-ink);
+}
+.cn-gprob-handled {
+  color: var(--cn-fg-faint);
+}
+.cn-gprob-open {
+  margin-left: auto;
+  font-size: 12.5px;
+}
+.cn-gprob-calm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-color: var(--cn-line);
+  background: var(--cn-panel);
+  color: var(--cn-fg-dim);
+}
+.cn-prob {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.cn-prob-row {
+  padding: 8px 12px;
+  border-top: 1px solid var(--cn-red-line);
+}
+.cn-gprob-guess .cn-prob-row {
+  border-top-color: var(--cn-amber-line);
+}
+.cn-prob-card {
+  padding: 10px 12px;
+  border: 1px solid var(--cn-red-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+}
+.cn-prob-card.cn-prob-guess {
+  border-color: var(--cn-amber-line);
+  border-style: dashed;
+}
+.cn-prob-done {
+  color: var(--cn-fg-dim);
+}
+.cn-prob-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cn-prob-where {
+  font-size: 12px;
+  color: var(--cn-fg-faint);
+}
+.cn-prob-what {
+  flex: 1 1 280px;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.cn-prob-card .cn-prob-what {
+  flex-basis: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.cn-prob-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.cn-prob-count {
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+}
+.cn-prob-goal {
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+}
+.cn-prob-reason {
+  font-size: 13px;
+  color: var(--cn-fg-dim);
+}
+.cn-prob-reason b {
+  color: var(--cn-amber-ink);
+}
+.cn-prob-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
