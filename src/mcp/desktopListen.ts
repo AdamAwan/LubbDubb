@@ -2,9 +2,11 @@ import { z } from 'zod';
 import { goalIssue, goalOfPr, issueAddress, prAddress } from '../asks/lines.js';
 import type { PrReadInputs } from '../asks/queue.js';
 import { prOnYouReasons } from '../listen/prsOnYou.js';
+import { prSkillOf, type ListenPolicy } from '../listen/policy.js';
 import { prState } from '../pr/prHealth.js';
 import { knownPrs, prView, replyView } from './worldRead.js';
 import type { OpenPullRequest } from '../wire.js';
+import type { AutoSendWhy, ListenItem } from '../types.js';
 import type { DesktopToolFactory } from './desktopContext.js';
 import { toolSchema } from './schema.js';
 import { toolError, toolJson } from './protocol.js';
@@ -12,22 +14,34 @@ import { toolError, toolJson } from './protocol.js';
 // → docs/spec/44-needs-you.md
 
 const WAIT_NEXT = {
-  ask: 'Start a fork for it running `/lubbdubb:next <id> only`, then call ask_wait again at once.',
-  pr: 'Start a fork for it running `/lubbdubb:pr <number>`, then call ask_wait again at once.',
+  item: 'Start a session or fork for it running `skill`, titled `title`, then call ask_wait again at once.',
   none: 'Nothing was sent. Call ask_wait again, saying nothing.',
 };
 
+const PR_TITLE: Record<AutoSendWhy | 'sent', string> = {
+  review: 'Review',
+  ready: 'Ready',
+  sent: 'Talk through',
+};
+
+function itemSkill(item: ListenItem, policy: ListenPolicy): { skill: string; title: string } {
+  if (item.kind === 'ask') return { skill: `/lubbdubb:next ${item.id} only`, title: `Talk through ask ${item.id}` };
+  return { skill: `${prSkillOf(policy)} ${item.number}`, title: `${PR_TITLE[item.why ?? 'sent']} #${item.number}` };
+}
+
 export const askWait: DesktopToolFactory = (deps) => ({
   description:
-    'Wait for the operator to send this chat something from the cockpit’s Needs you page — an ask (`id`) or a ' +
-    'pull request (`number`). Returns at once when something is waiting; otherwise holds for up to ten ' +
-    'minutes and returns `{ item: null }`, and the listen loop calls it again. A newer ask_wait answers an ' +
-    'older one with `superseded: true`. Each item is handed out once. Decides nothing.',
+    'Wait for what is sent to this chat — an ask (`id`) or a pull request (`number`) from the cockpit’s Needs ' +
+    'you page, or a pull request the harness sent by itself (`why`: review or ready). Returns at once when ' +
+    'something is waiting; otherwise holds for up to ten minutes and returns `{ item: null }`, and the listen ' +
+    'loop calls it again. An item comes with the `skill` line to run and the `title` to give its session. A ' +
+    'newer ask_wait answers an older one with `superseded: true`. Each item is handed out once. Decides nothing.',
   inputSchema: toolSchema(z.object({})),
   handler: async () => {
     const result = await deps.listener.wait();
-    const next = result.item === null ? WAIT_NEXT.none : WAIT_NEXT[result.item.kind];
-    return toolJson({ ...result, next: result.superseded === true ? 'Another ask_wait took over. Stop here.' : next });
+    if (result.superseded === true) return toolJson({ ...result, next: 'Another ask_wait took over. Stop here.' });
+    if (result.item === null) return toolJson({ ...result, next: WAIT_NEXT.none });
+    return toolJson({ ...result, ...itemSkill(result.item, deps.listen()), next: WAIT_NEXT.item });
   },
 });
 

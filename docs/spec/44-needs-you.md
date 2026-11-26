@@ -2,7 +2,8 @@
 
 **Built.** The page — the `needs` tab, its fleet tiles and two columns, the Claude button and the listener status —
 and the server side under it: the listener (`src/listen/listener.ts`), the desktop tools `ask_wait`
-and `pr_read`, `POST /api/listen/send`, the snapshot's `listener`, and the `listen` and `pr` skills.
+and `pr_read`, `POST /api/listen/send`, the snapshot's `listener`, the `listen` and `pr` skills, and
+[sending by itself](#sending-by-itself) (`src/listen/autoSend.ts`), off by default.
 
 The overview answers _what is the fleet doing_. That stopped being the operator's question: what
 matters is **what is waiting on me** — the orchestrator's asks and the pull requests that need a
@@ -12,7 +13,8 @@ person. And most of the time the operator does not want to answer an ask with a 
 So this is a new cockpit tab, **Needs you**, beside the overview rather than replacing it. The
 overview stays where it is until this page has proved itself; the one thing the two share is the
 [pull-request card](17-cockpit.md#the-pull-request-card), so a pull request reads the same on both. The listen loop below is
-part of this page **only**: no other surface sends anything to it.
+part of this page **only**: no other surface sends anything to it — the one exception being the harness
+itself, [sending a pull request by itself](#sending-by-itself) where the operator turned that on.
 
 ## Invariants
 
@@ -20,13 +22,16 @@ part of this page **only**: no other surface sends anything to it.
 - **Every column scrolls on its own.** A long list in one column never pushes another out of view. → [§](#where-it-sits) · _no test_
 - **The asks are grouped by family, in the queue's order inside each.** `askFamilies` filters and never sorts; urgency is a tag, not the order. → [§](#from-the-orchestrator) · `test/needsYouPage.test.ts`
 - **An ask opens in place with the same body the ask panel draws.** The opened card renders `needBody`, never a second copy of an ask's actions, so the card and the panel cannot disagree about how an ask is closed. → [§](#opening-an-ask-in-place) · `test/needsYouPage.test.ts`
-- **Only this page sends to the listening chat.** `POST /api/listen/send` has one caller, `web/src/console/NeedsYouPage.tsx`; every other surface keeps its own buttons and its own deep links. → [§](#scope) · `test/needsYouPage.test.ts`
+- **Only this page sends to the listening chat, besides the harness's own sending.** `POST /api/listen/send` has one caller, `web/src/console/NeedsYouPage.tsx`; every other surface keeps its own buttons and its own deep links. The one other sender is `AutoSend`, server side. → [§](#scope) · `test/needsYouPage.test.ts`
+- **Sending by itself is off by default, and needs every CI check passing.** Both `listen.autoSend*` keys default to false; a pull request with any check failing, pending, unread or withheld — advisory ones included — is never sent. → [§](#sending-by-itself) · `test/listenAutoSend.test.ts`
+- **A pull request is sent by itself at most once per reason while it is open**, and never for what already qualified on the first pass after sending was turned on. → [§](#sending-by-itself) · `test/listenAutoSend.test.ts`
 - **Which pull requests are on the page is `prOnYouReasons`, one pure function the server and the page share.** A pull request is on the page when any one of its reasons holds, and a reason is read off fields the server already decided — never re-derived in the browser. The page, the pruning of `sent` and `pr_read`'s `onYou` all read its keys. → [§](#pull-requests-waiting-on-you) · `test/prsOnYou.test.ts`
 - **The page reads `listener.state`; it never guesses.** `listening`, `busy` and `off` are the server's, off whether a wait is open. → [§](#is-a-chat-listening) · `test/needsYouPage.test.ts`
 - **A wait is bounded.** `ask_wait` returns by itself after `LISTEN_WAIT_MS` (10 minutes) with nothing, and the skill calls it again; a held call never outlives that bound. → [§](#the-wait) · `test/listener.test.ts`
 - **The listener tells the cockpit only when what it shows has changed**, and that is its own `listener` section — never a rebuild of the ask queue. → [§](#the-wait) · `test/listener.test.ts`
 - **An item is handed out once.** A sent item leaves the queue the moment one `ask_wait` returns it; a second waiter never receives it too. → [§](#the-wait) · `test/listener.test.ts`
 - **The listen loop decides nothing.** `/lubbdubb:listen` hands each item to the same reading the `next` skill does; the operator answers. → [§](#the-listen-skill) · _no test_
+- **`ask_wait` names the skill line and the title; the skill only runs them.** Which skill a pull request is talked through with is `listen.prSkill`, read by the tool, never by the chat. → [§](#the-wait) · `test/listenAutoSend.test.ts`
 
 ## Where it sits
 
@@ -259,6 +264,15 @@ or `LISTEN_WAIT_MS` passes, and returns `{ item }` or `{ item: null }`. One wait
 call answers the older one with `{ item: null, superseded: true }`. Returning an item marks the chat
 `busy` on it and records it in `sent`.
 
+An item comes back with two more fields, so the skill never works out what to run:
+
+- **`skill`** — the line its thread runs: `/lubbdubb:next <id> only` for an ask; for a pull request,
+  `listen.prSkill` (empty is `/lubbdubb:pr`) followed by its number. That is how an operator's own
+  skill for reading a pull request replaces the harness's.
+- **`title`** — the thread's name: `Talk through ask <id>`; for a pull request `Review #<n>` or
+  `Ready #<n>` when the harness [sent it by itself](#sending-by-itself), `Talk through #<n>` when the
+  page did.
+
 `POST /api/listen/send` (`{ item: ListenItem }`) appends to the queue and answers the open waiter if
 there is one. Sending an item already queued or already on the chat is a no-op. A sent entry is
 dropped when the ask no longer stands or the pull request is no longer on [the page](#pull-requests-waiting-on-you),
@@ -283,6 +297,42 @@ rather than announcing a view that still reads `listening`.
 `busy` has no timeout of its own: a chat closed while working an item inline reads `busy` until the
 next `ask_wait` or a restart.
 
+## Sending by itself
+
+The operator opened a Claude chat for nearly every pull request that became ready, and for every one
+they were asked to review, to run their own skill over it. With `listen.autoSendReviews` or
+`listen.autoSendReady` on, the harness does the pressing: `AutoSend` (`src/listen/autoSend.ts`),
+wired by `wireAutoSend` (`src/system/systemListen.ts`), reads the open pull requests (`openPrs`) at the end of every cycle that ran and sends each new one to the
+listener as `{ kind: 'pr', number, why }` — the same queue the page's button feeds, so it lands as a
+linked session under the listen chat, which is the grouping the operator wanted. The desktop app
+offers no way to put a session into a sidebar Section, so nesting under the one listen chat is the
+grouping there is.
+
+`autoSendWhy` answers one reason or none, built on the page's own table so the two cannot disagree about what is on the operator — and only for a pull request whose **every CI check passed**
+(`ciStatus` passing, nothing withheld, every check `passing` — an advisory failure holds it too, since
+the operator asked for nothing failing at all):
+
+| `why`    | Holds when                                                                                                                                                     |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `review` | [`prOnYouReasons`](#pull-requests-waiting-on-you) holds `review` — somebody asked the operator, and attention puts it on them (not once they have approved it) |
+| `ready`  | it holds `call` or `assign`; or the operator opened it (`viewerAuthored`) and no agent is on it (`attention.status` is neither `harness` nor `done`)           |
+
+A pass only counts once a whole world has been read: with no baseline yet, or one with `staleSources`, `wireAutoSend` hands it no read and the pass learns, sends and forgets nothing — so a first cycle on an empty read never primes on nothing, and a partial read never drops a pull request it would then send again.
+
+Each key gates its own reason. A pull request is sent **once per reason** while it is open: going red
+and green again does not send it twice, and a key is forgotten only when the pull request is no longer
+open. The memory is in-process, so the **first pass after sending is turned on** — a boot, or the
+keys switched on — only learns what already qualifies and sends none of it: a restart never sends the
+same pull request again, and switching it on never sends a burst of every ready pull request at once.
+The cost is that one which became ready while the harness was down is not sent; it is still on this
+page with its button. While both keys are off nothing is read at all.
+
+The listener queues an item whether or not a chat is listening, so what is sent while no chat
+listens waits for the next `ask_wait`. A pull request the page already sent, queued or on the chat is
+not sent again ([the wait](#the-wait)).
+
+Both keys and `listen.prSkill` are restart-only ([02](02-configuration.md#liveness)).
+
 ## The listen skill
 
 `/lubbdubb:listen` (`plugin/skills/listen/SKILL.md`). The chat loops on `ask_wait`:
@@ -291,14 +341,13 @@ next `ask_wait` or a restart.
    once per session. An error (the harness restarted) → call it again. `superseded: true` → another
    wait took over, so this loop stops and says so in one line.
 2. An item → hand it to a thread of its own, in this order of preference. Each runs one skill for the
-   one item and nothing else — an ask as `/lubbdubb:next <id> only`, a pull request as
-   `/lubbdubb:pr <n>` — told to talk it through with the operator, decide nothing, and end with one
+   one item and nothing else — the `skill` line `ask_wait` returned — told to talk it through with the operator, decide nothing, and end with one
    line: what landed, or "left open".
    - **A linked session**, where the Claude desktop app offers `start_session`
      (`mcp__ccd_session__start_session`): a Claude Code session nested under the listen session in
      the sidebar, which the operator opens and talks to. It is started fresh, in this checkout (no
-     worktree), titled "Talk through ask <id>" or "Talk through #<n>", with a background note that the
-     item came from this page through the listen loop and that the session holds the conversation for
+     worktree), titled with the `title` `ask_wait` returned, with a background note that the
+     item came from this page — or from the harness sending it by itself — through the listen loop and that the session holds the conversation for
      that one item. A fork in the desktop app runs as a background task the operator cannot open,
      which defeats "Talk it through" — so the linked session comes first.
    - **A fork**, where the `Agent` tool can start one, exactly as the `next` skill's side thread does
@@ -331,6 +380,7 @@ exist (`pr_assign`, `description_read`, `description_check`).
 
 ## Scope
 
-The listen loop is new and not yet trusted, so it is wired to this page and nothing else. The goal
+The listen loop is new and not yet trusted, so it is wired to this page and nothing else — and to
+[sending by itself](#sending-by-itself), which the operator turns on. The goal
 page, the rail, Focus mode and the feature board keep their own deep links and never call
 `POST /api/listen/send`. Widening it is a change to this spec first.

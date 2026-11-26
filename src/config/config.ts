@@ -19,6 +19,7 @@ import { validateAgentModels, type AgentModels } from '../agents/modelPolicy.js'
 import { DEFAULT_FILING_TYPES } from '../tickets/ticketTypes.js';
 import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from '../store/mcpCalls.js';
 import type { PetPolicy } from '../pets/keeper.js';
+import { DEFAULT_LISTEN, type ListenPolicy } from '../listen/policy.js';
 import { validateEnvironments, validateOperatorTenants, type EnvironmentConfig } from '../environments/policy.js';
 import { DEFAULT_READ_LANES } from '../world/readPlan.js';
 import type { IssueSequencing } from '../sequence/readiness.js';
@@ -75,6 +76,8 @@ export interface Config {
   spendBurn: BurnPolicy;
   runway: RunwayPolicy;
   pets: PetPolicy;
+  /** The listen loop's sending by itself. → docs/spec/44-needs-you.md#sending-by-itself */
+  listen: ListenPolicy;
   /**
    * Use every agent draft as if the operator had pressed
    * **Use the agent's** at the open. Off by default.
@@ -248,6 +251,7 @@ const DEFAULTS: Config = {
   spendBurn: DEFAULT_BURN,
   runway: DEFAULT_RUNWAY,
   pets: { enabled: true, visible: true },
+  listen: DEFAULT_LISTEN,
   autoUseAgentDescriptions: false,
   selfUpdate: {
     enabled: true,
@@ -349,6 +353,7 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   merged.pool = { ...DEFAULTS.pool, ...overrides.pool };
   merged.planning = { ...DEFAULTS.planning, ...overrides.planning };
   merged.pets = { ...DEFAULTS.pets, ...overrides.pets };
+  merged.listen = { ...DEFAULTS.listen, ...overrides.listen };
   merged.spendBurn = { ...DEFAULTS.spendBurn, ...overrides.spendBurn };
   merged.runway = { ...DEFAULTS.runway, ...overrides.runway };
   merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...overrides.selfUpdate };
@@ -377,6 +382,7 @@ export const DEEP_MERGED_BLOCKS = [
   'integrations',
   'planning',
   'pets',
+  'listen',
   'spendBurn',
   'runway',
   'selfUpdate',

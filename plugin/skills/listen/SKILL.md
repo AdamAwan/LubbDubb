@@ -1,14 +1,16 @@
 ---
 name: listen
-description: Wait for what the operator sends from the cockpit's Needs you page — an ask or a pull request — and start a linked session (or fork) for each, so it can be talked through. Use for "/lubbdubb:listen", "listen for the cockpit", "wait for what I send you".
+description: Wait for what the operator sends from the cockpit's Needs you page — an ask or a pull request — or what the harness sends by itself, and start a linked session (or fork) for each, so it can be talked through. Use for "/lubbdubb:listen", "listen for the cockpit", "wait for what I send you".
 argument-hint: ''
 ---
 
 ## Listen for the Needs you page
 
 The operator works from the cockpit's **Needs you** page. When they press
-**Talk it through** on an ask or a pull request, it is sent to this chat. You
-wait for it, hand it to a thread of its own, and wait again. You decide nothing: each
+**Talk it through** on an ask or a pull request, it is sent to this chat. Where the
+operator turned it on, the harness also sends a pull request by itself — one they were asked to
+review (`why: "review"`), or one of theirs or the fleet's that is ready (`why: "ready"`) — once all its
+CI passes. You wait for it, hand it to a thread of its own, and wait again. You decide nothing: each
 item is worked the way the `next` and `pr` skills say, and the operator answers.
 
 ### The loop
@@ -24,9 +26,10 @@ item is worked the way the `next` and `pr` skills say, and the operator answers.
    - **An error** — usually the harness restarted. Call `ask_wait` again. Only
      if it keeps failing, say what it said and stop.
 2. **An item → a thread of its own.** The thread runs one skill for the item and
-   nothing else:
-   - an **ask** (`item.kind: "ask"`) — `/lubbdubb:next <item.id> only`;
-   - a **pull request** (`item.kind: "pr"`) — `/lubbdubb:pr <item.number>`.
+   nothing else: the `skill` line `ask_wait` returned with it — for an ask,
+   `/lubbdubb:next <id> only`; for a pull request, the operator's chosen skill
+   (`/lubbdubb:pr` unless they named their own) and its number. Run that line
+   exactly as given.
 
    Use the first of these you can:
 
@@ -35,18 +38,20 @@ item is worked the way the `next` and `pr` skills say, and the operator answers.
    First write a bold title line and one sentence saying what you are starting.
    Then call it with:
    - `initiation: "user_asked"`, `context: "fresh"`, `use_worktree: false`;
-   - `title`: "Talk through ask <item.id>" or "Talk through #<item.number>";
-   - `prompt`: the skill line above, then "Talk it through with the operator;
+   - `title`: the `title` `ask_wait` returned ("Review #212", "Ready #212",
+     "Talk through #212", "Talk through ask <id>");
+   - `prompt`: the `skill` line, then "Talk it through with the operator;
      do not decide. End with one line: what landed, or 'left open'.";
    - `background`: this item came from the cockpit's Needs you page through the
-     listen loop; this session holds the conversation for that one item.
+     listen loop — or, with a `why`, the harness sent it by itself because a
+     review was asked of the operator or the pull request is ready with all CI
+     passing; this session holds the conversation for that one item.
 
    Then tell the operator in one line that the session sits under this one in
    the sidebar.
 
    **b. A fork** — otherwise, where `Agent` can fork. `subagent_type: "fork"`, a
-   short `description` naming it ("Talk through #212", "Ask 3f9c…"), and the
-   skill line as the prompt. Say the prompt ends with one line back — what
+   short `description` (the `title`), and the `skill` line as the prompt. Say the prompt ends with one line back — what
    landed, or "left open". Then tell the operator in one line where it is: in
    the panel under the prompt, select its row and press `Enter` to talk to it,
    `Esc` to come back.
@@ -59,8 +64,7 @@ item is worked the way the `next` and `pr` skills say, and the operator answers.
    say so in one line with a link to it: `[title](#local_<id>)`.
 
 **Where you cannot start either** — no `start_session`, and no `Agent` tool or
-forks turned off — work the item here, as that skill says (`next <id> only` for an
-ask, `pr <n>` for a pull request). When it is answered or left, go back to step 1.
+forks turned off — work the item here, as its `skill` line says. When it is answered or left, go back to step 1.
 While you work it, the page shows the chat as busy, and anything else sent queues
 behind it.
 
