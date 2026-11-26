@@ -8996,8 +8996,10 @@ surface a server change, and the fold under it is what a future one is built fro
 ## The fixture world
 
 The cockpit tests render against one shared fixture world, `buildFixtureState` in
-`test/support/cockpitFixtures.ts`. There is no demo build: the cockpit only ever talks to a real
-harness, and the fixtures exist to give the view-model and render tests a full, coherent `AppState`.
+`test/support/cockpitFixtures.ts`. The fixtures exist to give the view-model and render tests a full,
+coherent `AppState`, and the same world is what `npm run demo` serves to a live cockpit for design work
+([19](19-development.md#the-demo-cockpit)) — so a fixture is also what a person planning a surface looks
+at.
 
 **The fixture world is one product, and the product is Inkwell Books** — a small online bookshop:
 browse and search a catalogue, a basket, checkout and payment, orders, refunds, and one background job
