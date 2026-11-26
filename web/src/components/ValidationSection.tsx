@@ -83,6 +83,7 @@ interface ValidationSectionProps {
   onWaive: (checkId: string, reason: string) => Promise<unknown> | unknown;
   onReset: (checkId: string) => Promise<unknown> | unknown;
   onHandover: (checkId: string, to: 'fleet' | 'human') => Promise<unknown> | unknown;
+  onPassAll: (checkIds: string[]) => Promise<unknown> | unknown;
 }
 
 /**
@@ -121,6 +122,7 @@ export function ValidationSection({
   onWaive,
   onReset,
   onHandover,
+  onPassAll,
 }: ValidationSectionProps) {
   useEffect(() => {
     logUsage('validation.view');
@@ -166,12 +168,10 @@ export function ValidationSection({
      open, the rest as lines — is what the needs band and the plan sheet still draw, where the set
      is read without the runners beside it. Two presentations of one set, because the two surfaces
      are asked different questions. → docs/spec/17-cockpit.md#the-validate-pane */
-  const markAll = <MarkAllPassed checks={markableAsPassed(live)} onResult={onResult} onDone={release} />;
-
-  if (standings !== undefined) {
-    return (
-      <>
-        {markAll}
+  return (
+    <>
+      <MarkAllPassed checks={markableAsPassed(live)} onPassAll={onPassAll} onDone={release} />
+      {standings !== undefined ? (
         <BandedChecks
           live={live}
           withdrawn={withdrawn}
@@ -184,24 +184,19 @@ export function ValidationSection({
           onOpenAgent={onOpenAgent}
           block={block}
         />
-      </>
-    );
-  }
-
-  return (
-    <>
-      {markAll}
-      <CheckQueue
-        live={live}
-        withdrawn={withdrawn}
-        plan={plan}
-        resources={resources}
-        focus={focus}
-        all={all}
-        onAll={() => setAll(!all)}
-        onOpen={setFocus}
-        block={block}
-      />
+      ) : (
+        <CheckQueue
+          live={live}
+          withdrawn={withdrawn}
+          plan={plan}
+          resources={resources}
+          focus={focus}
+          all={all}
+          onAll={() => setAll(!all)}
+          onOpen={setFocus}
+          block={block}
+        />
+      )}
     </>
   );
 }

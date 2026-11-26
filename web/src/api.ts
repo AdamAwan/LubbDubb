@@ -355,6 +355,8 @@ export const api = {
     post<{ ok: true }>(`/api/issues/${issueNumber}/watch/${encodeURIComponent(environment)}/extend`),
   discussWatchOutcome: (issueNumber: number) => post<{ ok: true }>(`/api/discussions/${issueNumber}/watch-outcome`),
   getPlanHistory: (planId: string) => authFetch(`/api/plans/${planId}/history`).then((r) => json<PlanHistory>(r)),
+  passValidation: (issueNumber: number, checkIds: string[]) =>
+    post<{ ok: true; passed: string[] }>(`/api/issues/${issueNumber}/validation/pass`, { checkIds }),
   setValidation: (
     issueNumber: number,
     checkId: string,

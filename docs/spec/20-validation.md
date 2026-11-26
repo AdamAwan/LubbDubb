@@ -2004,11 +2004,15 @@ a fact about that plan, while the goal's card lists what is still to be checked.
 
 **_Mark all passed_ is one press for checks a person has already confirmed by hand**, offered above
 the list wherever it is drawn and only where two or more qualify. It is asked twice — the press, then
-_Yes, all passed_ naming the count — and then records an ordinary operator `passed` on each check,
-one `…/validation/:checkId/result` call apiece, so nothing about it is a new kind of reading. It takes
-`markableAsPassed` (`web/src/view/validationChecks.ts`): a check still owed whose actor is `human`,
-**never one that `failed`** — overturning a failure is a reading about that one check — and never
-one with the fleet, whose answer is the run's to give. Nothing is inferred: it exists because
+_Mark N passed_ naming the count, the cockpit's ordinary armed double-press — and then records an
+ordinary operator `passed` on each check, so nothing about it is a new kind of reading. It is **one**
+write, `POST /api/issues/:number/validation/pass` ([16](16-http-api.md)), so the bench row is settled
+and the cockpit refreshed once rather than once per check. Which checks qualify is decided twice, on
+purpose: `markableAsPassed` (`web/src/view/validationChecks.ts`) chooses what the button offers, and
+the route skips any id that does not qualify, so a stale page cannot pass the wrong one. A check
+qualifies while it is still owed and its actor is `human` — **never one that `failed`**, because
+overturning a failure is a reading about that one check, and never one with the fleet, whose answer
+is the run's to give. Nothing is inferred: it exists because
 operators who validate by hand were pressing _Passed_ row by row on checks they had just finished.
 
 The goal page also carries the verdict as a chip beside the appraisal and the conclusion, inside neither —

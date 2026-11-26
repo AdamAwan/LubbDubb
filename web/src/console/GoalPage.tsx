@@ -532,6 +532,7 @@ function Validation({
             onWaive={(checkId, reason) => actions.setValidation(issue.number, checkId, { kind: 'waive', reason })}
             onReset={(checkId) => actions.setValidation(issue.number, checkId, { kind: 'reset' })}
             onHandover={(checkId, to) => actions.setValidation(issue.number, checkId, { kind: 'handover', to })}
+            onPassAll={(checkIds) => actions.passValidation(issue.number, checkIds)}
           />
         </div>
       )}
