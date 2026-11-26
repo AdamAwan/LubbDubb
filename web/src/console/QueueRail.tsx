@@ -2,7 +2,7 @@ import { Fragment, useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedGroup, NeedKind, NeedRow, NeedUrgency } from '../view/needsYou.js';
-import { openRow, rowDestination } from './queueRailOpens.js';
+import { openRow, rowDestination, tabDestination } from './queueRailOpens.js';
 import type { Destination } from '../components/button.js';
 import type { BuildReading, ControlUsage, SetupCheck } from '../types.js';
 import { relTime } from '../components/util.js';
@@ -11,10 +11,8 @@ import { BareButton, Button } from '../components/button.js';
 import { Tag } from '../components/tag.js';
 import { CardFoot, ConfigFix, SettledFix, UpdateActs } from './queueRailFoots.js';
 import { assignGroupLine, groupAsks, type AssignAsk } from '../view/askGroups.js';
-import { askLine } from '../view/needLines.js';
 import { FoldToggle } from '../components/collapsible.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../view/askKinds.js';
-import { tabUsage } from '../cockpit/usage.js';
 import { classes } from '../components/classes.js';
 
 // → docs/spec/17-cockpit.md
@@ -383,8 +381,8 @@ function Row({
   );
 }
 
-/* Several assign asks folded by `groupAsks` are one card, the pull requests as refs in its foot.
-   → docs/spec/17-cockpit.md#the-same-ask-twice-is-one-ask */
+/* Every assign ask in a section, folded by `groupAsks` with one key, is one card that opens the Reviewers
+   page, the pull requests as refs in its foot. → docs/spec/17-cockpit.md#every-reviewer-ask-is-one-page */
 function AssignGroupRow({
   first,
   asks,
@@ -398,9 +396,9 @@ function AssignGroupRow({
   focus: string | null;
   actions: CockpitActions;
 }): JSX.Element {
-  const row: NeedRow = { ...first, title: askLine(assignGroupLine(asks.length), first.goalRef, view.state) };
-  const open = openRow(row, actions);
-  const current = focus !== null && row.goalRef === focus;
+  const row: NeedRow = { ...first, goalRef: null, title: assignGroupLine(asks.length) };
+  const open = tabDestination('reviewers', actions);
+  const current = focus === null && view.tab === 'reviewers';
   return (
     <Card
       cls={rowClass(row, focus, current)}
@@ -492,7 +490,7 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
           <RailTiers
             rows={rows}
             draw={(tier) =>
-              groupAsks(tier, view.state).map((item) =>
+              groupAsks(tier, view.state, () => 'all').map((item) =>
                 item.kind === 'assign' ? (
                   <AssignGroupRow
                     key={`assign:${item.first.id}`}
@@ -526,15 +524,9 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
 export function HandledLine({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const open = view.state.handledOpen;
   const here = view.goalPage === null && view.tab === 'handled';
+  const go = tabDestination('handled', actions);
   return (
-    <BareButton
-      usage={tabUsage('handled')}
-      className={`cn-handled${here ? ' cn-on' : ''}`}
-      onClick={() => {
-        actions.selectGoal(null);
-        actions.openTab('handled');
-      }}
-    >
+    <BareButton usage={go.usage} className={`cn-handled${here ? ' cn-on' : ''}`} onClick={go.go}>
       <span className="cn-handled-mark">✓</span>
       <span>Handled for you</span>
       {open > 0 && <i className="cn-count">{open}</i>}

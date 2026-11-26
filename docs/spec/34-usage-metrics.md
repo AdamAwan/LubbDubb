@@ -122,7 +122,7 @@ offers no such control, and the day it does, the cell is where it is added.
 | `watch`          | `expand` `create` `edit` `accept` `reject` `defer` `waive` `abandon` `close`                            |
 | `schedule`       | `expand` `create` `edit` `abandon` `stop` `undo` `close`                                                |
 | `review-thread`  | `reject` `undo`                                                                                         |
-| `pr-assignee`    | `accept` `reject`                                                                                       |
+| `pr-assignee`    | `view` `expand` `accept` `reject`                                                                       |
 | `bot-pr`         | `view` `create` `accept` `abandon` `reject`                                                             |
 | `app-error`      | `view` `filter`                                                                                         |
 | `ejection`       | `expand` `accept` `close` `open`                                                                        |

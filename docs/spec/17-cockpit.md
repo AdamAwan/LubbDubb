@@ -12,7 +12,7 @@ and that `src/wire.ts` is the only server module the SPA names at all. See
 
 **One thing is passed through by value: the ask queue.** `src/wire.ts` re-exports runtime from three
 pure leaf modules under `src/asks/` — `buildAskQueue`, which the test fixtures derive their queue
-with ([the fixture world](#the-fixture-world)), and `askLine`, `oneLine`, `upgradeHeadline` and `projectName`, which
+with ([the fixture world](#the-fixture-world)), and `oneLine`, `upgradeHeadline` and `projectName`, which
 the cockpit words its own lines with so that a line it composes cannot word the server's row
 differently. `test/wireRuntime.test.ts` pins that list and walks each module's imports refusing a node
 builtin or a package value — a re-export is not a declaration and would slip past
@@ -2671,11 +2671,41 @@ as one band: a line per pull request, each ticked, and the shortlist and **Nah**
 the same `assignPr` write per ticked pull request that its own row's button makes, so the group adds
 no route and no refusal of its own; unticking one leaves it for its own answer. A different
 shortlist or a different goal is a different question and stays its own row, and a group of one is
-the ordinary row. Both the rows above the navigation and the pane's cards go through it, and so
-does the **Needs you** rail: `QueueRail` runs each urgency section through `groupAsks` and draws a
-group as one card (`AssignGroupRow`) — the goal page's line (`assignGroupLine`), the pull requests
-as refs in its foot — whose press opens the goal page, where the group is answered. The
-rail's count stays every row, folded ones included. `test/goalAskLines.test.ts` pins the fold.
+the ordinary row. Both the rows above the navigation and the pane's cards go through it.
+`test/goalAskLines.test.ts` pins the fold. The **Needs you** rail folds wider — every assign ask,
+whatever its goal — and sends the operator to [one page](#every-reviewer-ask-is-one-page) for them.
+
+#### Every reviewer ask is one page
+
+Twelve unassigned pull requests across four goals were twelve rail rows, or four cards at best, each
+asking the same thing. The rail runs each urgency section through `groupAsks`
+(`web/src/view/askGroups.ts`) with one constant key, which folds **every** assign ask in it — any
+goal, any shortlist — into one card (`AssignGroupRow`) where the first stood: `N pull requests need a
+reviewer` (`assignGroupLine`, the goal page's group line too), the pull requests as refs in its foot. A lone ask stays its own row. The card's
+press opens the **Reviewers** tab (`reviewers`, `web/src/console/ReviewersPage.tsx`), which is not in
+the nav: it is reached from the card, and by its address. The rail's count stays every row, folded
+ones included.
+
+The page draws the same asks — the `assign` rows of `needsYou` — grouped by stack (`reviewerGroups`
+in `web/src/view/reviewersPage.ts`, over `AppState.stacks`): each stack its rungs in stack order,
+drawn as a tree counted from the shallowest ask shown (a rung already reviewed is not drawn, so
+nothing hangs from it), and the pull requests stacked on nothing in one last group, each with its own
+goal ref since that group gathers any goal. Every pull request keeps
+its own shortlist, search and **Nah**, each the same `assignPr` / `declineAssignPr` write its rail
+row would make. A stack with two or more asks also offers **the whole stack at once**: each of its
+pull requests ticked, and the union of their shortlists, a name or **Nah** written once per ticked
+pull request — as the goal page's group does, so the page adds no route of its own.
+
+Each person on a shortlist carries their standing, read off the world the cockpit already holds:
+
+| Standing          | Read from                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `free` / `N open` | How many open pull requests name them in `assignees`.                                                                                           |
+| knows this stack  | They are an assignee or the author (by id or name, ignoring case, as `assignShortlist` matches) of another open pull request in the same stack. |
+
+A stack's union lists those who know it first. Whether someone is **away** is not drawn: no tracker
+the harness reads says so, and a guess at it would be a standing the operator trusts and nothing
+keeps true. `test/reviewersPage.test.ts` pins the fold, the grouping and the standings.
 
 #### A check set ask is named by its checks
 

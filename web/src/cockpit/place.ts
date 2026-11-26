@@ -136,6 +136,7 @@ const TABS: readonly ConsoleTab[] = [
   'features',
   'bots',
   'handled',
+  'reviewers',
   'errors',
   'insights',
   'pets',

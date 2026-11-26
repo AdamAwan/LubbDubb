@@ -1,7 +1,7 @@
-import type { CockpitActions } from '../cockpit/actions.js';
+import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import type { Destination } from '../components/button.js';
 import type { NeedRow } from '../view/needsYou.js';
-import { panelUsage } from '../cockpit/usage.js';
+import { panelUsage, tabUsage } from '../cockpit/usage.js';
 import { openGoalForAsk } from './jump.js';
 
 // → docs/spec/17-cockpit.md
@@ -29,4 +29,15 @@ function askDestination(row: NeedRow, actions: CockpitActions): Destination {
 
 export function openRow(row: NeedRow, actions: CockpitActions): Destination {
   return rowDestination(row, row.opens, actions) ?? askDestination(row, actions);
+}
+
+/** Leaves any goal page and opens a tab. */
+export function tabDestination(tab: ConsoleTab, actions: CockpitActions): Destination {
+  return {
+    go: () => {
+      actions.selectGoal(null);
+      actions.openTab(tab);
+    },
+    usage: tabUsage(tab),
+  };
 }

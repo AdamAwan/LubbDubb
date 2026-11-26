@@ -42,23 +42,32 @@ export function AssignButtons({ ask, actions }: { ask: AssignAsk; actions: Cockp
   );
 }
 
-function ShortlistButtons({
+export function ShortlistButtons({
   people,
   search,
   onPick,
   onDecline,
   disabled = false,
+  notes,
 }: {
   people: AssignAsk['assignAsk'];
   search: (query: string) => Promise<PrPerson[]>;
   onPick: (person: PrPerson) => Promise<void>;
   onDecline: () => Promise<void>;
   disabled?: boolean;
+  /** What the operator should know about each person before picking them, by id. */
+  notes?: ReadonlyMap<string, string>;
 }): JSX.Element {
   return (
     <>
       {people.map((person) => (
-        <PersonButton key={person.id} person={person} onPick={onPick} disabled={disabled} />
+        <PersonButton
+          key={person.id}
+          person={person}
+          onPick={onPick}
+          disabled={disabled}
+          note={notes?.get(person.id)}
+        />
       ))}
       <AssigneeSearch shortlisted={people} search={search} onPick={onPick} disabled={disabled} />
       <AsyncButton
@@ -86,19 +95,9 @@ export function AssignGroup({
   asks: readonly AssignAsk[];
   actions: CockpitActions;
 }): JSX.Element | null {
-  const [skipped, setSkipped] = useState<ReadonlySet<number>>(new Set());
+  const { skipped, ticked, toggle, each } = useTicks(asks);
   const [first] = asks;
   if (first === undefined) return null;
-  const ticked = asks.map((a) => a.number).filter((n) => !skipped.has(n));
-  const toggle = (n: number): void =>
-    setSkipped((held) => {
-      const next = new Set(held);
-      if (!next.delete(n)) next.add(n);
-      return next;
-    });
-  const each = async (write: (n: number) => Promise<void>): Promise<void> => {
-    await Promise.all(ticked.map(write));
-  };
   const none = ticked.length === 0;
   return (
     <div className={`cn-needs-group cn-t-${KIND_TONE.assign}`}>
@@ -140,16 +139,39 @@ export function AssignGroup({
   );
 }
 
+/** Every ask ticked until unticked; `each` makes one write per ticked pull request. */
+export function useTicks(asks: readonly AssignAsk[]): {
+  skipped: ReadonlySet<number>;
+  ticked: number[];
+  toggle: (n: number) => void;
+  each: (write: (n: number) => Promise<void>) => Promise<void>;
+} {
+  const [skipped, setSkipped] = useState<ReadonlySet<number>>(new Set());
+  const ticked = asks.map((a) => a.number).filter((n) => !skipped.has(n));
+  const toggle = (n: number): void =>
+    setSkipped((held) => {
+      const next = new Set(held);
+      if (!next.delete(n)) next.add(n);
+      return next;
+    });
+  const each = async (write: (n: number) => Promise<void>): Promise<void> => {
+    await Promise.all(ticked.map(write));
+  };
+  return { skipped, ticked, toggle, each };
+}
+
 const SEARCH_DELAY_MS = 250;
 
 function PersonButton({
   person,
   onPick,
   disabled,
+  note,
 }: {
   person: PrPerson;
   onPick: (person: PrPerson) => Promise<void>;
   disabled: boolean;
+  note?: string | undefined;
 }): JSX.Element {
   return (
     <AsyncButton
@@ -160,6 +182,7 @@ function PersonButton({
       title={`Assign ${person.name} in the tracker`}
     >
       {person.name}
+      {note !== undefined && <span className="cn-person-note">{note}</span>}
     </AsyncButton>
   );
 }
