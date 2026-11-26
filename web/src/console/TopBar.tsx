@@ -26,7 +26,7 @@ const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   needs: 'Needs you',
-  goals: 'By goal',
+  goals: 'Work',
   tickets: 'Tickets',
   features: 'Features',
   bots: 'Bot PRs',
