@@ -138,7 +138,7 @@ function recoveryBand(view: CockpitView, actions: CockpitActions): JSX.Element |
 
 /** The focus shape is in front, which draws the creatures on its own card. */
 function goalsInFront(view: CockpitView): boolean {
-  return view.tab === 'goals' && view.selectedGoal === null && view.selectedPr === null;
+  return view.tab === 'goals';
 }
 
 function focusInFront(view: CockpitView): boolean {
