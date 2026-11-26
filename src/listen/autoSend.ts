@@ -30,8 +30,8 @@ export class AutoSend {
     private readonly policy: () => ListenPolicy,
   ) {}
 
-  /** Reads the open pull requests only while either kind of sending is on. */
-  observe(openPrs: () => readonly OpenPullRequest[]): void {
+  /** Reads the open pull requests only while either kind of sending is on; a null read is no observation. */
+  observe(openPrs: () => readonly OpenPullRequest[] | null): void {
     const policy = this.policy();
     if (!policy.autoSendReviews && !policy.autoSendReady) {
       this.seen.clear();
@@ -39,6 +39,7 @@ export class AutoSend {
       return;
     }
     const prs = openPrs();
+    if (prs === null) return;
     for (const pr of prs) {
       const why = autoSendWhy(pr);
       if (why === null || !(why === 'review' ? policy.autoSendReviews : policy.autoSendReady)) continue;

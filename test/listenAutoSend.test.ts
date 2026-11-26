@@ -123,6 +123,10 @@ test('the first pass after it is turned on only learns what already qualifies; l
   auto.observe(() => [openPr(3)]);
   assert.equal(sent.length, 2, 'going red and green again is not sent twice');
 
+  auto.observe(() => null);
+  auto.observe(() => [openPr(3)]);
+  assert.equal(sent.length, 2, 'a read that is not whole forgets nothing, so nothing is sent again');
+
   current.policy = { ...current.policy, autoSendReady: false };
   auto.observe(() => [openPr(3), openPr(9)]);
   assert.equal(sent.length, 2, 'ready turned off');
