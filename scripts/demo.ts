@@ -18,14 +18,9 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-async function demoState(vite: ViteDevServer, url: URL): Promise<Partial<AppState>> {
+async function demoState(vite: ViteDevServer): Promise<AppState> {
   const { buildFixtureState } = (await vite.ssrLoadModule(FIXTURES)) as FixtureModule;
-  const state = buildFixtureState();
-  const sections = url.searchParams.get('sections');
-  if (sections === null) return state;
-  const picked: Record<string, unknown> = { refUrls: state.refUrls };
-  for (const key of sections.split(',')) if (key in state) picked[key] = state[key as keyof AppState];
-  return picked as Partial<AppState>;
+  return buildFixtureState();
 }
 
 function demoApi(vite: ViteDevServer) {
@@ -40,7 +35,7 @@ function demoApi(vite: ViteDevServer) {
       send(res, 404, { error: `The demo world has no data for ${url.pathname}` });
       return;
     }
-    demoState(vite, url).then(
+    demoState(vite).then(
       (state) => send(res, 200, state),
       (err: unknown) => {
         vite.ssrFixStacktrace(err as Error);
@@ -60,15 +55,12 @@ function acceptSocket(req: IncomingMessage, socket: Duplex): void {
     'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n' +
       `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
   );
-  socket.on('data', () => undefined);
+  socket.resume();
   socket.on('error', () => socket.destroy());
 }
 
 const demoPlugin: Plugin = {
   name: 'lubbdubb-demo',
-  config(config) {
-    delete config.server?.proxy;
-  },
   configureServer(vite) {
     vite.middlewares.use(demoApi(vite));
     vite.httpServer?.on('upgrade', (req: IncomingMessage, socket: Duplex) => {
@@ -83,6 +75,7 @@ const demoPlugin: Plugin = {
 
 const vite = await createServer({
   configFile: resolve(import.meta.dirname, '../web/vite.config.ts'),
+  mode: 'demo',
   plugins: [demoPlugin],
 });
 await vite.listen();

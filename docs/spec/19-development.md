@@ -461,7 +461,7 @@ what settle whether a new cut is worth making.
 
 `npm run demo` (`scripts/demo.ts`) is for planning and reviewing cockpit design without a live
 deployment: a fresh harness has no goals, agents or PRs, and a surface drawn against an empty store
-cannot be judged. It runs the cockpit's own Vite dev server (`web/vite.config.ts`, proxy removed) and
+cannot be judged. It runs the cockpit's own Vite dev server (`web/vite.config.ts` in mode `demo`, which leaves out its proxy to the server) and
 answers the API itself from [the fixture world](17-cockpit.md#the-fixture-world) —
 `buildFixtureState` in `test/support/cockpitFixtures.ts`, the same `AppState` the render tests use.
 
@@ -469,8 +469,9 @@ answers the API itself from [the fixture world](17-cockpit.md#the-fixture-world)
   the tests that render it, so the demo cannot drift from what a real harness ships. A second demo
   data set would be a third copy of the wire shape for nothing to keep true. To show a new state, add
   it to the fixture world under that spec's rules.
-- **Only `GET /api/state` has data**, rebuilt per request so relative times stay fresh, and honouring
-  `?sections=`. Any other `GET /api/*` answers 404 with a refusal the panel draws; any write answers
+- **Only `GET /api/state` has data**, rebuilt per request so relative times stay fresh. It always
+  answers the whole state, `?sections=` or not — the cockpit merges a patch over what it holds, so the
+  whole state is a correct answer to a partial ask. Any other `GET /api/*` answers 404 with a refusal the panel draws; any write answers
   409 — nothing is saved.
 - **`/ws` is accepted and kept silent**, so the cockpit reads as connected rather than drawing its
   link-down state. No frames are ever sent.

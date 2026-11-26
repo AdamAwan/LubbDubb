@@ -28,16 +28,20 @@ const CHUNKS: [name: string, path: string][] = [
 ];
 
 // The SPA lives in web/ and builds to web/dist, which the Fastify server serves
-// in production. In dev, `npm run web:dev` proxies /api and /ws to the server.
-export default defineConfig({
+// in production. In dev, `npm run web:dev` proxies /api and /ws to the server;
+// `npm run demo` runs in mode `demo`, where scripts/demo.ts answers them instead.
+export default defineConfig(({ mode }) => ({
   root: resolve(__dirname),
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: {
-      '/api': 'http://localhost:4300',
-      '/ws': { target: 'ws://localhost:4300', ws: true },
-    },
+    proxy:
+      mode === 'demo'
+        ? undefined
+        : {
+            '/api': 'http://localhost:4300',
+            '/ws': { target: 'ws://localhost:4300', ws: true },
+          },
   },
   build: {
     outDir: resolve(__dirname, 'dist'),
@@ -72,4 +76,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));
