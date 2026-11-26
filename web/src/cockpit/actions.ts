@@ -99,6 +99,8 @@ export interface CockpitActions {
   /** Writes the watch's outcome to the goal's discussion file; the link that calls it opens `/lubbdubb:discuss <n>` itself. */
   discussWatchOutcome(issueNumber: number): Promise<void>;
   setValidation(issueNumber: number, checkId: string, act: ValidationAct): Promise<void>;
+  /** Mark these checks passed in one write. → docs/spec/20-validation.md#marking-them-all-passed */
+  passValidation(issueNumber: number, checkIds: string[]): Promise<void>;
   viewPlan(planId: string | null): void;
   regroupPlanView(on: boolean): void;
   viewRetro(issueRef: string | null): void;

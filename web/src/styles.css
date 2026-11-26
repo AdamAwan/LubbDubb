@@ -10873,6 +10873,13 @@ button.rv.rv {
 /* Every check the sheet is not answering: a line each. The set stays countable
    and skimmable, and none of it competes with the one check that is asking a
    question. */
+.vq-markall {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+}
 .vq-rest {
   margin-top: 10px;
   font-size: 12px;

@@ -138,6 +138,7 @@ function watchActions(then: Then, refresh: Refresh) {
     answerWatchAsk: (id, answer, presence) => then(api.answerWatchAsk(id, answer, presence)),
     discussWatchOutcome: (issueNumber) => then(api.discussWatchOutcome(issueNumber)),
     setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
+    passValidation: (issueNumber, checkIds) => then(api.passValidation(issueNumber, checkIds)),
   } satisfies Partial<CockpitActions>;
 }
 

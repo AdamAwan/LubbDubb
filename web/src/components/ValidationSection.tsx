@@ -11,11 +11,13 @@ import {
   checkQueue,
   digestCount,
   isMissingFile,
+  markableAsPassed,
   resourcesFor,
   resourceTitle,
   splitChecks,
 } from '../view/validationChecks.js';
 import { logUsage } from '../cockpit/usage.js';
+import { MarkAllPassed } from './markAllPassed.js';
 import { CheckBlock, CheckLine, CheckRuns, stateTone } from './validationCheckRows.js';
 
 // → docs/spec/17-cockpit.md
@@ -81,6 +83,7 @@ interface ValidationSectionProps {
   onWaive: (checkId: string, reason: string) => Promise<unknown> | unknown;
   onReset: (checkId: string) => Promise<unknown> | unknown;
   onHandover: (checkId: string, to: 'fleet' | 'human') => Promise<unknown> | unknown;
+  onPassAll: (checkIds: string[]) => Promise<unknown> | unknown;
 }
 
 /**
@@ -96,8 +99,9 @@ interface ValidationSectionProps {
  * two jobs, and this component is the second one.
  *
  * **Every control writes an operator's reading and derives nothing.** The section
- * has no opinion about whether a check passed; there is no "mark all", and no
- * state is inferred from a merged part or a green build. That is the same refusal
+ * has no opinion about whether a check passed, and no state is inferred from a
+ * merged part or a green build. *Mark all passed* is still a person's reading,
+ * one per check, pressed and confirmed by them. That is the same refusal
  * the acceptance checklist makes, one layer up: a positive terminal inferred from
  * incidental evidence is a check nobody ran, recorded as one that passed.
  *
@@ -118,6 +122,7 @@ export function ValidationSection({
   onWaive,
   onReset,
   onHandover,
+  onPassAll,
 }: ValidationSectionProps) {
   useEffect(() => {
     logUsage('validation.view');
@@ -163,35 +168,36 @@ export function ValidationSection({
      open, the rest as lines — is what the needs band and the plan sheet still draw, where the set
      is read without the runners beside it. Two presentations of one set, because the two surfaces
      are asked different questions. → docs/spec/17-cockpit.md#the-validate-pane */
-  if (standings !== undefined) {
-    return (
-      <BandedChecks
-        live={live}
-        withdrawn={withdrawn}
-        plan={plan}
-        resources={resources}
-        standings={standings}
-        opened={live.find((c) => c.id === focus) ?? null}
-        onOpen={setFocus}
-        onSelect={onSelect}
-        onOpenAgent={onOpenAgent}
-        block={block}
-      />
-    );
-  }
-
   return (
-    <CheckQueue
-      live={live}
-      withdrawn={withdrawn}
-      plan={plan}
-      resources={resources}
-      focus={focus}
-      all={all}
-      onAll={() => setAll(!all)}
-      onOpen={setFocus}
-      block={block}
-    />
+    <>
+      <MarkAllPassed checks={markableAsPassed(live)} onPassAll={onPassAll} onDone={release} />
+      {standings !== undefined ? (
+        <BandedChecks
+          live={live}
+          withdrawn={withdrawn}
+          plan={plan}
+          resources={resources}
+          standings={standings}
+          opened={live.find((c) => c.id === focus) ?? null}
+          onOpen={setFocus}
+          onSelect={onSelect}
+          onOpenAgent={onOpenAgent}
+          block={block}
+        />
+      ) : (
+        <CheckQueue
+          live={live}
+          withdrawn={withdrawn}
+          plan={plan}
+          resources={resources}
+          focus={focus}
+          all={all}
+          onAll={() => setAll(!all)}
+          onOpen={setFocus}
+          block={block}
+        />
+      )}
+    </>
   );
 }
 

@@ -24,6 +24,10 @@ const ResultBody = z.object({
   note: optionalText('note'),
 });
 
+const PassBody = z.object({
+  checkIds: z.array(z.string().min(1), { error: 'checkIds must be a list of check ids' }).min(1, 'checkIds is empty'),
+});
+
 const DeferBody = z.object({
   reason: requiredNote('reason', 'say what it is waiting for'),
   until: z
@@ -69,9 +73,33 @@ function write(
   return next;
 }
 
+function passOwed(ctx: RouteContext, originRef: string, checkIds: string[]): string[] {
+  const { validation } = ctx.system.store;
+  const passed = checkIds.filter((checkId) => {
+    const check = validation.getValidationCheck(originRef, checkId);
+    if (check === null || check.actor !== 'human') return false;
+    if (check.state === 'passed' || check.state === 'waived' || check.state === 'failed') return false;
+    return validation.recordValidationResult(originRef, checkId, { state: 'passed', note: null, by: 'operator' });
+  });
+  if (passed.length > 0) {
+    settled(ctx, originRef);
+    ctx.hub.broadcast({ type: 'world:changed' });
+  }
+  return passed;
+}
+
 export function register(app: FastifyInstance, ctx: RouteContext): void {
   const { system, hub } = ctx;
   const { store } = system;
+
+  app.post(
+    '/api/issues/:number/validation/pass',
+    checked({ params: IssueNumberParams, body: PassBody }, async ({ params, body, reply }) => {
+      const passed = passOwed(ctx, issueOrigin(params.number), body.checkIds);
+      if (passed.length === 0) return reply.code(409).send({ error: 'none of those checks is still owed by a person' });
+      return { ok: true, passed };
+    }),
+  );
 
   app.post(
     '/api/issues/:number/validation/:checkId/result',

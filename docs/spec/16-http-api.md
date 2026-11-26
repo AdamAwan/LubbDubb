@@ -2194,6 +2194,15 @@ Each writes the check's whole current reading, clearing whatever the last one le
 broadcasts `world:changed`. **None of them runs a cycle** — nothing here schedules work, and a pulse
 per checkbox is a pulse per checkbox. Returns `{ ok: true, check }`. → [20](20-validation.md)
 
+### `POST /api/issues/:number/validation/pass`
+
+Body `{checkIds: string[]}`, non-empty: _Mark all passed_. Records an operator `passed` on each listed
+check that is still owed by a person — actor `human`, not already `passed` or `waived`, and **not
+`failed`** — and skips the rest rather than refusing the batch, since the page that sent the list may
+be a pulse behind. The goal's `validate` row is settled and `world:changed` broadcast **once**, after
+every write. Returns `{ ok: true, passed }`, the ids it recorded; **409** when it recorded none.
+Like the per-check routes, it runs no cycle. → [20](20-validation.md#marking-them-all-passed)
+
 ### `POST /api/issues/:number/validation/:checkId/handover`
 
 Body `{to: 'fleet' | 'human'}`, and **the only writer of a check's `actor`**. Handing a check to the

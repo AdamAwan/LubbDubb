@@ -14,6 +14,7 @@ import {
   isMissingFile,
   isOwed,
   lineAside,
+  markableAsPassed,
   resourcesFor,
   resourceTitle,
   splitChecks,
@@ -146,6 +147,22 @@ test('only passed and waived settle a check', () => {
   assert.equal(isOwed(check({ state: 'waived' })), false);
   for (const state of ['unrun', 'captured', 'failed', 'deferred', 'declined'] as const)
     assert.equal(isOwed(check({ state })), true, state);
+});
+
+test("mark all passed takes a person's owed checks, never a failed one or the fleet's", () => {
+  const live = [
+    check({ id: 'unrun' }),
+    check({ id: 'captured', state: 'captured' }),
+    check({ id: 'deferred', state: 'deferred' }),
+    check({ id: 'failed', state: 'failed' }),
+    check({ id: 'passed', state: 'passed' }),
+    check({ id: 'waived', state: 'waived' }),
+    check({ id: 'fleet', actor: 'fleet' }),
+  ];
+  assert.deepEqual(
+    markableAsPassed(live).map((c) => c.id),
+    ['unrun', 'captured', 'deferred'],
+  );
 });
 
 test('the queue opens the first check owed, and lists the rest owed apart from done', () => {

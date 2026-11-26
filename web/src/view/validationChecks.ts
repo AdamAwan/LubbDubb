@@ -22,6 +22,12 @@ export function isOwed(check: Pick<ValidationCheckView, 'state'>): boolean {
   return check.state !== 'passed' && check.state !== 'waived';
 }
 
+/** What one *Mark all passed* press settles: a person's checks still owed, short of one already failed.
+ *  → docs/spec/20-validation.md#marking-them-all-passed */
+export function markableAsPassed(live: readonly ValidationCheckView[]): ValidationCheckView[] {
+  return live.filter((c) => isOwed(c) && c.state !== 'failed' && c.actor === 'human');
+}
+
 interface CheckQueue {
   owed: ValidationCheckView[];
   /** What the sheet draws open: the pinned check, else the first still owed, else the first at all. */

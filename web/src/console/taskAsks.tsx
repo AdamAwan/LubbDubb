@@ -208,6 +208,7 @@ function GoalChecks({
         onWaive={(checkId, reason) => actions.setValidation(number, checkId, { kind: 'waive', reason })}
         onReset={(checkId) => actions.setValidation(number, checkId, { kind: 'reset' })}
         onHandover={(checkId, to) => actions.setValidation(number, checkId, { kind: 'handover', to })}
+        onPassAll={(checkIds) => actions.passValidation(number, checkIds)}
       />
     </div>
   );

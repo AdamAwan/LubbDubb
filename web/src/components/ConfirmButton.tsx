@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAsyncAction } from './AsyncButton.js';
 import { BareButton, buttonClass } from './button.js';
-import type { ButtonSize, Usage } from './button.js';
+import type { ButtonLook, ButtonSize, Usage } from './button.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -12,6 +12,7 @@ export function ConfirmButton({
   onConfirm,
   ghost,
   size,
+  tone = 'danger',
   className,
   title,
   pendingLabel = 'Working…',
@@ -23,6 +24,7 @@ export function ConfirmButton({
   onConfirm: () => Promise<unknown> | unknown;
   ghost?: boolean;
   size?: ButtonSize;
+  tone?: ButtonLook['tone'];
   className?: string;
   title?: string;
   pendingLabel?: string;
@@ -63,7 +65,7 @@ export function ConfirmButton({
       usage={usage}
       logs={armed}
       data-kn-key={hotkey}
-      className={buttonClass({ tone: 'danger', ghost, size, className }, armed ? 'armed' : '', flash)}
+      className={buttonClass({ tone, ghost, size, className }, armed ? 'armed' : '', flash)}
       onClick={handleClick}
       onBlur={disarm}
       disabled={phase === 'pending'}

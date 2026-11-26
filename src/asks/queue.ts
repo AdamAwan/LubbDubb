@@ -77,7 +77,7 @@ const KIND_URGENCY: Record<AskKind, AskUrgency> = {
   findings: 'now',
   profile: 'next',
   close_out: 'next',
-  validate: 'next',
+  validate: 'later',
   validation_plan: 'next',
   bench: 'next',
   config_gap: 'next',
