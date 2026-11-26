@@ -254,14 +254,18 @@ and is the difference between a hook people keep and one they disable.
 `.gitattributes` pins `.githooks/*` to `eol=lf`: git runs hooks through `sh`, and a CRLF shebang
 line is unparseable on any non-Windows checkout.
 
-## The review Stop hook
+## The review hook
 
-`.claude/settings.json` registers `.claude/hooks/review-reminder.sh` as a Claude Code `Stop` hook.
-When the branch's diff against `origin/main` touches `src/`, `web/` or `scripts/`, it blocks the
-stop once and asks the agent to run `/simplify` then `/code-review`. It stamps a hash of that diff in
-the git dir, so it asks once per distinct change set, and it never blocks a stop that is already the
-hook's own continuation (`stop_hook_active`) — without both, it loops. A hook cannot invoke a skill
-itself; it can only hand the agent a reason to.
+`.claude/settings.json` registers `.claude/hooks/review-reminder.sh` as a Claude Code `PreToolUse`
+hook on `Bash`, `mcp__github__create_pull_request` and `mcp__github__push_files`. It acts only when
+the agent is about to submit work, never at the end of an ordinary turn, so questions and design or
+prototype iterations are left alone. A `Bash` call counts only when its command runs `git push` as a
+command (start of line or after `;`, `&`, `|`, `(`), not when the words merely appear in its text.
+When the branch's diff against `origin/main` touches `src/`, `web/` or `scripts/`, it denies that
+first submit once and asks the agent to run `/simplify` then `/code-review`, apply what they find,
+and try again. It records the branch name in `lubbdubb-review-stamp` in the git dir, so it asks once
+per branch: the retry goes through, and later pushes answering PR review do not re-trigger it. A
+hook cannot invoke a skill itself; it can only hand the agent a reason to.
 
 ## What holds the documentation honest
 
