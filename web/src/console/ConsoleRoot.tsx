@@ -24,6 +24,7 @@ import { PetsPage } from '../components/PetsPage.js';
 import { Vivarium, openPets } from './Vivarium.js';
 import { InsightsPage } from '../components/InsightsPage.js';
 import { BotPrsPage } from '../components/BotPrsPage.js';
+import { ReviewersPage } from './ReviewersPage.js';
 import { HandledPage } from '../components/HandledPage.js';
 import { AppErrorsPage } from '../components/AppErrorsPage.js';
 import { Ref } from '../components/refs.js';
@@ -179,37 +180,11 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
         </>
       );
     case 'tickets':
-      return (
-        <TicketsPanel
-          query={{
-            watch: view.ticketWatch,
-            tracking: view.ticketTracking,
-            state: view.ticketState,
-            feature: view.ticketFeature,
-            group: view.ticketGroup,
-            order: view.ticketOrder,
-            view: view.ticketView,
-            columns: view.ticketColumns,
-          }}
-          onQuery={(next) =>
-            actions.setTicketQuery({
-              ...(next.watch !== undefined ? { ticketWatch: next.watch } : {}),
-              ...(next.tracking !== undefined ? { ticketTracking: next.tracking } : {}),
-              ...(next.state !== undefined ? { ticketState: next.state } : {}),
-              ...(next.feature !== undefined ? { ticketFeature: next.feature } : {}),
-              ...(next.group !== undefined ? { ticketGroup: next.group } : {}),
-              ...(next.order !== undefined ? { ticketOrder: next.order } : {}),
-              ...(next.view !== undefined ? { ticketView: next.view } : {}),
-              ...(next.columns !== undefined ? { ticketColumns: next.columns } : {}),
-            })
-          }
-          view={view}
-          actions={actions}
-          now={view.now}
-        />
-      );
+      return <TicketsTab view={view} actions={actions} />;
     case 'bots':
       return <BotPrsPage now={view.now} />;
+    case 'reviewers':
+      return <ReviewersPage view={view} actions={actions} />;
     case 'handled':
       return <HandledPage now={view.now} />;
     case 'errors':
@@ -229,6 +204,38 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
     case 'config':
       return <ConfigPage view={view} actions={actions} />;
   }
+}
+
+function TicketsTab({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  return (
+    <TicketsPanel
+      query={{
+        watch: view.ticketWatch,
+        tracking: view.ticketTracking,
+        state: view.ticketState,
+        feature: view.ticketFeature,
+        group: view.ticketGroup,
+        order: view.ticketOrder,
+        view: view.ticketView,
+        columns: view.ticketColumns,
+      }}
+      onQuery={(next) =>
+        actions.setTicketQuery({
+          ...(next.watch !== undefined ? { ticketWatch: next.watch } : {}),
+          ...(next.tracking !== undefined ? { ticketTracking: next.tracking } : {}),
+          ...(next.state !== undefined ? { ticketState: next.state } : {}),
+          ...(next.feature !== undefined ? { ticketFeature: next.feature } : {}),
+          ...(next.group !== undefined ? { ticketGroup: next.group } : {}),
+          ...(next.order !== undefined ? { ticketOrder: next.order } : {}),
+          ...(next.view !== undefined ? { ticketView: next.view } : {}),
+          ...(next.columns !== undefined ? { ticketColumns: next.columns } : {}),
+        })
+      }
+      view={view}
+      actions={actions}
+      now={view.now}
+    />
+  );
 }
 
 function GoalGone({ ref_, tab, actions }: { ref_: string; tab: ConsoleTab; actions: CockpitActions }): JSX.Element {

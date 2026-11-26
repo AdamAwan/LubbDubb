@@ -75,7 +75,7 @@ export function askTitle(
   return { title: askLine(summary, goalRef, state), summary };
 }
 
-export function askLine(summary: string, goalRef: string | null, state: AskInputs): string {
+function askLine(summary: string, goalRef: string | null, state: AskInputs): string {
   const issue = goalRef === null ? undefined : goalIssue(state, goalRef);
   if (issue === undefined) return summary;
   const named = new RegExp(`#${issue.number}(?!\\d)`).test(summary);

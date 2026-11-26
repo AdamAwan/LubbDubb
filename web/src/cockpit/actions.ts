@@ -45,7 +45,17 @@ export type ConsolePanel =
   | null;
 
 export type ConsoleTab =
-  'overview' | 'needs' | 'tickets' | 'features' | 'bots' | 'handled' | 'errors' | 'insights' | 'pets' | 'config';
+  | 'overview'
+  | 'needs'
+  | 'tickets'
+  | 'features'
+  | 'bots'
+  | 'handled'
+  | 'reviewers'
+  | 'errors'
+  | 'insights'
+  | 'pets'
+  | 'config';
 
 export type InsightsView =
   'economics' | 'allowance' | 'reliability' | 'throughput' | 'causes' | 'trend' | 'mcp' | 'usage';

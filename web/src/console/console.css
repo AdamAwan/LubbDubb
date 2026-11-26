@@ -8014,3 +8014,37 @@ button.cn-grow {
   align-items: center;
   gap: 6px;
 }
+/* Every reviewer ask, one page, grouped by stack.
+   → docs/spec/17-cockpit.md#every-reviewer-ask-is-one-page */
+.cn-rv {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.cn-rv > header h2 {
+  margin: 0 0 4px;
+}
+.cn-rv-group li {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px 0;
+}
+.cn-rv-pr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cn-rv-do {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-left: 24px;
+}
+.cn-rv-note {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--cn-fg-dim);
+}

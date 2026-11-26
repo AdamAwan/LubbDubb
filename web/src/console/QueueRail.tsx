@@ -10,8 +10,8 @@ import { PrLink, Ref, refLabel } from '../components/refs.js';
 import { BareButton, Button } from '../components/button.js';
 import { Tag } from '../components/tag.js';
 import { CardFoot, ConfigFix, SettledFix, UpdateActs } from './queueRailFoots.js';
-import { assignGroupLine, groupAsks, type AssignAsk } from '../view/askGroups.js';
-import { askLine } from '../view/needLines.js';
+import { foldAssignAsks, type AssignAsk } from '../view/askGroups.js';
+import { reviewersLine } from '../view/reviewersPage.js';
 import { FoldToggle } from '../components/collapsible.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../view/askKinds.js';
 import { tabUsage } from '../cockpit/usage.js';
@@ -383,8 +383,8 @@ function Row({
   );
 }
 
-/* Several assign asks folded by `groupAsks` are one card, the pull requests as refs in its foot.
-   → docs/spec/17-cockpit.md#the-same-ask-twice-is-one-ask */
+/* Every assign ask in a section, folded by `foldAssignAsks`, is one card that opens the Reviewers
+   page, the pull requests as refs in its foot. → docs/spec/17-cockpit.md#every-reviewer-ask-is-one-page */
 function AssignGroupRow({
   first,
   asks,
@@ -398,9 +398,15 @@ function AssignGroupRow({
   focus: string | null;
   actions: CockpitActions;
 }): JSX.Element {
-  const row: NeedRow = { ...first, title: askLine(assignGroupLine(asks.length), first.goalRef, view.state) };
-  const open = openRow(row, actions);
-  const current = focus !== null && row.goalRef === focus;
+  const row: NeedRow = { ...first, goalRef: null, title: reviewersLine(asks.length) };
+  const open = {
+    usage: tabUsage('reviewers'),
+    go: () => {
+      actions.selectGoal(null);
+      actions.openTab('reviewers');
+    },
+  };
+  const current = focus === null && view.tab === 'reviewers';
   return (
     <Card
       cls={rowClass(row, focus, current)}
@@ -492,7 +498,7 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
           <RailTiers
             rows={rows}
             draw={(tier) =>
-              groupAsks(tier, view.state).map((item) =>
+              foldAssignAsks(tier, view.state).map((item) =>
                 item.kind === 'assign' ? (
                   <AssignGroupRow
                     key={`assign:${item.first.id}`}

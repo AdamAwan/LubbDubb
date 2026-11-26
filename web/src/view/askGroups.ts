@@ -45,3 +45,25 @@ export function groupAsks(rows: readonly NeedRow[], state: AppState): AskItem[] 
   }
   return items;
 }
+
+/**
+ * The rail's fold: every assign ask, whatever its goal or shortlist, is one item where the first
+ * stood, answered on the Reviewers page. → docs/spec/17-cockpit.md#every-reviewer-ask-is-one-page
+ */
+export function foldAssignAsks(rows: readonly NeedRow[], state: AppState): AskItem[] {
+  const asks: AssignAsk[] = [];
+  let first: NeedRow | null = null;
+  for (const row of rows) {
+    const ask = assignAskOf(row, state);
+    if (ask === null) continue;
+    asks.push(ask);
+    first ??= row;
+  }
+  if (first === null || asks.length < 2) return rows.map((row) => ({ kind: 'one', row }));
+  const items: AskItem[] = [];
+  for (const row of rows) {
+    if (row === first) items.push({ kind: 'assign', first, asks });
+    else if (assignAskOf(row, state) === null) items.push({ kind: 'one', row });
+  }
+  return items;
+}

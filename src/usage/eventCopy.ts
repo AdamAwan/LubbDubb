@@ -248,6 +248,10 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   'schedule.abandon': { label: 'Deleted a schedule', blurb: 'A recurrence was forgotten; jobs it queued are kept' },
   'review-thread.reject': { label: 'Reopened a thread', blurb: 'A review thread was put back to the fleet' },
   'review-thread.undo': { label: 'Withdrew a reopen', blurb: 'The thread was left as the provider has it' },
+  'pr-assignee.view': {
+    label: 'Opened Reviewers',
+    blurb: 'The page of every pull request waiting on someone to be put on it was reached',
+  },
   'pr-assignee.expand': { label: 'Searched for an assignee', blurb: 'Looked past the shortlist for someone else' },
   'pr-assignee.accept': { label: 'Assigned a pull request', blurb: 'Someone was put on it' },
   'pr-assignee.reject': { label: 'Left it unassigned', blurb: 'The assign ask was declined' },
