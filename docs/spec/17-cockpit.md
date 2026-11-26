@@ -2675,17 +2675,19 @@ whatever its goal — and sends the operator to [one page](#every-reviewer-ask-i
 #### Every reviewer ask is one page
 
 Twelve unassigned pull requests across four goals were twelve rail rows, or four cards at best, each
-asking the same thing. The rail runs each urgency section through `foldAssignAsks`
-(`web/src/view/askGroups.ts`), which folds **every** assign ask in it — any goal, any shortlist —
-into one card (`AssignGroupRow`) where the first stood: `N pull requests need a reviewer`
-(`reviewersLine`), the pull requests as refs in its foot. A lone ask stays its own row. The card's
+asking the same thing. The rail runs each urgency section through `groupAsks`
+(`web/src/view/askGroups.ts`) with one constant key, which folds **every** assign ask in it — any
+goal, any shortlist — into one card (`AssignGroupRow`) where the first stood: `N pull requests need a
+reviewer` (`assignGroupLine`, the goal page's group line too), the pull requests as refs in its foot. A lone ask stays its own row. The card's
 press opens the **Reviewers** tab (`reviewers`, `web/src/console/ReviewersPage.tsx`), which is not in
 the nav: it is reached from the card, and by its address. The rail's count stays every row, folded
 ones included.
 
 The page draws the same asks — the `assign` rows of `needsYou` — grouped by stack (`reviewerGroups`
 in `web/src/view/reviewersPage.ts`, over `AppState.stacks`): each stack its rungs in stack order,
-drawn as a tree, and the pull requests stacked on nothing in one last group. Every pull request keeps
+drawn as a tree counted from the shallowest ask shown (a rung already reviewed is not drawn, so
+nothing hangs from it), and the pull requests stacked on nothing in one last group, each with its own
+goal ref since that group gathers any goal. Every pull request keeps
 its own shortlist, search and **Nah**, each the same `assignPr` / `declineAssignPr` write its rail
 row would make. A stack with two or more asks also offers **the whole stack at once**: each of its
 pull requests ticked, and the union of their shortlists, a name or **Nah** written once per ticked
@@ -2693,10 +2695,10 @@ pull request — as the goal page's group does, so the page adds no route of its
 
 Each person on a shortlist carries their standing, read off the world the cockpit already holds:
 
-| Standing          | Read from                                                                          |
-| ----------------- | ---------------------------------------------------------------------------------- |
-| `free` / `N open` | How many open pull requests name them in `assignees`.                              |
-| knows this stack  | They are an assignee or the author of another open pull request in the same stack. |
+| Standing          | Read from                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `free` / `N open` | How many open pull requests name them in `assignees`.                                                                                           |
+| knows this stack  | They are an assignee or the author (by id or name, ignoring case, as `assignShortlist` matches) of another open pull request in the same stack. |
 
 A stack's union lists those who know it first. Whether someone is **away** is not drawn: no tracker
 the harness reads says so, and a guess at it would be a standing the operator trusts and nothing

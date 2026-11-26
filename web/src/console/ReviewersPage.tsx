@@ -1,17 +1,10 @@
 import type { CSSProperties, JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { PrPerson } from '../types.js';
 import { Ref } from '../components/refs.js';
 import { oneLine } from '../view/needLines.js';
-import {
-  reviewerAsks,
-  reviewerGroups,
-  reviewersLine,
-  standingNote,
-  type ReviewerGroup,
-  type ReviewerStanding,
-} from '../view/reviewersPage.js';
+import { notesOf, reviewerAsks, reviewerGroups, type ReviewerGroup } from '../view/reviewersPage.js';
+import { assignGroupLine } from '../view/askGroups.js';
 import { ShortlistButtons, useTicks } from './assignAsks.js';
 import { KIND_TONE } from '../view/askKinds.js';
 
@@ -24,7 +17,7 @@ export function ReviewersPage({ view, actions }: { view: CockpitView; actions: C
   return (
     <section className="cn-rv">
       <header>
-        <h2>{reviewersLine(asks.length)}</h2>
+        <h2>{assignGroupLine(asks.length)}</h2>
         <p className="muted">
           The fleet is done with these and nobody is on them. A stack is usually best read by one person, so each stack
           can be answered once.
@@ -35,13 +28,6 @@ export function ReviewersPage({ view, actions }: { view: CockpitView; actions: C
       ))}
     </section>
   );
-}
-
-function noteOf(people: readonly ReviewerStanding[]): (person: PrPerson) => string {
-  return (person) => {
-    const s = people.find((p) => p.person.id === person.id);
-    return s === undefined ? '' : standingNote(s);
-  };
 }
 
 function GroupCard({ group, actions }: { group: ReviewerGroup; actions: CockpitActions }): JSX.Element {
@@ -60,7 +46,7 @@ function GroupCard({ group, actions }: { group: ReviewerGroup; actions: CockpitA
         )}
       </header>
       <ul>
-        {group.rungs.map(({ ask, depth, people }) => (
+        {group.rungs.map(({ ask, depth, goal, people }) => (
           <li key={ask.number}>
             <div className="cn-rv-pr">
               {whole && (
@@ -77,15 +63,22 @@ function GroupCard({ group, actions }: { group: ReviewerGroup; actions: CockpitA
                   └
                 </span>
               )}
-              <Ref to={`pr:${ask.number}`} />
-              <label htmlFor={`rv-pick-${ask.number}`} className="cn-grow">
-                {oneLine(ask.title)}
-              </label>
+              <span className="cn-refs">
+                <Ref to={`pr:${ask.number}`} />
+                {goal !== null && <Ref to={goal} />}
+              </span>
+              {whole ? (
+                <label htmlFor={`rv-pick-${ask.number}`} className="cn-grow">
+                  {oneLine(ask.title)}
+                </label>
+              ) : (
+                <span className="cn-grow">{oneLine(ask.title)}</span>
+              )}
             </div>
             <div className="cn-rv-do">
               <ShortlistButtons
                 people={ask.assignAsk}
-                note={noteOf(people)}
+                notes={notesOf(people)}
                 search={actions.searchAssignees}
                 onPick={(person) => actions.assignPr(ask.number, person.id, person.name)}
                 onDecline={() => actions.declineAssignPr(ask.number)}
@@ -101,7 +94,7 @@ function GroupCard({ group, actions }: { group: ReviewerGroup; actions: CockpitA
           </span>
           <ShortlistButtons
             people={group.people.map((s) => s.person)}
-            note={noteOf(group.people)}
+            notes={notesOf(group.people)}
             disabled={none}
             search={actions.searchAssignees}
             onPick={(person) => each((n) => actions.assignPr(n, person.id, person.name))}

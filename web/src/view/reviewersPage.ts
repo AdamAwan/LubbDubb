@@ -15,13 +15,17 @@ export interface ReviewerStanding {
 
 interface ReviewerRung {
   ask: AssignAsk;
+  /** Below the shallowest ask drawn, so a tie never hangs from a rung the page leaves out. */
   depth: number;
+  /** Its own goal, drawn only in the unstacked group, which gathers asks from any goal. */
+  goal: string | null;
   people: ReviewerStanding[];
 }
 
 export interface ReviewerGroup {
   /** The stack's ref, or null for the pull requests stacked on nothing. */
   stack: string | null;
+  /** The stack's goal; null for the unstacked group, whose rungs carry their own. */
   goal: string | null;
   rungs: ReviewerRung[];
   /** Everyone any of its pull requests shortlists, those who know the stack first. */
@@ -35,52 +39,69 @@ export function reviewerAsks(rows: readonly NeedRow[], state: AppState): AssignA
   });
 }
 
-export function reviewerGroups(asks: readonly AssignAsk[], state: AppState): ReviewerGroup[] {
-  const open = state.world.pullRequests;
-  const load = new Map<string, number>();
-  for (const pr of open) for (const p of pr.assignees ?? []) load.set(p.id, (load.get(p.id) ?? 0) + 1);
+interface Placed {
+  ask: AssignAsk;
+  depth: number;
+  stackPrs: readonly OpenPullRequest[];
+}
 
-  const stackOf = new Map<number, { ref: string; members: number[]; position: number }>();
+const same = (a: string | undefined, b: string): boolean => a !== undefined && a.toLowerCase() === b.toLowerCase();
+
+function stackIndex(state: AppState): Map<number, { ref: string; depth: number; prs: OpenPullRequest[] }> {
+  const byNumber = new Map(state.world.pullRequests.map((pr) => [pr.number, pr]));
+  const stackOf = new Map<number, { ref: string; depth: number; prs: OpenPullRequest[] }>();
   for (const stack of state.stacks ?? []) {
-    const members = stack.rungs.map((r) => r.prNumber);
-    stack.rungs.forEach((rung, i) => {
-      if (!stackOf.has(rung.prNumber)) stackOf.set(rung.prNumber, { ref: stack.ref, members, position: i });
-    });
+    const prs = stack.rungs.flatMap((r) => byNumber.get(r.prNumber) ?? []);
+    for (const rung of stack.rungs)
+      if (!stackOf.has(rung.prNumber)) stackOf.set(rung.prNumber, { ref: stack.ref, depth: rung.position - 1, prs });
   }
+  return stackOf;
+}
 
-  const byGroup = new Map<string | null, { ask: AssignAsk; position: number; members: number[] }[]>();
+function knowsOne(person: PrPerson, pr: OpenPullRequest): boolean {
+  return (
+    same(pr.author, person.id) || same(pr.author, person.name) || (pr.assignees ?? []).some((a) => a.id === person.id)
+  );
+}
+
+export function reviewerGroups(asks: readonly AssignAsk[], state: AppState): ReviewerGroup[] {
+  const load = new Map<string, number>();
+  for (const pr of state.world.pullRequests)
+    for (const p of pr.assignees ?? []) load.set(p.id, (load.get(p.id) ?? 0) + 1);
+  const stackOf = stackIndex(state);
+
+  const byGroup = new Map<string | null, Placed[]>();
   for (const ask of asks) {
     const at = stackOf.get(ask.number);
-    const key = at?.ref ?? null;
-    const list = byGroup.get(key) ?? [];
-    list.push({ ask, position: at?.position ?? 0, members: at?.members ?? [] });
-    byGroup.set(key, list);
+    const placed = { ask, depth: at?.depth ?? 0, stackPrs: at?.prs ?? [] };
+    byGroup.set(at?.ref ?? null, [...(byGroup.get(at?.ref ?? null) ?? []), placed]);
   }
 
   const standing = (person: PrPerson, others: readonly OpenPullRequest[]): ReviewerStanding => ({
     person,
     open: load.get(person.id) ?? 0,
-    knows: others.some(
-      (pr) =>
-        pr.author === person.id || pr.author === person.name || (pr.assignees ?? []).some((a) => a.id === person.id),
-    ),
+    knows: others.some((pr) => knowsOne(person, pr)),
   });
 
-  const groups = [...byGroup.entries()].map(([stack, members]): ReviewerGroup => {
-    members.sort((a, b) => a.position - b.position || a.ask.number - b.ask.number);
-    const rungs = members.map(({ ask, position, members: stackPrs }): ReviewerRung => {
-      const others = open.filter((pr) => pr.number !== ask.number && stackPrs.includes(pr.number));
-      return { ask, depth: stack === null ? 0 : position, people: ask.assignAsk.map((p) => standing(p, others)) };
+  const groups = [...byGroup.entries()].map(([stack, placed]): ReviewerGroup => {
+    placed.sort((a, b) => a.depth - b.depth || a.ask.number - b.ask.number);
+    const top = placed[0]?.depth ?? 0;
+    const rungs = placed.map(({ ask, depth, stackPrs }): ReviewerRung => {
+      const others = stackPrs.filter((pr) => pr.number !== ask.number);
+      return {
+        ask,
+        depth: depth - top,
+        goal: stack === null ? goalOfPr(state, ask.number) : null,
+        people: ask.assignAsk.map((p) => standing(p, others)),
+      };
     });
     const seen = new Map<string, ReviewerStanding>();
-    for (const rung of rungs)
-      for (const s of rung.people) {
-        const was = seen.get(s.person.id);
-        seen.set(s.person.id, was === undefined ? s : { ...was, knows: was.knows || s.knows });
-      }
+    for (const s of rungs.flatMap((r) => r.people)) {
+      const was = seen.get(s.person.id);
+      seen.set(s.person.id, was === undefined ? s : { ...was, knows: was.knows || s.knows });
+    }
     const people = [...seen.values()].sort((a, b) => Number(b.knows) - Number(a.knows));
-    const first = members[0]?.ask.number;
-    return { stack, goal: first === undefined ? null : goalOfPr(state, first), rungs, people };
+    return { stack, goal: stack === null ? null : goalOfPr(state, rungs[0]!.ask.number), rungs, people };
   });
   return groups.sort((a, b) => Number(a.stack === null) - Number(b.stack === null));
 }
@@ -90,6 +111,7 @@ export function standingNote(s: ReviewerStanding): string {
   return s.knows ? `knows this stack · ${load}` : load;
 }
 
-export function reviewersLine(count: number): string {
-  return count === 1 ? '1 pull request needs a reviewer' : `${count} pull requests need a reviewer`;
+/** Each person's note, by id, for the buttons that name them. */
+export function notesOf(people: readonly ReviewerStanding[]): ReadonlyMap<string, string> {
+  return new Map(people.map((s) => [s.person.id, standingNote(s)]));
 }

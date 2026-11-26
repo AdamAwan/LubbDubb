@@ -48,15 +48,15 @@ export function ShortlistButtons({
   onPick,
   onDecline,
   disabled = false,
-  note,
+  notes,
 }: {
   people: AssignAsk['assignAsk'];
   search: (query: string) => Promise<PrPerson[]>;
   onPick: (person: PrPerson) => Promise<void>;
   onDecline: () => Promise<void>;
   disabled?: boolean;
-  /** What the operator should know about each person before picking them. */
-  note?: (person: PrPerson) => string;
+  /** What the operator should know about each person before picking them, by id. */
+  notes?: ReadonlyMap<string, string>;
 }): JSX.Element {
   return (
     <>
@@ -66,7 +66,7 @@ export function ShortlistButtons({
           person={person}
           onPick={onPick}
           disabled={disabled}
-          {...(note === undefined ? {} : { note: note(person) })}
+          note={notes?.get(person.id)}
         />
       ))}
       <AssigneeSearch shortlisted={people} search={search} onPick={onPick} disabled={disabled} />
@@ -171,7 +171,7 @@ function PersonButton({
   person: PrPerson;
   onPick: (person: PrPerson) => Promise<void>;
   disabled: boolean;
-  note?: string;
+  note?: string | undefined;
 }): JSX.Element {
   return (
     <AsyncButton
@@ -182,7 +182,7 @@ function PersonButton({
       title={`Assign ${person.name} in the tracker`}
     >
       {person.name}
-      {note !== undefined && <span className="cn-rv-note">{note}</span>}
+      {note !== undefined && <span className="cn-person-note">{note}</span>}
     </AsyncButton>
   );
 }

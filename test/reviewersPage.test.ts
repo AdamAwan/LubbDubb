@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 (globalThis as { React?: typeof React }).React = React;
 
 const { buildFixtureState } = await import('./support/cockpitFixtures.js');
-const { foldAssignAsks } = await import('../web/src/view/askGroups.js');
+const { groupAsks } = await import('../web/src/view/askGroups.js');
 const { reviewerAsks, reviewerGroups, standingNote } = await import('../web/src/view/reviewersPage.js');
 
 // → docs/spec/17-cockpit.md#every-reviewer-ask-is-one-page
@@ -63,7 +63,11 @@ const other = { id: 'e1', kind: 'escalation', goalRef: 'issue:1' } as NeedRow;
 
 test('the rail folds every assign ask into one item, whatever its goal or shortlist', () => {
   const s = state({ 10: { assignAsk: [sam] }, 11: { assignAsk: [kim] }, 12: { assignAsk: [sam, kim] } });
-  const items = foldAssignAsks([other, assignRow(10, 'issue:1'), assignRow(11, 'issue:2'), assignRow(12, null)], s);
+  const items = groupAsks(
+    [other, assignRow(10, 'issue:1'), assignRow(11, 'issue:2'), assignRow(12, null)],
+    s,
+    () => 'all',
+  );
   assert.deepEqual(
     items.map((i) => i.kind),
     ['one', 'assign'],
@@ -74,7 +78,7 @@ test('the rail folds every assign ask into one item, whatever its goal or shortl
 test('a lone assign ask stays its own row', () => {
   const s = state({ 10: { assignAsk: [sam] } });
   assert.deepEqual(
-    foldAssignAsks([assignRow(10, null), other], s).map((i) => i.kind),
+    groupAsks([assignRow(10, null), other], s, () => 'all').map((i) => i.kind),
     ['one', 'one'],
   );
 });
@@ -98,6 +102,7 @@ test('the page groups asks by stack, in stack order, with the unstacked last', (
     groups.map((g) => g.stack),
     ['stack:22', null],
   );
+  assert.equal(groups[1]?.goal, null, 'the unstacked group gathers any goal, so its rungs carry their own');
   assert.deepEqual(
     groups[0]?.rungs.map((r) => [r.ask.number, r.depth]),
     [
@@ -148,4 +153,13 @@ test('the page draws each stack once, with a whole-stack answer and every pull r
   assert.equal(html.match(/cn-rv-group/g)?.length, 2);
   assert.equal(html.match(/Whole stack/g)?.length, 1, 'only the stack offers the whole-stack answer');
   assert.equal(html.match(/cn-stack-tie/g)?.length, 1);
+});
+
+test('a stack whose bottom rungs are already reviewed draws its first ask at the root', () => {
+  const s = state({ 80: {}, 81: { assignAsk: [sam] }, 82: { assignAsk: [sam] } }, [[80, 81, 82]]);
+  const [group] = reviewerGroups(reviewerAsks([assignRow(81, null), assignRow(82, null)], s), s);
+  assert.deepEqual(
+    group?.rungs.map((r) => r.depth),
+    [0, 1],
+  );
 });

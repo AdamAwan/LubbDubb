@@ -2,7 +2,7 @@ import { Fragment, useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedGroup, NeedKind, NeedRow, NeedUrgency } from '../view/needsYou.js';
-import { openRow, rowDestination } from './queueRailOpens.js';
+import { openRow, rowDestination, tabDestination } from './queueRailOpens.js';
 import type { Destination } from '../components/button.js';
 import type { BuildReading, ControlUsage, SetupCheck } from '../types.js';
 import { relTime } from '../components/util.js';
@@ -10,8 +10,7 @@ import { PrLink, Ref, refLabel } from '../components/refs.js';
 import { BareButton, Button } from '../components/button.js';
 import { Tag } from '../components/tag.js';
 import { CardFoot, ConfigFix, SettledFix, UpdateActs } from './queueRailFoots.js';
-import { foldAssignAsks, type AssignAsk } from '../view/askGroups.js';
-import { reviewersLine } from '../view/reviewersPage.js';
+import { assignGroupLine, groupAsks, type AssignAsk } from '../view/askGroups.js';
 import { FoldToggle } from '../components/collapsible.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../view/askKinds.js';
 import { tabUsage } from '../cockpit/usage.js';
@@ -383,7 +382,7 @@ function Row({
   );
 }
 
-/* Every assign ask in a section, folded by `foldAssignAsks`, is one card that opens the Reviewers
+/* Every assign ask in a section, folded by `groupAsks` with one key, is one card that opens the Reviewers
    page, the pull requests as refs in its foot. → docs/spec/17-cockpit.md#every-reviewer-ask-is-one-page */
 function AssignGroupRow({
   first,
@@ -398,14 +397,8 @@ function AssignGroupRow({
   focus: string | null;
   actions: CockpitActions;
 }): JSX.Element {
-  const row: NeedRow = { ...first, goalRef: null, title: reviewersLine(asks.length) };
-  const open = {
-    usage: tabUsage('reviewers'),
-    go: () => {
-      actions.selectGoal(null);
-      actions.openTab('reviewers');
-    },
-  };
+  const row: NeedRow = { ...first, goalRef: null, title: assignGroupLine(asks.length) };
+  const open = tabDestination('reviewers', actions);
   const current = focus === null && view.tab === 'reviewers';
   return (
     <Card
@@ -498,7 +491,7 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
           <RailTiers
             rows={rows}
             draw={(tier) =>
-              foldAssignAsks(tier, view.state).map((item) =>
+              groupAsks(tier, view.state, () => 'all').map((item) =>
                 item.kind === 'assign' ? (
                   <AssignGroupRow
                     key={`assign:${item.first.id}`}
