@@ -974,8 +974,11 @@ _complete_ and, past about a dozen rows, that was the whole of its cost.
 the last one's. `now` is what the fleet cannot get past — `recovery`, `escalation`, `permission`,
 `dispatch`, `fleet_stall`, `config`, the two proposals that gate work, `plan` and `merge`, and the ask planning waits on, `findings`. `next` is an
 obligation of the operator's that gates something: `reply`, `shortfall`, `intake`, `profile`,
-`close_out`, `validate`, `bench`, `config_gap`, `supply`, `describe`, `description_wrong`, `bot_pr`. `later` is an ask holding nothing at all —
+`close_out`, `bench`, `config_gap`, `supply`, `describe`, `description_wrong`, `bot_pr`. `later` is an ask holding nothing at all —
 `description_note`, `watch`, `burn`, `placement`, `assigned`, `upgrade`, `project_pull`, and `limit`.
+**`validate` is `later` too**: checks are run when the operator chooses to, and an ask that sat
+under _Yours to do_ from the moment of delivery was one they kept stepping over. The close-out still
+counts what is owed, so nothing is lost by it waiting.
 
 **`limit` is `later` and `blocking` at once, which is the point of having both readings.** An agent is
 parked and its slot is held — the group says so, and its row still draws at full weight — but there is
@@ -3054,9 +3057,10 @@ do exactly that. Folding away the steps costs a click; folding away "the check y
 rewritten" costs the reading. And the **result note**, because it is the answer to the question the
 row asks, and a state chip without the sentence behind it is the half nobody can act on.
 
-**Every control writes an operator's reading and derives nothing** — there is no "mark all", and no
-state is inferred from a merged part or a green build, which is the acceptance checklist's rule one
-layer up. Checks an amendment withdrew are drawn folded, as the record of what the plan stopped
+**Every control writes an operator's reading and derives nothing** — no state is inferred from a
+merged part or a green build, which is the acceptance checklist's rule one layer up. _Mark all passed_
+is a person's own reading on each check, confirmed before it writes
+([20](20-validation.md#marking-them-all-passed)). Checks an amendment withdrew are drawn folded, as the record of what the plan stopped
 asking for: filtering them would leave a reader unable to tell a dropped check from one nobody wrote.
 
 **One amber line at the top, not two.** What is not settled, what closing the goal will ask for, and
