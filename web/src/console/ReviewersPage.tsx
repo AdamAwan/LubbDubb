@@ -35,13 +35,14 @@ function GroupCard({ group, actions }: { group: ReviewerGroup; actions: CockpitA
   const { skipped, ticked, toggle, each } = useTicks(asks);
   const whole = group.stack !== null && asks.length > 1;
   const none = ticked.length === 0;
+  const stackGoal = group.stack === null ? null : (group.rungs[0]?.goal ?? null);
   return (
     <div className={`cn-needs-group cn-rv-group cn-t-${KIND_TONE.assign}`}>
       <header>
         <span className="cn-needs-kind">{group.stack === null ? 'Not stacked' : 'Stack'}</span>
-        {group.goal !== null && (
+        {stackGoal !== null && (
           <span className="cn-refs">
-            <Ref to={group.goal} />
+            <Ref to={stackGoal} />
           </span>
         )}
       </header>
@@ -65,15 +66,11 @@ function GroupCard({ group, actions }: { group: ReviewerGroup; actions: CockpitA
               )}
               <span className="cn-refs">
                 <Ref to={`pr:${ask.number}`} />
-                {goal !== null && <Ref to={goal} />}
+                {group.stack === null && <Ref to={goal} />}
               </span>
-              {whole ? (
-                <label htmlFor={`rv-pick-${ask.number}`} className="cn-grow">
-                  {oneLine(ask.title)}
-                </label>
-              ) : (
-                <span className="cn-grow">{oneLine(ask.title)}</span>
-              )}
+              <label className="cn-grow" {...(whole ? { htmlFor: `rv-pick-${ask.number}` } : {})}>
+                {oneLine(ask.title)}
+              </label>
             </div>
             <div className="cn-rv-do">
               <ShortlistButtons

@@ -102,7 +102,6 @@ test('the page groups asks by stack, in stack order, with the unstacked last', (
     groups.map((g) => g.stack),
     ['stack:22', null],
   );
-  assert.equal(groups[1]?.goal, null, 'the unstacked group gathers any goal, so its rungs carry their own');
   assert.deepEqual(
     groups[0]?.rungs.map((r) => [r.ask.number, r.depth]),
     [

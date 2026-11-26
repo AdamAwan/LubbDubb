@@ -13,7 +13,6 @@ import { CardFoot, ConfigFix, SettledFix, UpdateActs } from './queueRailFoots.js
 import { assignGroupLine, groupAsks, type AssignAsk } from '../view/askGroups.js';
 import { FoldToggle } from '../components/collapsible.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../view/askKinds.js';
-import { tabUsage } from '../cockpit/usage.js';
 import { classes } from '../components/classes.js';
 
 // → docs/spec/17-cockpit.md
@@ -525,15 +524,9 @@ export function QueueRail({ view, actions }: { view: CockpitView; actions: Cockp
 export function HandledLine({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const open = view.state.handledOpen;
   const here = view.goalPage === null && view.tab === 'handled';
+  const go = tabDestination('handled', actions);
   return (
-    <BareButton
-      usage={tabUsage('handled')}
-      className={`cn-handled${here ? ' cn-on' : ''}`}
-      onClick={() => {
-        actions.selectGoal(null);
-        actions.openTab('handled');
-      }}
-    >
+    <BareButton usage={go.usage} className={`cn-handled${here ? ' cn-on' : ''}`} onClick={go.go}>
       <span className="cn-handled-mark">✓</span>
       <span>Handled for you</span>
       {open > 0 && <i className="cn-count">{open}</i>}

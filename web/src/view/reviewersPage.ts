@@ -17,7 +17,6 @@ interface ReviewerRung {
   ask: AssignAsk;
   /** Below the shallowest ask drawn, so a tie never hangs from a rung the page leaves out. */
   depth: number;
-  /** Its own goal, drawn only in the unstacked group, which gathers asks from any goal. */
   goal: string | null;
   people: ReviewerStanding[];
 }
@@ -25,8 +24,6 @@ interface ReviewerRung {
 export interface ReviewerGroup {
   /** The stack's ref, or null for the pull requests stacked on nothing. */
   stack: string | null;
-  /** The stack's goal; null for the unstacked group, whose rungs carry their own. */
-  goal: string | null;
   rungs: ReviewerRung[];
   /** Everyone any of its pull requests shortlists, those who know the stack first. */
   people: ReviewerStanding[];
@@ -47,9 +44,15 @@ interface Placed {
 
 const same = (a: string | undefined, b: string): boolean => a !== undefined && a.toLowerCase() === b.toLowerCase();
 
-function stackIndex(state: AppState): Map<number, { ref: string; depth: number; prs: OpenPullRequest[] }> {
+interface StackSeat {
+  ref: string;
+  depth: number;
+  prs: OpenPullRequest[];
+}
+
+function stackIndex(state: AppState): Map<number, StackSeat> {
   const byNumber = new Map(state.world.pullRequests.map((pr) => [pr.number, pr]));
-  const stackOf = new Map<number, { ref: string; depth: number; prs: OpenPullRequest[] }>();
+  const stackOf = new Map<number, StackSeat>();
   for (const stack of state.stacks ?? []) {
     const prs = stack.rungs.flatMap((r) => byNumber.get(r.prNumber) ?? []);
     for (const rung of stack.rungs)
@@ -74,7 +77,10 @@ export function reviewerGroups(asks: readonly AssignAsk[], state: AppState): Rev
   for (const ask of asks) {
     const at = stackOf.get(ask.number);
     const placed = { ask, depth: at?.depth ?? 0, stackPrs: at?.prs ?? [] };
-    byGroup.set(at?.ref ?? null, [...(byGroup.get(at?.ref ?? null) ?? []), placed]);
+    const key = at?.ref ?? null;
+    const list = byGroup.get(key) ?? [];
+    list.push(placed);
+    byGroup.set(key, list);
   }
 
   const standing = (person: PrPerson, others: readonly OpenPullRequest[]): ReviewerStanding => ({
@@ -91,7 +97,7 @@ export function reviewerGroups(asks: readonly AssignAsk[], state: AppState): Rev
       return {
         ask,
         depth: depth - top,
-        goal: stack === null ? goalOfPr(state, ask.number) : null,
+        goal: goalOfPr(state, ask.number),
         people: ask.assignAsk.map((p) => standing(p, others)),
       };
     });
@@ -101,7 +107,7 @@ export function reviewerGroups(asks: readonly AssignAsk[], state: AppState): Rev
       seen.set(s.person.id, was === undefined ? s : { ...was, knows: was.knows || s.knows });
     }
     const people = [...seen.values()].sort((a, b) => Number(b.knows) - Number(a.knows));
-    return { stack, goal: stack === null ? null : goalOfPr(state, rungs[0]!.ask.number), rungs, people };
+    return { stack, rungs, people };
   });
   return groups.sort((a, b) => Number(a.stack === null) - Number(b.stack === null));
 }
