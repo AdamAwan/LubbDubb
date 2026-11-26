@@ -5,7 +5,7 @@ import type { AskRow } from '../asks/askRow.js';
 import { buildAskQueue, type AskSnapshot, type PrReadInputs } from '../asks/queue.js';
 import { askInputs, prReadInputs } from './stateAsks.js';
 import { snapshotReads } from './stateSnapshot.js';
-import { AutoSend } from '../listen/autoSend.js';
+import type { OpenPullRequest } from '../wire.js';
 
 // → docs/spec/17-cockpit.md#one-list-for-the-cockpit-and-for-claude-code
 
@@ -37,8 +37,7 @@ export function lateReads(system: System): Pick<Late, 'askSnapshot' | 'prInputs'
   return { askSnapshot: () => askSnapshot(system), prInputs: () => prInputs(system) };
 }
 
-/** Sends pull requests to the listen loop by itself at every cycle's end. → docs/spec/44-needs-you.md#sending-by-itself */
-export function followAutoSend(system: System): void {
-  const autoSend = new AutoSend(system.listener, () => system.config.listen);
-  autoSend.follow(system.harness, () => prInputs(system).world.pullRequests, system.errors);
+/** The open pull requests as the cockpit reads them, with nothing else built. */
+export function openPrs(system: System): OpenPullRequest[] {
+  return snapshotReads(system, undefined).openPullRequests();
 }

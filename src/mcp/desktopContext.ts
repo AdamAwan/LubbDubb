@@ -28,6 +28,7 @@ import type { RemoteRunDesk } from '../validation/remote/run.js';
 import type { McpTool } from './protocol.js';
 import type { WatchAsks } from '../environments/watchAsks.js';
 import type { Listener } from '../listen/listener.js';
+import type { ListenPolicy } from '../listen/policy.js';
 
 // → docs/spec/11-mcp-tools.md
 
@@ -96,8 +97,8 @@ export interface DesktopToolDeps {
   prInputs(): PrReadInputs;
   /** The listen loop `ask_wait` holds open. → docs/spec/44-needs-you.md#the-wait */
   listener: Pick<Listener, 'wait'>;
-  /** The skill a pull request is talked through with, as `listen.prSkill` names it. → docs/spec/44-needs-you.md#sending-by-itself */
-  prSkill(): string;
+  /** The running `listen` policy, read at each call. → docs/spec/44-needs-you.md#sending-by-itself */
+  listen(): ListenPolicy;
   /** Where the cockpit is served, for a link to the ask an answer here cannot give; null where none is. */
   cockpitUrl: string | null;
   /** Re-emitted by `McpDesktopServer` as `changed`, which the hub broadcasts. */

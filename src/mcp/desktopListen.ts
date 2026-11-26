@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { goalIssue, goalOfPr, issueAddress, prAddress } from '../asks/lines.js';
 import type { PrReadInputs } from '../asks/queue.js';
 import { prOnYouReasons } from '../listen/prsOnYou.js';
-import { DEFAULT_PR_SKILL } from '../listen/autoSend.js';
+import { prSkillOf, type ListenPolicy } from '../listen/policy.js';
 import { prState } from '../pr/prHealth.js';
 import { knownPrs, prView, replyView } from './worldRead.js';
 import type { OpenPullRequest } from '../wire.js';
@@ -14,8 +14,7 @@ import { toolError, toolJson } from './protocol.js';
 // → docs/spec/44-needs-you.md
 
 const WAIT_NEXT = {
-  ask: 'Start a session or fork for it running `skill`, then call ask_wait again at once.',
-  pr: 'Start a session or fork for it running `skill`, titled `title`, then call ask_wait again at once.',
+  item: 'Start a session or fork for it running `skill`, titled `title`, then call ask_wait again at once.',
   none: 'Nothing was sent. Call ask_wait again, saying nothing.',
 };
 
@@ -25,10 +24,9 @@ const PR_TITLE: Record<AutoSendWhy | 'sent', string> = {
   sent: 'Talk through',
 };
 
-function itemSkill(item: ListenItem, prSkill: string): { skill: string; title: string } {
+function itemSkill(item: ListenItem, policy: ListenPolicy): { skill: string; title: string } {
   if (item.kind === 'ask') return { skill: `/lubbdubb:next ${item.id} only`, title: `Talk through ask ${item.id}` };
-  const skill = prSkill.trim() === '' ? DEFAULT_PR_SKILL : prSkill.trim();
-  return { skill: `${skill} ${item.number}`, title: `${PR_TITLE[item.why ?? 'sent']} #${item.number}` };
+  return { skill: `${prSkillOf(policy)} ${item.number}`, title: `${PR_TITLE[item.why ?? 'sent']} #${item.number}` };
 }
 
 export const askWait: DesktopToolFactory = (deps) => ({
@@ -43,7 +41,7 @@ export const askWait: DesktopToolFactory = (deps) => ({
     const result = await deps.listener.wait();
     if (result.superseded === true) return toolJson({ ...result, next: 'Another ask_wait took over. Stop here.' });
     if (result.item === null) return toolJson({ ...result, next: WAIT_NEXT.none });
-    return toolJson({ ...result, ...itemSkill(result.item, deps.prSkill()), next: WAIT_NEXT[result.item.kind] });
+    return toolJson({ ...result, ...itemSkill(result.item, deps.listen()), next: WAIT_NEXT.item });
   },
 });
 

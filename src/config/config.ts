@@ -19,7 +19,7 @@ import { validateAgentModels, type AgentModels } from '../agents/modelPolicy.js'
 import { DEFAULT_FILING_TYPES } from '../tickets/ticketTypes.js';
 import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from '../store/mcpCalls.js';
 import type { PetPolicy } from '../pets/keeper.js';
-import { DEFAULT_LISTEN, type ListenPolicy } from '../listen/autoSend.js';
+import { DEFAULT_LISTEN, type ListenPolicy } from '../listen/policy.js';
 import { validateEnvironments, validateOperatorTenants, type EnvironmentConfig } from '../environments/policy.js';
 import { DEFAULT_READ_LANES } from '../world/readPlan.js';
 import type { IssueSequencing } from '../sequence/readiness.js';

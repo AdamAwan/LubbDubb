@@ -302,20 +302,20 @@ next `ask_wait` or a restart.
 The operator opened a Claude chat for nearly every pull request that became ready, and for every one
 they were asked to review, to run their own skill over it. With `listen.autoSendReviews` or
 `listen.autoSendReady` on, the harness does the pressing: `AutoSend` (`src/listen/autoSend.ts`),
-wired by `followAutoSend` (`src/server/askReads.ts`), reads the open pull requests at every `cycle:end` and sends each new one to the
+wired by `wireAutoSend` (`src/system/systemListen.ts`), reads the open pull requests (`openPrs`) at the end of every cycle that ran and sends each new one to the
 listener as `{ kind: 'pr', number, why }` — the same queue the page's button feeds, so it lands as a
 linked session under the listen chat, which is the grouping the operator wanted. The desktop app
 offers no way to put a session into a sidebar Section, so nesting under the one listen chat is the
 grouping there is.
 
-`autoSendWhy` answers one reason or none, and only for a pull request whose **every CI check passed**
+`autoSendWhy` answers one reason or none, built on the page's own table so the two cannot disagree about what is on the operator — and only for a pull request whose **every CI check passed**
 (`ciStatus` passing, nothing withheld, every check `passing` — an advisory failure holds it too, since
 the operator asked for nothing failing at all):
 
-| `why`    | Holds when                                                                                                                                                                     |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `review` | `viewerAssignment` is set — somebody assigned the operator or asked their review — on a pull request they did not open and have not approved                                   |
-| `ready`  | no agent is on it (`attention.status` is not `harness`), not assigned to them, and it is theirs (`viewerAuthored`), on them (`attention.status: 'you'`), or has a reviewer ask |
+| `why`    | Holds when                                                                                                                                                     |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `review` | [`prOnYouReasons`](#pull-requests-waiting-on-you) holds `review` — somebody asked the operator, and attention puts it on them (not once they have approved it) |
+| `ready`  | it holds `call` or `assign`; or the operator opened it (`viewerAuthored`) and no agent is on it (`attention.status` is neither `harness` nor `done`)           |
 
 Each key gates its own reason. A pull request is sent **once per reason** while it is open: going red
 and green again does not send it twice, and a key is forgotten only when the pull request is no longer

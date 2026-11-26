@@ -23,7 +23,6 @@ import { wireBlocks } from '../escalation/blocked.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from '../mcp/server.js';
 import type { McpDesktopServer } from '../mcp/desktop.js';
 import { buildDesktop } from './systemDesktop.js';
-import { Listener } from '../listen/listener.js';
 import { ValidationReadyDesk } from '../validation/readyDesk.js';
 import type { WatchDryRunner } from '../environments/watchDryRun.js';
 import type { WatchAsks } from '../environments/watchAsks.js';
@@ -63,7 +62,8 @@ import type { LocalValidationAutoPress } from '../validation/local/auto.js';
 import { LocalRunWatch } from '../localRun/watch.js';
 import { LiveConfig } from '../config/configApply.js';
 import { ErrorLog } from '../errorLog.js';
-import { followAutoSend, lateReads } from '../server/askReads.js';
+import { lateReads } from '../server/askReads.js';
+import { Listener, wireAutoSend } from './systemListen.js';
 import type { SetupReading } from '../setup/reading.js';
 import {
   type BuildOptions,
@@ -253,7 +253,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     runtimeHealth: base.runtimeHealth,
   };
   late.bind(lateParts({ fleet, envs, lessons, bench, harness, local, intake, reads: lateReads(system) }));
-  followAutoSend(system);
+  wireAutoSend(system);
   return system;
 }
 

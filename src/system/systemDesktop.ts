@@ -53,7 +53,7 @@ export function buildDesktop(
     asks: () => late.get().askSnapshot(),
     prInputs: () => late.get().prInputs(),
     listener,
-    prSkill: () => config.listen.prSkill,
+    listen: () => config.listen,
     cockpitUrl: apiUrl(config),
     proposals: () => late.get().proposals,
     prAssign: () => late.get().prAssign,

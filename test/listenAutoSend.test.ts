@@ -9,7 +9,8 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { McpDesktopServer } from '../src/mcp/desktop.js';
-import { AutoSend, autoSendWhy, DEFAULT_LISTEN, type ListenPolicy } from '../src/listen/autoSend.js';
+import { AutoSend, autoSendWhy } from '../src/listen/autoSend.js';
+import { DEFAULT_LISTEN, type ListenPolicy } from '../src/listen/policy.js';
 import { FakeListenClock } from '../src/listen/fakeListenClock.js';
 import type { ToolCallResult } from '../src/mcp/protocol.js';
 import type { ListenItem, PullRequest } from '../src/types.js';
@@ -80,7 +81,16 @@ test('ready is a pull request on the operator with no agent on it; review is one
     null,
   );
   assert.equal(autoSendWhy(openPr(4, { viewerAuthored: false, assignAsk: [{ id: 'p', name: 'Pat' }] })), 'ready');
-  assert.equal(autoSendWhy(review(5, { viewerApproved: true })), null, 'already approved by you');
+  assert.equal(
+    autoSendWhy(review(5, { viewerApproved: true, attention: { status: 'elsewhere', reasons: [] } })),
+    null,
+    'once you approved it, attention no longer puts it on you',
+  );
+  assert.equal(
+    autoSendWhy(openPr(6, { attention: { status: 'unwatched', reasons: [] } })),
+    'ready',
+    'yours, unwatched',
+  );
 });
 
 function harnessOf(policy: Partial<ListenPolicy>) {
@@ -165,7 +175,7 @@ function worldPr(number: number, over: Partial<PullRequest> = {}): PullRequest {
 }
 
 const endCycle = (sys: System): void => {
-  sys.harness.emit('cycle:end', { cycleId: 'test', at: NOW } as never);
+  sys.harness.emit('cycle:end', { cycleId: 'cyc_test', at: NOW } as never);
 };
 
 async function askWait(sys: System) {
