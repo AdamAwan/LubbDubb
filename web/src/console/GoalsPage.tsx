@@ -18,6 +18,12 @@ import { PrCards } from './PrCards.js';
 import { PICKUP_WORD } from './Overview.js';
 
 const NONE = 'none';
+const LATER = 'later';
+
+function inFlight(w: GoalWork): boolean {
+  if (w.ref === NONE || w.prs.length > 0 || w.agents.length > 0) return true;
+  return w.issue !== undefined && CURRENT.has(w.issue.pickup.status);
+}
 const CURRENT = new Set(['active', 'has_pr', 'planning', 'investigation', 'parked', 'escalated']);
 
 interface Hold {
@@ -119,10 +125,17 @@ function prState(pr: OpenPullRequest): { text: string; tone: 'ask' | 'hold' | 'q
 }
 
 export function GoalsPage({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const goals = currentWork(view);
-  const features = byFeature(goals);
+  const all = currentWork(view);
+  const goals = all.filter((w) => inFlight(w));
+  const later = all.filter((w) => !inFlight(w));
+  const features = [
+    ...byFeature(goals),
+    ...(later.length === 0
+      ? []
+      : [{ key: LATER, title: 'Not in flight — appraising, queued or delivered', number: null, goals: later }]),
+  ];
   const headed = features.some((f) => f.key !== NONE);
-  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set([LATER]));
   const [open, setOpen] = useState<string | null>(null);
   const toggle = (key: string): void => {
     const next = new Set(folded);

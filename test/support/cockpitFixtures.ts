@@ -41,7 +41,47 @@ type IssueSeed = Omit<
 > &
   Partial<Issue>;
 
+/* The demo's Features, so the Work tab draws real headings: one moving, one stuck behind a
+   person, one nearly done. A seed's own non-null parent wins. */
+type Relative = NonNullable<Issue['parent']>;
+const FEATURES: Record<string, Relative> = {
+  checkout: {
+    number: 350,
+    title: 'Checkout and payments',
+    issueType: 'Feature',
+    workItemState: 'Active',
+    state: 'open',
+  },
+  operations: {
+    number: 360,
+    title: 'Running the shop',
+    issueType: 'Feature',
+    workItemState: 'Active',
+    state: 'open',
+  },
+  finding: {
+    number: 300,
+    title: 'Finding a book',
+    issueType: 'Feature',
+    workItemState: 'Active',
+    state: 'open',
+  },
+};
+const FEATURE_OF: Record<number, Relative> = {
+  390: FEATURES.checkout!,
+  376: FEATURES.checkout!,
+  382: FEATURES.checkout!,
+  359: FEATURES.checkout!,
+  368: FEATURES.operations!,
+  396: FEATURES.operations!,
+  364: FEATURES.operations!,
+  395: FEATURES.operations!,
+  388: FEATURES.finding!,
+  332: FEATURES.finding!,
+};
+
 function fixtureIssue(seed: IssueSeed): Issue {
+  const parent = seed.parent ?? FEATURE_OF[seed.number];
   return {
     conclusion: { verdict: 'undeclared', by: null, note: '', at: null },
     shortfall: null,
@@ -58,6 +98,7 @@ function fixtureIssue(seed: IssueSeed): Issue {
     localValidation: null,
     priority: null,
     ...seed,
+    ...(parent === undefined ? {} : { parent }),
   };
 }
 
@@ -523,6 +564,62 @@ export function buildFixtureState(): AppState {
           },
         }),
         fixturePr({
+          id: 'pr-435',
+          number: 435,
+          title: '#368 [1/2] feat(stock): parse the distributor’s nightly CSV',
+          branch: 'issue/368/parse',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: false,
+          mergeable: true,
+          baseBranch: 'main',
+          mergeableState: 'clean',
+          merged: false,
+          health: { blocked: true, reasons: ['not approved'] },
+          attention: { status: 'elsewhere', reasons: ['waiting on a reviewer — Priya Raman, requested 5h ago'] },
+          review: {
+            status: 'elsewhere',
+            addressed: false,
+            mode: null,
+            routeReason: null,
+            summary: null,
+            findings: [],
+            reviewedAt: null,
+            routedAt: null,
+            agentId: null,
+            routeAgentId: null,
+            headSha: null,
+          },
+        }),
+        fixturePr({
+          id: 'pr-436',
+          number: 436,
+          title: '#368 [2/2] feat(stock): update stock levels from the parsed feed',
+          branch: 'issue/368/update',
+          ciStatus: 'pending',
+          unresolvedComments: [],
+          approved: false,
+          mergeable: true,
+          baseBranch: 'issue/368/parse',
+          mergeableState: 'unknown',
+          merged: false,
+          health: { blocked: true, reasons: ['base PR #435 is not merged'] },
+          attention: { status: 'elsewhere', reasons: ['waiting on PR #435'] },
+          review: {
+            status: 'elsewhere',
+            addressed: false,
+            mode: null,
+            routeReason: null,
+            summary: null,
+            findings: [],
+            reviewedAt: null,
+            routedAt: null,
+            agentId: null,
+            routeAgentId: null,
+            headSha: null,
+          },
+        }),
+        fixturePr({
           id: 'pr-426',
           number: 426,
           title: 'Fold the admin console header into one bar',
@@ -954,6 +1051,7 @@ export function buildFixtureState(): AppState {
           id: 'iss-390',
           number: 390,
           title: 'Move checkout to the new payment provider',
+          priority: { since: ago(45) },
           body: 'Too big for one PR: the provider client has to land before anything can take a payment through it, and refunds cannot move until payments have.',
           labels: ['lubbdubb-watch'],
           state: 'open',
@@ -1440,6 +1538,30 @@ export function buildFixtureState(): AppState {
     ],
     stacks: [
       {
+        ref: 'stack:435',
+        issueNumber: 368,
+        issueTitle: 'Import the distributor’s nightly stock feed',
+        planId: null,
+        rungs: [
+          {
+            prNumber: 435,
+            title: '#368 [1/2] feat(stock): parse the distributor’s nightly CSV',
+            branch: 'issue/368/parse',
+            base: 'main',
+            position: 1,
+            partSlug: null,
+          },
+          {
+            prNumber: 436,
+            title: '#368 [2/2] feat(stock): update stock levels from the parsed feed',
+            branch: 'issue/368/update',
+            base: 'issue/368/parse',
+            position: 2,
+            partSlug: null,
+          },
+        ],
+      },
+      {
         ref: 'stack:413',
         issueNumber: 390,
         issueTitle: 'Move checkout to the new payment provider',
@@ -1913,7 +2035,10 @@ export function buildFixtureState(): AppState {
         ],
       },
     ],
-    stackLandings: [{ ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 }],
+    stackLandings: [
+      { ref: 'stack:435', offer: false, blockedBy: '#435 not approved', landing: null, landed: 0 },
+      { ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 },
+    ],
     /* An arrival is only ever recorded for a goal whose work has landed, which on this fixture is
        the three delivered goals. #364's arrival is stamped but unannounced because its check set is
        still a proposal. → docs/spec/24-environments.md#what-an-arrival-means */
@@ -2900,7 +3025,8 @@ export function buildFixtureState(): AppState {
         size: null,
         branch: null,
         prNumber: null,
-        status: 'ready',
+        status: 'blocked',
+        blockedReason: 'needs the provider’s live keys — nobody has given the fleet a merchant account',
         taskId: null,
         createdAt: ago(300),
         updatedAt: ago(6),
@@ -4634,6 +4760,18 @@ export function buildFixtureState(): AppState {
           profileSource: 'pin',
         },
         {
+          origin: 'issue:332',
+          rule: 'issue-pickup',
+          title: 'Filter search results by format and price',
+          kind: 'code',
+          branch: 'issue/332',
+          status: 'sequenced',
+          reason:
+            'Issue #332 is ready. Held: it waits on #388 in the accepted order for Finding a book — the filters read the author index #388 builds.',
+          profile: 'standard',
+          profileSource: 'default',
+        },
+        {
           origin: 'issue:333:part:add',
           rule: 'plan-part',
           title: 'Issue #333 part: Save a book from the book page and from a search result',
@@ -4684,6 +4822,8 @@ export function buildFixtureState(): AppState {
       '#415': 'https://github.com/example/inkwell-books/pull/415',
       '#417': 'https://github.com/example/inkwell-books/pull/417',
       '#431': 'https://github.com/example/inkwell-books/pull/431',
+      '#435': 'https://github.com/example/inkwell-books/pull/435',
+      '#436': 'https://github.com/example/inkwell-books/pull/436',
       '#426': 'https://github.com/example/inkwell-books/pull/426',
       '#300': 'https://github.com/example/inkwell-books/issues/300',
       '#332': 'https://github.com/example/inkwell-books/issues/332',
