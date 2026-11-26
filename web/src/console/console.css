@@ -7772,19 +7772,36 @@ button.cn-grow {
   overflow: hidden;
 }
 
-/* A stack: its rungs in merge order down a rail, numbered; the ones not in this list
-   are slim rows so the whole stack is in view. */
+/* A stack: drawn as a path into its base — the top rung first, the rung that merges
+   next just above the base, merged parts below it, the base branch last. */
 .cn-prstack {
-  padding: 8px 10px 6px;
-  border: 1px dashed var(--cn-line-hi);
+  padding: 8px 10px 8px;
+  border: 1px solid var(--cn-line);
   border-radius: 8px;
+  background: var(--cn-panel);
 }
 .cn-prstack-head {
-  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 8px;
   font-size: 11.5px;
-  color: var(--cn-fg-faint);
+  color: var(--cn-fg-dim);
+}
+.cn-prstack-head code,
+.cn-prstack-base code {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg);
+}
+.cn-prstack-held {
+  color: var(--cn-red-ink);
+}
+.cn-prstack-ready {
+  color: var(--cn-green-ink);
 }
 .cn-prstack-rungs {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -7792,37 +7809,59 @@ button.cn-grow {
   padding: 0;
   list-style: none;
 }
+.cn-prstack-rungs::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 18px;
+  bottom: 12px;
+  border-left: 2px solid var(--cn-line-hi);
+}
 .cn-prstack-rung {
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
 }
-.cn-prstack-rung + .cn-prstack-rung::before {
-  content: '';
-  position: absolute;
-  left: 10px;
-  top: -8px;
-  height: 14px;
-  border-left: 2px solid var(--cn-line-hi);
-}
 .cn-prstack-pos {
+  position: relative;
+  z-index: 1;
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  min-width: 28px;
   height: 22px;
   margin-top: 8px;
+  padding: 0 4px;
   border: 1px solid var(--cn-line-hi);
-  border-radius: 50%;
-  font: 600 11px var(--cn-mono);
+  border-radius: 11px;
+  font: 600 10.5px var(--cn-mono);
   color: var(--cn-fg-dim);
   background: var(--cn-panel);
 }
 .cn-prstack-ghost .cn-prstack-pos {
   margin-top: 2px;
   color: var(--cn-fg-faint);
+}
+.cn-prstack-next > .cn-prstack-pos {
+  border-color: var(--cn-accent);
+  color: var(--cn-fg);
+}
+.cn-prstack-blocking > .cn-prstack-pos {
+  border-color: var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+.cn-prstack-merged .cn-prstack-pos {
+  border-color: var(--cn-green-line);
+  color: var(--cn-green-ink);
+}
+.cn-prstack-base {
+  align-items: center;
+}
+.cn-prstack-base .cn-prstack-pos {
+  margin-top: 0;
+  border-style: dashed;
 }
 .cn-prstack-card {
   flex: 1;
