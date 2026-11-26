@@ -37,9 +37,7 @@ export function lateReads(system: System): Pick<Late, 'askSnapshot' | 'prInputs'
   return { askSnapshot: () => askSnapshot(system), prInputs: () => prInputs(system) };
 }
 
-/** The open pull requests as the cockpit reads them, or null while no whole world has been read. */
-export function openPrs(system: System): OpenPullRequest[] | null {
-  const world = system.store.world.getWorldBaseline();
-  if (world === null || (world.staleSources ?? []).length > 0) return null;
+/** The open pull requests as the cockpit reads them, with nothing else built. */
+export function openPrs(system: System): OpenPullRequest[] {
   return snapshotReads(system, undefined).openPullRequests();
 }

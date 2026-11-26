@@ -12,7 +12,10 @@ export function wireAutoSend(system: System): void {
   system.harness.on('cycle:end', (report) => {
     if (!cycleRan(report)) return;
     try {
-      autoSend.observe(() => openPrs(system));
+      autoSend.observe(() => {
+        const world = system.store.world.getWorldBaseline();
+        return world === null || (world.staleSources ?? []).length > 0 ? null : openPrs(system);
+      });
     } catch (err) {
       system.errors.record({ source: 'cycle', message: `Listen auto-send failed: ${(err as Error).message}` });
     }

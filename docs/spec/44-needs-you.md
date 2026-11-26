@@ -317,7 +317,7 @@ the operator asked for nothing failing at all):
 | `review` | [`prOnYouReasons`](#pull-requests-waiting-on-you) holds `review` — somebody asked the operator, and attention puts it on them (not once they have approved it) |
 | `ready`  | it holds `call` or `assign`; or the operator opened it (`viewerAuthored`) and no agent is on it (`attention.status` is neither `harness` nor `done`)           |
 
-A pass only counts once a whole world has been read: with no baseline yet, or one with `staleSources`, `openPrs` answers null and the pass learns, sends and forgets nothing — so a first cycle on an empty read never primes on nothing, and a partial read never drops a pull request it would then send again.
+A pass only counts once a whole world has been read: with no baseline yet, or one with `staleSources`, `wireAutoSend` hands it no read and the pass learns, sends and forgets nothing — so a first cycle on an empty read never primes on nothing, and a partial read never drops a pull request it would then send again.
 
 Each key gates its own reason. A pull request is sent **once per reason** while it is open: going red
 and green again does not send it twice, and a key is forgotten only when the pull request is no longer
