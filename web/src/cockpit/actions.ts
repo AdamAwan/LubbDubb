@@ -47,6 +47,7 @@ export type ConsolePanel =
 export type ConsoleTab =
   | 'overview'
   | 'needs'
+  | 'goals'
   | 'tickets'
   | 'features'
   | 'bots'

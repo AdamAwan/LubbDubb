@@ -132,6 +132,7 @@ const FEATURE_PRS: readonly FeaturePrFilter[] = ['open', 'done', 'all'];
 const TABS: readonly ConsoleTab[] = [
   'overview',
   'needs',
+  'goals',
   'tickets',
   'features',
   'bots',
@@ -143,7 +144,7 @@ const TABS: readonly ConsoleTab[] = [
   'config',
 ];
 
-const HOME_TABS: readonly ConsoleTab[] = ['overview', 'needs', 'tickets', 'features'];
+const HOME_TABS: readonly ConsoleTab[] = ['overview', 'needs', 'goals', 'tickets', 'features'];
 
 const DEFAULT_HOME: ConsoleTab = 'overview';
 

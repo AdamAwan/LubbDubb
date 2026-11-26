@@ -11,6 +11,7 @@ import { renderPanel } from './ConsoleRootPanels.js';
 
 import { Overview } from './Overview.js';
 import { NeedsYouPage } from './NeedsYouPage.js';
+import { GoalsPage } from './GoalsPage.js';
 import { needsYouInFront } from '../view/needsYouPage.js';
 import { FocusOverview } from './overviews/FocusOverview.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
@@ -136,6 +137,10 @@ function recoveryBand(view: CockpitView, actions: CockpitActions): JSX.Element |
 }
 
 /** The focus shape is in front, which draws the creatures on its own card. */
+function goalsInFront(view: CockpitView): boolean {
+  return view.tab === 'goals' && view.selectedGoal === null && view.selectedPr === null;
+}
+
 function focusInFront(view: CockpitView): boolean {
   if (view.tab !== 'overview' || view.selectedGoal !== null || view.selectedPr !== null) return false;
   return view.overviewShape === 'focus';
@@ -143,7 +148,7 @@ function focusInFront(view: CockpitView): boolean {
 
 /** Whether the surface in front has absorbed the queue rail. → docs/spec/44-needs-you.md#where-it-sits */
 function railless(view: CockpitView): boolean {
-  return needsYouInFront(view) || focusInFront(view);
+  return needsYouInFront(view) || focusInFront(view) || goalsInFront(view);
 }
 
 function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): JSX.Element {
@@ -157,6 +162,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       }
     case 'needs':
       return <NeedsYouPage view={view} actions={actions} />;
+    case 'goals':
+      return <GoalsPage view={view} actions={actions} />;
     case 'insights':
       return (
         <>

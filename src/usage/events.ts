@@ -345,6 +345,7 @@ export function usageEventSource(event: UsageEvent): UsageEventSource {
 export const PLACE_KEYS = [
   'overview',
   'needs',
+  'goals',
   'tickets',
   'features',
   'bots',

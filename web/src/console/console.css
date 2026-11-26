@@ -8087,3 +8087,98 @@ button.cn-grow {
   font-size: 11px;
   color: var(--cn-fg-dim);
 }
+
+/* ---------- By goal: one block per goal, its asks beside its pull requests ---------- */
+.cn-gp {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.cn-gp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cn-gp-goal {
+  padding: 12px 14px;
+}
+.cn-gp-priority {
+  border-color: var(--cn-amber-line);
+}
+.cn-gp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+}
+.cn-gp-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.cn .cn-gp-title {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cn-fg);
+  text-align: left;
+}
+.cn-gp-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-gp-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cn-gp-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .cn-gp-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.cn-gp-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.cn-gp-col h4 {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-gp-agents {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cn .cn-gp-agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+  text-align: left;
+}
+.cn-gp-agent em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}

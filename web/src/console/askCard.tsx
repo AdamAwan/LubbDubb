@@ -17,9 +17,13 @@ function askOpen(row: NeedRow, actions: CockpitActions): Destination | null {
 }
 
 /** The ask card's three parts: what it is about, the ask, and a note only where it adds something. */
-function askWords(row: NeedRow, view: CockpitView): { about: string | null; ask: string; why?: string } {
+function askWords(
+  row: NeedRow,
+  view: CockpitView,
+  inGoal: boolean,
+): { about: string | null; ask: string; why?: string } {
   const goal = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
-  const about = goal?.title ?? row.agentLabel;
+  const about = inGoal && goal !== undefined ? null : (goal?.title ?? row.agentLabel);
   const ask = row.summary ?? row.title;
   const note = row.note ?? row.check?.remedy;
   return note === undefined || (about !== null && note.includes(about)) ? { about, ask } : { about, ask, why: note };
@@ -33,6 +37,7 @@ export function AskCard({
   expanded,
   onExpand,
   actions,
+  inGoal = false,
 }: {
   row: NeedRow;
   view: CockpitView;
@@ -40,9 +45,10 @@ export function AskCard({
   expanded: boolean;
   onExpand: () => void;
   actions: CockpitActions;
+  inGoal?: boolean;
 }): JSX.Element {
-  const ref = askRef(row);
-  const { about, ask, why } = askWords(row, view);
+  const ref = inGoal ? null : askRef(row);
+  const { about, ask, why } = askWords(row, view, inGoal);
   const body = expanded ? needBody(row, view, actions) : null;
   const open = body === null ? askOpen(row, actions) : null;
   return (
