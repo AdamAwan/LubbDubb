@@ -10,7 +10,8 @@ export { Listener } from '../listen/listener.js';
 export function wireAutoSend(system: System): void {
   const autoSend = new AutoSend(system.listener, () => system.config.listen);
   system.harness.on('cycle:end', (report) => {
-    if (!cycleRan(report)) return;
+    const world = system.store.world.getWorldBaseline();
+    if (!cycleRan(report) || world === null || (world.staleSources?.length ?? 0) > 0) return;
     try {
       autoSend.observe(() => openPrs(system));
     } catch (err) {

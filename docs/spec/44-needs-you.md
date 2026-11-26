@@ -320,7 +320,7 @@ the operator asked for nothing failing at all):
 Each key gates its own reason. A pull request is sent **once per reason** while it is open: going red
 and green again does not send it twice, and a key is forgotten only when the pull request is no longer
 open. The memory is in-process, so the **first pass after sending is turned on** — a boot, or the
-keys switched on — only learns what already qualifies and sends none of it: a restart never sends the
+keys switched on, and only once a cycle has read a whole world (none stale) — only learns what already qualifies and sends none of it: a restart never sends the
 same pull request again, and switching it on never sends a burst of every ready pull request at once.
 The cost is that one which became ready while the harness was down is not sent; it is still on this
 page with its button. While both keys are off nothing is read at all.

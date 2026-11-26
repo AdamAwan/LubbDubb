@@ -198,14 +198,20 @@ async function askWait(sys: System) {
 test('a review asked of the operator reaches ask_wait after a cycle, with the operator’s skill and a titled session', async () => {
   const sys = system({ autoSendReviews: true, prSkill: '/my-pr-skill' });
   try {
-    sys.store.world.setWorldBaseline({ takenAt: NOW, pullRequests: [], issues: [] });
+    endCycle(sys);
+    sys.store.world.setWorldBaseline({ takenAt: NOW, pullRequests: [worldPr(40)], issues: [] });
     endCycle(sys);
     sys.store.world.setWorldBaseline({
       takenAt: NOW,
-      pullRequests: [worldPr(41, { ciChecks: [{ name: 'build', status: 'failing' }] }), worldPr(42)],
+      pullRequests: [worldPr(40), worldPr(41, { ciChecks: [{ name: 'build', status: 'failing' }] }), worldPr(42)],
       issues: [],
     });
     endCycle(sys);
+    assert.equal(
+      sys.listener.view(() => true).queued,
+      1,
+      'no world read yet learns nothing; #40 was there when it first read one',
+    );
     const waited = await askWait(sys);
     assert.deepEqual(waited.item, { kind: 'pr', number: 42, why: 'review' });
     assert.equal(waited.skill, '/my-pr-skill 42');
