@@ -329,7 +329,7 @@ test('POST /api/listen/send queues for ask_wait, refuses a malformed item, and t
     const waited = await d.call('ask_wait');
     assert.equal(waited.isError, false, waited.text);
     assert.deepEqual(waited.json.item, PR);
-    assert.match(String(waited.json.next), /\/lubbdubb:pr <number>/);
+    assert.equal(waited.json.skill, '/lubbdubb:pr 212');
     const view = buildStateSnapshot(sys).listener;
     assert.equal(view.state, 'busy');
     assert.deepEqual(view.on, PR);

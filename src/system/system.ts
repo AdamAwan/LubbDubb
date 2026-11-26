@@ -63,7 +63,7 @@ import type { LocalValidationAutoPress } from '../validation/local/auto.js';
 import { LocalRunWatch } from '../localRun/watch.js';
 import { LiveConfig } from '../config/configApply.js';
 import { ErrorLog } from '../errorLog.js';
-import { lateReads } from '../server/askReads.js';
+import { followAutoSend, lateReads } from '../server/askReads.js';
 import type { SetupReading } from '../setup/reading.js';
 import {
   type BuildOptions,
@@ -253,6 +253,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     runtimeHealth: base.runtimeHealth,
   };
   late.bind(lateParts({ fleet, envs, lessons, bench, harness, local, intake, reads: lateReads(system) }));
+  followAutoSend(system);
   return system;
 }
 

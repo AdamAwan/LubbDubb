@@ -1,7 +1,10 @@
 // → docs/spec/44-needs-you.md
 
+/** Why the harness sent a pull request by itself: a review asked of the operator, or one of theirs ready. */
+export type AutoSendWhy = 'review' | 'ready';
+
 /** What the Needs you page hands a listening Claude chat: one ask, or one pull request. */
-export type ListenItem = { kind: 'ask'; id: string } | { kind: 'pr'; number: number };
+export type ListenItem = { kind: 'ask'; id: string } | { kind: 'pr'; number: number; why?: AutoSendWhy };
 
 export type ListenerState = 'listening' | 'busy' | 'off';
 

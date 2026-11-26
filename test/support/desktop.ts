@@ -39,6 +39,7 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     asks: () => askSnapshot(system),
     prInputs: () => prInputs(system),
     listener: system.listener,
+    prSkill: () => system.config.listen.prSkill,
     cockpitUrl: 'http://127.0.0.1:4300',
     changed: () => {},
   };
