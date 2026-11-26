@@ -324,11 +324,18 @@ run every other part of validation without meeting the card.
 
 ### The check set is proposed before it is work
 
-**Built.** Authoring is not the release. A check set is a claim about what running the delivered goal
+**Built, and now bypassed by default: a set is released the moment it is authored.** The
+`validation_plan` tool calls `releaseValidationPlan` straight after `recordValidationAuthoring`, so
+nobody is asked to OK the set — operators found the card ("Use these checks") added nothing. Rule
+`validation-plan-approval` therefore only fires for a set authored before this change and still
+unreleased; the machinery below stays for those, and for a reject on a standing card. Rows can still
+be declined one by one at the bench.
+
+Original rationale: a check set is a claim about what running the delivered goal
 would settle — written by an agent, against code an operator has not read since they approved the plan
 — and the person who read the hint at the plan's approval gate is the one entitled to say whether the
-set that came back from it is the right one. So the authored set is **put to them as a proposal**, and
-until they answer nothing in the harness reads it as work.
+set that came back from it is the right one. So the authored set was **put to them as a proposal**, and
+until they answered nothing in the harness read it as work.
 
 The machinery is the plan gate's, one subsystem over: rule `validation-plan-approval`
 (`src/dispatcher/rules/validationPlanApproval.ts`, a `DISPATCH_PIPELINE` entry registered in `STAGES`)

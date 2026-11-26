@@ -167,6 +167,7 @@ export const validationPlan: ToolFactory = ({ deps, task, ok }) => ({
       note: set.note,
       emptyReason: set.checks.length === 0 ? (set.emptyReason ?? null) : null,
     });
+    deps.store.validation.releaseValidationPlan(origin);
 
     return ok(authoredReply(written, resources));
   },
