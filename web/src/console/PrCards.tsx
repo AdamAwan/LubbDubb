@@ -1,7 +1,7 @@
 import { Fragment, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { OpenPullRequest, PrOnYouReason } from '../types.js';
+import type { OpenPullRequest, PlanPartView, PrOnYouReason } from '../types.js';
 import { buildGoalPage } from '../view/goalPage.js';
 import { buildGoalTrack } from '../view/goalStages.js';
 import { goalIssue, goalOfPr } from '../view/goalRefs.js';
@@ -160,9 +160,18 @@ function stackParts(
   const parts = view.state.planParts.filter((p) => p.planId === stack.planId && p.status !== 'retired');
   const bySlug = new Map(parts.map((p) => [p.slug, p]));
   const partOf = (rung: StackRung) => (rung.partSlug === null ? undefined : bySlug.get(rung.partSlug));
-  const firstSeq = Math.min(...stack.rungs.map((r) => partOf(r)?.seq ?? Infinity));
-  const merged = parts
-    .filter((p) => p.status === 'merged' && p.seq < firstSeq)
+  const bottom = stack.rungs.find((r) => r.position === 1);
+  const below = new Map<string, PlanPartView>();
+  const walk = (slugs: readonly string[]): void => {
+    for (const slug of slugs) {
+      const p = bySlug.get(slug);
+      if (p === undefined || p.status !== 'merged' || below.has(slug)) continue;
+      below.set(slug, p);
+      walk(p.dependsOn);
+    }
+  };
+  walk(bottom === undefined ? [] : (partOf(bottom)?.dependsOn ?? []));
+  const merged = [...below.values()]
     .sort((a, b) => b.seq - a.seq)
     .map((p) => ({ seq: p.seq, title: p.title, prNumber: p.prNumber }));
   return {
@@ -184,8 +193,8 @@ function StackBlock({
   actions: CockpitActions;
 }): JSX.Element {
   const { stack } = item;
-  const open = stack.rungs.length;
-  const base = stack.rungs.find((r) => r.position === 1)?.base ?? 'main';
+  const open = item.rungs.length;
+  const base = stack.rungs.find((r) => r.position === 1)?.base || 'main';
   const landing = view.state.stackLandings.find((l) => l.ref === stack.ref);
   const blockedPr = /^#(\d+)/.exec(landing?.blockedBy ?? '')?.[1];
   const { label, merged } = stackParts(view, stack);
