@@ -10,6 +10,7 @@ import { PR_REASON_LABEL } from '../view/prsOnYou.js';
 import { rackByGoal, type RackGoal } from '../view/prRack.js';
 import { prHeadline } from '../view/prHeadline.js';
 import { BareButton } from '../components/button.js';
+import { classes } from '../components/classes.js';
 import { Ref, refLabel } from '../components/refs.js';
 import { waitedFor } from '../components/util.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
@@ -147,37 +148,29 @@ export function PrCards({
   );
 }
 
-interface StackPart {
-  seq: number;
-  total: number;
-}
-
 function stackParts(
   view: CockpitView,
   stack: Stack,
 ): {
-  partOf: (rung: StackRung) => StackPart | null;
+  label: (rung: StackRung) => string;
   merged: { seq: number; title: string; prNumber: number | null }[];
-  total: number | null;
 } {
-  if (stack.planId === null) return { partOf: () => null, merged: [], total: null };
+  const byPosition = (rung: StackRung): string => String(rung.position);
+  if (stack.planId === null) return { label: byPosition, merged: [] };
   const parts = view.state.planParts.filter((p) => p.planId === stack.planId && p.status !== 'retired');
-  const total = parts.length;
   const bySlug = new Map(parts.map((p) => [p.slug, p]));
-  const firstSeq = Math.min(
-    ...stack.rungs.map((r) => (r.partSlug === null ? Infinity : (bySlug.get(r.partSlug)?.seq ?? Infinity))),
-  );
+  const partOf = (rung: StackRung) => (rung.partSlug === null ? undefined : bySlug.get(rung.partSlug));
+  const firstSeq = Math.min(...stack.rungs.map((r) => partOf(r)?.seq ?? Infinity));
   const merged = parts
     .filter((p) => p.status === 'merged' && p.seq < firstSeq)
     .sort((a, b) => b.seq - a.seq)
     .map((p) => ({ seq: p.seq, title: p.title, prNumber: p.prNumber }));
   return {
-    partOf: (rung) => {
-      const part = rung.partSlug === null ? undefined : bySlug.get(rung.partSlug);
-      return part === undefined ? null : { seq: part.seq, total };
+    label: (rung) => {
+      const part = partOf(rung);
+      return part === undefined ? byPosition(rung) : `${String(part.seq)}/${String(parts.length)}`;
     },
     merged,
-    total,
   };
 }
 
@@ -195,11 +188,7 @@ function StackBlock({
   const base = stack.rungs.find((r) => r.position === 1)?.base ?? 'main';
   const landing = view.state.stackLandings.find((l) => l.ref === stack.ref);
   const blockedPr = /^#(\d+)/.exec(landing?.blockedBy ?? '')?.[1];
-  const { partOf, merged } = stackParts(view, stack);
-  const label = (rung: StackRung): string => {
-    const part = partOf(rung);
-    return part === null ? String(rung.position) : `${String(part.seq)}/${String(part.total)}`;
-  };
+  const { label, merged } = stackParts(view, stack);
   const topFirst = [...item.rungs].reverse();
   return (
     <div className="cn-prstack">
@@ -212,19 +201,17 @@ function StackBlock({
       </div>
       <ol className="cn-prstack-rungs">
         {topFirst.map(({ rung, card }) => {
-          const blocking = blockedPr === String(rung.prNumber);
-          const cls = [
+          const part = label(rung);
+          const cls = classes(
             'cn-prstack-rung',
-            card === null ? 'cn-prstack-ghost' : '',
-            blocking ? 'cn-prstack-blocking' : '',
-            rung.position === 1 ? 'cn-prstack-next' : '',
-          ]
-            .filter((c) => c !== '')
-            .join(' ');
+            card === null && 'cn-prstack-ghost',
+            blockedPr === String(rung.prNumber) && 'cn-prstack-blocking',
+            rung.position === 1 && 'cn-prstack-next',
+          );
           return (
             <li key={rung.prNumber} className={cls}>
-              <span className="cn-prstack-pos" aria-label={`part ${label(rung)}`}>
-                {label(rung)}
+              <span className="cn-prstack-pos" aria-label={`part ${part}`}>
+                {part}
               </span>
               {card === null ? (
                 <span className="cn-prstack-other">
@@ -247,26 +234,34 @@ function StackBlock({
             </li>
           );
         })}
-        {merged.map((part) => (
-          <li key={`merged-${String(part.seq)}`} className="cn-prstack-rung cn-prstack-ghost cn-prstack-merged">
-            <span className="cn-prstack-pos" aria-label={`part ${String(part.seq)}, merged`}>
-              ✓
-            </span>
-            <span className="cn-prstack-other">
-              {part.prNumber !== null && <Ref to={`pr:${part.prNumber}`} />}
-              <span className="cn-prstack-title">{part.title}</span>
-              <i>merged</i>
-            </span>
-          </li>
-        ))}
-        <li className="cn-prstack-rung cn-prstack-base">
-          <span className="cn-prstack-pos" aria-hidden>
-            ↓
-          </span>
-          <code>{base}</code>
-        </li>
+        <StackFoot merged={merged} base={base} />
       </ol>
     </div>
+  );
+}
+
+function StackFoot({ merged, base }: { merged: ReturnType<typeof stackParts>['merged']; base: string }): JSX.Element {
+  return (
+    <>
+      {merged.map((part) => (
+        <li key={`merged-${String(part.seq)}`} className="cn-prstack-rung cn-prstack-ghost cn-prstack-merged">
+          <span className="cn-prstack-pos" aria-label={`part ${String(part.seq)}, merged`}>
+            ✓
+          </span>
+          <span className="cn-prstack-other">
+            {part.prNumber !== null && <Ref to={`pr:${part.prNumber}`} />}
+            <span className="cn-prstack-title">{part.title}</span>
+            <i>merged</i>
+          </span>
+        </li>
+      ))}
+      <li className="cn-prstack-rung cn-prstack-base">
+        <span className="cn-prstack-pos" aria-hidden>
+          ↓
+        </span>
+        <code>{base}</code>
+      </li>
+    </>
   );
 }
 
