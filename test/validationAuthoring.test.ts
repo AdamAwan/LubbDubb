@@ -409,6 +409,7 @@ test('validation_plan writes the whole set, with a note, and stamps the goal as 
   const record = system.store.validation.getValidationPlanRecord(GOAL);
   assert.match(record?.note ?? '', /the suite already asserts them/, 'the departure from the hint is on the record');
   assert.notEqual(record?.authoredAt, null);
+  assert.notEqual(record?.releasedAt, null, 'and it is released at once, with no card to accept');
   assert.equal(record?.hint, 'the upload path', 'and writing the set does not un-write the plan’s intent');
   system.store.close();
 });
