@@ -9025,7 +9025,8 @@ Needs you answers _what is on me_; neither answers the question an operator brin
 day — **for each thing I am trying to get done, where is it and what is holding it**. Work is that
 page: one row per goal, read in one line each, opened in place for the rest.
 
-**The layout.** Under the head (the goal count, and the [listener's pill](44-needs-you.md#is-a-chat-listening))
+**The layout.** The page is capped at 1240px and centred, as the overview's focus column is — on a
+wide screen a full-width row stretches its stage bar and its lines past reading. Under the head (the goal count, and the [listener's pill](44-needs-you.md#is-a-chat-listening))
 come **Feature headings** — drawn heavier than the goal titles under them, on the `--cn-panel-2` band, so
 a section reads as a section above the red of the asks (an ask on a PRs or Held line leads with a
 dot, so it reads as an item and not a heading) — each goal under the Feature it hangs off (`byFeature`, first-seen order).
