@@ -9041,10 +9041,12 @@ in flight**:
   the queue. A prioritised row is drawn with a rule down its left.
 - **The stage bar**, under the head line: **Plan → Build → Validate → Close → Watch**, one segment
   each, drawn in the goal tabs' tones (`cn-t-*`: green done, blue moving, amber held or on the
-  operator, grey not yet) and filled to the stage's `done` where it has one, whole where it has none,
-  empty where grey. The first stage not green is where the goal _is_, and its name is drawn bold;
-  Build's name carries `merged/total` wherever the plan has parts, even while its reading is the operator's court. Plan and Build split the goal page's one Plan stage — Plan is
-  the plan record's status, Build its parts merged (or the goal's open pull requests where it has
+  operator, grey not yet). A stage fills solid to its `done` where it has one and whole when green
+  without one; a blue or amber stage with no `done` is drawn whole at half strength, so it
+  keeps its colour without reading as finished. The first stage not green is where the goal _is_, and its name is drawn bold;
+  Build's name carries `merged/total` wherever the plan has parts, even while its reading is the operator's court. Plan and Build split the goal page's one Plan stage, through the same
+  `planRecordStage` / `partsStage` / `courtStage` it is composed of — Plan is the plan record's
+  status, Build its parts merged (or the goal's open pull requests where it has
   no parts), amber while a pull request is in the operator's court. Validate, Close and Watch are
   the goal page's own `validationStage` / `closeStage` / `watchStage`, fed from the work index rather
   than a built goal page (`stagesOf`, `web/src/view/workPage.ts`). The No goal row has no bar.

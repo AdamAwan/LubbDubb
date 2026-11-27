@@ -187,7 +187,7 @@ function StageBar({ stages }: { stages: readonly WorkStage[] }): JSX.Element | n
         return (
           <div
             key={name}
-            className={`cn-wk-seg cn-t-${stage.tone}${i === here ? ' cn-wk-here' : ''}`}
+            className={`cn-wk-seg cn-t-${stage.tone}${i === here ? ' cn-wk-here' : ''}${stage.done === null && stage.tone !== 'green' ? ' cn-wk-open-ended' : ''}`}
             title={`${name}: ${stage.reading}`}
           >
             <span className="cn-wk-segtrack">

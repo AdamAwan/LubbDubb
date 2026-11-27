@@ -1,10 +1,13 @@
 import type { CockpitView } from './viewModel.js';
 import type { Agent, Issue, OpenPullRequest, Plan, PlanPart } from '../types.js';
 import type { NeedRow } from './needsYou.js';
-import { goalObligations, type GoalPageView } from './goalPage.js';
+import { goalObligations, reachFields, type GoalPageView } from './goalPage.js';
 import {
   buildGoalTrack,
   closeStage,
+  courtStage,
+  partsStage,
+  planRecordStage,
   validationStage,
   watchStage,
   type CloseInputs,
@@ -105,15 +108,9 @@ function groupBy<T>(items: readonly T[] | undefined, key: (item: T) => string): 
 
 /** Each goal's live plan parts in plan order — the first plan on a goal, as the goal page reads it. */
 function partsByGoal(state: CockpitView['state'], plans: ReadonlyMap<string, Plan>): (ref: string) => PlanPart[] {
-  const planOf = new Map([...plans].map(([ref, plan]) => [ref, plan.id]));
-  const byPlan = new Map<string, PlanPart[]>();
-  for (const part of liveParts(state.planParts ?? [])) {
-    const list = byPlan.get(part.planId) ?? [];
-    list.push(part);
-    byPlan.set(part.planId, list);
-  }
+  const byPlan = groupBy(liveParts(state.planParts ?? []), (part) => part.planId);
   for (const list of byPlan.values()) list.sort((a, b) => a.seq - b.seq);
-  return (ref) => byPlan.get(planOf.get(ref) ?? '') ?? [];
+  return (ref) => byPlan.get(plans.get(ref)?.id ?? '') ?? [];
 }
 
 function indexWork(view: CockpitView): WorkIndex {
@@ -129,21 +126,14 @@ function indexWork(view: CockpitView): WorkIndex {
     for (const rung of stack.rungs) stackHolds.set(rung.prNumber, `stack can’t land: ${blocked}`);
   }
 
-  const queueHolds = new Map<string, string[]>();
-  for (const item of view.upNext) {
-    if (item.status === 'dispatching') continue;
-    const goal = goalOfOrigin(state, item.origin);
-    if (goal === null) continue;
-    const list = queueHolds.get(goal) ?? [];
-    list.push(item.reason);
-    queueHolds.set(goal, list);
-  }
+  const held = view.upNext.flatMap((item) => {
+    const goal = item.status === 'dispatching' ? null : goalOfOrigin(state, item.origin);
+    return goal === null ? [] : [{ goal, reason: item.reason }];
+  });
+  const queueHolds = new Map([...groupBy(held, (h) => h.goal)].map(([goal, hs]) => [goal, hs.map((h) => h.reason)]));
 
   const reach = new Map((state.environmentReach ?? []).map((r) => [r.goalRef, r]));
-  const closeOf = (issue: Issue, ref: string): CloseInputs => {
-    const r = reach.get(ref);
-    return { issue, environments: r?.environments ?? [], groups: r?.groups ?? [], gateHold: r?.gateHold ?? null };
-  };
+  const closeOf = (issue: Issue, ref: string): CloseInputs => ({ issue, ...reachFields(reach.get(ref)) });
   const obligations = goalObligations(state.config.environments);
   const windows = groupBy(state.goalWatchWindows, (w) => w.goalRef);
   const signals = groupBy(state.goalWatches, (w) => w.originRef);
@@ -205,42 +195,30 @@ function stagesOf(work: GoalWork, index: WorkIndex): WorkStage[] {
   const track = workTrack(work.parts);
   const count = track.total > 0 ? `${track.merged}/${track.total}` : null;
   return [
-    { name: 'Plan', stage: planOnly(work, index.planOf.get(work.ref)), count: null },
-    { name: 'Build', stage: buildStage(work), count },
+    { name: 'Plan', stage: planOnly(work, issue, index.planOf.get(work.ref)), count: null },
+    { name: 'Build', stage: buildStage(work, issue, track), count },
     { name: 'Validate', stage: validationStage({ issue }), count: null },
     { name: 'Close', stage: closeStage(index.closeOf(issue, work.ref)), count: null },
     { name: 'Watch', stage: watchStage(index.watchOf(work.ref)), count: null },
   ];
 }
 
-function planOnly(work: GoalWork, plan: Plan | undefined): GoalStage {
+/** The plan record alone; a goal worked without one reads as needing none once it has a pull request. */
+function planOnly(work: GoalWork, issue: Issue, plan: Plan | undefined): GoalStage {
   if (plan === undefined) {
-    if (work.prs.length > 0 || work.issue?.delivery != null)
-      return { reading: 'no plan needed', tone: 'green', done: null };
-    if (work.issue?.pickup.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
-    return { reading: 'not drawn', tone: 'grey', done: null };
+    if (work.prs.length > 0 || issue.delivery != null) return { reading: 'no plan needed', tone: 'green', done: null };
+    if (issue.pickup.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
   }
-  if (plan.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
-  if (plan.status === 'awaiting_approval') return { reading: 'waiting on you', tone: 'amber', done: null };
-  if (plan.status === 'abandoned') return { reading: 'abandoned', tone: 'grey', done: null };
-  return { reading: 'approved', tone: 'green', done: null };
+  return planRecordStage(plan ?? null) ?? { reading: 'approved', tone: 'green', done: null };
 }
 
 /** The plan's parts merged, or the goal's pull requests where it has no parts; a PR on the operator reads amber. */
-function buildStage(work: GoalWork): GoalStage {
-  const court = work.prs.filter((pr) => pr.attention.status === 'you').length;
-  const track = workTrack(work.parts);
-  const done = track.total === 0 ? null : (track.merged / track.total) * 100;
-  if (court > 0) return { reading: court === 1 ? '1 in your court' : `${court} in your court`, tone: 'amber', done };
-  if (track.total > 0) {
-    return {
-      reading: `${track.merged}/${track.total} parts merged`,
-      tone: track.merged === track.total ? 'green' : track.held > 0 ? 'amber' : track.now > 0 ? 'blue' : 'grey',
-      done,
-    };
-  }
-  if (work.issue?.delivery != null || work.issue?.state !== 'open')
-    return { reading: 'delivered', tone: 'green', done: null };
+function buildStage(work: GoalWork, issue: Issue, track: GoalTrack): GoalStage {
+  const parts = partsStage(track);
+  const court = courtStage(work.prs, parts?.done ?? null);
+  if (court !== null) return court;
+  if (parts !== null) return parts;
+  if (issue.delivery != null || issue.state !== 'open') return { reading: 'delivered', tone: 'green', done: null };
   if (work.prs.length > 0) return { reading: `${work.prs.length} open`, tone: 'blue', done: null };
   if (work.agents.length > 0) return { reading: 'being worked', tone: 'blue', done: null };
   return { reading: 'not started', tone: 'grey', done: null };

@@ -1,6 +1,6 @@
 import type { GoalEnvironmentReachView, GoalGroupReach, GoalWatch, GoalWatchView, WatchPlanRecord } from '../types.js';
 import type { GoalPageView, GoalPartView, GoalTrack } from './goalPage.js';
-import type { PartGroup } from '../types.js';
+import type { OpenPullRequest, PartGroup, Plan } from '../types.js';
 import { inFlight, localValidationSaid } from './localValidation.js';
 import { isProposed } from './watchChecks.js';
 
@@ -36,17 +36,32 @@ export function planStage(page: GoalPageView): GoalStage {
      because it is the one reading on this stage that is about them. The tab row
      said it and the track did not, and folding the two into one control is how a
      reading gets lost — so it is said here, where both now read from. */
-  const court = page.openPullRequests.filter((pr) => pr.attention.status === 'you').length;
-  if (court > 0) {
-    return { reading: court === 1 ? '1 in your court' : `${court} in your court`, tone: 'amber', done: null };
-  }
-  if (page.plan === null) return { reading: 'not drawn', tone: 'grey', done: null };
-  if (page.plan.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
-  if (page.plan.status === 'awaiting_approval') return { reading: 'waiting on you', tone: 'amber', done: null };
-  if (page.plan.status === 'abandoned') return { reading: 'abandoned', tone: 'grey', done: null };
+  const court = courtStage(page.openPullRequests, null);
+  if (court !== null) return court;
+  const record = planRecordStage(page.plan);
+  if (record !== null) return record;
+  return partsStage(buildGoalTrack(page.parts)) ?? { reading: 'one pull request', tone: 'grey', done: null };
+}
 
-  const track = buildGoalTrack(page.parts);
-  if (track.total === 0) return { reading: 'one pull request', tone: 'grey', done: null };
+/** The pull requests in the operator's court, as a stage; null when none is. */
+export function courtStage(prs: readonly Pick<OpenPullRequest, 'attention'>[], done: number | null): GoalStage | null {
+  const court = prs.filter((pr) => pr.attention.status === 'you').length;
+  if (court === 0) return null;
+  return { reading: court === 1 ? '1 in your court' : `${court} in your court`, tone: 'amber', done };
+}
+
+/** The plan record's own status; null once it is approved, where the parts take over. */
+export function planRecordStage(plan: Pick<Plan, 'status'> | null): GoalStage | null {
+  if (plan === null) return { reading: 'not drawn', tone: 'grey', done: null };
+  if (plan.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
+  if (plan.status === 'awaiting_approval') return { reading: 'waiting on you', tone: 'amber', done: null };
+  if (plan.status === 'abandoned') return { reading: 'abandoned', tone: 'grey', done: null };
+  return null;
+}
+
+/** The plan's parts merged; null for a plan with no parts. */
+export function partsStage(track: GoalTrack): GoalStage | null {
+  if (track.total === 0) return null;
   return {
     reading: `${track.merged}/${track.total} parts merged`,
     tone: track.merged === track.total ? 'green' : track.held > 0 ? 'amber' : track.now > 0 ? 'blue' : 'grey',
