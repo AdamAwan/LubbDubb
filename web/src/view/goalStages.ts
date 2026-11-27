@@ -1,6 +1,6 @@
 import type { GoalEnvironmentReachView, GoalGroupReach, GoalWatch, GoalWatchView, WatchPlanRecord } from '../types.js';
 import type { GoalPageView, GoalPartView, GoalTrack } from './goalPage.js';
-import type { PartGroup } from '../types.js';
+import type { OpenPullRequest, PartGroup, Plan } from '../types.js';
 import { inFlight, localValidationSaid } from './localValidation.js';
 import { isProposed } from './watchChecks.js';
 
@@ -17,6 +17,12 @@ export function buildGoalTrack(parts: readonly Pick<GoalPartView, 'group'>[]): G
   };
 }
 
+/** What the close-out reading reads. */
+export type CloseInputs = Pick<GoalPageView, 'issue' | 'gateHold' | 'environments' | 'groups'>;
+
+/** What the Watch reading reads. */
+export type WatchInputs = Pick<GoalPageView, 'watches' | 'obligations' | 'signals' | 'watchPlan'>;
+
 export type GoalStageTone = 'green' | 'blue' | 'amber' | 'grey';
 
 export interface GoalStage {
@@ -30,17 +36,32 @@ export function planStage(page: GoalPageView): GoalStage {
      because it is the one reading on this stage that is about them. The tab row
      said it and the track did not, and folding the two into one control is how a
      reading gets lost — so it is said here, where both now read from. */
-  const court = page.openPullRequests.filter((pr) => pr.attention.status === 'you').length;
-  if (court > 0) {
-    return { reading: court === 1 ? '1 in your court' : `${court} in your court`, tone: 'amber', done: null };
-  }
-  if (page.plan === null) return { reading: 'not drawn', tone: 'grey', done: null };
-  if (page.plan.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
-  if (page.plan.status === 'awaiting_approval') return { reading: 'waiting on you', tone: 'amber', done: null };
-  if (page.plan.status === 'abandoned') return { reading: 'abandoned', tone: 'grey', done: null };
+  const court = courtStage(page.openPullRequests, null);
+  if (court !== null) return court;
+  const record = planRecordStage(page.plan);
+  if (record !== null) return record;
+  return partsStage(buildGoalTrack(page.parts)) ?? { reading: 'one pull request', tone: 'grey', done: null };
+}
 
-  const track = buildGoalTrack(page.parts);
-  if (track.total === 0) return { reading: 'one pull request', tone: 'grey', done: null };
+/** The pull requests in the operator's court, as a stage; null when none is. */
+export function courtStage(prs: readonly Pick<OpenPullRequest, 'attention'>[], done: number | null): GoalStage | null {
+  const court = prs.filter((pr) => pr.attention.status === 'you').length;
+  if (court === 0) return null;
+  return { reading: court === 1 ? '1 in your court' : `${court} in your court`, tone: 'amber', done };
+}
+
+/** The plan record's own status; null once it is approved, where the parts take over. */
+export function planRecordStage(plan: Pick<Plan, 'status'> | null): GoalStage | null {
+  if (plan === null) return { reading: 'not drawn', tone: 'grey', done: null };
+  if (plan.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
+  if (plan.status === 'awaiting_approval') return { reading: 'waiting on you', tone: 'amber', done: null };
+  if (plan.status === 'abandoned') return { reading: 'abandoned', tone: 'grey', done: null };
+  return null;
+}
+
+/** The plan's parts merged; null for a plan with no parts. */
+export function partsStage(track: GoalTrack): GoalStage | null {
+  if (track.total === 0) return null;
   return {
     reading: `${track.merged}/${track.total} parts merged`,
     tone: track.merged === track.total ? 'green' : track.held > 0 ? 'amber' : track.now > 0 ? 'blue' : 'grey',
@@ -48,7 +69,7 @@ export function planStage(page: GoalPageView): GoalStage {
   };
 }
 
-export function validationStage(page: GoalPageView): GoalStage {
+export function validationStage(page: Pick<GoalPageView, 'issue'>): GoalStage {
   /* A local check plan that is running outranks the set's own count, because it
      is the only thing on the goal that is happening right now — and with the
      header's chip gone this is the one place outside the pane that says so. */
@@ -89,7 +110,7 @@ export interface GoalReachBand {
   grouped: boolean;
 }
 
-export function reachBands(page: GoalPageView): GoalReachBand[] {
+export function reachBands(page: Pick<GoalPageView, 'environments' | 'groups'>): GoalReachBand[] {
   const byMember = new Map<string, GoalGroupReach>();
   for (const group of page.groups) for (const name of group.environments) byMember.set(name, group);
   const out: GoalReachBand[] = [];
@@ -127,7 +148,7 @@ export function reachBands(page: GoalPageView): GoalReachBand[] {
  * has arrived nowhere is not a goal whose close-out is outstanding, it is one whose close-out
  * cannot be asked for yet. → docs/spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time
  */
-export function closeStage(page: GoalPageView): GoalStage {
+export function closeStage(page: CloseInputs): GoalStage {
   const { issue } = page;
   if (issue.state !== 'open') return { reading: issue.state, tone: 'green', done: 100 };
   if (issue.shortfall) return { reading: 'fell short', tone: 'amber', done: null };
@@ -140,7 +161,7 @@ export function closeStage(page: GoalPageView): GoalStage {
 
 /* Counted in places rather than in commands: a goal that has reached one region of production
    has not reached production. → docs/spec/24-environments.md#groups */
-function reachStage(page: GoalPageView): GoalStage {
+function reachStage(page: CloseInputs): GoalStage {
   const envs = reachBands(page);
   if (envs.length === 0) return { reading: 'not reached', tone: 'grey', done: null };
   const reached = envs.filter((e) => e.status === 'reached');
@@ -184,7 +205,7 @@ export function awaitingAccept(signals: readonly GoalWatch[], record: WatchPlanR
   return record?.authoredAt != null && record.acceptedAt === null ? signals.filter(isProposed).length : 0;
 }
 
-export function watchStage(page: GoalPageView): GoalStage {
+export function watchStage(page: WatchInputs): GoalStage {
   const windows = page.watches.filter((w) => page.obligations.watch.includes(w.environment));
   const open = windows.filter((w) => w.checks.length > 0);
   if (open.length === 0) {
@@ -236,7 +257,7 @@ export function askStage(page: GoalPageView): GoalStage {
   return { reading: n === 0 ? 'ready' : n === 1 ? '1 instruction' : `${n} instructions`, tone: 'green', done };
 }
 
-export function flaggedLocally(page: GoalPageView): boolean {
+export function flaggedLocally(page: Pick<GoalPageView, 'issue'>): boolean {
   const local = page.issue.localValidation;
   return local !== null && (local.status === 'failed' || local.status === 'blocked');
 }

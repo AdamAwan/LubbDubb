@@ -13,12 +13,11 @@ import {
   prReading,
   strayPrs,
   workParts,
-  workTrack,
   type GoalWork,
   type Hold,
   type PrReading,
+  type WorkStage,
 } from '../view/workPage.js';
-import { buildGoalPage } from '../view/goalPage.js';
 import { goalInChat, inChat } from '../view/needsYouPage.js';
 import { pickupWord } from '../view/pickup.js';
 import { BareButton } from '../components/button.js';
@@ -27,7 +26,6 @@ import { ControlButton } from '../components/controls.js';
 import { Icon } from '../components/icons.js';
 import { InstructionModal } from '../components/InstructionModal.js';
 import { Ref, refLabel } from '../components/refs.js';
-import { Track } from '../components/track.js';
 import { fmtUsd } from '../components/util.js';
 import { AskCard } from './askCard.js';
 import { agentLamp } from './fleetRows.js';
@@ -130,11 +128,12 @@ function GoalRow({ work, view, actions }: Props & { work: GoalWork }): JSX.Eleme
   return (
     <div className={`cn-wk-row${priority ? ' cn-wk-priority' : ''}${open ? ' cn-wk-open' : ''}`}>
       <RowHead work={work} open={open} view={view} actions={actions} />
+      <StageBar stages={work.stages} />
       {open && work.asks.length > 0 && <NeedsYou asks={work.asks} view={view} actions={actions} />}
       {open && planned && <PartsLine work={work} talk={talk} />}
       <PrsLine prs={loose} talk={talk} />
       <HeldLine holds={holds} />
-      {open && <LaterLine work={work} view={view} />}
+      {open && <LaterLine work={work} />}
       {open && !planned && work.prs.length > 0 && (
         <div className="cn-wk-inset">
           <PrCards cards={work.prs.map((pr) => ({ pr, goal: false }))} view={view} actions={actions} />
@@ -146,7 +145,6 @@ function GoalRow({ work, view, actions }: Props & { work: GoalWork }): JSX.Eleme
 
 function RowHead({ work, open, view, actions }: Props & { work: GoalWork; open: boolean }): JSX.Element {
   const { issue } = work;
-  const track = work.parts.length === 0 ? null : workTrack(work.parts);
   return (
     <div className="cn-wk-line">
       <BareButton
@@ -160,12 +158,6 @@ function RowHead({ work, open, view, actions }: Props & { work: GoalWork; open: 
       </BareButton>
       <RowTitle work={work} actions={actions} />
       {issue !== undefined && <span className="cn-wk-stage">{pickupWord(issue.pickup.status)}</span>}
-      {track !== null && track.total > 0 && (
-        <span className="cn-wk-meta">
-          <Track track={track} />
-          {track.merged}/{track.total}
-        </span>
-      )}
       {work.agents[0] !== undefined && (
         <span className="cn-wk-meta" title={work.agents.map((a) => view.taskFor(a)?.title ?? a.id).join('\n')}>
           <i className={`cn-lamp ${agentLamp(work.agents[0], view)}`} />
@@ -179,6 +171,36 @@ function RowHead({ work, open, view, actions }: Props & { work: GoalWork; open: 
       )}
       {issue?.spend != null && <span className="cn-wk-meta">{fmtUsd(issue.spend.costUsd)}</span>}
       {issue !== undefined && <Steer issue={issue} open={open} actions={actions} />}
+    </div>
+  );
+}
+
+function StageBar({ stages }: { stages: readonly WorkStage[] }): JSX.Element | null {
+  if (stages.length === 0) return null;
+  const here =
+    stages.find((s) => s.name === 'Close')?.stage.tone === 'green'
+      ? -1
+      : stages.findIndex((s) => s.stage.tone !== 'green');
+  return (
+    <div className="cn-wk-bar">
+      {stages.map(({ name, stage, count }, i) => {
+        const fill = stage.done ?? (stage.tone === 'grey' ? 0 : 100);
+        return (
+          <div
+            key={name}
+            className={`cn-wk-seg cn-t-${stage.tone}${i === here ? ' cn-wk-here' : ''}${stage.done === null && stage.tone !== 'green' ? ' cn-wk-open-ended' : ''}`}
+            title={`${name}: ${stage.reading}`}
+          >
+            <span className="cn-wk-segtrack">
+              <i style={{ width: `${fill}%` }} />
+            </span>
+            <span className="cn-wk-segname">
+              {name}
+              {count !== null && ` ${count}`}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -321,9 +343,8 @@ function HeldLine({ holds }: { holds: readonly Hold[] }): JSX.Element | null {
   );
 }
 
-function LaterLine({ work, view }: { work: GoalWork; view: CockpitView }): JSX.Element | null {
-  const page = work.issue === undefined ? null : buildGoalPage(view.state, work.ref, view.needsYou, null);
-  const stages = page === null ? [] : laterStages(page);
+function LaterLine({ work }: { work: GoalWork }): JSX.Element | null {
+  const stages = laterStages(work.stages);
   if (stages.length === 0) return null;
   return (
     <Facts label="Later">

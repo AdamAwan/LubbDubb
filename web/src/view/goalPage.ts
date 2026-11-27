@@ -234,7 +234,13 @@ function goalReach(
   state: AppState,
   ref: string,
 ): Pick<GoalPageView, 'environments' | 'groups' | 'landings' | 'gateHold' | 'gateRelease'> {
-  const reach = (state.environmentReach ?? []).find((e) => e.goalRef === ref);
+  return reachFields((state.environmentReach ?? []).find((e) => e.goalRef === ref));
+}
+
+/** A goal's reach record as the page reads it, defaulted where the goal has none. */
+export function reachFields(
+  reach: AppState['environmentReach'][number] | undefined,
+): Pick<GoalPageView, 'environments' | 'groups' | 'landings' | 'gateHold' | 'gateRelease'> {
   return {
     environments: reach?.environments ?? [],
     groups: reach?.groups ?? [],

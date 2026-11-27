@@ -9026,7 +9026,9 @@ day — **for each thing I am trying to get done, where is it and what is holdin
 page: one row per goal, read in one line each, opened in place for the rest.
 
 **The layout.** Under the head (the goal count, and the [listener's pill](44-needs-you.md#is-a-chat-listening))
-come **Feature headings** — each goal under the Feature it hangs off (`byFeature`, first-seen order).
+come **Feature headings** — drawn heavier than the goal titles under them, on the `--cn-panel-2` band, so
+a section reads as a section above the red of the asks (an ask on a PRs or Held line leads with a
+dot, so it reads as an item and not a heading) — each goal under the Feature it hangs off (`byFeature`, first-seen order).
 A goal under no Feature is **its own top-level card**, after the Features, with no heading: it is a
 peer of a Feature, not a member of a `No feature` bucket. A Feature
 folds through `FoldToggle` (subject `work`), and its fold is the same `collapsed` set the tickets tab
@@ -9034,10 +9036,21 @@ folds Features with — one Feature folded is folded everywhere. Under each head
 in flight**:
 
 - **The head line**: the goal's title (the control that opens the full goal page) and its `<Ref>`;
-  then its pickup word (`pickupWord`, `web/src/view/pickup.ts`), the plan's track and `merged/total`,
-  the agents on it as a lamp and a count, `in Claude` where any of its asks or pull requests is in the
+  then its pickup word (`pickupWord`, `web/src/view/pickup.ts`), the agents on it as a lamp and a count, `in Claude` where any of its asks or pull requests is in the
   listening chat, its spend, and ⚡ — the [priority](05-dispatcher.md#marking-a-goal-a-priority) control, which puts the goal first in
   the queue. A prioritised row is drawn with a rule down its left.
+- **The stage bar**, under the head line: **Plan → Build → Validate → Close → Watch**, one segment
+  each, drawn in the goal tabs' tones (`cn-t-*`: green done, blue moving, amber held or on the
+  operator, grey not yet). A stage fills solid to its `done` where it has one and whole when green
+  without one; a blue or amber stage with no `done` is drawn whole at half strength, so it
+  keeps its colour without reading as finished. The first stage not green is where the goal _is_, and its name is drawn bold — none once Close is green;
+  Build's name carries `merged/total` wherever the plan has parts, even while its reading is the operator's court. Plan and Build split the goal page's one Plan stage, through the same
+  `planRecordStage` / `partsStage` / `courtStage` it is composed of — Plan is the plan record's
+  status (`approved` / `complete` once past it; `no plan needed` for a goal worked without one, i.e.
+  with a pull request, an agent, a delivery or a closed ticket), Build its parts merged (or the goal's open pull requests where it has
+  no parts), amber while a pull request is in the operator's court. Validate, Close and Watch are
+  the goal page's own `validationStage` / `closeStage` / `watchStage`, fed from the work index rather
+  than a built goal page (`stagesOf`, `web/src/view/workPage.ts`). The No goal row has no bar.
 - **PRs**: every open pull request of the goal, each in **one** reading (`prReading`): why it is on the
   operator, in the [Needs you words](44-needs-you.md#pull-requests-waiting-on-you) (`Your call`,
   `Your review`, `Comments` …, through `prOnYouReasons` and `PR_REASON_LABEL`, so the two pages never
@@ -9073,17 +9086,18 @@ here rather than discovered between two literals. → `test/workPage.test.ts`
   with its pull request's reading and its Claude control; pull requests no part names follow on a PRs
   line (`strayPrs`). A blocked part is said here, so Held leaves it out, and the asks are drawn above,
   so Held leaves them out too;
-- **a Later line**: Validate, Close and Watch, each in the goal tab's own reading, where it has one
-  (`laterStages` drops a stage reading grey, which is a stage with nothing yet);
+- **a Later line**: Validate, Close and Watch in words — the stage bar's own readings, which the bar
+  carries only in its tooltips (`laterStages` drops a stage reading grey, which is a stage with nothing yet);
 - **Instruct** — the goal page's instruction modal — and its cost on the head line.
 
 A goal with no plan and open pull requests draws their cards under the row instead of a Parts line.
 
 **Built once per snapshot.** `WorkPage` memoizes `goalsOfWork` on the snapshot, not the clock tick,
-and `goalsOfWork` reads it through one index (`indexWork`): each plan's live parts by goal
-(`liveParts`), the stack hold by pull request, the queue's holds by goal. A row's parts, track and
-holds come off that index; **the full `buildGoalPage` is built only by the open row's Later line**,
-because building it for every goal on every snapshot was the whole cost of the page.
+and `goalsOfWork` reads it through one index (`indexWork`): each goal's plan and its live parts
+(`liveParts`), the stack hold by pull request, the queue's holds by goal, and the reach and watch
+records by goal. A row's parts, holds and stages — and the open row's Later line — come off that index; **the Work
+tab never builds `buildGoalPage`**, because building it for every goal on every snapshot was the whole
+cost of the page.
 
 **The rail stays hidden on Work** (`workInFront` in `ConsoleRoot.tsx`), and on the goal, pull-request
 and agent pages it opens: Work is itself a list of what holds every goal, and a second list of holds
