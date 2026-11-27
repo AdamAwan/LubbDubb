@@ -8244,3 +8244,27 @@ button.cn-grow {
   font-size: 11px;
   color: var(--cn-fg-faint);
 }
+.cn-gp-needs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 4px 24px;
+}
+.cn-gp-inset {
+  margin: 6px 0 0 24px;
+}
+.cn-gp-part {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.cn-gp-part b {
+  font-weight: 600;
+}
+.cn-gp-arrow {
+  font-style: normal;
+  color: var(--cn-fg-faint);
+}
+.cn-gp-done {
+  color: var(--cn-green-ink);
+}

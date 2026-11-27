@@ -1,17 +1,18 @@
-import { useState, type JSX } from 'react';
+import { useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { Agent, Issue, OpenPullRequest } from '../types.js';
+import type { Agent, Issue, OpenPullRequest, PlanPart } from '../types.js';
 import type { NeedRow } from '../view/needsYou.js';
-import { buildGoalPage } from '../view/goalPage.js';
-import { buildGoalTrack } from '../view/goalStages.js';
+import { buildGoalPage, type GoalPageView } from '../view/goalPage.js';
+import { buildGoalTrack, closeStage, validationStage, watchStage } from '../view/goalStages.js';
 import { goalIssue, goalNumber, goalOfOrigin, goalOfPr, standsFor } from '../view/goalRefs.js';
 import { plural } from '../view/plural.js';
 import { BareButton } from '../components/button.js';
 import { ControlButton } from '../components/controls.js';
 import { Ref, refLabel } from '../components/refs.js';
 import { Track } from '../components/track.js';
-import { elapsed } from '../components/util.js';
+import { fmtUsd } from '../components/util.js';
+import { InstructionModal } from '../components/InstructionModal.js';
 import { AskCard } from './askCard.js';
 import { agentLamp } from './fleetRows.js';
 import { PrCards } from './PrCards.js';
@@ -29,6 +30,7 @@ const CURRENT = new Set(['active', 'has_pr', 'planning', 'investigation', 'parke
 interface Hold {
   text: string;
   tone: 'ask' | 'hold';
+  part?: true;
 }
 
 interface GoalWork {
@@ -105,7 +107,7 @@ function holdsOf(work: GoalWork, view: CockpitView): Hold[] {
     const page = buildGoalPage(state, work.ref, view.needsYou, null);
     for (const { part } of page?.parts ?? []) {
       if (part.status === 'blocked')
-        holds.push({ text: `part “${part.slug}”: ${part.blockedReason ?? 'blocked'}`, tone: 'hold' });
+        holds.push({ text: `part “${part.slug}”: ${part.blockedReason ?? 'blocked'}`, tone: 'hold', part: true });
     }
     for (const item of view.upNext) {
       if (item.status === 'dispatching') continue;
@@ -196,11 +198,13 @@ function GoalRow({
   onToggle: () => void;
 }): JSX.Element {
   const { issue } = work;
+  const [instructing, setInstructing] = useState(false);
   const page = work.ref === NONE ? null : buildGoalPage(view.state, work.ref, view.needsYou, null);
   const track = page === null ? null : buildGoalTrack(page.parts);
   const priority = issue?.priority != null;
-  const holds = holdsOf(work, view);
+  const holds = holdsOf(work, view).filter((h) => !open || (h.tone === 'hold' && h.part === undefined));
   const stage = issue === undefined ? null : (PICKUP_WORD[issue.pickup.status] ?? issue.pickup.status);
+  const planned = page !== null && page.parts.length > 0;
   return (
     <div className={`cn-gp-row${priority ? ' cn-gp-priority' : ''}${open ? ' cn-gp-open' : ''}`}>
       <div className="cn-gp-line">
@@ -209,7 +213,7 @@ function GoalRow({
           className="cn-gp-fold"
           onClick={onToggle}
           aria-expanded={open}
-          title={open ? 'Fold' : 'Show its asks and pull requests here'}
+          title={open ? 'Fold' : 'Show what it needs, its parts and what comes later'}
         >
           {open ? '▾' : '▸'}
         </BareButton>
@@ -221,7 +225,7 @@ function GoalRow({
               usage={{ counted: 'goal.view' }}
               className="cn-gp-title"
               onClick={() => actions.selectGoal(work.ref)}
-              title="Open the goal page"
+              title="Open the full goal page"
             >
               {issue?.title ?? refLabel(work.ref)}
             </BareButton>
@@ -243,6 +247,17 @@ function GoalRow({
             {work.agents.length}
           </span>
         )}
+        {issue?.spend != null && <span className="cn-gp-onit">{fmtUsd(issue.spend.costUsd)}</span>}
+        {issue !== undefined && open && (
+          <ControlButton
+            icon="pen"
+            usage="goal.expand"
+            onClick={() => setInstructing(true)}
+            title="Say what you want done next — your words go to the next agent on this goal"
+          >
+            Instruct
+          </ControlButton>
+        )}
         {issue !== undefined && (
           <ControlButton
             icon="bolt"
@@ -255,95 +270,150 @@ function GoalRow({
           </ControlButton>
         )}
       </div>
-      {work.prs.length > 0 && (
-        <div className="cn-gp-facts">
-          <span className="cn-gp-label">PRs</span>
-          <span className="cn-gp-items">
-            {work.prs.map((pr) => {
-              const s = prState(pr);
-              return (
-                <span key={pr.number} className={`cn-gp-item cn-gp-${s.tone}`}>
-                  <Ref to={`pr:${pr.number}`} /> {s.text}
-                </span>
-              );
-            })}
-          </span>
-        </div>
-      )}
+      {open && work.asks.length > 0 && <NeedsYou asks={work.asks} view={view} actions={actions} />}
+      {open && planned ? <PartsLine page={page} prs={work.prs} /> : work.prs.length > 0 && <PrsLine prs={work.prs} />}
+      {open && planned && <OtherPrs page={page} prs={work.prs} />}
       {holds.length > 0 && (
-        <div className="cn-gp-facts">
-          <span className="cn-gp-label">Held</span>
-          <span className="cn-gp-items">
-            {holds.map((h, i) => (
-              <span key={i} className={`cn-gp-item cn-gp-${h.tone}`}>
-                {h.text}
-              </span>
-            ))}
-          </span>
+        <Facts label="Held">
+          {holds.map((h, i) => (
+            <span key={i} className={`cn-gp-item cn-gp-${h.tone}`}>
+              {h.text}
+            </span>
+          ))}
+        </Facts>
+      )}
+      {open && page !== null && <LaterLine page={page} />}
+      {open && !planned && work.prs.length > 0 && (
+        <div className="cn-gp-inset">
+          <PrCards cards={work.prs.map((pr) => ({ pr, goal: false }))} view={view} actions={actions} />
         </div>
       )}
-      {open && <GoalDetail work={work} view={view} actions={actions} />}
+      {instructing && issue !== undefined && (
+        <InstructionModal
+          issueNumber={issue.number}
+          issueTitle={issue.title}
+          onSubmit={(text) => actions.addInstruction(issue.number, text)}
+          onClose={() => setInstructing(false)}
+        />
+      )}
     </div>
   );
 }
 
-function GoalDetail({
-  work,
+function Facts({ label, children }: { label: string; children: ReactNode }): JSX.Element {
+  return (
+    <div className="cn-gp-facts">
+      <span className="cn-gp-label">{label}</span>
+      <span className="cn-gp-items">{children}</span>
+    </div>
+  );
+}
+
+function PrsLine({ prs }: { prs: readonly OpenPullRequest[] }): JSX.Element {
+  return (
+    <Facts label="PRs">
+      {prs.map((pr) => {
+        const s = prState(pr);
+        return (
+          <span key={pr.number} className={`cn-gp-item cn-gp-${s.tone}`}>
+            <Ref to={`pr:${pr.number}`} /> {s.text}
+          </span>
+        );
+      })}
+    </Facts>
+  );
+}
+
+const PART_MARK: Partial<Record<PlanPart['status'], string>> = {
+  merged: '✓',
+  concluded: '✓',
+  blocked: '⏸',
+  dispatched: '▶',
+  in_review: '▶',
+};
+
+function PartsLine({ page, prs }: { page: GoalPageView; prs: readonly OpenPullRequest[] }): JSX.Element {
+  const parts = page.parts
+    .map((p) => p.part)
+    .filter((p) => p.status !== 'retired')
+    .sort((a, b) => a.seq - b.seq);
+  return (
+    <Facts label="Parts">
+      {parts.map((part, i) => {
+        const pr = part.prNumber === null ? undefined : prs.find((p) => p.number === part.prNumber);
+        const state = pr === undefined ? null : prState(pr);
+        const mark = PART_MARK[part.status] ?? (pr !== undefined ? '▶' : '');
+        const tone = part.status === 'blocked' ? 'hold' : (state?.tone ?? (mark === '✓' ? 'done' : 'quiet'));
+        return (
+          <span key={part.id} className={`cn-gp-item cn-gp-part cn-gp-${tone}`}>
+            {i > 0 && <i className="cn-gp-arrow">→</i>}
+            {mark !== '' && <b>{mark}</b>}
+            {part.seq} {part.slug}
+            {part.prNumber !== null && <Ref to={`pr:${part.prNumber}`} />}
+            {state !== null && <span>{state.text}</span>}
+            {part.status === 'blocked' && part.blockedReason !== null && <span>: {part.blockedReason}</span>}
+          </span>
+        );
+      })}
+    </Facts>
+  );
+}
+
+function OtherPrs({ page, prs }: { page: GoalPageView; prs: readonly OpenPullRequest[] }): JSX.Element | null {
+  const inPlan = new Set(page.parts.flatMap((p) => (p.part.prNumber === null ? [] : [p.part.prNumber])));
+  const others = prs.filter((pr) => !inPlan.has(pr.number));
+  return others.length === 0 ? null : <PrsLine prs={others} />;
+}
+
+function LaterLine({ page }: { page: GoalPageView }): JSX.Element | null {
+  const stages = [
+    ['Validate', validationStage(page)],
+    ['Close', closeStage(page)],
+    ['Watch', watchStage(page)],
+  ] as const;
+  const live = stages.filter(([, s]) => s.tone !== 'grey');
+  if (live.length === 0) return null;
+  return (
+    <Facts label="Later">
+      {live.map(([name, s]) => (
+        <span key={name} className="cn-gp-item">
+          {name}: {s.reading}
+        </span>
+      ))}
+    </Facts>
+  );
+}
+
+function NeedsYou({
+  asks,
   view,
   actions,
 }: {
-  work: GoalWork;
+  asks: readonly NeedRow[];
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  const flip = (id: string): void => {
+    const next = new Set(folded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setFolded(next);
+  };
   return (
-    <div className="cn-gp-cols">
-      <div className="cn-gp-col">
-        <h4>Asks</h4>
-        {work.asks.length === 0 ? (
-          <p className="cn-empty">Nothing waiting on you.</p>
-        ) : (
-          work.asks.map((row) => (
-            <AskCard
-              key={row.id}
-              row={row}
-              view={view}
-              claude={null}
-              expanded={expanded === row.id}
-              onExpand={() => setExpanded(expanded === row.id ? null : row.id)}
-              actions={actions}
-              inGoal
-            />
-          ))
-        )}
-        {work.agents.length > 0 && (
-          <>
-            <h4>On the fleet</h4>
-            {work.agents.map((agent) => (
-              <BareButton
-                key={agent.id}
-                usage={{ counted: 'agent.view' }}
-                className="cn-gp-agent"
-                onClick={() => actions.select(agent.id)}
-                title="Open the agent"
-              >
-                <i className={`cn-lamp ${agentLamp(agent, view)}`} />
-                <span>{view.taskFor(agent)?.title ?? agent.id}</span>
-                <em>{elapsed(agent.startedAt, null, view.now)}</em>
-              </BareButton>
-            ))}
-          </>
-        )}
-      </div>
-      <div className="cn-gp-col">
-        <h4>Pull requests</h4>
-        {work.prs.length === 0 ? (
-          <p className="cn-empty">No open pull requests.</p>
-        ) : (
-          <PrCards cards={work.prs.map((pr) => ({ pr, goal: false }))} view={view} actions={actions} />
-        )}
-      </div>
+    <div className="cn-gp-needs">
+      {asks.map((row) => (
+        <AskCard
+          key={row.id}
+          row={row}
+          view={view}
+          claude={null}
+          expanded={!folded.has(row.id)}
+          onExpand={() => flip(row.id)}
+          actions={actions}
+          inGoal
+        />
+      ))}
     </div>
   );
 }
