@@ -113,20 +113,29 @@ test('the Work tab’s in-flight set and the overview’s differ in exactly park
   assert.deepEqual(only(OVERVIEW_IN_FLIGHT, WORK_IN_FLIGHT), ['delivered']);
 });
 
-test('by feature: goals grouped under their parent in first-seen order, the ones under none last', () => {
+test('by feature: goals grouped under their parent in first-seen order, each one under none on its own', () => {
   const under = (n: number | null, ref: string): GoalWork =>
     work({
       ref,
       issue: { parent: n === null ? null : { number: n, title: `F${n}` } } as unknown as GoalWork['issue'],
     });
-  const groups = byFeature([under(null, 'a'), under(7, 'b'), under(3, 'c'), under(7, 'd')]);
+  const { features, loose } = byFeature([
+    under(null, 'a'),
+    under(7, 'b'),
+    under(3, 'c'),
+    under(7, 'd'),
+    under(null, 'e'),
+  ]);
   assert.deepEqual(
-    groups.map((g) => [g.number, g.title, g.goals.map((w) => w.ref)]),
+    features.map((g) => [g.number, g.title, g.goals.map((w) => w.ref)]),
     [
       [7, 'F7', ['b', 'd']],
       [3, 'F3', ['c']],
-      [null, null, ['a']],
     ],
+  );
+  assert.deepEqual(
+    loose.map((w) => w.ref),
+    ['a', 'e'],
   );
 });
 

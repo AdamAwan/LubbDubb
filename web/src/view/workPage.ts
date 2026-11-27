@@ -27,11 +27,16 @@ export interface GoalWork {
   holds: Hold[];
 }
 
-export interface FeatureGroup {
-  /** The Feature's issue number, or null for the goals that hang off none. */
-  number: number | null;
-  title: string | null;
+interface FeatureGroup {
+  number: number;
+  title: string;
   goals: GoalWork[];
+}
+
+/** The Work tab's top level: the Features, each with its goals, then each goal under none on its own. */
+interface TopLevel {
+  features: FeatureGroup[];
+  loose: GoalWork[];
 }
 
 export interface Hold {
@@ -156,20 +161,24 @@ export function inFlight(work: GoalWork): boolean {
   return work.issue !== undefined && WORK_IN_FLIGHT.has(work.issue.pickup.status);
 }
 
-/** The goals under the Feature each hangs off, in first-seen order, with the ones under none last. */
-export function byFeature(goals: readonly GoalWork[]): FeatureGroup[] {
-  const groups = new Map<number | null, FeatureGroup>();
+/** The goals under the Feature each hangs off, in first-seen order; a goal under none stands alone. */
+export function byFeature(goals: readonly GoalWork[]): TopLevel {
+  const groups = new Map<number, FeatureGroup>();
+  const loose: GoalWork[] = [];
   for (const work of goals) {
     const parent = work.issue?.parent ?? null;
-    const key = parent?.number ?? null;
-    let group = groups.get(key);
+    if (parent === null) {
+      loose.push(work);
+      continue;
+    }
+    let group = groups.get(parent.number);
     if (group === undefined) {
-      group = { number: key, title: parent?.title ?? null, goals: [] };
-      groups.set(key, group);
+      group = { number: parent.number, title: parent.title, goals: [] };
+      groups.set(parent.number, group);
     }
     group.goals.push(work);
   }
-  return [...groups.values()].sort((a, b) => Number(a.number === null) - Number(b.number === null));
+  return { features: [...groups.values()], loose };
 }
 
 /**

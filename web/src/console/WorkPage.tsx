@@ -50,8 +50,7 @@ export function WorkPage({ view, actions }: Props): JSX.Element {
   const all = useMemo(() => goalsOfWork(view), [state, needsYou, upNext, live]);
   const current = all.filter(inFlight);
   const later = all.filter((w) => !inFlight(w));
-  const features = byFeature(current);
-  const headed = features.some((f) => f.number !== null);
+  const { features, loose } = byFeature(current);
   return (
     <div className="cn-wk cn-plainrefs">
       <header className="cn-ny-head">
@@ -61,21 +60,22 @@ export function WorkPage({ view, actions }: Props): JSX.Element {
         </span>
         <ListenerStatus asks={view.needsYou} listener={view.state.listener} folder={view.state.config.desktopFolder} />
       </header>
-      {features.map((feature) => {
-        const { number } = feature;
-        const folded = number !== null && view.collapsedFeatures.has(number);
-        return (
-          <GoalSection
-            key={number ?? NO_GOAL}
-            title={headed ? (feature.title ?? 'No feature') : null}
-            goals={feature.goals}
-            open={!folded}
-            onToggle={number === null ? null : (open) => actions.collapseFeature(number, !open)}
-            view={view}
-            actions={actions}
-          />
-        );
-      })}
+      {features.map((feature) => (
+        <GoalSection
+          key={feature.number}
+          title={feature.title}
+          goals={feature.goals}
+          open={!view.collapsedFeatures.has(feature.number)}
+          onToggle={(open) => actions.collapseFeature(feature.number, !open)}
+          view={view}
+          actions={actions}
+        />
+      ))}
+      {loose.map((work) => (
+        <section key={work.ref} className="cn-wk-feature">
+          <GoalRow work={work} view={view} actions={actions} />
+        </section>
+      ))}
       {later.length > 0 && (
         <GoalSection
           title="Not in flight — appraising, queued or delivered"
@@ -90,7 +90,7 @@ export function WorkPage({ view, actions }: Props): JSX.Element {
   );
 }
 
-/** A run of goal rows under one heading: a Feature, or the goals not in flight. No title draws no heading. */
+/** A run of goal rows under one folding heading: a Feature, or the goals not in flight. */
 function GoalSection({
   title,
   goals,
@@ -99,10 +99,10 @@ function GoalSection({
   view,
   actions,
 }: Props & {
-  title: string | null;
+  title: string;
   goals: readonly GoalWork[];
   open: boolean;
-  onToggle: ((open: boolean) => void) | null;
+  onToggle: (open: boolean) => void;
 }): JSX.Element {
   const label = (
     <>
@@ -112,19 +112,7 @@ function GoalSection({
   );
   return (
     <section className="cn-wk-feature">
-      {title !== null &&
-        (onToggle === null ? (
-          <div className="cn-wk-fhead">{label}</div>
-        ) : (
-          <FoldToggle
-            subject="work"
-            className="cn-wk-fhead"
-            open={open}
-            onToggle={onToggle}
-            label={label}
-            hint={false}
-          />
-        ))}
+      <FoldToggle subject="work" className="cn-wk-fhead" open={open} onToggle={onToggle} label={label} hint={false} />
       {open && goals.map((work) => <GoalRow key={work.ref} work={work} view={view} actions={actions} />)}
     </section>
   );
