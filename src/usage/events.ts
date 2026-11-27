@@ -349,7 +349,7 @@ export function usageEventSource(event: UsageEvent): UsageEventSource {
 export const PLACE_KEYS = [
   'overview',
   'needs',
-  'work',
+  'inflight',
   'tickets',
   'features',
   'bots',

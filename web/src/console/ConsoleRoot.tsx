@@ -138,7 +138,7 @@ function recoveryBand(view: CockpitView, actions: CockpitActions): JSX.Element |
 
 /** The focus shape is in front, which draws the creatures on its own card. */
 function workInFront(view: CockpitView): boolean {
-  return view.tab === 'work';
+  return view.tab === 'inflight';
 }
 
 function focusInFront(view: CockpitView): boolean {
@@ -157,7 +157,7 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       return <OverviewTab view={view} actions={actions} />;
     case 'needs':
       return <NeedsYouPage view={view} actions={actions} />;
-    case 'work':
+    case 'inflight':
       return <WorkPage view={view} actions={actions} />;
     case 'insights':
       return (

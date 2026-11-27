@@ -126,7 +126,7 @@ export function panelClose(panel: Panel): ControlUsage {
 const TAB_REACH: Record<ConsoleTab, { key: PlaceKey; view: TabView }> = {
   overview: { key: 'overview', view: 'fleet.view' },
   needs: { key: 'needs', view: 'listen.view' },
-  work: { key: 'work', view: 'work.view' },
+  inflight: { key: 'inflight', view: 'work.view' },
   tickets: { key: 'tickets', view: 'ticket.view' },
   features: { key: 'features', view: 'feature.view' },
   bots: { key: 'bots', view: 'bot-pr.view' },

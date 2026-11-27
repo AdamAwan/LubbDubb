@@ -103,6 +103,7 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
   );
   const planId = planIds.size === 1 ? [...planIds][0]! : null;
   const plan = planId !== null ? (plans.find((p) => p.id === planId) ?? null) : null;
+  const live = planId === null ? null : livePartsOf(parts, planId);
 
   return {
     ref: stackRef(prs, forked),
@@ -110,8 +111,8 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
     issueTitle: plan?.title ?? null,
     planId,
     rungs,
-    partTotal: planId === null ? null : livePartsOf(parts, planId).length,
-    mergedBelow: planId === null ? [] : mergedBelow(livePartsOf(parts, planId), partByPr.get(prs[0]?.number ?? -1)),
+    partTotal: live === null ? null : live.length,
+    mergedBelow: live === null ? [] : mergedBelow(live, partByPr.get(prs[0]?.number ?? -1)),
   };
 }
 

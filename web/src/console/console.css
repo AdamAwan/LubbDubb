@@ -7941,19 +7941,19 @@ button.cn-grow {
 
 /* Something's wrong — the goal's problem strip and the Needs you problem card.
    → docs/spec/17-cockpit.md#something-wrong-on-the-goal */
-.cn-wkrob {
+.cn-gprob {
   margin: 8px 0 4px;
   border: 1px solid var(--cn-red-line);
   background: var(--cn-red-bg);
   border-radius: var(--cn-r);
   overflow: hidden;
 }
-.cn-wkrob-guess {
+.cn-gprob-guess {
   border-color: var(--cn-amber-line);
   border-style: dashed;
   background: var(--cn-amber-bg);
 }
-.cn-wkrob-head {
+.cn-gprob-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -7961,17 +7961,17 @@ button.cn-grow {
   padding: 8px 12px;
   color: var(--cn-red-ink);
 }
-.cn-wkrob-guess .cn-wkrob-head {
+.cn-gprob-guess .cn-gprob-head {
   color: var(--cn-amber-ink);
 }
-.cn-wkrob-handled {
+.cn-gprob-handled {
   color: var(--cn-fg-faint);
 }
-.cn-wkrob-open {
+.cn-gprob-open {
   margin-left: auto;
   font-size: 12.5px;
 }
-.cn-wkrob-calm {
+.cn-gprob-calm {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -7990,7 +7990,7 @@ button.cn-grow {
   padding: 8px 12px;
   border-top: 1px solid var(--cn-red-line);
 }
-.cn-wkrob-guess .cn-prob-row {
+.cn-gprob-guess .cn-prob-row {
   border-top-color: var(--cn-amber-line);
 }
 .cn-prob-card {
@@ -8158,8 +8158,10 @@ button.cn-grow {
 }
 .cn-wk-stage {
   margin-left: auto;
-  font: 600 10.5px var(--cn-mono);
-  letter-spacing: 0.06em;
+  font-family: var(--cn-mono);
+  font-size: var(--label-size-sm);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
   text-transform: uppercase;
   color: var(--cn-fg-dim);
   white-space: nowrap;
@@ -8182,8 +8184,10 @@ button.cn-grow {
 .cn-wk-label {
   flex: none;
   width: 34px;
-  font: 600 10.5px var(--cn-mono);
-  letter-spacing: 0.06em;
+  font-family: var(--cn-mono);
+  font-size: var(--label-size-sm);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
   text-transform: uppercase;
   color: var(--cn-fg-faint);
 }
