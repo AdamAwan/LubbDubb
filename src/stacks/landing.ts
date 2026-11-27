@@ -8,6 +8,13 @@ interface RungVerdict {
   blockedBy: string | null;
 }
 
+export interface LandingReadiness {
+  offer: boolean;
+  blockedBy: string | null;
+  /** The rung that holds the stack, as a number — `blockedBy` is prose for a reader, never parsed. */
+  blockedPr: number | null;
+}
+
 function rungVerdict(pr: PullRequest): RungVerdict {
   if (pr.ciStatus === 'failing') return { clear: false, blockedBy: `#${pr.number} CI failing` };
   if (pr.ciStatus !== 'passing') return { clear: false, blockedBy: `#${pr.number} checks not reported yet` };
@@ -36,12 +43,12 @@ export function rungFault(pr: PullRequest): string | null {
   return null;
 }
 
-export function landingReadiness(rungPrs: PullRequest[]): { offer: boolean; blockedBy: string | null } {
+export function landingReadiness(rungPrs: PullRequest[]): LandingReadiness {
   for (const pr of rungPrs) {
     const verdict = rungVerdict(pr);
-    if (!verdict.clear) return { offer: false, blockedBy: verdict.blockedBy };
+    if (!verdict.clear) return { offer: false, blockedBy: verdict.blockedBy, blockedPr: pr.number };
   }
-  return { offer: rungPrs.length > 0, blockedBy: null };
+  return { offer: rungPrs.length > 0, blockedBy: null, blockedPr: null };
 }
 
 export function landingScope(

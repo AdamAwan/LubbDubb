@@ -1,7 +1,7 @@
 import { Fragment, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { OpenPullRequest, PlanPartView, PrOnYouReason } from '../types.js';
+import type { OpenPullRequest, PrOnYouReason } from '../types.js';
 import { buildGoalPage } from '../view/goalPage.js';
 import { buildGoalTrack } from '../view/goalStages.js';
 import { goalIssue, goalOfPr } from '../view/goalRefs.js';
@@ -148,39 +148,11 @@ export function PrCards({
   );
 }
 
-function stackParts(
-  view: CockpitView,
-  stack: Stack,
-): {
-  label: (rung: StackRung) => string;
-  merged: { seq: number; title: string; prNumber: number | null }[];
-} {
-  const byPosition = (rung: StackRung): string => String(rung.position);
-  if (stack.planId === null) return { label: byPosition, merged: [] };
-  const parts = view.state.planParts.filter((p) => p.planId === stack.planId && p.status !== 'retired');
-  const bySlug = new Map(parts.map((p) => [p.slug, p]));
-  const partOf = (rung: StackRung) => (rung.partSlug === null ? undefined : bySlug.get(rung.partSlug));
-  const bottom = stack.rungs.find((r) => r.position === 1);
-  const below = new Map<string, PlanPartView>();
-  const walk = (slugs: readonly string[]): void => {
-    for (const slug of slugs) {
-      const p = bySlug.get(slug);
-      if (p === undefined || p.status !== 'merged' || below.has(slug)) continue;
-      below.set(slug, p);
-      walk(p.dependsOn);
-    }
-  };
-  walk(bottom === undefined ? [] : (partOf(bottom)?.dependsOn ?? []));
-  const merged = [...below.values()]
-    .sort((a, b) => b.seq - a.seq)
-    .map((p) => ({ seq: p.seq, title: p.title, prNumber: p.prNumber }));
-  return {
-    label: (rung) => {
-      const part = partOf(rung);
-      return part === undefined ? byPosition(rung) : `${String(part.seq)}/${String(parts.length)}`;
-    },
-    merged,
-  };
+/** A rung as its plan numbers it (`2/6`), or by its place in the stack where no single plan owns it. */
+function rungLabel(stack: Stack, rung: StackRung): string {
+  return rung.partSeq === null || stack.partTotal === null
+    ? String(rung.position)
+    : `${String(rung.partSeq)}/${String(stack.partTotal)}`;
 }
 
 function StackBlock({
@@ -196,8 +168,6 @@ function StackBlock({
   const open = item.rungs.length;
   const base = stack.rungs.find((r) => r.position === 1)?.base || 'main';
   const landing = view.state.stackLandings.find((l) => l.ref === stack.ref);
-  const blockedPr = /^#(\d+)/.exec(landing?.blockedBy ?? '')?.[1];
-  const { label, merged } = stackParts(view, stack);
   const topFirst = [...item.rungs].reverse();
   return (
     <div className="cn-prstack">
@@ -210,11 +180,11 @@ function StackBlock({
       </div>
       <ol className="cn-prstack-rungs">
         {topFirst.map(({ rung, card }) => {
-          const part = label(rung);
+          const part = rungLabel(stack, rung);
           const cls = classes(
             'cn-prstack-rung',
             card === null && 'cn-prstack-ghost',
-            blockedPr === String(rung.prNumber) && 'cn-prstack-blocking',
+            landing?.blockedPr === rung.prNumber && 'cn-prstack-blocking',
             rung.position === 1 && 'cn-prstack-next',
           );
           return (
@@ -243,13 +213,13 @@ function StackBlock({
             </li>
           );
         })}
-        <StackFoot merged={merged} base={base} />
+        <StackFoot merged={stack.mergedBelow} base={base} />
       </ol>
     </div>
   );
 }
 
-function StackFoot({ merged, base }: { merged: ReturnType<typeof stackParts>['merged']; base: string }): JSX.Element {
+function StackFoot({ merged, base }: { merged: Stack['mergedBelow']; base: string }): JSX.Element {
   return (
     <>
       {merged.map((part) => (

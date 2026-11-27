@@ -1,4 +1,5 @@
 import { issueOriginNumber } from '../issueOrigins.js';
+import { liveParts } from '../plans/parts.js';
 import type { Plan, PlanPart, PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md
@@ -10,6 +11,15 @@ interface StackRung {
   base: string;
   position: number;
   partSlug: string | null;
+  /** The part's `seq` in its plan, so a rung is numbered as the plan numbers it. */
+  partSeq: number | null;
+}
+
+/** A part the bottom rung's part depends on, transitively, that has already merged. */
+interface MergedBelow {
+  seq: number;
+  title: string;
+  prNumber: number | null;
 }
 
 export interface Stack {
@@ -18,6 +28,10 @@ export interface Stack {
   issueTitle: string | null;
   planId: string | null;
   rungs: StackRung[];
+  /** How many live parts the plan has — the `m` of a rung's `n/m`; null with no single plan. */
+  partTotal: number | null;
+  /** The merged parts this stack is built on, top first; empty with no single plan. */
+  mergedBelow: MergedBelow[];
 }
 
 export function buildStacks(openPrs: PullRequest[], plans: Plan[], parts: PlanPart[], defaultBranch: string): Stack[] {
@@ -81,6 +95,7 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
     base: pr.baseBranch ?? '',
     position: i + 1,
     partSlug: partByPr.get(pr.number)?.slug ?? null,
+    partSeq: partByPr.get(pr.number)?.seq ?? null,
   }));
 
   const planIds = new Set(
@@ -95,7 +110,30 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
     issueTitle: plan?.title ?? null,
     planId,
     rungs,
+    partTotal: planId === null ? null : livePartsOf(parts, planId).length,
+    mergedBelow: planId === null ? [] : mergedBelow(livePartsOf(parts, planId), partByPr.get(prs[0]?.number ?? -1)),
   };
+}
+
+function livePartsOf(parts: PlanPart[], planId: string): PlanPart[] {
+  return liveParts(parts.filter((p) => p.planId === planId));
+}
+
+function mergedBelow(parts: PlanPart[], bottom: PlanPart | undefined): MergedBelow[] {
+  const bySlug = new Map(parts.map((p) => [p.slug, p]));
+  const found = new Map<string, PlanPart>();
+  const walk = (slugs: readonly string[]): void => {
+    for (const slug of slugs) {
+      const part = bySlug.get(slug);
+      if (part === undefined || part.status !== 'merged' || found.has(slug)) continue;
+      found.set(slug, part);
+      walk(part.dependsOn);
+    }
+  };
+  walk(bottom?.dependsOn ?? []);
+  return [...found.values()]
+    .sort((a, b) => b.seq - a.seq)
+    .map((p) => ({ seq: p.seq, title: p.title, prNumber: p.prNumber }));
 }
 
 function stackRef(prs: PullRequest[], forked: boolean): string {

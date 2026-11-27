@@ -252,15 +252,18 @@ test('the button is withheld until every rung is clear, and "behind" does not wi
   assert.deepEqual(landingReadiness([rung(1, 'main'), rung(2, 'issue/12/r1', { mergeableState: 'behind' })]), {
     offer: true,
     blockedBy: null,
+    blockedPr: null,
   });
   assert.deepEqual(landingReadiness([rung(1, 'main'), rung(2, 'issue/12/r1', { mergeableState: 'blocked' })]), {
     offer: false,
     blockedBy: '#2 merge blocked (required checks/reviews)',
+    blockedPr: 2,
   });
 
   assert.deepEqual(landingReadiness([rung(1, 'main'), rung(2, 'issue/12/r1', { ciStatus: 'failing' })]), {
     offer: false,
     blockedBy: '#2 CI failing',
+    blockedPr: 2,
   });
   assert.equal(landingReadiness([rung(1, 'main', { approved: false })]).blockedBy, '#1 not approved');
   assert.equal(

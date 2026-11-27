@@ -1550,6 +1550,7 @@ export function buildFixtureState(): AppState {
             base: 'main',
             position: 1,
             partSlug: null,
+            partSeq: null,
           },
           {
             prNumber: 436,
@@ -1558,8 +1559,11 @@ export function buildFixtureState(): AppState {
             base: 'issue/368/parse',
             position: 2,
             partSlug: null,
+            partSeq: null,
           },
         ],
+        partTotal: null,
+        mergedBelow: [],
       },
       {
         ref: 'stack:413',
@@ -1574,6 +1578,7 @@ export function buildFixtureState(): AppState {
             base: 'main',
             position: 1,
             partSlug: 'payment',
+            partSeq: 2,
           },
           {
             prNumber: 414,
@@ -1582,6 +1587,7 @@ export function buildFixtureState(): AppState {
             base: 'issue/390/payment',
             position: 2,
             partSlug: 'refunds',
+            partSeq: 3,
           },
           {
             prNumber: 431,
@@ -1590,8 +1596,11 @@ export function buildFixtureState(): AppState {
             base: 'issue/390/refunds',
             position: 3,
             partSlug: 'receipts',
+            partSeq: 4,
           },
         ],
+        partTotal: 6,
+        mergedBelow: [{ seq: 1, title: 'Add the new payment provider’s client', prNumber: 406 }],
       },
     ],
     /* Sheets exist only where a check set exists, and a check set exists only on a goal every part of
@@ -2036,8 +2045,8 @@ export function buildFixtureState(): AppState {
       },
     ],
     stackLandings: [
-      { ref: 'stack:435', offer: false, blockedBy: '#435 not approved', landing: null, landed: 0 },
-      { ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 },
+      { ref: 'stack:435', offer: false, blockedBy: '#435 not approved', blockedPr: 435, landing: null, landed: 0 },
+      { ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', blockedPr: 414, landing: null, landed: 0 },
     ],
     /* An arrival is only ever recorded for a goal whose work has landed, which on this fixture is
        the three delivered goals. #364's arrival is stamped but unannounced because its check set is

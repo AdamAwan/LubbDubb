@@ -340,6 +340,7 @@ function stackLandingViews(
         ref: landing.ref,
         offer: false,
         blockedBy: null,
+        blockedPr: null,
         landing,
         landed: landedCount(landing, { ...world, merged: mergedPrs() }),
       })),
