@@ -261,6 +261,15 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
   },
   'handled.undo': { label: 'Undid a handled ask', blurb: 'Something the harness did without asking was put back' },
   'handled.accept': { label: 'Checked handled asks', blurb: 'A group the harness answered itself was marked checked' },
+  'work.view': { label: 'Opened Work', blurb: 'The tab of goals in flight, grouped by Feature, was reached' },
+  'work.expand': {
+    label: 'Opened a goal on Work',
+    blurb: 'A goal row, a Feature or the goals not in flight was unfolded in place',
+  },
+  'work.close': {
+    label: 'Folded a goal on Work',
+    blurb: 'A goal row, a Feature or the goals not in flight was folded',
+  },
   'listen.view': {
     label: 'Opened Needs you',
     blurb: 'The page of asks and pull requests waiting on the operator was reached',

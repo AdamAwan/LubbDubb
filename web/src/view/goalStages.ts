@@ -6,7 +6,7 @@ import { isProposed } from './watchChecks.js';
 
 // → docs/spec/17-cockpit.md
 
-export function buildGoalTrack(parts: readonly GoalPartView[]): GoalTrack {
+export function buildGoalTrack(parts: readonly Pick<GoalPartView, 'group'>[]): GoalTrack {
   const count = (g: PartGroup) => parts.filter((p) => p.group === g).length;
   return {
     merged: count('merged'),
@@ -165,7 +165,7 @@ function reachStage(page: GoalPageView): GoalStage {
       /* Short enough to survive the tab's own width: the row ellipsizes, and a reading
          cut off mid-word is the reading lost. What it is owed *for* is the card below. */
       reading: owed === 1 ? '1 landing owed' : `${owed} landings owed`,
-      tone: 'grey',
+      tone: 'blue',
       done: null,
     };
   }

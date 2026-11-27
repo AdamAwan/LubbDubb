@@ -1,6 +1,6 @@
 import type { CockpitView } from '../../view/viewModel.js';
 import type { OpenPullRequest } from '../../types.js';
-import { IN_FLIGHT } from '../Overview.js';
+import { OVERVIEW_IN_FLIGHT } from '../../view/pickup.js';
 
 // → docs/spec/17-cockpit.md#when-nothing-needs-you
 
@@ -171,7 +171,7 @@ function reservoirLead(view: CockpitView): Lead | null {
 function quietLead(view: CockpitView): Lead | null {
   const { issues } = view.state.world;
   const quiet = issues
-    .filter((issue) => IN_FLIGHT.has(issue.pickup.status) && !view.agentOnGoal.has(`issue:${issue.number}`))
+    .filter((issue) => OVERVIEW_IN_FLIGHT.has(issue.pickup.status) && !view.agentOnGoal.has(`issue:${issue.number}`))
     .sort((a, b) => a.number - b.number);
   if (quiet.length === 0) return null;
   return {

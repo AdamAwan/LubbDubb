@@ -338,8 +338,7 @@ function stackLandingViews(
       .filter((l) => l.status === 'standing' && !l.rungs.some((n) => stackRungPrs.has(n)))
       .map((landing) => ({
         ref: landing.ref,
-        offer: false,
-        blockedBy: null,
+        ...landingReadiness([]),
         landing,
         landed: landedCount(landing, { ...world, merged: mergedPrs() }),
       })),

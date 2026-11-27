@@ -71,6 +71,7 @@ interface StackLandingView {
   ref: string;
   offer: boolean;
   blockedBy: string | null;
+  blockedPr: number | null;
   landing: StackLanding | null;
   landed: number;
 }

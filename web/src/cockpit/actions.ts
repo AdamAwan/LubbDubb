@@ -47,6 +47,7 @@ export type ConsolePanel =
 export type ConsoleTab =
   | 'overview'
   | 'needs'
+  | 'inflight'
   | 'tickets'
   | 'features'
   | 'bots'
@@ -206,6 +207,8 @@ export interface CockpitActions {
   placePet(id: string, placed: boolean): Promise<void>;
   blendPet(id: string): Promise<void>;
   showBlendedPets(show: boolean): void;
+  /** The Work tab's open row and whether it draws the goals not in flight — a place, never a useState. */
+  setWork(next: Partial<Pick<Place, 'workRow' | 'workLater'>>): void;
   /** The Errors tab, on a band, with steady and gone drawn or folded, ordered and narrowed — a place, never a useState. */
   openErrors(
     where: Partial<Pick<Place, 'errorsBand' | 'errorsSteady' | 'errorsSort' | 'errorsShow' | 'errorsText'>>,

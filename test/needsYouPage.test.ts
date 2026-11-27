@@ -184,8 +184,8 @@ test('the pull requests are grouped under their goal and a stack drawn as one bl
   assert.ok(payment && refunds, 'the fixtures must carry a two-PR stack on #390');
   const bottom = prs.indexOf(prHeadline(payment.title));
   const top = prs.indexOf(prHeadline(refunds.title));
-  assert.ok(head < bottom && bottom < top, 'the stack is not drawn base first under its goal');
-  assert.ok(prs.slice(head, bottom).includes('cn-prstack'), 'the stack is not drawn as one block');
+  assert.ok(head < top && top < bottom, 'the stack is not drawn top first under its goal');
+  assert.ok(prs.slice(head, top).includes('cn-prstack'), 'the stack is not drawn as one block');
 });
 
 test('listening: a filled pill, and every Claude button sends', () => {
@@ -209,7 +209,7 @@ test('busy: the pill names what the chat is on and what is queued', () => {
 });
 
 test('off: a dashed pill, a deep link to start the loop, Copy, and deep links on every row', () => {
-  const v = view('needs');
+  const v = view('needs', (s) => (s.listener = { state: 'off', on: null, queued: 0, sent: [] }));
   const html = page(render(v));
   assert.ok(html.includes('cn-ny-off">No Claude chat listening'));
   assert.ok(html.includes('Start listen loop ↗'));
@@ -223,7 +223,14 @@ test('off: a dashed pill, a deep link to start the loop, Copy, and deep links on
 });
 
 test('off with no desktop folder: no deep links drawn, Copy still offered', () => {
-  const html = page(render(view('needs', (s) => (s.config.desktopFolder = ''))));
+  const html = page(
+    render(
+      view('needs', (s) => {
+        s.config.desktopFolder = '';
+        s.listener = { state: 'off', on: null, queued: 0, sent: [] };
+      }),
+    ),
+  );
   assert.ok(!html.includes('Open in Claude'));
   assert.ok(!html.includes('Start listen loop'));
   assert.ok(html.includes('>Copy<'));
@@ -240,7 +247,7 @@ test('a sent item draws the strip under its card', () => {
   assert.ok(html.includes('In your Claude chat · sent 2m ago'));
 });
 
-test('only the Needs you page calls listenSend', () => {
+test('only the listen controls call listenSend', () => {
   const plumbing = new Set(['web/src/api.ts', 'web/src/cockpit/actions.ts', 'web/src/cockpit/useCockpitActions.ts']);
   const walk = (dir: string): string[] =>
     readdirSync(repoPath(dir)).flatMap((name) => {
@@ -248,7 +255,7 @@ test('only the Needs you page calls listenSend', () => {
       return statSync(repoPath(rel)).isDirectory() ? walk(rel) : /\.tsx?$/.test(name) ? [rel] : [];
     });
   const callers = walk('web/src').filter((file) => !plumbing.has(file) && /\blistenSend\b/.test(repoText(file)));
-  assert.deepEqual(callers, ['web/src/console/NeedsYouPage.tsx']);
+  assert.deepEqual(callers, ['web/src/console/listenControls.tsx']);
 });
 
 test('an opened ask draws the ask panel’s own body in place of its summary and verb', async () => {

@@ -127,6 +127,7 @@ offers no such control, and the day it does, the cell is where it is added.
 | `app-error`      | `view` `filter`                                                                                         |
 | `ejection`       | `expand` `accept` `close` `open`                                                                        |
 | `listen`         | `view` `send` `open` `copy`                                                                             |
+| `work`           | `view` `expand` `close`                                                                                 |
 | `theme`          | `edit` `accept` `undo`                                                                                  |
 | `notification`   | `edit` `send`                                                                                           |
 | `project`        | `accept`                                                                                                |

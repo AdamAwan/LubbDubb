@@ -1787,11 +1787,11 @@ test('each tab replaces the last, and a selected goal outranks every one of them
 
 test('the work graph is a panel reached from the bar, not a nav destination', () => {
   const nav = render(view()).split('</nav>')[0] ?? '';
-  for (const label of ['Overview', 'Tickets', 'Insights']) {
+  for (const label of ['Overview', 'Work', 'Tickets', 'Insights']) {
     assert.ok(nav.includes(`>${label}`), `the nav is missing ${label}`);
   }
   assert.ok(!nav.includes('>Obstacles'), 'the obstacle board was removed, and its tab with it');
-  assert.ok(!nav.includes('>Work'), 'the record is not a nav destination — it is the Record reading');
+  assert.ok(!nav.includes('>Record'), 'the record is not a nav destination — it is the Record reading');
   assert.ok(
     menuEntries(view(), actions).some((entry) => entry.key === 'record'),
     'and the bar carries the way to it',

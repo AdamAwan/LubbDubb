@@ -7772,19 +7772,36 @@ button.cn-grow {
   overflow: hidden;
 }
 
-/* A stack: its rungs in merge order down a rail, numbered; the ones not in this list
-   are slim rows so the whole stack is in view. */
+/* A stack: drawn as a path into its base — the top rung first, the rung that merges
+   next just above the base, merged parts below it, the base branch last. */
 .cn-prstack {
-  padding: 8px 10px 6px;
-  border: 1px dashed var(--cn-line-hi);
+  padding: 8px 10px 8px;
+  border: 1px solid var(--cn-line);
   border-radius: 8px;
+  background: var(--cn-panel);
 }
 .cn-prstack-head {
-  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 8px;
   font-size: 11.5px;
-  color: var(--cn-fg-faint);
+  color: var(--cn-fg-dim);
+}
+.cn-prstack-head code,
+.cn-prstack-base code {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg);
+}
+.cn-prstack-held {
+  color: var(--cn-red-ink);
+}
+.cn-prstack-ready {
+  color: var(--cn-green-ink);
 }
 .cn-prstack-rungs {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -7792,37 +7809,59 @@ button.cn-grow {
   padding: 0;
   list-style: none;
 }
+.cn-prstack-rungs::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 18px;
+  bottom: 12px;
+  border-left: 2px solid var(--cn-line-hi);
+}
 .cn-prstack-rung {
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
 }
-.cn-prstack-rung + .cn-prstack-rung::before {
-  content: '';
-  position: absolute;
-  left: 10px;
-  top: -8px;
-  height: 14px;
-  border-left: 2px solid var(--cn-line-hi);
-}
 .cn-prstack-pos {
+  position: relative;
+  z-index: 1;
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  min-width: 28px;
   height: 22px;
   margin-top: 8px;
+  padding: 0 4px;
   border: 1px solid var(--cn-line-hi);
-  border-radius: 50%;
-  font: 600 11px var(--cn-mono);
+  border-radius: 11px;
+  font: 600 10.5px var(--cn-mono);
   color: var(--cn-fg-dim);
   background: var(--cn-panel);
 }
 .cn-prstack-ghost .cn-prstack-pos {
   margin-top: 2px;
   color: var(--cn-fg-faint);
+}
+.cn-prstack-next > .cn-prstack-pos {
+  border-color: var(--cn-accent);
+  color: var(--cn-fg);
+}
+.cn-prstack-blocking > .cn-prstack-pos {
+  border-color: var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+.cn-prstack-merged .cn-prstack-pos {
+  border-color: var(--cn-green-line);
+  color: var(--cn-green-ink);
+}
+.cn-prstack-base {
+  align-items: center;
+}
+.cn-prstack-base .cn-prstack-pos {
+  margin-top: 0;
+  border-style: dashed;
 }
 .cn-prstack-card {
   flex: 1;
@@ -8047,4 +8086,168 @@ button.cn-grow {
   margin-left: 6px;
   font-size: 11px;
   color: var(--cn-fg-dim);
+}
+
+/* ---------- Work: Feature headings, a row per goal in flight ---------- */
+.cn-wk {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+}
+.cn-wk-feature {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--cn-line);
+  border-radius: 8px;
+  background: var(--cn-panel);
+  overflow: hidden;
+}
+.cn .cn-wk-fhead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  font-size: 13px;
+  color: var(--cn-fg);
+  text-align: left;
+}
+.cn .cn-wk-fhead {
+  width: 100%;
+}
+.cn-wk-fhead .fold-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.cn-wk-fhead em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+.cn-wk-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 12px 8px 10px;
+  border-left: 2px solid transparent;
+}
+.cn-wk-row + .cn-wk-row {
+  border-top: 1px solid var(--cn-line-soft);
+}
+.cn-wk-priority {
+  border-left-color: var(--cn-amber);
+}
+.cn-wk-open {
+  background: var(--cn-hover);
+}
+.cn-wk-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cn .cn-wk-fold {
+  width: 16px;
+  padding: 0;
+  color: var(--cn-fg-faint);
+}
+.cn .cn-wk-title {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--cn-fg);
+  text-align: left;
+}
+.cn-wk-stage {
+  margin-left: auto;
+  font-family: var(--cn-mono);
+  font-size: var(--label-size-sm);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-dim);
+  white-space: nowrap;
+}
+.cn-wk-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  white-space: nowrap;
+}
+.cn-wk-facts {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-left: 24px;
+  font-size: 12px;
+}
+.cn-wk-label {
+  flex: none;
+  width: 34px;
+  font-family: var(--cn-mono);
+  font-size: var(--label-size-sm);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-wk-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  min-width: 0;
+}
+.cn-wk-item {
+  color: var(--cn-fg-dim);
+}
+.cn-wk-ask {
+  color: var(--cn-red-ink);
+}
+.cn-wk-hold {
+  color: var(--cn-amber-ink);
+}
+.cn-wk-needs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 4px 24px;
+}
+.cn-wk-inset {
+  margin: 6px 0 0 24px;
+}
+.cn-wk-part {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.cn-wk-part b {
+  font-weight: 600;
+}
+.cn-wk-arrow {
+  font-style: normal;
+  color: var(--cn-fg-faint);
+}
+.cn-wk-done {
+  color: var(--cn-green-ink);
+}
+.cn-wk-chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--cn-accent);
+  white-space: nowrap;
+}
+.cn-wk .cn-ny-listen .ref-goal.ref-goal,
+.cn-wk .cn-ny-listen .ref-arm.ref-arm {
+  color: inherit;
+  font-weight: 600;
 }

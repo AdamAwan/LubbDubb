@@ -246,6 +246,7 @@ function placeActions(go: Go) {
     setTicketQuery: (next) => go(next),
     setFeatureQuery: (next) => go(next),
     showBlendedPets: (petsBlended) => go({ petsBlended }),
+    setWork: (next) => go(next),
     openErrors: (where) => go({ tab: 'errors', goal: null, pr: null, ...where }),
     setOverviewShape: (overview) => go({ overview }),
     setFeatureMode: (featureMode) => go({ featureMode }),

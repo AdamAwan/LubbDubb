@@ -60,6 +60,10 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'features', featurePrs: 'done' }),
     at({ tab: 'features', featureDensity: 'rows' }),
     at({ tab: 'features', featureDensity: 'brief', featureCard: 900 }),
+    at({ tab: 'inflight' }),
+    at({ tab: 'inflight', workRow: 'issue:390' }),
+    at({ tab: 'inflight', workRow: 'none', workLater: true }),
+    at({ tab: 'inflight', workLater: true }),
   ];
   for (const place of places) assert.deepEqual(readPlace(placeQuery(place)), place, placeQuery(place));
 });
@@ -376,4 +380,15 @@ test('the Tickets layout and the Insights tab do not share a key', () => {
   const back = readPlace(placeQuery(place));
   assert.equal(back.insightsView, 'reliability');
   assert.equal(back.ticketView, 'card');
+});
+
+test('the Work tab keeps its open row and the not-in-flight fold on the address bar', () => {
+  assert.equal(
+    placeQuery(at({ tab: 'inflight', workRow: 'issue:390', workLater: true })),
+    '?tab=inflight&row=issue%3A390&later=1',
+  );
+  assert.deepEqual(
+    readPlace('?tab=inflight&row=issue:390&later=1'),
+    at({ tab: 'inflight', workRow: 'issue:390', workLater: true }),
+  );
 });

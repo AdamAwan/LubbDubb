@@ -1,4 +1,5 @@
 import { issueOriginNumber } from '../issueOrigins.js';
+import { bySlug, dependenciesOf, liveParts } from '../plans/parts.js';
 import type { Plan, PlanPart, PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md
@@ -10,6 +11,15 @@ interface StackRung {
   base: string;
   position: number;
   partSlug: string | null;
+  /** The part's `seq` in its plan, so a rung is numbered as the plan numbers it. */
+  partSeq: number | null;
+}
+
+/** A part the bottom rung's part depends on, transitively, that has already merged. */
+interface MergedBelow {
+  seq: number;
+  title: string;
+  prNumber: number | null;
 }
 
 export interface Stack {
@@ -18,6 +28,12 @@ export interface Stack {
   issueTitle: string | null;
   planId: string | null;
   rungs: StackRung[];
+  /** The branch the stack lands on: the bottom rung's base, or the default branch where it reports none. */
+  base: string;
+  /** How many live parts the plan has — the `m` of a rung's `n/m`; null with no single plan. */
+  partTotal: number | null;
+  /** The merged parts this stack is built on, top first; empty with no single plan. */
+  mergedBelow: MergedBelow[];
 }
 
 export function buildStacks(openPrs: PullRequest[], plans: Plan[], parts: PlanPart[], defaultBranch: string): Stack[] {
@@ -39,7 +55,7 @@ export function buildStacks(openPrs: PullRequest[], plans: Plan[], parts: PlanPa
   for (const bottom of bottoms) {
     for (const path of pathsFrom(bottom, childrenOf)) {
       if (path.length < 2) continue;
-      stacks.push(assemble(path, plans, parts, forks(bottom, childrenOf)));
+      stacks.push(assemble(path, plans, parts, forks(bottom, childrenOf), defaultBranch));
     }
   }
 
@@ -70,24 +86,30 @@ function forks(bottom: PullRequest, childrenOf: (pr: PullRequest) => PullRequest
   return pathsFrom(bottom, childrenOf).filter((p) => p.length >= 2).length > 1;
 }
 
-function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: boolean): Stack {
+function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: boolean, defaultBranch: string): Stack {
   const partByPr = new Map<number, PlanPart>();
   for (const part of parts) if (part.prNumber !== null) partByPr.set(part.prNumber, part);
 
-  const rungs: StackRung[] = prs.map((pr, i) => ({
-    prNumber: pr.number,
-    title: pr.title,
-    branch: pr.branch,
-    base: pr.baseBranch ?? '',
-    position: i + 1,
-    partSlug: partByPr.get(pr.number)?.slug ?? null,
-  }));
+  const rungs: StackRung[] = prs.map((pr, i) => {
+    const part = partByPr.get(pr.number);
+    return {
+      prNumber: pr.number,
+      title: pr.title,
+      branch: pr.branch,
+      base: pr.baseBranch ?? '',
+      position: i + 1,
+      partSlug: part?.slug ?? null,
+      partSeq: part === undefined || part.status === 'retired' ? null : part.seq,
+    };
+  });
 
   const planIds = new Set(
     prs.map((pr) => partByPr.get(pr.number)?.planId).filter((id): id is string => id !== undefined),
   );
   const planId = planIds.size === 1 ? [...planIds][0]! : null;
   const plan = planId !== null ? (plans.find((p) => p.id === planId) ?? null) : null;
+  const live = planId === null ? null : liveParts(parts.filter((p) => p.planId === planId));
+  const bottom = prs[0] === undefined ? undefined : partByPr.get(prs[0].number);
 
   return {
     ref: stackRef(prs, forked),
@@ -95,7 +117,26 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
     issueTitle: plan?.title ?? null,
     planId,
     rungs,
+    base: prs[0]?.baseBranch || defaultBranch,
+    partTotal: live === null ? null : live.length,
+    mergedBelow: live === null ? [] : mergedBelow(live, bottom),
   };
+}
+
+function mergedBelow(parts: PlanPart[], bottom: PlanPart | undefined): MergedBelow[] {
+  const index = bySlug(parts);
+  const found = new Map<string, PlanPart>();
+  const walk = (part: PlanPart): void => {
+    for (const dep of dependenciesOf(part, index)) {
+      if (dep.status !== 'merged' || found.has(dep.slug)) continue;
+      found.set(dep.slug, dep);
+      walk(dep);
+    }
+  };
+  if (bottom !== undefined) walk(bottom);
+  return [...found.values()]
+    .sort((a, b) => b.seq - a.seq)
+    .map((p) => ({ seq: p.seq, title: p.title, prNumber: p.prNumber }));
 }
 
 function stackRef(prs: PullRequest[], forked: boolean): string {

@@ -11,6 +11,7 @@ import { renderPanel } from './ConsoleRootPanels.js';
 
 import { Overview } from './Overview.js';
 import { NeedsYouPage } from './NeedsYouPage.js';
+import { WorkPage } from './WorkPage.js';
 import { needsYouInFront } from '../view/needsYouPage.js';
 import { FocusOverview } from './overviews/FocusOverview.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
@@ -135,6 +136,11 @@ function recoveryBand(view: CockpitView, actions: CockpitActions): JSX.Element |
   ) : null;
 }
 
+/** The Work tab is in front: it says what holds every goal, so the rail would say it twice. */
+function workInFront(view: CockpitView): boolean {
+  return view.tab === 'inflight';
+}
+
 /** The focus shape is in front, which draws the creatures on its own card. */
 function focusInFront(view: CockpitView): boolean {
   if (view.tab !== 'overview' || view.selectedGoal !== null || view.selectedPr !== null) return false;
@@ -143,20 +149,17 @@ function focusInFront(view: CockpitView): boolean {
 
 /** Whether the surface in front has absorbed the queue rail. → docs/spec/44-needs-you.md#where-it-sits */
 function railless(view: CockpitView): boolean {
-  return needsYouInFront(view) || focusInFront(view);
+  return needsYouInFront(view) || focusInFront(view) || workInFront(view);
 }
 
 function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): JSX.Element {
   switch (tab) {
     case 'overview':
-      switch (view.overviewShape) {
-        case 'focus':
-          return <FocusOverview view={view} actions={actions} />;
-        default:
-          return <Overview view={view} actions={actions} />;
-      }
+      return <OverviewTab view={view} actions={actions} />;
     case 'needs':
       return <NeedsYouPage view={view} actions={actions} />;
+    case 'inflight':
+      return <WorkPage view={view} actions={actions} />;
     case 'insights':
       return (
         <>
@@ -204,6 +207,14 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
     case 'config':
       return <ConfigPage view={view} actions={actions} />;
   }
+}
+
+function OverviewTab({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  return view.overviewShape === 'focus' ? (
+    <FocusOverview view={view} actions={actions} />
+  ) : (
+    <Overview view={view} actions={actions} />
+  );
 }
 
 function TicketsTab({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {

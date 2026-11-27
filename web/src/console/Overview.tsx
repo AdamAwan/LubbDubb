@@ -18,6 +18,7 @@ import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 import { Tag } from '../components/tag.js';
 import { agentRow, deskRow, ejectedRow, readyingRow } from './fleetRows.js';
 import { FoldToggle } from '../components/collapsible.js';
+import { OVERVIEW_IN_FLIGHT, pickupWord } from '../view/pickup.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -226,15 +227,12 @@ const RUNWAY_LABEL: Record<SupplyState, string> = {
   unknown: 'No history yet',
 };
 
-/** @public shared with the overview's alternative shapes, which draw the same set. */
-export const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'investigation', 'delivered']);
-
 function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [showKept, setShowKept] = useState(false);
   const retained = view.state.retainedRuns ?? [];
   const working = retained.filter((issue) => retainedWorkInFlight(issue, view));
   const kept = retained.filter((issue) => !retainedWorkInFlight(issue, view));
-  const goals = [...view.state.world.issues.filter((issue) => IN_FLIGHT.has(issue.pickup.status)), ...working];
+  const goals = [...view.state.world.issues.filter((issue) => OVERVIEW_IN_FLIGHT.has(issue.pickup.status)), ...working];
   const orphans = orphanCount(view.state, goals);
 
   return (
@@ -305,7 +303,7 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
         : []),
       ...(asks > 0 ? [{ label: 'asking you', value: asks, alarm: true }] : []),
     ],
-    whyLabel: PICKUP_WORD[issue.pickup.status] ?? issue.pickup.status,
+    whyLabel: pickupWord(issue.pickup.status),
     whyTone: PICKUP_TONE[issue.pickup.status] ?? 'quiet',
     why: issue.pickup.reasons.join(' '),
     reading: track !== null ? <Track track={track} /> : undefined,
@@ -332,24 +330,6 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
     ),
   };
 }
-
-/**
- * The pickup kind in the operator's words. The kind is an identifier the
- * dispatcher passes between its own rules; `has_pr` reaching the glass unedited
- * asks the operator to know the enum before the row means anything.
- *
- * @public shared with the overview's alternative shapes.
- */
-export const PICKUP_WORD: Record<string, string> = {
-  has_pr: 'in review',
-  active: 'working',
-  eligible: 'up next',
-  blocked: 'no capacity',
-  retained: 'kept',
-  container: 'a container',
-  investigation: 'investigating',
-  parked: 'blocked',
-};
 
 const PICKUP_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
   escalated: 'ask',

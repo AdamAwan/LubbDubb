@@ -17,8 +17,9 @@ import { REPO_ROOT as ROOT } from './support/paths.js';
  * `ask_next`'s card reads too — and the answers an investigation's findings take, so the cockpit
  * offers exactly the ones the route accepts — and which watch checks are still proposed, so the Signals card
  * and the window pass cannot disagree about what the operator is yet to accept — and the Needs you
- * page's reasons a pull request is on the operator and its listen-item match, so the page and the
- * listener read one table.
+ * page's reasons a pull request is on the operator and its listen-item match (with whether the chat
+ * holds an item or a goal's), so the page, the Work tab and the listener read one table — and which
+ * parts of a plan are live, so the Work tab counts a plan's parts as the stack block numbers them.
  */
 const RUNTIME_MODULES: string[] = [
   './asks/queue.js',

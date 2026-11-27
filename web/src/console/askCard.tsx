@@ -9,6 +9,7 @@ import { KIND_LABEL, KIND_TONE } from '../view/askKinds.js';
 import { goalIssue } from '../view/goalRefs.js';
 import { openRow } from './queueRailOpens.js';
 import { needBody } from './NeedsBand.js';
+import { classes } from '../components/classes.js';
 import { configDestination, KIND_VERB, rowClass, subjectRef } from './QueueRail.js';
 
 function askOpen(row: NeedRow, actions: CockpitActions): Destination | null {
@@ -16,14 +17,28 @@ function askOpen(row: NeedRow, actions: CockpitActions): Destination | null {
   return row.opens === null ? null : openRow(row, actions);
 }
 
-/** The ask card's three parts: what it is about, the ask, and a note only where it adds something. */
-function askWords(row: NeedRow, view: CockpitView): { about: string | null; ask: string; why?: string } {
+/**
+ * The ask card's three parts: what it is about, the ask, and a note only where it adds something.
+ * Under its goal's own heading (`inGoal`) the goal is already said, so the ask leads.
+ */
+function askWords(
+  row: NeedRow,
+  view: CockpitView,
+  inGoal: boolean,
+): { about: string | null; ask: string; why?: string } {
   const goal = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
-  const about = goal?.title ?? row.agentLabel;
+  const about = inGoal && goal !== undefined ? null : (goal?.title ?? row.agentLabel);
   const ask = row.summary ?? row.title;
   const note = row.note ?? row.check?.remedy;
-  return note === undefined || (about !== null && note.includes(about)) ? { about, ask } : { about, ask, why: note };
+  const says = note !== undefined && (about === null || !note.includes(about));
+  return { about, ask, ...(says ? { why: note } : {}) };
 }
+
+const askCardClass = (expanded: boolean): string => classes('cn-ny-ask cn-plainrefs', expanded && 'cn-ny-ask-open');
+
+/** An opened task's body leads with the task's own title, so a headline that is the ask would say it twice. */
+const bodyLeads = (row: NeedRow, view: CockpitView, inGoal: boolean, body: ReactNode): boolean =>
+  inGoal && body !== null && (view.state.humanTasks ?? []).some((t) => t.id === row.id);
 
 // → docs/spec/44-needs-you.md#the-ask-card
 export function AskCard({
@@ -33,6 +48,7 @@ export function AskCard({
   expanded,
   onExpand,
   actions,
+  inGoal = false,
 }: {
   row: NeedRow;
   view: CockpitView;
@@ -40,13 +56,13 @@ export function AskCard({
   expanded: boolean;
   onExpand: () => void;
   actions: CockpitActions;
+  inGoal?: boolean;
 }): JSX.Element {
-  const ref = askRef(row);
-  const { about, ask, why } = askWords(row, view);
+  const { about, ask, why } = askWords(row, view, inGoal);
   const body = expanded ? needBody(row, view, actions) : null;
   const open = body === null ? askOpen(row, actions) : null;
   return (
-    <div className={rowClass(row, null, false, `cn-ny-ask cn-plainrefs${expanded ? ' cn-ny-ask-open' : ''}`)}>
+    <div className={rowClass(row, null, false, askCardClass(expanded))}>
       <i className="cn-stripe" />
       <BareButton
         usage={expanded ? 'escalation.close' : 'escalation.expand'}
@@ -57,14 +73,7 @@ export function AskCard({
       />
       <div className="cn-qin">
         <AskTop row={row} now={view.now} open={expanded} />
-        <p className="cn-ny-about">
-          <span>{about ?? ask}</span>
-          {ref !== null && (
-            <span className="cn-refs">
-              <Ref to={ref} />
-            </span>
-          )}
-        </p>
+        <AskHeadline row={row} view={view} about={about} ask={ask} body={body} inGoal={inGoal} />
         {body === null ? (
           <>
             {about !== null && <p className="cn-ny-body">{ask}</p>}
@@ -83,6 +92,35 @@ export function AskCard({
         </span>
       </div>
     </div>
+  );
+}
+
+function AskHeadline({
+  row,
+  view,
+  about,
+  ask,
+  body,
+  inGoal,
+}: {
+  row: NeedRow;
+  view: CockpitView;
+  about: string | null;
+  ask: string;
+  body: ReactNode;
+  inGoal: boolean;
+}): JSX.Element | null {
+  if (bodyLeads(row, view, inGoal, body)) return null;
+  const ref = inGoal ? null : askRef(row);
+  return (
+    <p className="cn-ny-about">
+      <span>{about ?? ask}</span>
+      {ref !== null && (
+        <span className="cn-refs">
+          <Ref to={ref} />
+        </span>
+      )}
+    </p>
   );
 }
 

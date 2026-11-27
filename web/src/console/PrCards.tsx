@@ -1,5 +1,6 @@
 import { Fragment, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
+import { plural } from '../view/plural.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { OpenPullRequest, PrOnYouReason } from '../types.js';
 import { buildGoalPage } from '../view/goalPage.js';
@@ -10,6 +11,7 @@ import { PR_REASON_LABEL } from '../view/prsOnYou.js';
 import { rackByGoal, type RackGoal } from '../view/prRack.js';
 import { prHeadline } from '../view/prHeadline.js';
 import { BareButton } from '../components/button.js';
+import { classes } from '../components/classes.js';
 import { Ref, refLabel } from '../components/refs.js';
 import { waitedFor } from '../components/util.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
@@ -78,6 +80,8 @@ type PrItem =
       stack: Stack;
       group?: RowGroup;
       rungs: { rung: StackRung; card: PrCardModel | null }[];
+      /** A fork's earlier block in this group already drew these merged parts. */
+      footAbove: boolean;
     };
 
 /**
@@ -90,6 +94,7 @@ function stackItems(cards: readonly PrCardModel[], stacks: readonly Stack[], gho
   for (const st of stacks) for (const r of st.rungs) if (!byPr.has(r.prNumber)) byPr.set(r.prNumber, st);
   const stackOf = (n: number): Stack | undefined => byPr.get(n);
   const drawn = new Set<string>();
+  const feet = new Set<string>();
   const items: PrItem[] = [];
   for (const card of cards) {
     const stack = stackOf(card.pr.number);
@@ -109,7 +114,17 @@ function stackItems(cards: readonly PrCardModel[], stacks: readonly Stack[], gho
       items.push({ kind: 'card', key: String(card.pr.number), card });
       continue;
     }
-    items.push({ kind: 'stack', key, stack, rungs, ...(card.group === undefined ? {} : { group: card.group }) });
+    const foot = `${card.group?.key ?? ''}|${stack.planId ?? ''}|${stack.mergedBelow.map((m) => m.seq).join(',')}`;
+    const footAbove = stack.mergedBelow.length > 0 && feet.has(foot);
+    feet.add(foot);
+    items.push({
+      kind: 'stack',
+      key,
+      stack,
+      rungs,
+      footAbove,
+      ...(card.group === undefined ? {} : { group: card.group }),
+    });
   }
   return items;
 }
@@ -147,6 +162,13 @@ export function PrCards({
   );
 }
 
+/** A rung as its plan numbers it (`2/6`), or by its place in the stack where no single plan owns it. */
+function rungLabel(stack: Stack, rung: StackRung): string {
+  return rung.partSeq === null || stack.partTotal === null
+    ? String(rung.position)
+    : `${String(rung.partSeq)}/${String(stack.partTotal)}`;
+}
+
 function StackBlock({
   item,
   view,
@@ -156,38 +178,104 @@ function StackBlock({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
-  const total = item.stack.rungs.length;
+  const { stack } = item;
+  const open = stack.rungs.length;
+  const base = stack.base;
+  const landing = view.state.stackLandings.find((l) => l.ref === stack.ref);
+  const topFirst = [...item.rungs].reverse();
   return (
     <div className="cn-prstack">
-      <div className="cn-prstack-head">Stack of {total} · merges from the bottom up</div>
+      <div className="cn-prstack-head">
+        <span>
+          Stack · {open} open · lands on <code>{base}</code>
+        </span>
+        {landing?.blockedBy != null && <span className="cn-prstack-held">Held: {landing.blockedBy}</span>}
+        {landing?.offer === true && <span className="cn-prstack-ready">Ready to land</span>}
+      </div>
       <ol className="cn-prstack-rungs">
-        {item.rungs.map(({ rung, card }) => (
-          <li key={rung.prNumber} className={card === null ? 'cn-prstack-rung cn-prstack-ghost' : 'cn-prstack-rung'}>
-            <span className="cn-prstack-pos" aria-label={`${String(rung.position)} of ${String(total)}`}>
-              {rung.position}
-            </span>
-            {card === null ? (
-              <span className="cn-prstack-other">
-                <Ref to={`pr:${rung.prNumber}`} />
-                <BareButton
-                  usage={{ counted: 'pr.view' }}
-                  className="cn-prstack-title"
-                  onClick={() => actions.selectPr(rung.prNumber)}
-                  title={`Open pull request #${rung.prNumber}`}
-                >
-                  {prHeadline(rung.title)}
-                </BareButton>
-                <i>not waiting on you</i>
+        {topFirst.map(({ rung, card }) => {
+          const part = rungLabel(stack, rung);
+          const cls = classes(
+            'cn-prstack-rung',
+            card === null && 'cn-prstack-ghost',
+            landing?.blockedPr === rung.prNumber && 'cn-prstack-blocking',
+            rung.position === 1 && 'cn-prstack-next',
+          );
+          return (
+            <li key={rung.prNumber} className={cls}>
+              <span className="cn-prstack-pos" aria-label={`part ${part}`}>
+                {part}
               </span>
-            ) : (
-              <div className="cn-prstack-card">
-                <PrCardWithBelow card={card} view={view} actions={actions} />
-              </div>
-            )}
-          </li>
-        ))}
+              {card === null ? (
+                <span className="cn-prstack-other">
+                  <Ref to={`pr:${rung.prNumber}`} />
+                  <BareButton
+                    usage={{ counted: 'pr.view' }}
+                    className="cn-prstack-title"
+                    onClick={() => actions.selectPr(rung.prNumber)}
+                    title={`Open pull request #${rung.prNumber}`}
+                  >
+                    {prHeadline(rung.title)}
+                  </BareButton>
+                  <i>not waiting on you</i>
+                </span>
+              ) : (
+                <div className="cn-prstack-card">
+                  <PrCardWithBelow card={card} view={view} actions={actions} />
+                </div>
+              )}
+            </li>
+          );
+        })}
+        <StackFoot merged={stack.mergedBelow} base={base} above={item.footAbove} />
       </ol>
     </div>
+  );
+}
+
+function StackFoot({
+  merged,
+  base,
+  above,
+}: {
+  merged: Stack['mergedBelow'];
+  base: string;
+  /** The fork's other block drew these merged parts; this one names them in one line. */
+  above: boolean;
+}): JSX.Element {
+  return (
+    <>
+      {above ? (
+        <MergedRung key="above" label="merged parts, as above">
+          <i>{plural(merged.length, 'merged part')}, as above</i>
+        </MergedRung>
+      ) : (
+        merged.map((part) => (
+          <MergedRung key={`merged-${String(part.seq)}`} label={`part ${String(part.seq)}, merged`}>
+            {part.prNumber !== null && <Ref to={`pr:${part.prNumber}`} />}
+            <span className="cn-prstack-title">{part.title}</span>
+            <i>merged</i>
+          </MergedRung>
+        ))
+      )}
+      <li className="cn-prstack-rung cn-prstack-base">
+        <span className="cn-prstack-pos" aria-hidden>
+          ↓
+        </span>
+        <code>{base}</code>
+      </li>
+    </>
+  );
+}
+
+function MergedRung({ label, children }: { label: string; children: ReactNode }): JSX.Element {
+  return (
+    <li className="cn-prstack-rung cn-prstack-ghost cn-prstack-merged">
+      <span className="cn-prstack-pos" aria-label={label}>
+        ✓
+      </span>
+      <span className="cn-prstack-other">{children}</span>
+    </li>
   );
 }
 

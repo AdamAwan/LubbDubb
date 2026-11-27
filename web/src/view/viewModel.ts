@@ -83,6 +83,8 @@ export interface CockpitView {
   featureDensity: FeatureDensity;
   featureClosed: boolean;
   petsBlended: boolean;
+  workRow: string | null;
+  workLater: boolean;
   errorsBand: string | null;
   errorsSteady: boolean;
   errorsSort: ErrorsSort;
@@ -202,6 +204,8 @@ interface ViewInputs {
   featureDensity?: FeatureDensity;
   featureClosed?: boolean;
   petsBlended?: boolean;
+  workRow?: string | null;
+  workLater?: boolean;
   errorsBand?: string | null;
   errorsSteady?: boolean;
   errorsSort?: ErrorsSort;
@@ -278,6 +282,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     ...placeView(input),
     ...ticketsView(input),
     ...featuresView(input),
+    ...workView(input),
 
     selectedAgent: selectedAgentOf(input),
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,
@@ -334,6 +339,10 @@ function ticketsView(input: ViewInputs) {
     ticketView: input.ticketView ?? 'table',
     ticketColumns: input.ticketColumns ?? [],
   } satisfies Partial<CockpitView>;
+}
+
+function workView(input: ViewInputs) {
+  return { workRow: input.workRow ?? null, workLater: input.workLater ?? false };
 }
 
 function featuresView(input: ViewInputs) {

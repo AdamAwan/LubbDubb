@@ -303,6 +303,22 @@ that fires on its own, so a rule consulting it would be a second opinion about a
 elsewhere. `test/stacks.test.ts` asserts that structurally — no file under `src/dispatcher/` names
 `stacks/`, and the only importer is `src/server/stateSnapshot.ts`.
 
+**What a stack says about its plan**, for the cockpit's [stack block](17-cockpit.md#a-stack-is-drawn-as-a-path-into-its-base),
+which draws it and never re-derives it:
+
+- `StackRung.partSeq` — the rung's part's `seq` in its plan, so a rung is numbered as the plan numbers
+  it (`2/6`); null for a rung no part delivers, or whose part was retired (a redraw renumbers the live
+  parts and leaves a retired one's old `seq`, which would read `5/4`).
+- `Stack.base` — the branch the stack lands on: the bottom rung's base, or the default branch where it
+  reports none, so the cockpit never guesses `main`.
+- `Stack.partTotal` — how many **live** parts (`liveParts`: every one but `retired`) the plan has, the
+  `6` of `2/6`; null where the rungs do not resolve to one plan.
+- `Stack.mergedBelow` — the plan's merged parts this stack is built on, top first, each as `seq`,
+  `title` and `prNumber`. They are the parts the **bottom rung's part depends on, transitively**,
+  walked through `dependsOn` (`bySlug`, `dependenciesOf`) and kept while `merged`. Not every merged
+  part of the plan: a part merged on a parallel branch of a diamond is not under this chain, and
+  drawing it there would say the chain is built on code it is not. Empty with no single plan.
+
 A chain of one is not a stack. A merged rung is not a base. A cycle in the base edges terminates
 rather than hanging the pulse. It takes the **unfiltered** open list, so an unwatched rung does not
 put a hole in the chain.
@@ -362,6 +378,12 @@ deliberately **excluded** — a rung is behind because the one beneath it has no
 itself on retarget, so counting it would withhold the button from every real stack. The line: the
 operator is authorizing _code they have read_, and `behind` is a fact about the queue, not about the
 code.
+
+What holds it is said twice, once for each reader: `blockedBy` is the first unclear rung's sentence
+(`#414 CI failing`) for a person, and `blockedPr` is that rung's **number**, for the cockpit to colour
+the blocking rung by — the same rung, bottom-most first, so the two never name different pull requests.
+`blockedBy` is prose and is never parsed back into a number. Both ride `StackLandingView` on
+`/api/state`; a standing landing with no stack left to read has neither.
 
 **The offer gate must be no weaker than rule `pr-merge-ready`'s test on anything that does not clear
 itself**, and `behind` is the only thing that does. Where the two disagree there is no exit: the

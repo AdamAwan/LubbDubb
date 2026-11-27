@@ -2,6 +2,7 @@ import { issueOriginNumber, issueOriginRef } from '../issueOrigins.js';
 import { prState } from '../pr/prHealth.js';
 import { prRef, type PrRefStyle } from '../pr/prRef.js';
 import type { PartOutcomeKind, Plan, PlanAtom, PlanPart, PullRequest } from '../types.js';
+import { liveParts } from './partGroup.js';
 
 // → docs/spec/08-planning.md
 
@@ -64,9 +65,7 @@ export function partBase(
   return dep.branch ?? partBranch(issueNumber, dep.slug);
 }
 
-export function liveParts(parts: readonly PlanPart[]): PlanPart[] {
-  return parts.filter((p) => p.status !== 'retired');
-}
+export { liveParts };
 
 export function planInFlight(plan: Plan): boolean {
   return plan.status === 'active' || plan.status === 'planning' || plan.status === 'awaiting_approval';

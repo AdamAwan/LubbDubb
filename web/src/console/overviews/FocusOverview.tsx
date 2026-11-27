@@ -12,7 +12,7 @@ import { holdingLabel, subjectLabel } from '../QueueRail.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../../view/askKinds.js';
 import { needBody } from '../NeedsBand.js';
 import { openGoalForAsk } from '../jump.js';
-import { PICKUP_WORD } from '../Overview.js';
+import { pickupWord } from '../../view/pickup.js';
 import { waitedFor } from '../../components/util.js';
 import { PetFloor, openPets } from '../Vivarium.js';
 import { OverviewSwitch } from './OverviewSwitch.js';
@@ -301,9 +301,7 @@ function Context({ row, view, actions }: { row: NeedRow; view: CockpitView; acti
           {issue?.title ?? row.goalRef}
         </BareButton>
         <Ref to={row.goalRef} />
-        {issue !== undefined && (
-          <span className="cn-ov-ctx-state">{PICKUP_WORD[issue.pickup.status] ?? issue.pickup.status}</span>
-        )}
+        {issue !== undefined && <span className="cn-ov-ctx-state">{pickupWord(issue.pickup.status)}</span>}
       </div>
 
       {parts.length > 0 && (

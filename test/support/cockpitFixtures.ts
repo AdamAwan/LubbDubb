@@ -41,7 +41,47 @@ type IssueSeed = Omit<
 > &
   Partial<Issue>;
 
+/* The demo's Features, so the Work tab draws real headings: one moving, one stuck behind a
+   person, one nearly done. A seed's own non-null parent wins. */
+type Relative = NonNullable<Issue['parent']>;
+const FEATURES: Record<string, Relative> = {
+  checkout: {
+    number: 350,
+    title: 'Checkout and payments',
+    issueType: 'Feature',
+    workItemState: 'Active',
+    state: 'open',
+  },
+  operations: {
+    number: 360,
+    title: 'Running the shop',
+    issueType: 'Feature',
+    workItemState: 'Active',
+    state: 'open',
+  },
+  finding: {
+    number: 300,
+    title: 'Finding a book',
+    issueType: 'Feature',
+    workItemState: 'Active',
+    state: 'open',
+  },
+};
+const FEATURE_OF: Record<number, Relative> = {
+  390: FEATURES.checkout!,
+  376: FEATURES.checkout!,
+  382: FEATURES.checkout!,
+  359: FEATURES.checkout!,
+  368: FEATURES.operations!,
+  396: FEATURES.operations!,
+  364: FEATURES.operations!,
+  395: FEATURES.operations!,
+  388: FEATURES.finding!,
+  332: FEATURES.finding!,
+};
+
 function fixtureIssue(seed: IssueSeed): Issue {
+  const parent = seed.parent ?? FEATURE_OF[seed.number];
   return {
     conclusion: { verdict: 'undeclared', by: null, note: '', at: null },
     shortfall: null,
@@ -58,6 +98,7 @@ function fixtureIssue(seed: IssueSeed): Issue {
     localValidation: null,
     priority: null,
     ...seed,
+    ...(parent === undefined ? {} : { parent }),
   };
 }
 
@@ -440,7 +481,7 @@ export function buildFixtureState(): AppState {
         fixturePr({
           id: 'pr-413',
           number: 413,
-          title: '#390 [2/3] feat(checkout): take card payment through the new provider',
+          title: '#390 [2/6] feat(checkout): take card payment through the new provider',
           branch: 'issue/390/payment',
           headSha: 'c7d41e02a9b6538f14ac0d7b2e95f83610d4ab27',
           ciStatus: 'passing',
@@ -469,7 +510,7 @@ export function buildFixtureState(): AppState {
         fixturePr({
           id: 'pr-414',
           number: 414,
-          title: '#390 [3/3] feat(checkout): move refunds onto the new provider',
+          title: '#390 [3/6] feat(checkout): move refunds onto the new provider',
           branch: 'issue/390/refunds',
           ciStatus: 'failing',
           unresolvedComments: [],
@@ -480,6 +521,90 @@ export function buildFixtureState(): AppState {
           merged: false,
           health: { blocked: true, reasons: ['CI failing on base PR #413'] },
           attention: { status: 'elsewhere', reasons: ['waiting on PR #413'] },
+          review: {
+            status: 'elsewhere',
+            addressed: false,
+            mode: null,
+            routeReason: null,
+            summary: null,
+            findings: [],
+            reviewedAt: null,
+            routedAt: null,
+            agentId: null,
+            routeAgentId: null,
+            headSha: null,
+          },
+        }),
+        fixturePr({
+          id: 'pr-431',
+          number: 431,
+          title: '#390 [4/6] feat(checkout): email a receipt for every refund',
+          branch: 'issue/390/receipts',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: false,
+          mergeable: true,
+          baseBranch: 'issue/390/refunds',
+          mergeableState: 'unknown',
+          merged: false,
+          health: { blocked: true, reasons: ['base PR #414 is not merged'] },
+          attention: { status: 'elsewhere', reasons: ['waiting on PR #414'] },
+          review: {
+            status: 'elsewhere',
+            addressed: false,
+            mode: null,
+            routeReason: null,
+            summary: null,
+            findings: [],
+            reviewedAt: null,
+            routedAt: null,
+            agentId: null,
+            routeAgentId: null,
+            headSha: null,
+          },
+        }),
+        fixturePr({
+          id: 'pr-435',
+          number: 435,
+          title: '#368 [1/2] feat(stock): parse the distributor’s nightly CSV',
+          branch: 'issue/368/parse',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: false,
+          mergeable: true,
+          baseBranch: 'main',
+          mergeableState: 'clean',
+          merged: false,
+          health: { blocked: true, reasons: ['not approved'] },
+          attention: { status: 'elsewhere', reasons: ['waiting on a reviewer — Priya Raman, requested 5h ago'] },
+          review: {
+            status: 'elsewhere',
+            addressed: false,
+            mode: null,
+            routeReason: null,
+            summary: null,
+            findings: [],
+            reviewedAt: null,
+            routedAt: null,
+            agentId: null,
+            routeAgentId: null,
+            headSha: null,
+          },
+        }),
+        fixturePr({
+          id: 'pr-436',
+          number: 436,
+          title: '#368 [2/2] feat(stock): update stock levels from the parsed feed',
+          branch: 'issue/368/update',
+          ciStatus: 'pending',
+          unresolvedComments: [],
+          approved: false,
+          mergeable: true,
+          baseBranch: 'issue/368/parse',
+          mergeableState: 'unknown',
+          merged: false,
+          health: { blocked: true, reasons: ['base PR #435 is not merged'] },
+          attention: { status: 'elsewhere', reasons: ['waiting on PR #435'] },
           review: {
             status: 'elsewhere',
             addressed: false,
@@ -926,6 +1051,7 @@ export function buildFixtureState(): AppState {
           id: 'iss-390',
           number: 390,
           title: 'Move checkout to the new payment provider',
+          priority: { since: ago(45) },
           body: 'Too big for one PR: the provider client has to land before anything can take a payment through it, and refunds cannot move until payments have.',
           labels: ['lubbdubb-watch'],
           state: 'open',
@@ -1412,6 +1538,35 @@ export function buildFixtureState(): AppState {
     ],
     stacks: [
       {
+        ref: 'stack:435',
+        issueNumber: 368,
+        issueTitle: 'Import the distributor’s nightly stock feed',
+        planId: null,
+        rungs: [
+          {
+            prNumber: 435,
+            title: '#368 [1/2] feat(stock): parse the distributor’s nightly CSV',
+            branch: 'issue/368/parse',
+            base: 'main',
+            position: 1,
+            partSlug: null,
+            partSeq: null,
+          },
+          {
+            prNumber: 436,
+            title: '#368 [2/2] feat(stock): update stock levels from the parsed feed',
+            branch: 'issue/368/update',
+            base: 'issue/368/parse',
+            position: 2,
+            partSlug: null,
+            partSeq: null,
+          },
+        ],
+        base: 'main',
+        partTotal: null,
+        mergedBelow: [],
+      },
+      {
         ref: 'stack:413',
         issueNumber: 390,
         issueTitle: 'Move checkout to the new payment provider',
@@ -1419,21 +1574,35 @@ export function buildFixtureState(): AppState {
         rungs: [
           {
             prNumber: 413,
-            title: '#390 [2/3] feat(checkout): take card payment through the new provider',
+            title: '#390 [2/6] feat(checkout): take card payment through the new provider',
             branch: 'issue/390/payment',
             base: 'main',
             position: 1,
             partSlug: 'payment',
+            partSeq: 2,
           },
           {
             prNumber: 414,
-            title: '#390 [3/3] feat(checkout): move refunds onto the new provider',
+            title: '#390 [3/6] feat(checkout): move refunds onto the new provider',
             branch: 'issue/390/refunds',
             base: 'issue/390/payment',
             position: 2,
             partSlug: 'refunds',
+            partSeq: 3,
+          },
+          {
+            prNumber: 431,
+            title: '#390 [4/6] feat(checkout): email a receipt for every refund',
+            branch: 'issue/390/receipts',
+            base: 'issue/390/refunds',
+            position: 3,
+            partSlug: 'receipts',
+            partSeq: 4,
           },
         ],
+        base: 'main',
+        partTotal: 6,
+        mergedBelow: [{ seq: 1, title: 'Add the new payment provider’s client', prNumber: 406 }],
       },
     ],
     /* Sheets exist only where a check set exists, and a check set exists only on a goal every part of
@@ -1877,7 +2046,10 @@ export function buildFixtureState(): AppState {
         ],
       },
     ],
-    stackLandings: [{ ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 }],
+    stackLandings: [
+      { ref: 'stack:435', offer: false, blockedBy: '#435 not approved', blockedPr: 435, landing: null, landed: 0 },
+      { ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', blockedPr: 414, landing: null, landed: 0 },
+    ],
     /* An arrival is only ever recorded for a goal whose work has landed, which on this fixture is
        the three delivered goals. #364's arrival is stamped but unannounced because its check set is
        still a proposal. → docs/spec/24-environments.md#what-an-arrival-means */
@@ -2832,13 +3004,30 @@ export function buildFixtureState(): AppState {
         updatedAt: ago(6),
       }),
       fixturePart({
+        id: 'plan-390:receipts',
+        planId: 'plan-390',
+        slug: 'receipts',
+        seq: 4,
+        title: 'Email a receipt for every refund',
+        scope: 'apps/api/src/features/refunds/receipts.ts',
+        dependsOn: ['refunds'],
+        rationale: 'A refund the customer never hears about is a support ticket.',
+        acceptance: 'Every refund issued through the client sends one receipt email.',
+        branch: 'issue/390/receipts',
+        prNumber: 431,
+        status: 'in_review',
+        taskId: null,
+        createdAt: ago(300),
+        updatedAt: ago(4),
+      }),
+      fixturePart({
         id: 'plan-390:cutover',
         planId: 'plan-390',
         slug: 'cutover',
-        seq: 4,
+        seq: 5,
         title: 'Switch the staging shop’s provider keys over',
         scope: 'the payment provider’s own dashboard — no agent has an account for it',
-        dependsOn: ['refunds'],
+        dependsOn: ['receipts'],
         expectedKind: 'human',
         rationale: 'Nobody gave the fleet a merchant account, and nobody should.',
         acceptance: 'The staging shop charges and refunds against the new provider’s test keys.',
@@ -2847,7 +3036,8 @@ export function buildFixtureState(): AppState {
         size: null,
         branch: null,
         prNumber: null,
-        status: 'ready',
+        status: 'blocked',
+        blockedReason: 'needs the provider’s live keys — nobody has given the fleet a merchant account',
         taskId: null,
         createdAt: ago(300),
         updatedAt: ago(6),
@@ -2856,7 +3046,7 @@ export function buildFixtureState(): AppState {
         id: 'plan-390:soak',
         planId: 'plan-390',
         slug: 'soak',
-        seq: 5,
+        seq: 6,
         title: 'Assert on a staging checkout soak run',
         scope: 'scripts/checkout-e2e.mjs',
         dependsOn: ['cutover'],
@@ -4427,7 +4617,7 @@ export function buildFixtureState(): AppState {
         type: 'approve_change',
         status: 'open',
         prompt:
-          'PR #413 ("#390 [2/3] feat(checkout): take card payment through the new provider") is approved, green and ' +
+          'PR #413 ("#390 [2/6] feat(checkout): take card payment through the new provider") is approved, green and ' +
           'clean against main — merge it?',
         context: {
           originRef: 'pr:413',
@@ -4581,6 +4771,18 @@ export function buildFixtureState(): AppState {
           profileSource: 'pin',
         },
         {
+          origin: 'issue:332',
+          rule: 'issue-pickup',
+          title: 'Filter search results by format and price',
+          kind: 'code',
+          branch: 'issue/332',
+          status: 'sequenced',
+          reason:
+            'Issue #332 is ready. Held: it waits on #388 in the accepted order for Finding a book — the filters read the author index #388 builds.',
+          profile: 'standard',
+          profileSource: 'default',
+        },
+        {
           origin: 'issue:333:part:add',
           rule: 'plan-part',
           title: 'Issue #333 part: Save a book from the book page and from a search result',
@@ -4630,6 +4832,9 @@ export function buildFixtureState(): AppState {
       '#414': 'https://github.com/example/inkwell-books/pull/414',
       '#415': 'https://github.com/example/inkwell-books/pull/415',
       '#417': 'https://github.com/example/inkwell-books/pull/417',
+      '#431': 'https://github.com/example/inkwell-books/pull/431',
+      '#435': 'https://github.com/example/inkwell-books/pull/435',
+      '#436': 'https://github.com/example/inkwell-books/pull/436',
       '#426': 'https://github.com/example/inkwell-books/pull/426',
       '#300': 'https://github.com/example/inkwell-books/issues/300',
       '#332': 'https://github.com/example/inkwell-books/issues/332',
@@ -4690,7 +4895,15 @@ export function buildFixtureState(): AppState {
     },
     asks: [],
     handledOpen: 3,
-    listener: { state: 'off', on: null, queued: 0, sent: [] },
+    listener: {
+      state: 'busy',
+      on: { kind: 'pr', number: 413 },
+      queued: 1,
+      sent: [
+        { item: { kind: 'pr', number: 413 }, sentAt: ago(3) },
+        { item: { kind: 'pr', number: 412 }, sentAt: ago(10) },
+      ],
+    },
     dispatchRules: {
       'pr-ci-failing': {
         kind: 'rule',
