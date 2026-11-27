@@ -8116,10 +8116,6 @@ button.cn-grow {
 .cn .cn-wk-fhead {
   width: 100%;
 }
-/* Under its goal the headline is the ask, which a task body's lede says again. */
-.cn-ny-ask-ingoal .cn-ny-askmore > .cn-lede:first-child {
-  display: none;
-}
 .cn-wk-fhead .fold-label {
   display: inline-flex;
   align-items: baseline;

@@ -88,22 +88,26 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
   const partByPr = new Map<number, PlanPart>();
   for (const part of parts) if (part.prNumber !== null) partByPr.set(part.prNumber, part);
 
-  const rungs: StackRung[] = prs.map((pr, i) => ({
-    prNumber: pr.number,
-    title: pr.title,
-    branch: pr.branch,
-    base: pr.baseBranch ?? '',
-    position: i + 1,
-    partSlug: partByPr.get(pr.number)?.slug ?? null,
-    partSeq: partByPr.get(pr.number)?.seq ?? null,
-  }));
+  const rungs: StackRung[] = prs.map((pr, i) => {
+    const part = partByPr.get(pr.number);
+    return {
+      prNumber: pr.number,
+      title: pr.title,
+      branch: pr.branch,
+      base: pr.baseBranch ?? '',
+      position: i + 1,
+      partSlug: part?.slug ?? null,
+      partSeq: part?.seq ?? null,
+    };
+  });
 
   const planIds = new Set(
     prs.map((pr) => partByPr.get(pr.number)?.planId).filter((id): id is string => id !== undefined),
   );
   const planId = planIds.size === 1 ? [...planIds][0]! : null;
   const plan = planId !== null ? (plans.find((p) => p.id === planId) ?? null) : null;
-  const live = planId === null ? null : livePartsOf(parts, planId);
+  const live = planId === null ? null : liveParts(parts.filter((p) => p.planId === planId));
+  const bottom = prs[0] === undefined ? undefined : partByPr.get(prs[0].number);
 
   return {
     ref: stackRef(prs, forked),
@@ -112,12 +116,8 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
     planId,
     rungs,
     partTotal: live === null ? null : live.length,
-    mergedBelow: live === null ? [] : mergedBelow(live, partByPr.get(prs[0]?.number ?? -1)),
+    mergedBelow: live === null ? [] : mergedBelow(live, bottom),
   };
-}
-
-function livePartsOf(parts: PlanPart[], planId: string): PlanPart[] {
-  return liveParts(parts.filter((p) => p.planId === planId));
 }
 
 function mergedBelow(parts: PlanPart[], bottom: PlanPart | undefined): MergedBelow[] {

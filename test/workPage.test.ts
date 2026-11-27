@@ -20,7 +20,7 @@ import { OVERVIEW_IN_FLIGHT, WORK_IN_FLIGHT } from '../web/src/view/pickup.js';
 
 type State = CockpitView['state'];
 
-function view(mutate: (state: State) => void = () => {}, workRow: string | null = null): CockpitView {
+function view(mutate: (state: State) => void = () => {}): CockpitView {
   const state = buildFixtureState();
   mutate(state);
   return buildViewModel({
@@ -41,7 +41,6 @@ function view(mutate: (state: State) => void = () => {}, workRow: string | null 
     selectedGoal: null,
     consolePanel: null,
     tab: 'inflight',
-    workRow,
   });
 }
 
@@ -52,7 +51,7 @@ const goal = (goals: readonly GoalWork[], ref: string): GoalWork => {
 };
 
 function work(over: Partial<GoalWork> & { ref: string }): GoalWork {
-  return { issue: undefined, parts: [], page: null, asks: [], prs: [], agents: [], holds: [], ...over };
+  return { issue: undefined, parts: [], asks: [], prs: [], agents: [], holds: [], ...over };
 }
 
 test('goals of work: a prioritised goal first, then those with a pressing ask, then other asks, then the rest; no goal last', () => {
@@ -93,12 +92,6 @@ test('goals of work: every goal with a pull request open is a row, and the row c
     parts.map((p) => p.seq),
     [...parts.map((p) => p.seq)].sort((a, b) => a - b),
   );
-});
-
-test('the full goal page is built for the open row only', () => {
-  const goals = goalsOfWork(view(() => {}, 'issue:390'));
-  assert.notEqual(goal(goals, 'issue:390').page, null);
-  assert.ok(goals.filter((g) => g.ref !== 'issue:390').every((g) => g.page === null));
 });
 
 test('in flight: by pickup status, or by an open pull request or a live agent whatever the status says', () => {

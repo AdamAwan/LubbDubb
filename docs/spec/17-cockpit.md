@@ -9032,7 +9032,7 @@ folds Features with — one Feature folded is folded everywhere. Under each head
 in flight**:
 
 - **The head line**: the goal's title (the control that opens the full goal page) and its `<Ref>`;
-  then its pickup word (`PICKUP_WORD`, `web/src/view/pickup.ts`), the plan's track and `merged/total`,
+  then its pickup word (`pickupWord`, `web/src/view/pickup.ts`), the plan's track and `merged/total`,
   the agents on it as a lamp and a count, `in Claude` where any of its asks or pull requests is in the
   listening chat, its spend, and ⚡ — the [priority](05-dispatcher.md#marking-a-goal-a-priority) control, which puts the goal first in
   the queue. A prioritised row is drawn with a rule down its left.
@@ -9077,11 +9077,11 @@ here rather than discovered between two literals. → `test/workPage.test.ts`
 
 A goal with no plan and open pull requests draws their cards under the row instead of a Parts line.
 
-**Built once per snapshot.** `goalsOfWork` reads the snapshot through one index (`indexWork`): each
-plan's live parts by goal (`liveParts`), the stack hold by pull request, the queue's holds by goal. A
-row's parts, track and holds come off that index; **the full `buildGoalPage` is built for the open row
-only** — every other row is null there — because building it for every goal on every snapshot was the
-whole cost of the page.
+**Built once per snapshot.** `WorkPage` memoizes `goalsOfWork` on the snapshot, not the clock tick,
+and `goalsOfWork` reads it through one index (`indexWork`): each plan's live parts by goal
+(`liveParts`), the stack hold by pull request, the queue's holds by goal. A row's parts, track and
+holds come off that index; **the full `buildGoalPage` is built only by the open row's Later line**,
+because building it for every goal on every snapshot was the whole cost of the page.
 
 **The rail stays hidden on Work** (`workInFront` in `ConsoleRoot.tsx`), and on the goal, pull-request
 and agent pages it opens: Work is itself a list of what holds every goal, and a second list of holds

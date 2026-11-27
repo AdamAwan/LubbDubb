@@ -18,7 +18,7 @@ import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 import { Tag } from '../components/tag.js';
 import { agentRow, deskRow, ejectedRow, readyingRow } from './fleetRows.js';
 import { FoldToggle } from '../components/collapsible.js';
-import { OVERVIEW_IN_FLIGHT, PICKUP_WORD } from '../view/pickup.js';
+import { OVERVIEW_IN_FLIGHT, pickupWord } from '../view/pickup.js';
 
 // → docs/spec/17-cockpit.md
 
@@ -303,7 +303,7 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
         : []),
       ...(asks > 0 ? [{ label: 'asking you', value: asks, alarm: true }] : []),
     ],
-    whyLabel: PICKUP_WORD[issue.pickup.status] ?? issue.pickup.status,
+    whyLabel: pickupWord(issue.pickup.status),
     whyTone: PICKUP_TONE[issue.pickup.status] ?? 'quiet',
     why: issue.pickup.reasons.join(' '),
     reading: track !== null ? <Track track={track} /> : undefined,

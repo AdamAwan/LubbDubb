@@ -1,11 +1,12 @@
 import type { CockpitView } from './viewModel.js';
 import type { Agent, Issue, OpenPullRequest, PlanPart } from '../types.js';
 import type { NeedRow } from './needsYou.js';
-import { buildGoalPage, type GoalPageView } from './goalPage.js';
+import type { GoalPageView } from './goalPage.js';
 import { buildGoalTrack, closeStage, validationStage, watchStage, type GoalStage } from './goalStages.js';
 import type { GoalTrack } from './goalPage.js';
-import { goalIssue, goalNumber, goalOfOrigin, goalOfPr, standsFor } from './goalRefs.js';
+import { goalIssue, goalNumber, goalOfOrigin, goalOfPr } from './goalRefs.js';
 import { liveParts, PART_GROUP } from './partGroups.js';
+import type { PartGroup } from '../types.js';
 import { prOnYouReasons } from './needsYouPage.js';
 import { PR_REASON_LABEL } from './prsOnYou.js';
 import { WORK_IN_FLIGHT } from './pickup.js';
@@ -20,8 +21,6 @@ export interface GoalWork {
   issue: Issue | undefined;
   /** The plan's live parts in plan order; empty with no plan. */
   parts: PlanPart[];
-  /** The full goal page — built for the open row only, null on every other. */
-  page: GoalPageView | null;
   asks: NeedRow[];
   prs: OpenPullRequest[];
   agents: Agent[];
@@ -52,6 +51,7 @@ export interface PrReading {
 export interface WorkPart {
   part: PlanPart;
   pr: OpenPullRequest | undefined;
+  reading: PrReading | undefined;
   mark: '✓' | '⏸' | '▶' | '';
   tone: Tone;
 }
@@ -90,9 +90,11 @@ function indexWork(view: CockpitView): WorkIndex {
   const queueHolds = new Map<string, string[]>();
   for (const item of view.upNext) {
     if (item.status === 'dispatching') continue;
-    const goal = goalOfOrigin(state, standsFor(state, item.origin));
+    const goal = goalOfOrigin(state, item.origin);
     if (goal === null) continue;
-    queueHolds.set(goal, [...(queueHolds.get(goal) ?? []), item.reason]);
+    const list = queueHolds.get(goal) ?? [];
+    list.push(item.reason);
+    queueHolds.set(goal, list);
   }
   return { partsOf, stackHolds, queueHolds };
 }
@@ -110,7 +112,6 @@ export function goalsOfWork(view: CockpitView): GoalWork[] {
         ref: key,
         issue: ref === null ? undefined : goalIssue(state, ref),
         parts: ref === null ? [] : index.partsOf(ref),
-        page: ref !== null && ref === view.workRow ? buildGoalPage(state, ref, view.needsYou, null) : null,
         asks: [],
         prs: [],
         agents: [],
@@ -124,7 +125,7 @@ export function goalsOfWork(view: CockpitView): GoalWork[] {
   for (const row of view.needsYou) if (row.goalRef !== null) at(row.goalRef).asks.push(row);
   for (const pr of state.world.pullRequests) at(goalOfPr(state, pr.number)).prs.push(pr);
   for (const agent of view.live) {
-    const goal = goalOfOrigin(state, standsFor(state, view.taskFor(agent)?.originRef ?? null));
+    const goal = goalOfOrigin(state, view.taskFor(agent)?.originRef ?? null);
     if (goal !== null) at(goal).agents.push(agent);
   }
   const goals = [...byRef.values()];
@@ -199,22 +200,19 @@ export function prReading(pr: OpenPullRequest): PrReading {
   return { text: pr.attention.reasons[0] ?? pr.attention.status, tone: 'quiet' };
 }
 
-const PART_MARK: Partial<Record<PlanPart['status'], WorkPart['mark']>> = {
-  merged: '✓',
-  concluded: '✓',
-  blocked: '⏸',
-  dispatched: '▶',
-  in_review: '▶',
-};
+const GROUP_MARK: Record<PartGroup, WorkPart['mark']> = { merged: '✓', held: '⏸', now: '▶', waiting: '' };
 
 /** The plan's live parts in plan order, each with its open pull request and how it reads. */
 export function workParts(parts: readonly PlanPart[], prs: readonly OpenPullRequest[]): WorkPart[] {
+  const byNumber = new Map(prs.map((pr) => [pr.number, pr]));
   return parts.map((part) => {
-    const pr = part.prNumber === null ? undefined : prs.find((p) => p.number === part.prNumber);
-    const mark = PART_MARK[part.status] ?? (pr === undefined ? '' : '▶');
+    const pr = part.prNumber === null ? undefined : byNumber.get(part.prNumber);
+    const reading = pr === undefined ? undefined : prReading(pr);
+    const group = PART_GROUP[part.status];
+    const mark = group === null || group === 'waiting' ? (pr === undefined ? '' : '▶') : GROUP_MARK[group];
     const tone: Tone =
-      part.status === 'blocked' ? 'hold' : pr !== undefined ? prReading(pr).tone : mark === '✓' ? 'done' : 'quiet';
-    return { part, pr, mark, tone };
+      part.status === 'blocked' ? 'hold' : reading !== undefined ? reading.tone : mark === '✓' ? 'done' : 'quiet';
+    return { part, pr, reading, mark, tone };
   });
 }
 

@@ -1,4 +1,4 @@
-import { useState, type JSX, type ReactNode } from 'react';
+import { useMemo, useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { ListenItem, OpenPullRequest } from '../types.js';
@@ -16,9 +16,11 @@ import {
   workTrack,
   type GoalWork,
   type Hold,
+  type PrReading,
 } from '../view/workPage.js';
+import { buildGoalPage } from '../view/goalPage.js';
 import { goalInChat, inChat } from '../view/needsYouPage.js';
-import { PICKUP_WORD } from '../view/pickup.js';
+import { pickupWord } from '../view/pickup.js';
 import { BareButton } from '../components/button.js';
 import { FoldToggle } from '../components/collapsible.js';
 import { ControlButton } from '../components/controls.js';
@@ -40,10 +42,12 @@ interface Props {
 }
 
 /** A pull request's chat control: the mark where it is already in the chat, the button where it waits on the operator. */
-type Talk = (pr: OpenPullRequest) => ReactNode;
+type Talk = (pr: OpenPullRequest, reading: PrReading) => ReactNode;
 
 export function WorkPage({ view, actions }: Props): JSX.Element {
-  const all = goalsOfWork(view);
+  const { state, needsYou, upNext, live } = view;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuilt per snapshot, not per clock tick
+  const all = useMemo(() => goalsOfWork(view), [state, needsYou, upNext, live]);
   const current = all.filter(inFlight);
   const later = all.filter((w) => !inFlight(w));
   const features = byFeature(current);
@@ -131,21 +135,18 @@ function GoalRow({ work, view, actions }: Props & { work: GoalWork }): JSX.Eleme
   const priority = work.issue?.priority != null;
   const planned = work.parts.length > 0;
   const holds = work.holds.filter((h) => !open || (h.tone === 'hold' && !h.part));
-  const talk: Talk = (pr) => <PrTalk pr={pr} open={open} view={view} actions={actions} />;
+  const talk: Talk = (pr, reading) => (
+    <PrTalk pr={pr} onYou={reading.tone === 'ask'} open={open} view={view} actions={actions} />
+  );
+  const loose = open && planned ? strayPrs(work.parts, work.prs) : work.prs;
   return (
     <div className={`cn-wk-row${priority ? ' cn-wk-priority' : ''}${open ? ' cn-wk-open' : ''}`}>
       <RowHead work={work} open={open} view={view} actions={actions} />
       {open && work.asks.length > 0 && <NeedsYou asks={work.asks} view={view} actions={actions} />}
-      {open && planned ? (
-        <>
-          <PartsLine work={work} talk={talk} />
-          <PrsLine prs={strayPrs(work.parts, work.prs)} talk={talk} />
-        </>
-      ) : (
-        <PrsLine prs={work.prs} talk={talk} />
-      )}
+      {open && planned && <PartsLine work={work} talk={talk} />}
+      <PrsLine prs={loose} talk={talk} />
       <HeldLine holds={holds} />
-      {open && <LaterLine work={work} />}
+      {open && <LaterLine work={work} view={view} />}
       {open && !planned && work.prs.length > 0 && (
         <div className="cn-wk-inset">
           <PrCards cards={work.prs.map((pr) => ({ pr, goal: false }))} view={view} actions={actions} />
@@ -170,9 +171,7 @@ function RowHead({ work, open, view, actions }: Props & { work: GoalWork; open: 
         {open ? '▾' : '▸'}
       </BareButton>
       <RowTitle work={work} actions={actions} />
-      {issue !== undefined && (
-        <span className="cn-wk-stage">{PICKUP_WORD[issue.pickup.status] ?? issue.pickup.status}</span>
-      )}
+      {issue !== undefined && <span className="cn-wk-stage">{pickupWord(issue.pickup.status)}</span>}
       {track !== null && track.total > 0 && (
         <span className="cn-wk-meta">
           <Track track={track} />
@@ -259,7 +258,13 @@ function Steer({
   );
 }
 
-function PrTalk({ pr, open, view, actions }: Props & { pr: OpenPullRequest; open: boolean }): JSX.Element | null {
+function PrTalk({
+  pr,
+  onYou,
+  open,
+  view,
+  actions,
+}: Props & { pr: OpenPullRequest; onYou: boolean; open: boolean }): JSX.Element | null {
   const item: ListenItem = { kind: 'pr', number: pr.number };
   if (inChat(view.state.listener, item))
     return (
@@ -267,7 +272,7 @@ function PrTalk({ pr, open, view, actions }: Props & { pr: OpenPullRequest; open
         <Icon name="chat" />
       </span>
     );
-  if (!open || prReading(pr).tone !== 'ask') return null;
+  if (!open || !onYou) return null;
   return <ClaudeButton item={item} view={view} actions={actions} compact />;
 }
 
@@ -289,7 +294,7 @@ function PrsLine({ prs, talk }: { prs: readonly OpenPullRequest[]; talk: Talk })
         return (
           <span key={pr.number} className={`cn-wk-item cn-wk-${reading.tone}`}>
             <Ref to={`pr:${pr.number}`} /> {reading.text}
-            {talk(pr)}
+            {talk(pr, reading)}
           </span>
         );
       })}
@@ -300,14 +305,14 @@ function PrsLine({ prs, talk }: { prs: readonly OpenPullRequest[]; talk: Talk })
 function PartsLine({ work, talk }: { work: GoalWork; talk: Talk }): JSX.Element | null {
   return (
     <Facts label="Parts">
-      {workParts(work.parts, work.prs).map(({ part, pr, mark, tone }, i) => (
+      {workParts(work.parts, work.prs).map(({ part, pr, reading, mark, tone }, i) => (
         <span key={part.id} className={`cn-wk-item cn-wk-part cn-wk-${tone}`}>
           {i > 0 && <i className="cn-wk-arrow">→</i>}
           {mark !== '' && <b>{mark}</b>}
           {part.seq} {part.slug}
           {part.prNumber !== null && <Ref to={`pr:${part.prNumber}`} />}
-          {pr !== undefined && <span>{prReading(pr).text}</span>}
-          {pr !== undefined && talk(pr)}
+          {reading !== undefined && <span>{reading.text}</span>}
+          {pr !== undefined && reading !== undefined && talk(pr, reading)}
           {part.status === 'blocked' && part.blockedReason !== null && <span>: {part.blockedReason}</span>}
         </span>
       ))}
@@ -328,8 +333,9 @@ function HeldLine({ holds }: { holds: readonly Hold[] }): JSX.Element | null {
   );
 }
 
-function LaterLine({ work }: { work: GoalWork }): JSX.Element | null {
-  const stages = work.page === null ? [] : laterStages(work.page);
+function LaterLine({ work, view }: { work: GoalWork; view: CockpitView }): JSX.Element | null {
+  const page = work.issue === undefined ? null : buildGoalPage(view.state, work.ref, view.needsYou, null);
+  const stages = page === null ? [] : laterStages(page);
   if (stages.length === 0) return null;
   return (
     <Facts label="Later">

@@ -80,6 +80,8 @@ type PrItem =
       stack: Stack;
       group?: RowGroup;
       rungs: { rung: StackRung; card: PrCardModel | null }[];
+      /** A fork's earlier block in this group already drew these merged parts. */
+      footAbove: boolean;
     };
 
 /**
@@ -92,6 +94,7 @@ function stackItems(cards: readonly PrCardModel[], stacks: readonly Stack[], gho
   for (const st of stacks) for (const r of st.rungs) if (!byPr.has(r.prNumber)) byPr.set(r.prNumber, st);
   const stackOf = (n: number): Stack | undefined => byPr.get(n);
   const drawn = new Set<string>();
+  const feet = new Set<string>();
   const items: PrItem[] = [];
   for (const card of cards) {
     const stack = stackOf(card.pr.number);
@@ -111,7 +114,17 @@ function stackItems(cards: readonly PrCardModel[], stacks: readonly Stack[], gho
       items.push({ kind: 'card', key: String(card.pr.number), card });
       continue;
     }
-    items.push({ kind: 'stack', key, stack, rungs, ...(card.group === undefined ? {} : { group: card.group }) });
+    const foot = `${card.group?.key ?? ''}|${stack.planId ?? ''}|${stack.mergedBelow.map((m) => m.seq).join(',')}`;
+    const footAbove = stack.mergedBelow.length > 0 && feet.has(foot);
+    feet.add(foot);
+    items.push({
+      kind: 'stack',
+      key,
+      stack,
+      rungs,
+      footAbove,
+      ...(card.group === undefined ? {} : { group: card.group }),
+    });
   }
   return items;
 }
@@ -128,7 +141,6 @@ export function PrCards({
   ghosts?: boolean;
 }): JSX.Element {
   let band: string | undefined;
-  const feet = new Set<string>();
   return (
     <div className="cn-prcards cn-plainrefs">
       {stackItems(cards, view.state.stacks ?? [], ghosts).map((item) => {
@@ -141,7 +153,7 @@ export function PrCards({
             {item.kind === 'card' ? (
               <PrCardWithBelow card={item.card} view={view} actions={actions} />
             ) : (
-              <StackBlock item={item} view={view} actions={actions} footAbove={footDrawn(feet, item)} />
+              <StackBlock item={item} view={view} actions={actions} />
             )}
           </Fragment>
         );
@@ -157,30 +169,18 @@ function rungLabel(stack: Stack, rung: StackRung): string {
     : `${String(rung.partSeq)}/${String(stack.partTotal)}`;
 }
 
-/** Whether a fork's other block already drew this merged foot — marks it drawn when not. */
-function footDrawn(feet: Set<string>, item: Extract<PrItem, { kind: 'stack' }>): boolean {
-  const { stack } = item;
-  if (stack.mergedBelow.length === 0) return false;
-  const key = `${item.group?.key ?? ''}|${stack.planId ?? ''}|${stack.mergedBelow.map((p) => p.seq).join(',')}`;
-  if (feet.has(key)) return true;
-  feet.add(key);
-  return false;
-}
-
 function StackBlock({
   item,
   view,
   actions,
-  footAbove,
 }: {
   item: Extract<PrItem, { kind: 'stack' }>;
   view: CockpitView;
   actions: CockpitActions;
-  footAbove: boolean;
 }): JSX.Element {
   const { stack } = item;
   const open = item.rungs.length;
-  const base = stack.rungs.find((r) => r.position === 1)?.base || 'main';
+  const base = stack.rungs[0]?.base || 'main';
   const landing = view.state.stackLandings.find((l) => l.ref === stack.ref);
   const topFirst = [...item.rungs].reverse();
   return (
@@ -227,7 +227,7 @@ function StackBlock({
             </li>
           );
         })}
-        <StackFoot merged={stack.mergedBelow} base={base} above={footAbove} />
+        <StackFoot merged={stack.mergedBelow} base={base} above={item.footAbove} />
       </ol>
     </div>
   );
@@ -245,29 +245,19 @@ function StackFoot({
 }): JSX.Element {
   return (
     <>
-      {above && (
-        <li className="cn-prstack-rung cn-prstack-ghost cn-prstack-merged">
-          <span className="cn-prstack-pos" aria-hidden>
-            ✓
-          </span>
-          <span className="cn-prstack-other">
-            <i>{plural(merged.length, 'merged part')}, as above</i>
-          </span>
-        </li>
-      )}
-      {!above &&
+      {above ? (
+        <MergedRung key="above" label="merged parts, as above">
+          <i>{plural(merged.length, 'merged part')}, as above</i>
+        </MergedRung>
+      ) : (
         merged.map((part) => (
-          <li key={`merged-${String(part.seq)}`} className="cn-prstack-rung cn-prstack-ghost cn-prstack-merged">
-            <span className="cn-prstack-pos" aria-label={`part ${String(part.seq)}, merged`}>
-              ✓
-            </span>
-            <span className="cn-prstack-other">
-              {part.prNumber !== null && <Ref to={`pr:${part.prNumber}`} />}
-              <span className="cn-prstack-title">{part.title}</span>
-              <i>merged</i>
-            </span>
-          </li>
-        ))}
+          <MergedRung key={`merged-${String(part.seq)}`} label={`part ${String(part.seq)}, merged`}>
+            {part.prNumber !== null && <Ref to={`pr:${part.prNumber}`} />}
+            <span className="cn-prstack-title">{part.title}</span>
+            <i>merged</i>
+          </MergedRung>
+        ))
+      )}
       <li className="cn-prstack-rung cn-prstack-base">
         <span className="cn-prstack-pos" aria-hidden>
           ↓
@@ -275,6 +265,17 @@ function StackFoot({
         <code>{base}</code>
       </li>
     </>
+  );
+}
+
+function MergedRung({ label, children }: { label: string; children: ReactNode }): JSX.Element {
+  return (
+    <li className="cn-prstack-rung cn-prstack-ghost cn-prstack-merged">
+      <span className="cn-prstack-pos" aria-label={label}>
+        ✓
+      </span>
+      <span className="cn-prstack-other">{children}</span>
+    </li>
   );
 }
 

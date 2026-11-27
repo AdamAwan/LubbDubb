@@ -18,27 +18,27 @@ function askOpen(row: NeedRow, actions: CockpitActions): Destination | null {
 }
 
 /**
- * The ask card's parts: what it is about, the ask, a note only where it adds something, and the
- * reference it carries. Under its goal's own heading (`inGoal`) the goal is already said, so the
- * ask leads and the goal's name and reference are left off.
+ * The ask card's three parts: what it is about, the ask, and a note only where it adds something.
+ * Under its goal's own heading (`inGoal`) the goal is already said, so the ask leads.
  */
 function askWords(
   row: NeedRow,
   view: CockpitView,
   inGoal: boolean,
-): { about: string | null; ask: string; why?: string; ref: string | null } {
+): { about: string | null; ask: string; why?: string } {
   const goal = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
   const about = inGoal && goal !== undefined ? null : (goal?.title ?? row.agentLabel);
   const ask = row.summary ?? row.title;
-  const ref = inGoal ? null : askRef(row);
   const note = row.note ?? row.check?.remedy;
-  return note === undefined || (about !== null && note.includes(about))
-    ? { about, ask, ref }
-    : { about, ask, why: note, ref };
+  const says = note !== undefined && (about === null || !note.includes(about));
+  return { about, ask, ...(says ? { why: note } : {}) };
 }
 
-const askCardClass = (expanded: boolean, inGoal: boolean): string =>
-  classes('cn-ny-ask cn-plainrefs', expanded && 'cn-ny-ask-open', inGoal && 'cn-ny-ask-ingoal');
+const askCardClass = (expanded: boolean): string => classes('cn-ny-ask cn-plainrefs', expanded && 'cn-ny-ask-open');
+
+/** An opened task's body leads with the task's own title, so a headline that is the ask would say it twice. */
+const bodyLeads = (row: NeedRow, view: CockpitView, about: string | null, body: ReactNode): boolean =>
+  about === null && body !== null && (view.state.humanTasks ?? []).some((t) => t.id === row.id);
 
 // → docs/spec/44-needs-you.md#the-ask-card
 export function AskCard({
@@ -58,11 +58,11 @@ export function AskCard({
   actions: CockpitActions;
   inGoal?: boolean;
 }): JSX.Element {
-  const { about, ask, why, ref } = askWords(row, view, inGoal);
+  const { about, ask, why } = askWords(row, view, inGoal);
   const body = expanded ? needBody(row, view, actions) : null;
   const open = body === null ? askOpen(row, actions) : null;
   return (
-    <div className={rowClass(row, null, false, askCardClass(expanded, inGoal))}>
+    <div className={rowClass(row, null, false, askCardClass(expanded))}>
       <i className="cn-stripe" />
       <BareButton
         usage={expanded ? 'escalation.close' : 'escalation.expand'}
@@ -73,14 +73,7 @@ export function AskCard({
       />
       <div className="cn-qin">
         <AskTop row={row} now={view.now} open={expanded} />
-        <p className="cn-ny-about">
-          <span>{about ?? ask}</span>
-          {ref !== null && (
-            <span className="cn-refs">
-              <Ref to={ref} />
-            </span>
-          )}
-        </p>
+        <AskHeadline row={row} view={view} about={about} ask={ask} body={body} inGoal={inGoal} />
         {body === null ? (
           <>
             {about !== null && <p className="cn-ny-body">{ask}</p>}
@@ -99,6 +92,35 @@ export function AskCard({
         </span>
       </div>
     </div>
+  );
+}
+
+function AskHeadline({
+  row,
+  view,
+  about,
+  ask,
+  body,
+  inGoal,
+}: {
+  row: NeedRow;
+  view: CockpitView;
+  about: string | null;
+  ask: string;
+  body: ReactNode;
+  inGoal: boolean;
+}): JSX.Element | null {
+  if (bodyLeads(row, view, about, body)) return null;
+  const ref = inGoal ? null : askRef(row);
+  return (
+    <p className="cn-ny-about">
+      <span>{about ?? ask}</span>
+      {ref !== null && (
+        <span className="cn-refs">
+          <Ref to={ref} />
+        </span>
+      )}
+    </p>
   );
 }
 
