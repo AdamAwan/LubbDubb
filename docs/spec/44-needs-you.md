@@ -162,7 +162,8 @@ agent's name are not drawn: the dot carries the first and the rest are one press
 **`inGoal`.** `AskCard` (`web/src/console/askCard.tsx`) is also drawn under a goal's own heading — an
 open row on the [Work tab](17-cockpit.md#the-work-tab). There the goal is already said, so with
 `inGoal` the card drops the goal's title from the headline and its reference: the ask leads. An ask
-about no goal keeps its run's name.
+about no goal keeps its run's name. Opened, a task's body would lead with the task's title again — the headline
+already is that title there — so an in-goal card hides the body's leading lede (`.cn-ny-ask-ingoal`).
 
 ### Opening an ask in place
 

@@ -9,6 +9,7 @@ import { KIND_LABEL, KIND_TONE } from '../view/askKinds.js';
 import { goalIssue } from '../view/goalRefs.js';
 import { openRow } from './queueRailOpens.js';
 import { needBody } from './NeedsBand.js';
+import { classes } from '../components/classes.js';
 import { configDestination, KIND_VERB, rowClass, subjectRef } from './QueueRail.js';
 
 function askOpen(row: NeedRow, actions: CockpitActions): Destination | null {
@@ -36,6 +37,9 @@ function askWords(
     : { about, ask, why: note, ref };
 }
 
+const askCardClass = (expanded: boolean, inGoal: boolean): string =>
+  classes('cn-ny-ask cn-plainrefs', expanded && 'cn-ny-ask-open', inGoal && 'cn-ny-ask-ingoal');
+
 // → docs/spec/44-needs-you.md#the-ask-card
 export function AskCard({
   row,
@@ -58,7 +62,7 @@ export function AskCard({
   const body = expanded ? needBody(row, view, actions) : null;
   const open = body === null ? askOpen(row, actions) : null;
   return (
-    <div className={rowClass(row, null, false, `cn-ny-ask cn-plainrefs${expanded ? ' cn-ny-ask-open' : ''}`)}>
+    <div className={rowClass(row, null, false, askCardClass(expanded, inGoal))}>
       <i className="cn-stripe" />
       <BareButton
         usage={expanded ? 'escalation.close' : 'escalation.expand'}
