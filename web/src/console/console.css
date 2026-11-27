@@ -8268,3 +8268,16 @@ button.cn-grow {
 .cn-gp-done {
   color: var(--cn-green-ink);
 }
+.cn-gp-chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--cn-accent);
+  white-space: nowrap;
+}
+.cn-gp .cn-ny-listen .ref-goal.ref-goal,
+.cn-gp .cn-ny-listen .ref-arm.ref-arm {
+  color: inherit;
+  font-weight: 600;
+}

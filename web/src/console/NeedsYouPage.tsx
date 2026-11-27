@@ -127,7 +127,7 @@ function FleetPanel({ view, actions }: { view: CockpitView; actions: CockpitActi
   );
 }
 
-function SentLine({ item, view }: { item: ListenItem; view: CockpitView }): JSX.Element | null {
+export function SentLine({ item, view }: { item: ListenItem; view: CockpitView }): JSX.Element | null {
   const at = view.state.listener.sent.find((entry) => sameItem(entry.item, item))?.sentAt;
   return at === undefined ? null : <SentStrip at={at} now={view.now} />;
 }
@@ -374,7 +374,7 @@ function PrBox({
   );
 }
 
-function ClaudeButton({
+export function ClaudeButton({
   item,
   view,
   actions,
@@ -438,7 +438,7 @@ function OnItem({ item, asks }: { item: ListenItem | null; asks: readonly NeedRo
   return ref === null ? 'an ask' : <Ref to={ref} />;
 }
 
-function ListenerStatus({
+export function ListenerStatus({
   asks,
   listener,
   folder,

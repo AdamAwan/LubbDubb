@@ -1,7 +1,7 @@
 import { useState, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { Agent, Issue, OpenPullRequest, PlanPart } from '../types.js';
+import type { Agent, Issue, ListenItem, OpenPullRequest, PlanPart } from '../types.js';
 import type { NeedRow } from '../view/needsYou.js';
 import { buildGoalPage, type GoalPageView } from '../view/goalPage.js';
 import { buildGoalTrack, closeStage, validationStage, watchStage } from '../view/goalStages.js';
@@ -13,9 +13,12 @@ import { Ref, refLabel } from '../components/refs.js';
 import { Track } from '../components/track.js';
 import { fmtUsd } from '../components/util.js';
 import { InstructionModal } from '../components/InstructionModal.js';
+import { Icon } from '../components/icons.js';
 import { AskCard } from './askCard.js';
 import { agentLamp } from './fleetRows.js';
 import { PrCards } from './PrCards.js';
+import { ClaudeButton, ListenerStatus, SentLine } from './NeedsYouPage.js';
+import { sameItem } from '../view/needsYouPage.js';
 import { PICKUP_WORD } from './Overview.js';
 
 const NONE = 'none';
@@ -152,6 +155,7 @@ export function GoalsPage({ view, actions }: { view: CockpitView; actions: Cockp
         <span className="cn-ny-counts">
           {plural(goals.filter((g) => g.ref !== NONE).length, 'goal')} in flight · ⚡ pins one to the top of the queue
         </span>
+        <ListenerStatus asks={view.needsYou} listener={view.state.listener} folder={view.state.config.desktopFolder} />
       </header>
       {features.map((feature) => (
         <section key={feature.key} className="cn-gp-feature">
@@ -205,6 +209,22 @@ function GoalRow({
   const holds = holdsOf(work, view).filter((h) => !open || (h.tone === 'hold' && h.part === undefined));
   const stage = issue === undefined ? null : (PICKUP_WORD[issue.pickup.status] ?? issue.pickup.status);
   const planned = page !== null && page.parts.length > 0;
+  const talk: Talk = (pr) => {
+    const item: ListenItem = { kind: 'pr', number: pr.number };
+    if (inChat(view, item))
+      return (
+        <span className="cn-gp-chat" title="In your Claude chat">
+          <Icon name="chat" />
+        </span>
+      );
+    return open && pr.attention.status === 'you' ? (
+      <ClaudeButton item={item} view={view} actions={actions} compact />
+    ) : null;
+  };
+  const chatting = [
+    ...work.asks.map((a): ListenItem => ({ kind: 'ask', id: a.id })),
+    ...work.prs.map((pr): ListenItem => ({ kind: 'pr', number: pr.number })),
+  ].some((item) => inChat(view, item));
   return (
     <div className={`cn-gp-row${priority ? ' cn-gp-priority' : ''}${open ? ' cn-gp-open' : ''}`}>
       <div className="cn-gp-line">
@@ -247,6 +267,11 @@ function GoalRow({
             {work.agents.length}
           </span>
         )}
+        {chatting && (
+          <span className="cn-gp-chat" title="Something of this goal's is in your Claude chat">
+            <Icon name="chat" /> in Claude
+          </span>
+        )}
         {issue?.spend != null && <span className="cn-gp-onit">{fmtUsd(issue.spend.costUsd)}</span>}
         {issue !== undefined && open && (
           <ControlButton
@@ -271,8 +296,12 @@ function GoalRow({
         )}
       </div>
       {open && work.asks.length > 0 && <NeedsYou asks={work.asks} view={view} actions={actions} />}
-      {open && planned ? <PartsLine page={page} prs={work.prs} /> : work.prs.length > 0 && <PrsLine prs={work.prs} />}
-      {open && planned && <OtherPrs page={page} prs={work.prs} />}
+      {open && planned ? (
+        <PartsLine page={page} prs={work.prs} talk={talk} />
+      ) : (
+        work.prs.length > 0 && <PrsLine prs={work.prs} talk={talk} />
+      )}
+      {open && planned && <OtherPrs page={page} prs={work.prs} talk={talk} />}
       {holds.length > 0 && (
         <Facts label="Held">
           {holds.map((h, i) => (
@@ -309,7 +338,7 @@ function Facts({ label, children }: { label: string; children: ReactNode }): JSX
   );
 }
 
-function PrsLine({ prs }: { prs: readonly OpenPullRequest[] }): JSX.Element {
+function PrsLine({ prs, talk }: { prs: readonly OpenPullRequest[]; talk: Talk }): JSX.Element {
   return (
     <Facts label="PRs">
       {prs.map((pr) => {
@@ -317,10 +346,20 @@ function PrsLine({ prs }: { prs: readonly OpenPullRequest[] }): JSX.Element {
         return (
           <span key={pr.number} className={`cn-gp-item cn-gp-${s.tone}`}>
             <Ref to={`pr:${pr.number}`} /> {s.text}
+            {talk(pr)}
           </span>
         );
       })}
     </Facts>
+  );
+}
+
+type Talk = (pr: OpenPullRequest) => ReactNode;
+
+function inChat(view: CockpitView, item: ListenItem): boolean {
+  const { listener } = view.state;
+  return (
+    (listener.on !== null && sameItem(listener.on, item)) || listener.sent.some((entry) => sameItem(entry.item, item))
   );
 }
 
@@ -332,7 +371,15 @@ const PART_MARK: Partial<Record<PlanPart['status'], string>> = {
   in_review: '▶',
 };
 
-function PartsLine({ page, prs }: { page: GoalPageView; prs: readonly OpenPullRequest[] }): JSX.Element {
+function PartsLine({
+  page,
+  prs,
+  talk,
+}: {
+  page: GoalPageView;
+  prs: readonly OpenPullRequest[];
+  talk: Talk;
+}): JSX.Element {
   const parts = page.parts
     .map((p) => p.part)
     .filter((p) => p.status !== 'retired')
@@ -351,6 +398,7 @@ function PartsLine({ page, prs }: { page: GoalPageView; prs: readonly OpenPullRe
             {part.seq} {part.slug}
             {part.prNumber !== null && <Ref to={`pr:${part.prNumber}`} />}
             {state !== null && <span>{state.text}</span>}
+            {pr !== undefined && talk(pr)}
             {part.status === 'blocked' && part.blockedReason !== null && <span>: {part.blockedReason}</span>}
           </span>
         );
@@ -359,10 +407,18 @@ function PartsLine({ page, prs }: { page: GoalPageView; prs: readonly OpenPullRe
   );
 }
 
-function OtherPrs({ page, prs }: { page: GoalPageView; prs: readonly OpenPullRequest[] }): JSX.Element | null {
+function OtherPrs({
+  page,
+  prs,
+  talk,
+}: {
+  page: GoalPageView;
+  prs: readonly OpenPullRequest[];
+  talk: Talk;
+}): JSX.Element | null {
   const inPlan = new Set(page.parts.flatMap((p) => (p.part.prNumber === null ? [] : [p.part.prNumber])));
   const others = prs.filter((pr) => !inPlan.has(pr.number));
-  return others.length === 0 ? null : <PrsLine prs={others} />;
+  return others.length === 0 ? null : <PrsLine prs={others} talk={talk} />;
 }
 
 function LaterLine({ page }: { page: GoalPageView }): JSX.Element | null {
@@ -403,16 +459,18 @@ function NeedsYou({
   return (
     <div className="cn-gp-needs">
       {asks.map((row) => (
-        <AskCard
-          key={row.id}
-          row={row}
-          view={view}
-          claude={null}
-          expanded={!folded.has(row.id)}
-          onExpand={() => flip(row.id)}
-          actions={actions}
-          inGoal
-        />
+        <div key={row.id}>
+          <AskCard
+            row={row}
+            view={view}
+            claude={<ClaudeButton item={{ kind: 'ask', id: row.id }} view={view} actions={actions} />}
+            expanded={!folded.has(row.id)}
+            onExpand={() => flip(row.id)}
+            actions={actions}
+            inGoal
+          />
+          <SentLine item={{ kind: 'ask', id: row.id }} view={view} />
+        </div>
       ))}
     </div>
   );

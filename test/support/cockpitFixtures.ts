@@ -4884,7 +4884,15 @@ export function buildFixtureState(): AppState {
     },
     asks: [],
     handledOpen: 3,
-    listener: { state: 'off', on: null, queued: 0, sent: [] },
+    listener: {
+      state: 'busy',
+      on: { kind: 'pr', number: 413 },
+      queued: 1,
+      sent: [
+        { item: { kind: 'pr', number: 413 }, sentAt: ago(3) },
+        { item: { kind: 'pr', number: 412 }, sentAt: ago(10) },
+      ],
+    },
     dispatchRules: {
       'pr-ci-failing': {
         kind: 'rule',
