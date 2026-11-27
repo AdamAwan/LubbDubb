@@ -9043,10 +9043,11 @@ in flight**:
   each, drawn in the goal tabs' tones (`cn-t-*`: green done, blue moving, amber held or on the
   operator, grey not yet). A stage fills solid to its `done` where it has one and whole when green
   without one; a blue or amber stage with no `done` is drawn whole at half strength, so it
-  keeps its colour without reading as finished. The first stage not green is where the goal _is_, and its name is drawn bold;
+  keeps its colour without reading as finished. The first stage not green is where the goal _is_, and its name is drawn bold — none once Close is green;
   Build's name carries `merged/total` wherever the plan has parts, even while its reading is the operator's court. Plan and Build split the goal page's one Plan stage, through the same
   `planRecordStage` / `partsStage` / `courtStage` it is composed of — Plan is the plan record's
-  status, Build its parts merged (or the goal's open pull requests where it has
+  status (`approved` / `complete` once past it; `no plan needed` for a goal worked without one, i.e.
+  with a pull request, an agent, a delivery or a closed ticket), Build its parts merged (or the goal's open pull requests where it has
   no parts), amber while a pull request is in the operator's court. Validate, Close and Watch are
   the goal page's own `validationStage` / `closeStage` / `watchStage`, fed from the work index rather
   than a built goal page (`stagesOf`, `web/src/view/workPage.ts`). The No goal row has no bar.
@@ -9085,8 +9086,8 @@ here rather than discovered between two literals. → `test/workPage.test.ts`
   with its pull request's reading and its Claude control; pull requests no part names follow on a PRs
   line (`strayPrs`). A blocked part is said here, so Held leaves it out, and the asks are drawn above,
   so Held leaves them out too;
-- **a Later line**: Validate, Close and Watch, each in the goal tab's own reading, where it has one
-  (`laterStages` drops a stage reading grey, which is a stage with nothing yet);
+- **a Later line**: Validate, Close and Watch in words — the stage bar's own readings, which the bar
+  carries only in its tooltips (`laterStages` drops a stage reading grey, which is a stage with nothing yet);
 - **Instruct** — the goal page's instruction modal — and its cost on the head line.
 
 A goal with no plan and open pull requests draws their cards under the row instead of a Parts line.
@@ -9094,8 +9095,9 @@ A goal with no plan and open pull requests draws their cards under the row inste
 **Built once per snapshot.** `WorkPage` memoizes `goalsOfWork` on the snapshot, not the clock tick,
 and `goalsOfWork` reads it through one index (`indexWork`): each goal's plan and its live parts
 (`liveParts`), the stack hold by pull request, the queue's holds by goal, and the reach and watch
-records by goal. A row's parts, holds and stages come off that index; **the full `buildGoalPage` is built only by the open row's Later line**,
-because building it for every goal on every snapshot was the whole cost of the page.
+records by goal. A row's parts, holds and stages — and the open row's Later line — come off that index; **the Work
+tab never builds `buildGoalPage`**, because building it for every goal on every snapshot was the whole
+cost of the page.
 
 **The rail stays hidden on Work** (`workInFront` in `ConsoleRoot.tsx`), and on the goal, pull-request
 and agent pages it opens: Work is itself a list of what holds every goal, and a second list of holds

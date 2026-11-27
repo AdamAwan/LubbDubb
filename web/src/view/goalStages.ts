@@ -17,7 +17,7 @@ export function buildGoalTrack(parts: readonly Pick<GoalPartView, 'group'>[]): G
   };
 }
 
-/** What the close-out reading reads, so the Work tab can take it without building the goal page. */
+/** What the close-out reading reads. */
 export type CloseInputs = Pick<GoalPageView, 'issue' | 'gateHold' | 'environments' | 'groups'>;
 
 /** What the Watch reading reads. */

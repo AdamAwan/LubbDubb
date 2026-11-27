@@ -1,7 +1,7 @@
 import type { CockpitView } from './viewModel.js';
 import type { Agent, Issue, OpenPullRequest, Plan, PlanPart } from '../types.js';
 import type { NeedRow } from './needsYou.js';
-import { goalObligations, reachFields, type GoalPageView } from './goalPage.js';
+import { goalObligations, reachFields } from './goalPage.js';
 import {
   buildGoalTrack,
   closeStage,
@@ -81,12 +81,9 @@ export interface WorkPart {
   tone: Tone;
 }
 
-export interface LaterStage {
-  name: 'Validate' | 'Close' | 'Watch';
-  stage: GoalStage;
-}
+const LATER: ReadonlySet<WorkStage['name']> = new Set(['Validate', 'Close', 'Watch']);
 
-/** What the snapshot says once, read by every goal: each plan's live parts, stack holds by PR, queue holds by goal. */
+/** What the snapshot says once, read by every goal: each goal's plan and live parts, stack holds by PR, queue holds by goal, and its close and watch inputs. */
 interface WorkIndex {
   partsOf: (ref: string) => PlanPart[];
   planOf: Map<string, Plan>;
@@ -185,10 +182,6 @@ export function goalsOfWork(view: CockpitView): GoalWork[] {
   return goals.sort(byUrgency);
 }
 
-/**
- * The goal's five stages, read off the snapshot without building the goal page: Plan and Build
- * split what the goal page's one Plan stage says, and the last three are the goal page's own.
- */
 function stagesOf(work: GoalWork, index: WorkIndex): WorkStage[] {
   const { issue } = work;
   if (issue === undefined) return [];
@@ -203,16 +196,21 @@ function stagesOf(work: GoalWork, index: WorkIndex): WorkStage[] {
   ];
 }
 
-/** The plan record alone; a goal worked without one reads as needing none once it has a pull request. */
 function planOnly(work: GoalWork, issue: Issue, plan: Plan | undefined): GoalStage {
   if (plan === undefined) {
-    if (work.prs.length > 0 || issue.delivery != null) return { reading: 'no plan needed', tone: 'green', done: null };
+    if (work.prs.length > 0 || work.agents.length > 0 || issue.delivery != null || issue.state !== 'open')
+      return { reading: 'no plan needed', tone: 'green', done: null };
     if (issue.pickup.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
   }
-  return planRecordStage(plan ?? null) ?? { reading: 'approved', tone: 'green', done: null };
+  return (
+    planRecordStage(plan ?? null) ?? {
+      reading: plan?.status === 'complete' ? 'complete' : 'approved',
+      tone: 'green',
+      done: null,
+    }
+  );
 }
 
-/** The plan's parts merged, or the goal's pull requests where it has no parts; a PR on the operator reads amber. */
 function buildStage(work: GoalWork, issue: Issue, track: GoalTrack): GoalStage {
   const parts = partsStage(track);
   const court = courtStage(work.prs, parts?.done ?? null);
@@ -328,11 +326,6 @@ export function strayPrs(parts: readonly PlanPart[], prs: readonly OpenPullReque
 }
 
 /** The stages past the plan that have something to say; a grey stage is one with nothing yet. */
-export function laterStages(page: GoalPageView): LaterStage[] {
-  const stages: LaterStage[] = [
-    { name: 'Validate', stage: validationStage(page) },
-    { name: 'Close', stage: closeStage(page) },
-    { name: 'Watch', stage: watchStage(page) },
-  ];
-  return stages.filter((s) => s.stage.tone !== 'grey');
+export function laterStages(stages: readonly WorkStage[]): WorkStage[] {
+  return stages.filter((s) => LATER.has(s.name) && s.stage.tone !== 'grey');
 }

@@ -18,7 +18,6 @@ import {
   type PrReading,
   type WorkStage,
 } from '../view/workPage.js';
-import { buildGoalPage } from '../view/goalPage.js';
 import { goalInChat, inChat } from '../view/needsYouPage.js';
 import { pickupWord } from '../view/pickup.js';
 import { BareButton } from '../components/button.js';
@@ -134,7 +133,7 @@ function GoalRow({ work, view, actions }: Props & { work: GoalWork }): JSX.Eleme
       {open && planned && <PartsLine work={work} talk={talk} />}
       <PrsLine prs={loose} talk={talk} />
       <HeldLine holds={holds} />
-      {open && <LaterLine work={work} view={view} />}
+      {open && <LaterLine work={work} />}
       {open && !planned && work.prs.length > 0 && (
         <div className="cn-wk-inset">
           <PrCards cards={work.prs.map((pr) => ({ pr, goal: false }))} view={view} actions={actions} />
@@ -176,14 +175,16 @@ function RowHead({ work, open, view, actions }: Props & { work: GoalWork; open: 
   );
 }
 
-/** The goal's stages as one bar; the first stage not done is where the goal is. */
 function StageBar({ stages }: { stages: readonly WorkStage[] }): JSX.Element | null {
   if (stages.length === 0) return null;
-  const here = stages.findIndex((s) => s.stage.tone !== 'green');
+  const here =
+    stages.find((s) => s.name === 'Close')?.stage.tone === 'green'
+      ? -1
+      : stages.findIndex((s) => s.stage.tone !== 'green');
   return (
     <div className="cn-wk-bar">
       {stages.map(({ name, stage, count }, i) => {
-        const fill = stage.tone === 'grey' ? 0 : (stage.done ?? 100);
+        const fill = stage.done ?? (stage.tone === 'grey' ? 0 : 100);
         return (
           <div
             key={name}
@@ -342,9 +343,8 @@ function HeldLine({ holds }: { holds: readonly Hold[] }): JSX.Element | null {
   );
 }
 
-function LaterLine({ work, view }: { work: GoalWork; view: CockpitView }): JSX.Element | null {
-  const page = work.issue === undefined ? null : buildGoalPage(view.state, work.ref, view.needsYou, null);
-  const stages = page === null ? [] : laterStages(page);
+function LaterLine({ work }: { work: GoalWork }): JSX.Element | null {
+  const stages = laterStages(work.stages);
   if (stages.length === 0) return null;
   return (
     <Facts label="Later">

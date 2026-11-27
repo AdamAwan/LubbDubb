@@ -15,7 +15,6 @@ import {
   type GoalWork,
 } from '../web/src/view/workPage.js';
 import { goalInChat, inChat } from '../web/src/view/needsYouPage.js';
-import { buildGoalPage } from '../web/src/view/goalPage.js';
 import { OVERVIEW_IN_FLIGHT, WORK_IN_FLIGHT } from '../web/src/view/pickup.js';
 
 type State = CockpitView['state'];
@@ -193,17 +192,13 @@ test('work parts: each part with its pull request, a mark and a tone', () => {
   );
 });
 
-test('later stages: only the stages with something to say', () => {
-  const v = view();
-  const page = buildGoalPage(v.state, 'issue:395', v.needsYou, null);
-  assert.ok(page);
-  const stages = laterStages(page);
+test('later stages: only the stages past Build with something to say, in order', () => {
+  const stages = laterStages(goal(goalsOfWork(view()), 'issue:395').stages);
   assert.ok(stages.length > 0);
   assert.ok(stages.every((s) => s.stage.tone !== 'grey'));
   assert.deepEqual(
     stages.map((s) => s.name),
     ['Validate', 'Close', 'Watch'].filter((n) => stages.some((s) => s.name === n)),
-    'in their order on the goal',
   );
 });
 
