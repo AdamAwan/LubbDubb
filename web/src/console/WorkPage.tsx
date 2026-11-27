@@ -3,25 +3,24 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { ListenItem, OpenPullRequest } from '../types.js';
 import type { NeedRow } from '../view/needsYou.js';
-import { buildGoalTrack } from '../view/goalStages.js';
 import { plural } from '../view/plural.js';
 import {
   byFeature,
-  goalInChat,
   goalsOfWork,
-  holdsOf,
-  inChat,
   inFlight,
   laterStages,
   NO_GOAL,
   prReading,
   strayPrs,
   workParts,
-  type FeatureGroup,
+  workTrack,
   type GoalWork,
   type Hold,
 } from '../view/workPage.js';
+import { goalInChat, inChat } from '../view/needsYouPage.js';
+import { PICKUP_WORD } from '../view/pickup.js';
 import { BareButton } from '../components/button.js';
+import { FoldToggle } from '../components/collapsible.js';
 import { ControlButton } from '../components/controls.js';
 import { Icon } from '../components/icons.js';
 import { InstructionModal } from '../components/InstructionModal.js';
@@ -30,8 +29,7 @@ import { Track } from '../components/track.js';
 import { fmtUsd } from '../components/util.js';
 import { AskCard } from './askCard.js';
 import { agentLamp } from './fleetRows.js';
-import { ClaudeButton, ListenerStatus, SentLine } from './NeedsYouPage.js';
-import { PICKUP_WORD } from './Overview.js';
+import { ClaudeButton, ListenerStatus, SentLine } from './listenControls.js';
 import { PrCards } from './PrCards.js';
 
 // → docs/spec/17-cockpit.md#the-work-tab
@@ -59,92 +57,89 @@ export function WorkPage({ view, actions }: Props): JSX.Element {
         </span>
         <ListenerStatus asks={view.needsYou} listener={view.state.listener} folder={view.state.config.desktopFolder} />
       </header>
-      {features.map((feature) => (
-        <Feature key={feature.number ?? NO_GOAL} feature={feature} headed={headed} view={view} actions={actions} />
-      ))}
-      {later.length > 0 && <NotInFlight goals={later} view={view} actions={actions} />}
+      {features.map((feature) => {
+        const { number } = feature;
+        const folded = number !== null && view.collapsedFeatures.has(number);
+        return (
+          <GoalSection
+            key={number ?? NO_GOAL}
+            title={headed ? (feature.title ?? 'No feature') : null}
+            goals={feature.goals}
+            open={!folded}
+            onToggle={number === null ? null : (open) => actions.collapseFeature(number, !open)}
+            view={view}
+            actions={actions}
+          />
+        );
+      })}
+      {later.length > 0 && (
+        <GoalSection
+          title="Not in flight — appraising, queued or delivered"
+          goals={later}
+          open={view.workLater}
+          onToggle={(open) => actions.setWork({ workLater: open })}
+          view={view}
+          actions={actions}
+        />
+      )}
     </div>
   );
 }
 
-function Feature({ feature, headed, view, actions }: Props & { feature: FeatureGroup; headed: boolean }): JSX.Element {
-  const { number } = feature;
-  const folded = number !== null && view.collapsedFeatures.has(number);
-  return (
-    <section className="cn-wk-feature">
-      {headed && (
-        <FoldHead
-          title={feature.title ?? 'No feature'}
-          count={feature.goals.length}
-          folded={folded}
-          onToggle={number === null ? null : () => actions.collapseFeature(number, !folded)}
-        />
-      )}
-      {!folded && feature.goals.map((work) => <GoalRow key={work.ref} work={work} view={view} actions={actions} />)}
-    </section>
-  );
-}
-
-function NotInFlight({ goals, view, actions }: Props & { goals: readonly GoalWork[] }): JSX.Element {
-  const open = view.workLater;
-  return (
-    <section className="cn-wk-feature">
-      <FoldHead
-        title="Not in flight — appraising, queued or delivered"
-        count={goals.length}
-        folded={!open}
-        onToggle={() => actions.setWork({ workLater: !open })}
-      />
-      {open && goals.map((work) => <GoalRow key={work.ref} work={work} view={view} actions={actions} />)}
-    </section>
-  );
-}
-
-function FoldHead({
+/** A run of goal rows under one heading: a Feature, or the goals not in flight. No title draws no heading. */
+function GoalSection({
   title,
-  count,
-  folded,
+  goals,
+  open,
   onToggle,
-}: {
-  title: string;
-  count: number;
-  folded: boolean;
-  onToggle: (() => void) | null;
+  view,
+  actions,
+}: Props & {
+  title: string | null;
+  goals: readonly GoalWork[];
+  open: boolean;
+  onToggle: ((open: boolean) => void) | null;
 }): JSX.Element {
-  const body = (
+  const label = (
     <>
-      {onToggle !== null && <span aria-hidden="true">{folded ? '▸' : '▾'}</span>}
       <b>{title}</b>
-      <em>{plural(count, 'goal')}</em>
+      <em>{plural(goals.length, 'goal')}</em>
     </>
   );
-  if (onToggle === null) return <div className="cn-wk-fhead">{body}</div>;
   return (
-    <BareButton
-      usage={folded ? 'work.expand' : 'work.close'}
-      className="cn-wk-fhead"
-      onClick={onToggle}
-      aria-expanded={!folded}
-    >
-      {body}
-    </BareButton>
+    <section className="cn-wk-feature">
+      {title !== null &&
+        (onToggle === null ? (
+          <div className="cn-wk-fhead">{label}</div>
+        ) : (
+          <FoldToggle
+            subject="work"
+            className="cn-wk-fhead"
+            open={open}
+            onToggle={onToggle}
+            label={label}
+            hint={false}
+          />
+        ))}
+      {open && goals.map((work) => <GoalRow key={work.ref} work={work} view={view} actions={actions} />)}
+    </section>
   );
 }
 
 function GoalRow({ work, view, actions }: Props & { work: GoalWork }): JSX.Element {
   const open = view.workRow === work.ref;
   const priority = work.issue?.priority != null;
-  const planned = work.page !== null && work.page.parts.length > 0;
-  const holds = holdsOf(work, view).filter((h) => !open || (h.tone === 'hold' && !h.part));
+  const planned = work.parts.length > 0;
+  const holds = work.holds.filter((h) => !open || (h.tone === 'hold' && !h.part));
   const talk: Talk = (pr) => <PrTalk pr={pr} open={open} view={view} actions={actions} />;
   return (
     <div className={`cn-wk-row${priority ? ' cn-wk-priority' : ''}${open ? ' cn-wk-open' : ''}`}>
       <RowHead work={work} open={open} view={view} actions={actions} />
       {open && work.asks.length > 0 && <NeedsYou asks={work.asks} view={view} actions={actions} />}
-      {open && planned && work.page !== null ? (
+      {open && planned ? (
         <>
           <PartsLine work={work} talk={talk} />
-          <PrsLine prs={strayPrs(work.page, work.prs)} talk={talk} />
+          <PrsLine prs={strayPrs(work.parts, work.prs)} talk={talk} />
         </>
       ) : (
         <PrsLine prs={work.prs} talk={talk} />
@@ -162,7 +157,7 @@ function GoalRow({ work, view, actions }: Props & { work: GoalWork }): JSX.Eleme
 
 function RowHead({ work, open, view, actions }: Props & { work: GoalWork; open: boolean }): JSX.Element {
   const { issue } = work;
-  const track = work.page === null ? null : buildGoalTrack(work.page.parts);
+  const track = work.parts.length === 0 ? null : workTrack(work.parts);
   return (
     <div className="cn-wk-line">
       <BareButton
@@ -190,7 +185,7 @@ function RowHead({ work, open, view, actions }: Props & { work: GoalWork; open: 
           {work.agents.length}
         </span>
       )}
-      {goalInChat(view, work) && (
+      {goalInChat(view.state.listener, work) && (
         <span className="cn-wk-chat" title="Something of this goal's is in your Claude chat">
           <Icon name="chat" /> in Claude
         </span>
@@ -266,13 +261,13 @@ function Steer({
 
 function PrTalk({ pr, open, view, actions }: Props & { pr: OpenPullRequest; open: boolean }): JSX.Element | null {
   const item: ListenItem = { kind: 'pr', number: pr.number };
-  if (inChat(view, item))
+  if (inChat(view.state.listener, item))
     return (
       <span className="cn-wk-chat" title="In your Claude chat">
         <Icon name="chat" />
       </span>
     );
-  if (!open || pr.attention.status !== 'you') return null;
+  if (!open || prReading(pr).tone !== 'ask') return null;
   return <ClaudeButton item={item} view={view} actions={actions} compact />;
 }
 
@@ -303,10 +298,9 @@ function PrsLine({ prs, talk }: { prs: readonly OpenPullRequest[]; talk: Talk })
 }
 
 function PartsLine({ work, talk }: { work: GoalWork; talk: Talk }): JSX.Element | null {
-  if (work.page === null) return null;
   return (
     <Facts label="Parts">
-      {workParts(work.page, work.prs).map(({ part, pr, mark, tone }, i) => (
+      {workParts(work.parts, work.prs).map(({ part, pr, mark, tone }, i) => (
         <span key={part.id} className={`cn-wk-item cn-wk-part cn-wk-${tone}`}>
           {i > 0 && <i className="cn-wk-arrow">→</i>}
           {mark !== '' && <b>{mark}</b>}

@@ -3,6 +3,11 @@ import { issueOriginId } from '../issueOrigins.js';
 
 // → docs/spec/17-cockpit.md#the-setting-beside-the-act
 
+/** The parts a plan still has: every one but those retired when the plan was redrawn. */
+export function liveParts(parts: readonly PlanPart[]): PlanPart[] {
+  return parts.filter((p) => p.status !== 'retired');
+}
+
 export type PartGroup = 'merged' | 'now' | 'held' | 'waiting';
 
 /** Where a part sits on a goal's plan, read the same by the goal page, Focus mode and `ask_next`'s card. A retired part is on none of them. */

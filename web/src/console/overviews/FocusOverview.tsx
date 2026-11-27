@@ -12,7 +12,7 @@ import { holdingLabel, subjectLabel } from '../QueueRail.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../../view/askKinds.js';
 import { needBody } from '../NeedsBand.js';
 import { openGoalForAsk } from '../jump.js';
-import { PICKUP_WORD } from '../Overview.js';
+import { PICKUP_WORD } from '../../view/pickup.js';
 import { waitedFor } from '../../components/util.js';
 import { PetFloor, openPets } from '../Vivarium.js';
 import { OverviewSwitch } from './OverviewSwitch.js';

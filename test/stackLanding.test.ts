@@ -522,3 +522,15 @@ test('an intent over one path of a fork is not drawn against the other', () => {
 
   assert.equal(landingFor([2], [landing], new Set([2, 3]))?.id, landing.id, '"landing 1 of 2" survives the merge');
 });
+
+test('blockedPr names the first rung that holds the stack, as a number, and nothing when none does', () => {
+  const held = landingReadiness([
+    rung(1, 'main'),
+    rung(2, 'issue/12/r1', { approved: false }),
+    rung(3, 'issue/12/r2', { ciStatus: 'failing' }),
+  ]);
+  assert.equal(held.blockedPr, 2, 'the bottom-most unclear rung, not the last');
+  assert.equal(held.blockedBy, '#2 not approved');
+  assert.equal(landingReadiness([]).blockedPr, null);
+  assert.equal(landingReadiness([rung(1, 'main')]).blockedPr, null);
+});

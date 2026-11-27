@@ -1,5 +1,6 @@
 import { Fragment, type JSX, type ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
+import { plural } from '../view/plural.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { OpenPullRequest, PrOnYouReason } from '../types.js';
 import { buildGoalPage } from '../view/goalPage.js';
@@ -127,6 +128,7 @@ export function PrCards({
   ghosts?: boolean;
 }): JSX.Element {
   let band: string | undefined;
+  const feet = new Set<string>();
   return (
     <div className="cn-prcards cn-plainrefs">
       {stackItems(cards, view.state.stacks ?? [], ghosts).map((item) => {
@@ -139,7 +141,7 @@ export function PrCards({
             {item.kind === 'card' ? (
               <PrCardWithBelow card={item.card} view={view} actions={actions} />
             ) : (
-              <StackBlock item={item} view={view} actions={actions} />
+              <StackBlock item={item} view={view} actions={actions} footAbove={footDrawn(feet, item)} />
             )}
           </Fragment>
         );
@@ -155,14 +157,26 @@ function rungLabel(stack: Stack, rung: StackRung): string {
     : `${String(rung.partSeq)}/${String(stack.partTotal)}`;
 }
 
+/** Whether a fork's other block already drew this merged foot — marks it drawn when not. */
+function footDrawn(feet: Set<string>, item: Extract<PrItem, { kind: 'stack' }>): boolean {
+  const { stack } = item;
+  if (stack.mergedBelow.length === 0) return false;
+  const key = `${item.group?.key ?? ''}|${stack.planId ?? ''}|${stack.mergedBelow.map((p) => p.seq).join(',')}`;
+  if (feet.has(key)) return true;
+  feet.add(key);
+  return false;
+}
+
 function StackBlock({
   item,
   view,
   actions,
+  footAbove,
 }: {
   item: Extract<PrItem, { kind: 'stack' }>;
   view: CockpitView;
   actions: CockpitActions;
+  footAbove: boolean;
 }): JSX.Element {
   const { stack } = item;
   const open = item.rungs.length;
@@ -213,27 +227,47 @@ function StackBlock({
             </li>
           );
         })}
-        <StackFoot merged={stack.mergedBelow} base={base} />
+        <StackFoot merged={stack.mergedBelow} base={base} above={footAbove} />
       </ol>
     </div>
   );
 }
 
-function StackFoot({ merged, base }: { merged: Stack['mergedBelow']; base: string }): JSX.Element {
+function StackFoot({
+  merged,
+  base,
+  above,
+}: {
+  merged: Stack['mergedBelow'];
+  base: string;
+  /** The fork's other block drew these merged parts; this one names them in one line. */
+  above: boolean;
+}): JSX.Element {
   return (
     <>
-      {merged.map((part) => (
-        <li key={`merged-${String(part.seq)}`} className="cn-prstack-rung cn-prstack-ghost cn-prstack-merged">
-          <span className="cn-prstack-pos" aria-label={`part ${String(part.seq)}, merged`}>
+      {above && (
+        <li className="cn-prstack-rung cn-prstack-ghost cn-prstack-merged">
+          <span className="cn-prstack-pos" aria-hidden>
             ✓
           </span>
           <span className="cn-prstack-other">
-            {part.prNumber !== null && <Ref to={`pr:${part.prNumber}`} />}
-            <span className="cn-prstack-title">{part.title}</span>
-            <i>merged</i>
+            <i>{plural(merged.length, 'merged part')}, as above</i>
           </span>
         </li>
-      ))}
+      )}
+      {!above &&
+        merged.map((part) => (
+          <li key={`merged-${String(part.seq)}`} className="cn-prstack-rung cn-prstack-ghost cn-prstack-merged">
+            <span className="cn-prstack-pos" aria-label={`part ${String(part.seq)}, merged`}>
+              ✓
+            </span>
+            <span className="cn-prstack-other">
+              {part.prNumber !== null && <Ref to={`pr:${part.prNumber}`} />}
+              <span className="cn-prstack-title">{part.title}</span>
+              <i>merged</i>
+            </span>
+          </li>
+        ))}
       <li className="cn-prstack-rung cn-prstack-base">
         <span className="cn-prstack-pos" aria-hidden>
           ↓

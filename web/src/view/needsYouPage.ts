@@ -1,6 +1,6 @@
 import type { CockpitView } from './viewModel.js';
 
-export { prOnYouReasons, sameItem } from '../../../src/wire.js';
+export { goalInChat, inChat, prOnYouReasons, sameItem } from '../../../src/wire.js';
 
 // → docs/spec/44-needs-you.md#where-it-sits
 

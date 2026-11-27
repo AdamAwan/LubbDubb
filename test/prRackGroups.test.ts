@@ -134,7 +134,7 @@ test('the rack draws no assignment band and no marks when nothing is anybody els
   assert.ok(card.includes('cn-prcard'), 'and the cards themselves are still drawn');
 });
 
-test('the fleet’s pull requests are grouped under their goal, a stack in base-first order', () => {
+test('the fleet’s pull requests are grouped under their goal, a stack drawn top first', () => {
   const state = buildFixtureState();
   const payment = state.world.pullRequests.find((pr) => pr.branch === 'issue/390/payment');
   const refunds = state.world.pullRequests.find((pr) => pr.branch === 'issue/390/refunds');
@@ -148,14 +148,14 @@ test('the fleet’s pull requests are grouped under their goal, a stack in base-
   assert.ok(goal, 'the fixtures must carry goal #390');
   const head = card.indexOf(`<span class="cn-group-t">${goal.title}</span>`);
   assert.ok(head > 0, 'no heading names goal #390');
-  const bottom = card.indexOf(prHeadline(payment.title));
-  assert.ok(bottom > head, 'the stack is not drawn under its goal');
   const top = card.indexOf(prHeadline(refunds.title));
-  assert.ok(top > bottom, 'the stack is not drawn base first');
-  assert.ok(card.slice(head, bottom).includes('cn-prstack'), 'the stack is not drawn as one block');
+  assert.ok(top > head, 'the stack is not drawn under its goal');
+  const bottom = card.indexOf(prHeadline(payment.title));
+  assert.ok(bottom > top, 'the stack is not drawn top first, base at the bottom');
+  assert.ok(card.slice(head, top).includes('cn-prstack'), 'the stack is not drawn as one block');
   const none = card.indexOf('No goal');
   assert.ok(
-    none > top && card.indexOf(prHeadline(loose.title)) > none,
+    none > bottom && card.indexOf(prHeadline(loose.title)) > none,
     'a PR with no goal is not drawn under "No goal", last',
   );
 });

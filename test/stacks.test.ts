@@ -340,3 +340,56 @@ test('a fork partway up a chain keeps the shared rungs on both paths', () => {
     ['stack:1:3[1>2>3]', 'stack:1:4[1>2>4]'],
   );
 });
+
+test('a rung carries its part number, the stack its plan’s live part count and the merged parts it is built on', () => {
+  const stacks = buildStacks(
+    [
+      pr({ number: 52, branch: 'issue/190/api', baseBranch: 'main' }),
+      pr({ number: 53, branch: 'issue/190/ui', baseBranch: 'issue/190/api' }),
+    ],
+    [plan({ id: 'p1', originRef: 'issue:190' })],
+    [
+      part({ planId: 'p1', slug: 'schema', seq: 1, status: 'merged', prNumber: 50 }),
+      part({ planId: 'p1', slug: 'store', seq: 2, status: 'merged', prNumber: 51, dependsOn: ['schema'] }),
+      part({ planId: 'p1', slug: 'docs', seq: 3, status: 'merged', prNumber: 49 }),
+      part({ planId: 'p1', slug: 'api', seq: 4, prNumber: 52, dependsOn: ['store'] }),
+      part({ planId: 'p1', slug: 'ui', seq: 5, prNumber: 53, dependsOn: ['api'] }),
+      part({ planId: 'p1', slug: 'dropped', seq: 6, status: 'retired' }),
+    ],
+    'main',
+  );
+  const stack = stacks[0];
+  assert.ok(stack);
+  assert.deepEqual(
+    stack.rungs.map((r) => [r.prNumber, r.partSeq]),
+    [
+      [52, 4],
+      [53, 5],
+    ],
+  );
+  assert.equal(stack.partTotal, 5, 'a retired part is not counted');
+  assert.deepEqual(
+    stack.mergedBelow,
+    [
+      { seq: 2, title: 'store', prNumber: 51 },
+      { seq: 1, title: 'schema', prNumber: 50 },
+    ],
+    'walked through dependsOn, top first — "docs" merged on a parallel branch and is not under this stack',
+  );
+});
+
+test('a hand-made stack has no part numbers and nothing merged below it', () => {
+  const [stack] = buildStacks(
+    [pr({ number: 60, branch: 'a', baseBranch: 'main' }), pr({ number: 61, branch: 'b', baseBranch: 'a' })],
+    [],
+    [],
+    'main',
+  );
+  assert.ok(stack);
+  assert.deepEqual(
+    stack.rungs.map((r) => r.partSeq),
+    [null, null],
+  );
+  assert.equal(stack.partTotal, null);
+  assert.deepEqual(stack.mergedBelow, []);
+});

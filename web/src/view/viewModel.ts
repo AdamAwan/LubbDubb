@@ -282,6 +282,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     ...placeView(input),
     ...ticketsView(input),
     ...featuresView(input),
+    ...workView(input),
 
     selectedAgent: selectedAgentOf(input),
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,
@@ -340,6 +341,10 @@ function ticketsView(input: ViewInputs) {
   } satisfies Partial<CockpitView>;
 }
 
+function workView(input: ViewInputs) {
+  return { workRow: input.workRow ?? null, workLater: input.workLater ?? false };
+}
+
 function featuresView(input: ViewInputs) {
   return {
     featureCard: input.featureCard ?? null,
@@ -347,8 +352,6 @@ function featuresView(input: ViewInputs) {
     featureDensity: input.featureDensity ?? 'auto',
     featureClosed: input.featureClosed ?? false,
     petsBlended: input.petsBlended ?? false,
-    workRow: input.workRow ?? null,
-    workLater: input.workLater ?? false,
     errorsBand: input.errorsBand ?? null,
     errorsSteady: input.errorsSteady ?? false,
     errorsSort: input.errorsSort ?? 'state',

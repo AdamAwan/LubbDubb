@@ -1,5 +1,5 @@
 import { issueOriginNumber } from '../issueOrigins.js';
-import { liveParts } from '../plans/parts.js';
+import { bySlug, dependenciesOf, liveParts } from '../plans/parts.js';
 import type { Plan, PlanPart, PullRequest } from '../types.js';
 
 // → docs/spec/07-pull-requests.md
@@ -121,17 +121,16 @@ function livePartsOf(parts: PlanPart[], planId: string): PlanPart[] {
 }
 
 function mergedBelow(parts: PlanPart[], bottom: PlanPart | undefined): MergedBelow[] {
-  const bySlug = new Map(parts.map((p) => [p.slug, p]));
+  const index = bySlug(parts);
   const found = new Map<string, PlanPart>();
-  const walk = (slugs: readonly string[]): void => {
-    for (const slug of slugs) {
-      const part = bySlug.get(slug);
-      if (part === undefined || part.status !== 'merged' || found.has(slug)) continue;
-      found.set(slug, part);
-      walk(part.dependsOn);
+  const walk = (part: PlanPart): void => {
+    for (const dep of dependenciesOf(part, index)) {
+      if (dep.status !== 'merged' || found.has(dep.slug)) continue;
+      found.set(dep.slug, dep);
+      walk(dep);
     }
   };
-  walk(bottom?.dependsOn ?? []);
+  if (bottom !== undefined) walk(bottom);
   return [...found.values()]
     .sort((a, b) => b.seq - a.seq)
     .map((p) => ({ seq: p.seq, title: p.title, prNumber: p.prNumber }));

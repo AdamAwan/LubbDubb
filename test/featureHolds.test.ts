@@ -289,8 +289,9 @@ test('goalPullRequests puts the stack bottom rung first, then the rest, then clo
   assert.deepEqual(
     rows.map((r) => [r.pr.number, r.open, r.position, r.stackSize]),
     [
-      [413, true, 1, 2],
-      [414, true, 2, 2],
+      [413, true, 1, 3],
+      [414, true, 2, 3],
+      [431, true, 3, 3],
       [406, false, null, null],
       [397, false, null, null],
     ],

@@ -8113,6 +8113,14 @@ button.cn-grow {
   color: var(--cn-fg);
   text-align: left;
 }
+.cn .cn-wk-fhead {
+  width: 100%;
+}
+.cn-wk-fhead .fold-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
 .cn-wk-fhead em {
   font-style: normal;
   font-size: 11px;
