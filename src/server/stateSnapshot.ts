@@ -313,6 +313,9 @@ function goalsSection(
   };
 }
 
+/** A landing already under way, with no stack left to read: nothing to offer, nothing holding it. */
+const STANDING = { offer: false, blockedBy: null, blockedPr: null } as const;
+
 function stackLandingViews(
   r: Reads,
   prByNumber: Map<number, PullRequest>,
@@ -338,9 +341,7 @@ function stackLandingViews(
       .filter((l) => l.status === 'standing' && !l.rungs.some((n) => stackRungPrs.has(n)))
       .map((landing) => ({
         ref: landing.ref,
-        offer: false,
-        blockedBy: null,
-        blockedPr: null,
+        ...STANDING,
         landing,
         landed: landedCount(landing, { ...world, merged: mergedPrs() }),
       })),

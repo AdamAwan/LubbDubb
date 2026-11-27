@@ -16,17 +16,24 @@ function askOpen(row: NeedRow, actions: CockpitActions): Destination | null {
   return row.opens === null ? null : openRow(row, actions);
 }
 
-/** The ask card's three parts: what it is about, the ask, and a note only where it adds something. */
+/**
+ * The ask card's parts: what it is about, the ask, a note only where it adds something, and the
+ * reference it carries. Under its goal's own heading (`inGoal`) the goal is already said, so the
+ * ask leads and the goal's name and reference are left off.
+ */
 function askWords(
   row: NeedRow,
   view: CockpitView,
   inGoal: boolean,
-): { about: string | null; ask: string; why?: string } {
+): { about: string | null; ask: string; why?: string; ref: string | null } {
   const goal = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
   const about = inGoal && goal !== undefined ? null : (goal?.title ?? row.agentLabel);
   const ask = row.summary ?? row.title;
+  const ref = inGoal ? null : askRef(row);
   const note = row.note ?? row.check?.remedy;
-  return note === undefined || (about !== null && note.includes(about)) ? { about, ask } : { about, ask, why: note };
+  return note === undefined || (about !== null && note.includes(about))
+    ? { about, ask, ref }
+    : { about, ask, why: note, ref };
 }
 
 // → docs/spec/44-needs-you.md#the-ask-card
@@ -47,8 +54,7 @@ export function AskCard({
   actions: CockpitActions;
   inGoal?: boolean;
 }): JSX.Element {
-  const ref = inGoal ? null : askRef(row);
-  const { about, ask, why } = askWords(row, view, inGoal);
+  const { about, ask, why, ref } = askWords(row, view, inGoal);
   const body = expanded ? needBody(row, view, actions) : null;
   const open = body === null ? askOpen(row, actions) : null;
   return (

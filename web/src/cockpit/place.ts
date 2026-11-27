@@ -64,6 +64,10 @@ export interface Place {
   featurePrs: FeaturePrFilter;
   /** Whether the Pets page draws the pets that have been blended. */
   petsBlended: boolean;
+  /** The goal row the Work tab has open, as its goal ref (`none` for the ticketless row), or null. → 17-cockpit.md#the-work-tab */
+  workRow: string | null;
+  /** Whether the Work tab draws the goals not in flight, which it folds by default. */
+  workLater: boolean;
   /** Which shape the overview draws in. */
   overview: OverviewShape;
   /** Which band the Errors tab draws, or null for the first. → 39-app-errors.md#in-the-cockpit */
@@ -132,7 +136,7 @@ const FEATURE_PRS: readonly FeaturePrFilter[] = ['open', 'done', 'all'];
 const TABS: readonly ConsoleTab[] = [
   'overview',
   'needs',
-  'goals',
+  'work',
   'tickets',
   'features',
   'bots',
@@ -144,7 +148,7 @@ const TABS: readonly ConsoleTab[] = [
   'config',
 ];
 
-const HOME_TABS: readonly ConsoleTab[] = ['overview', 'needs', 'goals', 'tickets', 'features'];
+const HOME_TABS: readonly ConsoleTab[] = ['overview', 'needs', 'work', 'tickets', 'features'];
 
 const DEFAULT_HOME: ConsoleTab = 'overview';
 
@@ -225,6 +229,8 @@ export const NOWHERE: Place = {
   featureClosed: false,
   featurePrs: 'open',
   petsBlended: false,
+  workRow: null,
+  workLater: false,
   overview: 'cards',
   featureMode: 'board',
   errorsBand: null,
@@ -368,6 +374,8 @@ function readFeatureBoard(
   | 'featureClosed'
   | 'featurePrs'
   | 'petsBlended'
+  | 'workRow'
+  | 'workLater'
   | 'overview'
   | 'featureMode'
 > {
@@ -378,6 +386,8 @@ function readFeatureBoard(
     featureClosed: query.has('closed'),
     featurePrs: FEATURE_PRS.find((f) => f === param(query, 'prs')) ?? 'open',
     petsBlended: query.has('blended'),
+    workRow: param(query, 'row'),
+    workLater: query.has('later'),
     overview: readOverview(param(query, 'overview')),
     featureMode: FEATURE_MODES.find((m) => m === param(query, 'fmode')) ?? 'board',
   };
@@ -551,6 +561,8 @@ function writeFeatureBoard(query: URLSearchParams, place: Place): void {
   if (place.featureClosed) query.set('closed', '1');
   if (place.featurePrs !== 'open') query.set('prs', place.featurePrs);
   if (place.petsBlended) query.set('blended', '1');
+  if (place.workRow !== null) query.set('row', place.workRow);
+  if (place.workLater) query.set('later', '1');
   if (place.overview !== 'cards') query.set('overview', place.overview);
   if (place.featureMode !== 'board') query.set('fmode', place.featureMode);
 }

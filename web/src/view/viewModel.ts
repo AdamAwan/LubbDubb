@@ -83,6 +83,8 @@ export interface CockpitView {
   featureDensity: FeatureDensity;
   featureClosed: boolean;
   petsBlended: boolean;
+  workRow: string | null;
+  workLater: boolean;
   errorsBand: string | null;
   errorsSteady: boolean;
   errorsSort: ErrorsSort;
@@ -202,6 +204,8 @@ interface ViewInputs {
   featureDensity?: FeatureDensity;
   featureClosed?: boolean;
   petsBlended?: boolean;
+  workRow?: string | null;
+  workLater?: boolean;
   errorsBand?: string | null;
   errorsSteady?: boolean;
   errorsSort?: ErrorsSort;
@@ -343,6 +347,8 @@ function featuresView(input: ViewInputs) {
     featureDensity: input.featureDensity ?? 'auto',
     featureClosed: input.featureClosed ?? false,
     petsBlended: input.petsBlended ?? false,
+    workRow: input.workRow ?? null,
+    workLater: input.workLater ?? false,
     errorsBand: input.errorsBand ?? null,
     errorsSteady: input.errorsSteady ?? false,
     errorsSort: input.errorsSort ?? 'state',

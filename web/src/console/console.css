@@ -7941,19 +7941,19 @@ button.cn-grow {
 
 /* Something's wrong — the goal's problem strip and the Needs you problem card.
    → docs/spec/17-cockpit.md#something-wrong-on-the-goal */
-.cn-gprob {
+.cn-wkrob {
   margin: 8px 0 4px;
   border: 1px solid var(--cn-red-line);
   background: var(--cn-red-bg);
   border-radius: var(--cn-r);
   overflow: hidden;
 }
-.cn-gprob-guess {
+.cn-wkrob-guess {
   border-color: var(--cn-amber-line);
   border-style: dashed;
   background: var(--cn-amber-bg);
 }
-.cn-gprob-head {
+.cn-wkrob-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -7961,17 +7961,17 @@ button.cn-grow {
   padding: 8px 12px;
   color: var(--cn-red-ink);
 }
-.cn-gprob-guess .cn-gprob-head {
+.cn-wkrob-guess .cn-wkrob-head {
   color: var(--cn-amber-ink);
 }
-.cn-gprob-handled {
+.cn-wkrob-handled {
   color: var(--cn-fg-faint);
 }
-.cn-gprob-open {
+.cn-wkrob-open {
   margin-left: auto;
   font-size: 12.5px;
 }
-.cn-gprob-calm {
+.cn-wkrob-calm {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -7990,7 +7990,7 @@ button.cn-grow {
   padding: 8px 12px;
   border-top: 1px solid var(--cn-red-line);
 }
-.cn-gprob-guess .cn-prob-row {
+.cn-wkrob-guess .cn-prob-row {
   border-top-color: var(--cn-amber-line);
 }
 .cn-prob-card {
@@ -8088,14 +8088,14 @@ button.cn-grow {
   color: var(--cn-fg-dim);
 }
 
-/* ---------- Work: feature headings, a row per goal in flight ---------- */
-.cn-gp {
+/* ---------- Work: Feature headings, a row per goal in flight ---------- */
+.cn-wk {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 12px 16px;
 }
-.cn-gp-feature {
+.cn-wk-feature {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--cn-line);
@@ -8103,7 +8103,7 @@ button.cn-grow {
   background: var(--cn-panel);
   overflow: hidden;
 }
-.cn .cn-gp-fhead {
+.cn .cn-wk-fhead {
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -8113,39 +8113,39 @@ button.cn-grow {
   color: var(--cn-fg);
   text-align: left;
 }
-.cn-gp-fhead em {
+.cn-wk-fhead em {
   font-style: normal;
   font-size: 11px;
   color: var(--cn-fg-faint);
 }
-.cn-gp-row {
+.cn-wk-row {
   display: flex;
   flex-direction: column;
   gap: 3px;
   padding: 8px 12px 8px 10px;
   border-left: 2px solid transparent;
 }
-.cn-gp-row + .cn-gp-row {
+.cn-wk-row + .cn-wk-row {
   border-top: 1px solid var(--cn-line-soft);
 }
-.cn-gp-priority {
+.cn-wk-priority {
   border-left-color: var(--cn-amber);
 }
-.cn-gp-open {
+.cn-wk-open {
   background: var(--cn-hover);
 }
-.cn-gp-line {
+.cn-wk-line {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
-.cn .cn-gp-fold {
+.cn .cn-wk-fold {
   width: 16px;
   padding: 0;
   color: var(--cn-fg-faint);
 }
-.cn .cn-gp-title {
+.cn .cn-wk-title {
   min-width: 0;
   padding: 0;
   overflow: hidden;
@@ -8156,7 +8156,7 @@ button.cn-grow {
   color: var(--cn-fg);
   text-align: left;
 }
-.cn-gp-stage {
+.cn-wk-stage {
   margin-left: auto;
   font: 600 10.5px var(--cn-mono);
   letter-spacing: 0.06em;
@@ -8164,8 +8164,7 @@ button.cn-grow {
   color: var(--cn-fg-dim);
   white-space: nowrap;
 }
-.cn-gp-track,
-.cn-gp-onit {
+.cn-wk-meta {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -8173,14 +8172,14 @@ button.cn-grow {
   color: var(--cn-fg-faint);
   white-space: nowrap;
 }
-.cn-gp-facts {
+.cn-wk-facts {
   display: flex;
   align-items: baseline;
   gap: 10px;
   padding-left: 24px;
   font-size: 12px;
 }
-.cn-gp-label {
+.cn-wk-label {
   flex: none;
   width: 34px;
   font: 600 10.5px var(--cn-mono);
@@ -8188,87 +8187,46 @@ button.cn-grow {
   text-transform: uppercase;
   color: var(--cn-fg-faint);
 }
-.cn-gp-items {
+.cn-wk-items {
   display: flex;
   flex-wrap: wrap;
   gap: 2px 14px;
   min-width: 0;
 }
-.cn-gp-item {
+.cn-wk-item {
   color: var(--cn-fg-dim);
 }
-.cn-gp-ask {
+.cn-wk-ask {
   color: var(--cn-red-ink);
 }
-.cn-gp-hold {
+.cn-wk-hold {
   color: var(--cn-amber-ink);
 }
-.cn-gp-cols {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px;
-  margin-top: 8px;
-  padding-left: 24px;
-}
-@media (max-width: 900px) {
-  .cn-gp-cols {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-.cn-gp-col {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.cn-gp-col h4 {
-  margin: 4px 0 0;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--cn-fg-faint);
-}
-.cn .cn-gp-agent {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  font-size: 12.5px;
-  color: var(--cn-fg-dim);
-  text-align: left;
-}
-.cn-gp-agent em {
-  margin-left: auto;
-  font-style: normal;
-  font-size: 11px;
-  color: var(--cn-fg-faint);
-}
-.cn-gp-needs {
+.cn-wk-needs {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 6px 0 4px 24px;
 }
-.cn-gp-inset {
+.cn-wk-inset {
   margin: 6px 0 0 24px;
 }
-.cn-gp-part {
+.cn-wk-part {
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
 }
-.cn-gp-part b {
+.cn-wk-part b {
   font-weight: 600;
 }
-.cn-gp-arrow {
+.cn-wk-arrow {
   font-style: normal;
   color: var(--cn-fg-faint);
 }
-.cn-gp-done {
+.cn-wk-done {
   color: var(--cn-green-ink);
 }
-.cn-gp-chat {
+.cn-wk-chat {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -8276,8 +8234,8 @@ button.cn-grow {
   color: var(--cn-accent);
   white-space: nowrap;
 }
-.cn-gp .cn-ny-listen .ref-goal.ref-goal,
-.cn-gp .cn-ny-listen .ref-arm.ref-arm {
+.cn-wk .cn-ny-listen .ref-goal.ref-goal,
+.cn-wk .cn-ny-listen .ref-arm.ref-arm {
   color: inherit;
   font-weight: 600;
 }

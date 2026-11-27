@@ -18,15 +18,15 @@ import { environmentsReading, menuEntries, usageReading } from './topBarReadings
 
 // → docs/spec/17-cockpit.md
 
-const TABS: readonly ConsoleTab[] = ['overview', 'needs', 'goals', 'tickets', 'insights'];
-const FEATURE_TABS: readonly ConsoleTab[] = ['overview', 'needs', 'goals', 'tickets', 'features', 'insights'];
+const TABS: readonly ConsoleTab[] = ['overview', 'needs', 'work', 'tickets', 'insights'];
+const FEATURE_TABS: readonly ConsoleTab[] = ['overview', 'needs', 'work', 'tickets', 'features', 'insights'];
 
 const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 
 export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   needs: 'Needs you',
-  goals: 'Work',
+  work: 'Work',
   tickets: 'Tickets',
   features: 'Features',
   bots: 'Bot PRs',

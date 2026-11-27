@@ -288,6 +288,8 @@ export function useCockpit(): CockpitStatus {
       featureDensity: place.featureDensity,
       featureClosed: place.featureClosed,
       petsBlended: place.petsBlended,
+      workRow: place.workRow,
+      workLater: place.workLater,
       errorsBand: place.errorsBand,
       errorsSteady: place.errorsSteady,
       errorsSort: place.errorsSort,
