@@ -17,6 +17,12 @@ export function buildGoalTrack(parts: readonly Pick<GoalPartView, 'group'>[]): G
   };
 }
 
+/** What the close-out reading reads, so the Work tab can take it without building the goal page. */
+export type CloseInputs = Pick<GoalPageView, 'issue' | 'gateHold' | 'environments' | 'groups'>;
+
+/** What the Watch reading reads. */
+export type WatchInputs = Pick<GoalPageView, 'watches' | 'obligations' | 'signals' | 'watchPlan'>;
+
 export type GoalStageTone = 'green' | 'blue' | 'amber' | 'grey';
 
 export interface GoalStage {
@@ -48,7 +54,7 @@ export function planStage(page: GoalPageView): GoalStage {
   };
 }
 
-export function validationStage(page: GoalPageView): GoalStage {
+export function validationStage(page: Pick<GoalPageView, 'issue'>): GoalStage {
   /* A local check plan that is running outranks the set's own count, because it
      is the only thing on the goal that is happening right now — and with the
      header's chip gone this is the one place outside the pane that says so. */
@@ -89,7 +95,7 @@ export interface GoalReachBand {
   grouped: boolean;
 }
 
-export function reachBands(page: GoalPageView): GoalReachBand[] {
+export function reachBands(page: Pick<GoalPageView, 'environments' | 'groups'>): GoalReachBand[] {
   const byMember = new Map<string, GoalGroupReach>();
   for (const group of page.groups) for (const name of group.environments) byMember.set(name, group);
   const out: GoalReachBand[] = [];
@@ -127,7 +133,7 @@ export function reachBands(page: GoalPageView): GoalReachBand[] {
  * has arrived nowhere is not a goal whose close-out is outstanding, it is one whose close-out
  * cannot be asked for yet. → docs/spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time
  */
-export function closeStage(page: GoalPageView): GoalStage {
+export function closeStage(page: CloseInputs): GoalStage {
   const { issue } = page;
   if (issue.state !== 'open') return { reading: issue.state, tone: 'green', done: 100 };
   if (issue.shortfall) return { reading: 'fell short', tone: 'amber', done: null };
@@ -140,7 +146,7 @@ export function closeStage(page: GoalPageView): GoalStage {
 
 /* Counted in places rather than in commands: a goal that has reached one region of production
    has not reached production. → docs/spec/24-environments.md#groups */
-function reachStage(page: GoalPageView): GoalStage {
+function reachStage(page: CloseInputs): GoalStage {
   const envs = reachBands(page);
   if (envs.length === 0) return { reading: 'not reached', tone: 'grey', done: null };
   const reached = envs.filter((e) => e.status === 'reached');
@@ -184,7 +190,7 @@ export function awaitingAccept(signals: readonly GoalWatch[], record: WatchPlanR
   return record?.authoredAt != null && record.acceptedAt === null ? signals.filter(isProposed).length : 0;
 }
 
-export function watchStage(page: GoalPageView): GoalStage {
+export function watchStage(page: WatchInputs): GoalStage {
   const windows = page.watches.filter((w) => page.obligations.watch.includes(w.environment));
   const open = windows.filter((w) => w.checks.length > 0);
   if (open.length === 0) {
@@ -236,7 +242,7 @@ export function askStage(page: GoalPageView): GoalStage {
   return { reading: n === 0 ? 'ready' : n === 1 ? '1 instruction' : `${n} instructions`, tone: 'green', done };
 }
 
-export function flaggedLocally(page: GoalPageView): boolean {
+export function flaggedLocally(page: Pick<GoalPageView, 'issue'>): boolean {
   const local = page.issue.localValidation;
   return local !== null && (local.status === 'failed' || local.status === 'blocked');
 }

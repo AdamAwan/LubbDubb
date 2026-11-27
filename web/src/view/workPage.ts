@@ -1,8 +1,16 @@
 import type { CockpitView } from './viewModel.js';
-import type { Agent, Issue, OpenPullRequest, PlanPart } from '../types.js';
+import type { Agent, Issue, OpenPullRequest, Plan, PlanPart } from '../types.js';
 import type { NeedRow } from './needsYou.js';
-import type { GoalPageView } from './goalPage.js';
-import { buildGoalTrack, closeStage, validationStage, watchStage, type GoalStage } from './goalStages.js';
+import { goalObligations, type GoalPageView } from './goalPage.js';
+import {
+  buildGoalTrack,
+  closeStage,
+  validationStage,
+  watchStage,
+  type CloseInputs,
+  type GoalStage,
+  type WatchInputs,
+} from './goalStages.js';
 import type { GoalTrack } from './goalPage.js';
 import { goalIssue, goalNumber, goalOfOrigin, goalOfPr } from './goalRefs.js';
 import { liveParts, PART_GROUP } from './partGroups.js';
@@ -25,6 +33,15 @@ export interface GoalWork {
   prs: OpenPullRequest[];
   agents: Agent[];
   holds: Hold[];
+  /** Plan → Build → Validate → Close → Watch; empty on the No goal row. */
+  stages: WorkStage[];
+}
+
+export interface WorkStage {
+  name: 'Plan' | 'Build' | 'Validate' | 'Close' | 'Watch';
+  stage: GoalStage;
+  /** `merged/total` on Build where the plan has parts, whatever the reading leads with. */
+  count: string | null;
 }
 
 interface FeatureGroup {
@@ -69,14 +86,26 @@ export interface LaterStage {
 /** What the snapshot says once, read by every goal: each plan's live parts, stack holds by PR, queue holds by goal. */
 interface WorkIndex {
   partsOf: (ref: string) => PlanPart[];
+  planOf: Map<string, Plan>;
   stackHolds: Map<number, string>;
   queueHolds: Map<string, string[]>;
+  closeOf: (issue: Issue, ref: string) => CloseInputs;
+  watchOf: (ref: string) => WatchInputs;
+}
+
+function groupBy<T>(items: readonly T[] | undefined, key: (item: T) => string): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const item of items ?? []) {
+    const list = out.get(key(item)) ?? [];
+    list.push(item);
+    out.set(key(item), list);
+  }
+  return out;
 }
 
 /** Each goal's live plan parts in plan order — the first plan on a goal, as the goal page reads it. */
-function partsByGoal(state: CockpitView['state']): (ref: string) => PlanPart[] {
-  const planOf = new Map<string, string>();
-  for (const plan of state.plans ?? []) if (!planOf.has(plan.originRef)) planOf.set(plan.originRef, plan.id);
+function partsByGoal(state: CockpitView['state'], plans: ReadonlyMap<string, Plan>): (ref: string) => PlanPart[] {
+  const planOf = new Map([...plans].map(([ref, plan]) => [ref, plan.id]));
   const byPlan = new Map<string, PlanPart[]>();
   for (const part of liveParts(state.planParts ?? [])) {
     const list = byPlan.get(part.planId) ?? [];
@@ -89,7 +118,9 @@ function partsByGoal(state: CockpitView['state']): (ref: string) => PlanPart[] {
 
 function indexWork(view: CockpitView): WorkIndex {
   const { state } = view;
-  const partsOf = partsByGoal(state);
+  const planOf = new Map<string, Plan>();
+  for (const plan of state.plans ?? []) if (!planOf.has(plan.originRef)) planOf.set(plan.originRef, plan);
+  const partsOf = partsByGoal(state, planOf);
 
   const stackHolds = new Map<number, string>();
   for (const stack of state.stacks) {
@@ -107,7 +138,23 @@ function indexWork(view: CockpitView): WorkIndex {
     list.push(item.reason);
     queueHolds.set(goal, list);
   }
-  return { partsOf, stackHolds, queueHolds };
+
+  const reach = new Map((state.environmentReach ?? []).map((r) => [r.goalRef, r]));
+  const closeOf = (issue: Issue, ref: string): CloseInputs => {
+    const r = reach.get(ref);
+    return { issue, environments: r?.environments ?? [], groups: r?.groups ?? [], gateHold: r?.gateHold ?? null };
+  };
+  const obligations = goalObligations(state.config.environments);
+  const windows = groupBy(state.goalWatchWindows, (w) => w.goalRef);
+  const signals = groupBy(state.goalWatches, (w) => w.originRef);
+  const watchPlans = new Map((state.watchPlans ?? []).map((r) => [r.goalRef, r]));
+  const watchOf = (ref: string): WatchInputs => ({
+    obligations,
+    watches: windows.get(ref) ?? [],
+    signals: signals.get(ref) ?? [],
+    watchPlan: watchPlans.get(ref) ?? null,
+  });
+  return { partsOf, planOf, stackHolds, queueHolds, closeOf, watchOf };
 }
 
 /** One entry per goal with anything to say: in flight, or holding an ask, a pull request or an agent. */
@@ -127,6 +174,7 @@ export function goalsOfWork(view: CockpitView): GoalWork[] {
         prs: [],
         agents: [],
         holds: [],
+        stages: [],
       };
       byRef.set(key, work);
     }
@@ -140,8 +188,62 @@ export function goalsOfWork(view: CockpitView): GoalWork[] {
     if (goal !== null) at(goal).agents.push(agent);
   }
   const goals = [...byRef.values()];
-  for (const work of goals) work.holds = holdsOf(work, index);
+  for (const work of goals) {
+    work.holds = holdsOf(work, index);
+    work.stages = stagesOf(work, index);
+  }
   return goals.sort(byUrgency);
+}
+
+/**
+ * The goal's five stages, read off the snapshot without building the goal page: Plan and Build
+ * split what the goal page's one Plan stage says, and the last three are the goal page's own.
+ */
+function stagesOf(work: GoalWork, index: WorkIndex): WorkStage[] {
+  const { issue } = work;
+  if (issue === undefined) return [];
+  const track = workTrack(work.parts);
+  const count = track.total > 0 ? `${track.merged}/${track.total}` : null;
+  return [
+    { name: 'Plan', stage: planOnly(work, index.planOf.get(work.ref)), count: null },
+    { name: 'Build', stage: buildStage(work), count },
+    { name: 'Validate', stage: validationStage({ issue }), count: null },
+    { name: 'Close', stage: closeStage(index.closeOf(issue, work.ref)), count: null },
+    { name: 'Watch', stage: watchStage(index.watchOf(work.ref)), count: null },
+  ];
+}
+
+function planOnly(work: GoalWork, plan: Plan | undefined): GoalStage {
+  if (plan === undefined) {
+    if (work.prs.length > 0 || work.issue?.delivery != null)
+      return { reading: 'no plan needed', tone: 'green', done: null };
+    if (work.issue?.pickup.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
+    return { reading: 'not drawn', tone: 'grey', done: null };
+  }
+  if (plan.status === 'planning') return { reading: 'being drawn', tone: 'blue', done: null };
+  if (plan.status === 'awaiting_approval') return { reading: 'waiting on you', tone: 'amber', done: null };
+  if (plan.status === 'abandoned') return { reading: 'abandoned', tone: 'grey', done: null };
+  return { reading: 'approved', tone: 'green', done: null };
+}
+
+/** The plan's parts merged, or the goal's pull requests where it has no parts; a PR on the operator reads amber. */
+function buildStage(work: GoalWork): GoalStage {
+  const court = work.prs.filter((pr) => pr.attention.status === 'you').length;
+  const track = workTrack(work.parts);
+  const done = track.total === 0 ? null : (track.merged / track.total) * 100;
+  if (court > 0) return { reading: court === 1 ? '1 in your court' : `${court} in your court`, tone: 'amber', done };
+  if (track.total > 0) {
+    return {
+      reading: `${track.merged}/${track.total} parts merged`,
+      tone: track.merged === track.total ? 'green' : track.held > 0 ? 'amber' : track.now > 0 ? 'blue' : 'grey',
+      done,
+    };
+  }
+  if (work.issue?.delivery != null || work.issue?.state !== 'open')
+    return { reading: 'delivered', tone: 'green', done: null };
+  if (work.prs.length > 0) return { reading: `${work.prs.length} open`, tone: 'blue', done: null };
+  if (work.agents.length > 0) return { reading: 'being worked', tone: 'blue', done: null };
+  return { reading: 'not started', tone: 'grey', done: null };
 }
 
 function rank(work: GoalWork): number {
@@ -232,7 +334,7 @@ export function workParts(parts: readonly PlanPart[], prs: readonly OpenPullRequ
 }
 
 /** The plan's progress track, read off its live parts without building the goal page. */
-export function workTrack(parts: readonly PlanPart[]): GoalTrack {
+function workTrack(parts: readonly PlanPart[]): GoalTrack {
   return buildGoalTrack(
     parts.flatMap((part) => {
       const group = PART_GROUP[part.status];

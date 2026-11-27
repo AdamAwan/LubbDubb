@@ -8107,9 +8107,11 @@ button.cn-grow {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--cn-line-soft);
-  font-size: 13px;
+  background: var(--cn-panel-2);
+  font-size: 15px;
+  font-weight: 700;
   color: var(--cn-fg);
   text-align: left;
 }
@@ -8123,7 +8125,8 @@ button.cn-grow {
 }
 .cn-wk-fhead em {
   font-style: normal;
-  font-size: 11px;
+  font-weight: 500;
+  font-size: 12px;
   color: var(--cn-fg-faint);
 }
 .cn-wk-row {
@@ -8159,8 +8162,8 @@ button.cn-grow {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 700;
   color: var(--cn-fg);
   text-align: left;
 }
@@ -8210,6 +8213,51 @@ button.cn-grow {
 }
 .cn-wk-ask {
   color: var(--cn-red-ink);
+}
+.cn-wk-facts .cn-wk-ask::before {
+  content: '●';
+  margin-right: 4px;
+  font-size: 7px;
+  vertical-align: 2px;
+}
+.cn-wk-bar {
+  display: flex;
+  gap: 3px;
+  padding-left: 24px;
+  margin: 3px 0 2px;
+}
+.cn-wk-seg {
+  flex: 1;
+  min-width: 0;
+}
+.cn-wk-segtrack {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--cn-line-soft);
+  overflow: hidden;
+}
+.cn-wk-segtrack i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--tone);
+}
+.cn-wk-segname {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--cn-mono);
+  font-size: var(--label-size-sm);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-wk-here .cn-wk-segname {
+  font-weight: 600;
+  color: var(--cn-fg);
 }
 .cn-wk-hold {
   color: var(--cn-amber-ink);

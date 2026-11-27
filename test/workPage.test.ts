@@ -51,7 +51,7 @@ const goal = (goals: readonly GoalWork[], ref: string): GoalWork => {
 };
 
 function work(over: Partial<GoalWork> & { ref: string }): GoalWork {
-  return { issue: undefined, parts: [], asks: [], prs: [], agents: [], holds: [], ...over };
+  return { issue: undefined, parts: [], asks: [], prs: [], agents: [], holds: [], stages: [], ...over };
 }
 
 test('goals of work: a prioritised goal first, then those with a pressing ask, then other asks, then the rest; no goal last', () => {
@@ -231,4 +231,32 @@ test('an ask raised on no goal is on the No goal row', () => {
   const none = goalsOfWork(v).find((g) => g.ref === NO_GOAL);
   assert.ok(none);
   assert.deepEqual(none.asks.map((a) => a.id).sort(), loose.map((a) => a.id).sort());
+});
+
+test('stages: five per goal in order, Plan approved for an active plan, Build reading its parts; none on the No goal row', () => {
+  const goals = goalsOfWork(view());
+  const row = goal(goals, 'issue:390');
+  assert.deepEqual(
+    row.stages.map((s) => s.name),
+    ['Plan', 'Build', 'Validate', 'Close', 'Watch'],
+  );
+  assert.equal(row.stages[0]?.stage.reading, 'approved');
+  assert.match(row.stages[1]?.count ?? '', /^\d+\/\d+$/);
+  const build = row.stages[1]?.stage;
+  assert.ok(build);
+  const merged = row.parts.filter((p) => p.status === 'merged' || p.status === 'concluded').length;
+  assert.ok(build.done !== null && Math.abs(build.done - (merged / row.parts.length) * 100) < 1e-9);
+  assert.deepEqual(goal(goals, NO_GOAL).stages, []);
+});
+
+test('stages: a plan awaiting approval reads amber on Plan', () => {
+  const goals = goalsOfWork(
+    view((s) => {
+      const plan = s.plans?.find((p) => p.originRef === 'issue:390');
+      assert.ok(plan);
+      plan.status = 'awaiting_approval';
+    }),
+  );
+  const plan = goal(goals, 'issue:390').stages[0]?.stage;
+  assert.equal(plan?.tone, 'amber');
 });
