@@ -312,7 +312,7 @@ facets of one page, not pages under it.** Each is on `Place` — they are places
 to work — but the strip that switches them is the navigation, and a crumb over it would offer a parent
 that is the page you are already on. A back control that goes nowhere is worse than none.
 
-The **nav** is three tabs: Overview, Tickets and Insights, with the feature board beside Tickets where it is on. Every button clears _both_ pieces
+The **nav** is Overview, Needs you, [Work](#the-work-tab), Tickets and Insights, with the feature board beside Tickets where it is on. Every button clears _both_ pieces
 of state, because a nav click means "go here" and either half left standing would land somewhere else.
 
 **A destination is not the same thing as a nav slot.** Config and Pets are reachable without being drawn
@@ -344,13 +344,15 @@ still in the URL. That is deliberate rather than a stranded link: there is no su
 place, and an alias onto one that does not answer the question would be the stranded link one layer
 down. An `obs` id beside one is dropped, since there is no row it could open.
 
-**Work is not a destination any more either** ([below](#the-record-panel)). Every
+**The old Work record is not a destination any more either** ([below](#the-record-panel)). Every
 part of it had found a better home — a goal's own record onto its goal page, the unrecorded-work
 call-out onto the tickets tab, the roots nothing has claimed into the `record` panel — so what the slot
 held by the end was a disclosure triangle over an index of pages that are one click away anyway. A nav
 slot is the most expensive space in the cockpit, and the rule for what earns one is the same rule that
 keeps Config out: **the nav is the surfaces work happens on**. `readPlace` aliases `?tab=work` onto
-tickets, where the one half of it an operator acted on went.
+tickets, where the one half of it an operator acted on went — and that alias is why the
+[Work tab](#the-work-tab) that holds the slot now is the id `inflight`, labelled `Work`: reusing `work`
+would have sent every saved link to the record somewhere it never meant.
 
 **The nav sits in the top bar** (`TopBar.tsx`), not at the head of the situation area. The situation
 area scrolls, and a page's primary navigation that scrolls away is navigation you have to scroll back
@@ -373,7 +375,7 @@ The tabs are a **list** (`ConsoleTab`, `web/src/cockpit/actions.ts`) rather than
 of buttons over a boolean, for `ConsolePanel`'s reason: a destination that has to be remembered in two
 booleans and four call sites is a destination that arrives half-wired. `test/console.test.ts` renders
 the nav and asserts every label, so a tab added to the type and forgotten in the nav is a view
-nothing can reach — and fails. It asserts `Work` is **not** among them for the mirror reason: a slot
+nothing can reach — and fails. It asserts `Record` is **not** among them for the mirror reason: a slot
 given back is given back.
 
 **Pets was the fifth and is not a tab any more.** The vivarium is drawn at full size in the
@@ -547,38 +549,40 @@ modals — and nothing that answers _what is true_. It replaced ten independent 
 page on the tickets tab is **one** place, and stepping back out of it has to restore all three at
 once.
 
-| Parameter                            | Carries                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`                                | `tickets` / `features` / `bots` / `errors` / `insights` / `pets` / `config`; the overview is the absent value. `backlog` and `work` are aliases for `tickets` — as are the `knowledge`, `findings` and `lessons` panel names — so links to a deleted tab or a retired panel still land. Narrowed by `homeTab` whenever `goal` or `pr` is set — a link naming one of those is a place one rung in, and the tab is the rung under it → [nesting](#nesting) |
-| `goal`                               | the open goal page, as `issue:<n>`. It outranks `tab`, which it is drawn over and which the crumb's first rung names                                                                                                                                                                                                                                                                                                                                     |
-| `pr`                                 | the open [pull request page](#the-pull-request-page), by number. It outranks `goal`, which it is drawn over and which is the crumb's second rung; a value that is not a positive integer is nowhere                                                                                                                                                                                                                                                      |
-| `panel`                              | `faults` / `launch` / `build` / `record` / `localRun` / `setup`. `pets` was one and is [the Pets page](22-pets.md#the-pets-page) now, so the name is a tab alias rather than a panel                                                                                                                                                                                                                                                                     |
-| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `regroup`                            | whether the plan sheet is showing [the regroup surface](#regrouping-the-atoms) rather than the plan. Carried only under `plan`, and dropped whenever `plan` changes: a view inside a sheet that is not open is not a place                                                                                                                                                                                                                               |
-| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `pane`                               | which of the goal page's panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                                       |
-| `open`                               | the goal page's reference sections held open, as `record,sequence`                                                                                                                                                                                                                                                                                                                                                                                       |
-| `dkind` / `dstate`                   | the Discussion tab's filters — `note` / `idea` / `question` / `decision`, and `open` / `answered` / `accepted` / `parked` / `dropped`; every kind and every state are the absent values → [40](40-discussions.md#in-the-cockpit)                                                                                                                                                                                                                         |
-| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                       |
-| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                                                                                                                                                                                                                                                           |
-| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                                                                                                                                                                                                                                                                                                                            |
-| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                                                                                                                                                                                                                                                                                                                                |
-| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                                                                                                                                                                                                                                                                                                                          |
-| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                                                                                                                                                                                                                                                      |
-| `layout`                             | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value. Its own key rather than `view`, which the Insights page owns; an old `view=card` link still reads as the board                                                                                                                                                                                                                                             |
-| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                                                                                                                                                                                                                                                            |
-| `card`                               | the Features tab's open Feature, by issue number — in board mode, [its page](#the-feature-page); the board of briefs is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                           |
-| `sort`                               | how the Features tab is ordered: `moved` / `done` / `spend`; `wants-you` is the absent value. Its own key rather than `order`, which the Tickets tab owns                                                                                                                                                                                                                                                                                                |
-| `prs`                                | which of the open Feature's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                         |
-| `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                                                                                                                                                                                                             |
-| `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                                                                                                                                                                                                          |
-| `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                          |
-| `step`                               | which dispatch rule the pool's Trend tab charts; the busiest step is the absent value → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                                                                                                                     |
-| `band`                               | which band the Errors tab draws, by name; the first band is the absent value, and a name the payload does not hold reads as it → [39](39-app-errors.md#in-the-cockpit)                                                                                                                                                                                                                                                                                   |
-| `steady`                             | whether the Errors tab draws the `steady` and `gone` groups it folds away by default → [39](39-app-errors.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                             |
+| Parameter                            | Carries                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`                                | `inflight` ([Work](#the-work-tab)) / `tickets` / `features` / `bots` / `errors` / `insights` / `pets` / `config`; the overview is the absent value. `backlog` and `work` are aliases for `tickets` — as are the `knowledge`, `findings` and `lessons` panel names — so links to a deleted tab or a retired panel still land. Narrowed by `homeTab` whenever `goal` or `pr` is set — a link naming one of those is a place one rung in, and the tab is the rung under it → [nesting](#nesting) |
+| `goal`                               | the open goal page, as `issue:<n>`. It outranks `tab`, which it is drawn over and which the crumb's first rung names                                                                                                                                                                                                                                                                                                                                                                          |
+| `pr`                                 | the open [pull request page](#the-pull-request-page), by number. It outranks `goal`, which it is drawn over and which is the crumb's second rung; a value that is not a positive integer is nowhere                                                                                                                                                                                                                                                                                           |
+| `panel`                              | `faults` / `launch` / `build` / `record` / `localRun` / `setup`. `pets` was one and is [the Pets page](22-pets.md#the-pets-page) now, so the name is a tab alias rather than a panel                                                                                                                                                                                                                                                                                                          |
+| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `regroup`                            | whether the plan sheet is showing [the regroup surface](#regrouping-the-atoms) rather than the plan. Carried only under `plan`, and dropped whenever `plan` changes: a view inside a sheet that is not open is not a place                                                                                                                                                                                                                                                                    |
+| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `pane`                               | which of the goal page's panes is open, as `plan` — absent means the lifecycle rule answers, and a move to a different goal drops the pick → [Which pane opens](#which-pane-opens)                                                                                                                                                                                                                                                                                                            |
+| `open`                               | the goal page's reference sections held open, as `record,sequence`                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `dkind` / `dstate`                   | the Discussion tab's filters — `note` / `idea` / `question` / `decision`, and `open` / `answered` / `accepted` / `parked` / `dropped`; every kind and every state are the absent values → [40](40-discussions.md#in-the-cockpit)                                                                                                                                                                                                                                                              |
+| `collapsed`                          | the Features folded away, as `3,12` — on the tickets tab and on [Work](#the-work-tab) alike, so a Feature folded on one is folded on the other                                                                                                                                                                                                                                                                                                                                                |
+| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                                                                                                                                                                                                                                                                                                |
+| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                                                                                                                                                                                                                                                                                                                                                                 |
+| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `layout`                             | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value. Its own key rather than `view`, which the Insights page owns; an old `view=card` link still reads as the board                                                                                                                                                                                                                                                                                  |
+| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                                                                                                                                                                                                                                                                                                 |
+| `card`                               | the Features tab's open Feature, by issue number — in board mode, [its page](#the-feature-page); the board of briefs is the absent value. A value that is not a positive integer opens nothing                                                                                                                                                                                                                                                                                                |
+| `sort`                               | how the Features tab is ordered: `moved` / `done` / `spend`; `wants-you` is the absent value. Its own key rather than `order`, which the Tickets tab owns                                                                                                                                                                                                                                                                                                                                     |
+| `prs`                                | which of the open Feature's pull requests are listed: `done` / `all`; `open` is the absent value                                                                                                                                                                                                                                                                                                                                                                                              |
+| `overview`                           | which shape the overview draws in: `next` for one ask at a time; `cards` is the absent value                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `fmode`                              | how the Features tab is read: `focus` for one Feature and its asks; `board` is the absent value                                                                                                                                                                                                                                                                                                                                                                                               |
+| `scope`                              | whose numbers the Insights page is over: `pool`; `mine` is the absent value. Narrowed against `view` on the way in, so a tab the pool cannot answer is not a representable place → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                                                               |
+| `step`                               | which dispatch rule the pool's Trend tab charts; the busiest step is the absent value → [just me, or the pool](#just-me-or-the-pool)                                                                                                                                                                                                                                                                                                                                                          |
+| `band`                               | which band the Errors tab draws, by name; the first band is the absent value, and a name the payload does not hold reads as it → [39](39-app-errors.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                        |
+| `row`                                | the goal row [Work](#the-work-tab) has open, as `issue:<n>`, or `none` for the no-goal row; none is the absent value                                                                                                                                                                                                                                                                                                                                                                          |
+| `later`                              | `1` when Work's _Not in flight_ fold is open; folded is the absent value                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `steady`                             | whether the Errors tab draws the `steady` and `gone` groups it folds away by default → [39](39-app-errors.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                                                  |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -1615,7 +1619,8 @@ still owed`, so it grows every time a plan decomposes further — a bar against 
   while the work goes forwards. Worse, it is a fraction of the wrong question: a goal is checked as a
   whole or not at all, so between its first part landing and its last it is not part-way checked, it
   is **not checkable**, and a bar at 57% says the first. Close therefore reads what is still owed
-  (`3 landings owed`) with `done: null` until an environment holds every landing, and only then draws
+  (`3 landings owed`, blue — work under way, not a stage with nothing yet, so the [Work tab](#the-work-tab)'s
+  Later line keeps it) with `done: null` until an environment holds every landing, and only then draws
   a meter — over the **environments**, which are configuration and fixed. Plan and Validate may draw
   one, because an approved plan's parts and a settled check plan are both closed sets. Ask's meter is
   over **readiness checks** (`askStage`,
@@ -4186,7 +4191,7 @@ rendering of rows ordered against their bands rather than a silent regrouping.
 
 <a id="grouped-by-goal-stacks-as-a-tree"></a>
 
-### Grouped by goal, stacks as a tree
+### Grouped by goal, a stack as one block
 
 A flat list answered neither question an operator brings to the fleet's pull requests: _which goal is
 this for_ (a `#390` reference at the row's end, read one row at a time) and _which of these are a
@@ -4195,15 +4200,16 @@ stack_ (nothing on the row said so at all). So below the assignment bands the ra
 request's goal through `goalOfPr`, so a goal here is exactly the goal the rest of the cockpit names.
 
 **One builder draws it, wherever pull requests are grouped.** `goalPrCards`
-(`web/src/console/PrCards.tsx`) turns a list of pull requests into grouped, tree-drawn
-`PrCardModel`s — goal headings, `depth`, the `on` reference — and every surface that groups pull
-requests by goal calls it: the rack here and the pull-request column of [Needs you](44-needs-you.md).
-A caller adds only what is its own by spreading onto each model (the rack's who-asked mark and watch
-switch; Needs you's Claude button and sent strip). Where no pull request has a goal the cards come
-back with no heading; the rack puts its own `The fleet's` band on them only when the assignment bands
-are drawn above. Two copies of the grouping is how two pages come to disagree about which goal a pull
-request is under. A card that needs something drawn beneath it — Needs you's sent strip — sets
-`below`, which `PrCards` draws after the card, so it stays inside one grouped list.
+(`web/src/console/PrCards.tsx`) turns a list of pull requests into grouped `PrCardModel`s — goal
+headings and the goal's own order — and every surface that groups pull requests by goal calls it: the
+rack here, the pull-request column of [Needs you](44-needs-you.md), and an open row on the
+[Work tab](#the-work-tab). A caller adds only what is its own by spreading onto each model (the
+rack's who-asked mark and watch switch; Needs you's Claude button and sent strip). Where no pull
+request has a goal the cards come back with no heading; the rack puts its own `The fleet's` band on
+them only when the assignment bands are drawn above. Two copies of the grouping is how two pages come
+to disagree about which goal a pull request is under. A card that needs something drawn beneath it —
+Needs you's sent strip — sets `below`, which `PrCards` draws after the card, so it stays inside one
+grouped list.
 
 - **Each goal is a heading** (`tone: 'title'`, `cn-group-title`): the goal's title in sentence case — a
   title is not a label, so it does not take the bands' uppercase — with a `<Ref>` to the goal in the
@@ -4215,16 +4221,12 @@ request is under. A card that needs something drawn beneath it — Needs you's s
 - **Goals are ordered by number; pull requests with no goal come last**, under `No goal`. A ticketless
   pull request is a first-class subject ([05](05-dispatcher.md)), but it answers neither question, so
   it is the band an operator reads last.
-- **Inside a goal a stack is drawn as a tree, read off `state.stacks`.** What is stacked on what is
-  the server's `buildStacks` answer ([07](07-pull-requests.md)) — the same one the goal page's stack
-  positions read — never re-derived from `baseBranch` in the cockpit, so the rack and the goal page
-  cannot disagree about which pull requests are a stack. A rung is drawn directly beneath the rung
-  below it, and its card sets `depth`: `PrCards` indents it one step per level through the
-  `--cn-depth` property (depth capped at four) and draws a corner line back to the card above
-  (`cn-prcard-stacked`). Its sub-line carries `on` with a `<Ref>` to the pull request it builds on, so
-  the card's own unwatched rule decides whether it is drawn. Roots, and siblings under one base, go in number order. A pull request stacked on another
-  goal's pull request is a root in its own goal, still with its `on` reference — the tree never
-  crosses a goal heading. An unwatched row keeps its no-sub-line rule, so it does not carry `on`.
+- **Inside a goal a stack is one block, read off `state.stacks`.** What is stacked on what is the
+  server's `buildStacks` answer ([07](07-pull-requests.md#buildstacksopenprs-plans-parts-defaultbranch)) — the same one the goal page's
+  stack positions read — never re-derived from `baseBranch` in the cockpit, so the rack and the goal
+  page cannot disagree about which pull requests are a stack. How the block is drawn is
+  [below](#a-stack-is-drawn-as-a-path-into-its-base). A pull request stacked on another goal's pull
+  request is drawn in its own goal; a block never crosses a goal heading.
 
 The assignment bands are not grouped by goal: they answer _is anything waiting on me_, which is a
 question about the operator, not the work, and they are mostly colleagues' pull requests with no goal.
@@ -4254,12 +4256,33 @@ The card has the [ask card](44-needs-you.md#the-ask-card)'s shape:
 - **The body**: the court's own sentence (`attention.reasons`), up to two lines. An unwatched card
   draws none.
 
-**A stack is drawn as one block.** Where two or more cards in one group are rungs of one stack
-(`state.stacks`, the server's `buildStacks` answer), `PrCards` draws them together at the place of
-the first, in a dashed box headed `Stack of n · merges from the bottom up`, each rung numbered by its
-position down a rail. With `ghosts` — Needs you passes it, since it lists only the pull requests on
-the operator — a rung not in the list is a slim row (number, title, `not waiting on you`) so the whole
-stack is in view; the overview lists every open pull request and draws only cards.
+#### A stack is drawn as a path into its base
+
+Where two or more cards in one group are rungs of one stack (`state.stacks`), `PrCards` draws them
+together at the place of the first, as one block (`StackBlock`, `.cn-prstack*`). The block reads as
+**the path the work takes into its base branch**, top to bottom, because that is the order an operator
+asks about it in — _what is waiting, what lands next, where does it end up_:
+
+- **The header** says `Stack · n open · lands on main` — `n` counts the rungs drawn, the base is the
+  bottom rung's base (`main` where it reports none) — and then exactly one of: `Held: <blockedBy>`
+  (the server's own sentence, quoted, from `StackLandingView.blockedBy`) or `Ready to land` (`offer`).
+- **The rungs run top first**: the rung furthest from the base at the top, the **next to merge**
+  (`position: 1`, accent ring) at the bottom of the open rungs. Each is numbered **as its plan numbers
+  it**, `partSeq/partTotal` (`2/6`), so the numbers on the block are the numbers on the goal page;
+  a stack no single plan owns falls back to its position in the stack. `rungLabel` is the one place
+  that choice is made.
+- **The blocking rung is red.** The server names it — `StackLandingView.blockedPr` — so the cockpit
+  never parses `#412` back out of the `blockedBy` prose to find which rung to colour.
+- **The foot**: below the open rungs, the plan's **merged parts this stack is built on**
+  (`Stack.mergedBelow`, green ✓, each with its pull request), then `↓ main`. Only the parts the bottom
+  rung's part depends on, walked through `dependsOn`, are drawn: a part merged on a parallel branch of
+  the plan is not under this stack and the foot does not claim it. Where a forked plan draws two
+  blocks in one group over the same merged parts, the second says them in one line
+  (`2 merged parts, as above`) rather than drawing the same rows twice.
+
+With `ghosts` — Needs you passes it, since it lists only the pull requests on the operator — a rung
+not in the list is a slim row (part number, title, `not waiting on you`) so the whole path is in view;
+the overview lists every open pull request and draws only cards.
 
 An unwatched card is drawn at reduced opacity and comes back to near full on hover or focus, as a spent
 row does. The rack's assignment bands, its who-asked mark and its goal headings are unchanged; they
@@ -8993,6 +9016,80 @@ from a reader that broke, and because each of these is a decision rather than an
 Each of these is a surface's absence, not a wire change: removing the field would make re-adding the
 surface a server change, and the fold under it is what a future one is built from.
 
+## The Work tab
+
+Tab `inflight`, labelled **Work** (`web/src/console/WorkPage.tsx`, its logic in
+`web/src/view/workPage.ts`, styles `.cn-wk*`). The overview answers _what is the fleet doing_ and
+Needs you answers _what is on me_; neither answers the question an operator brings at the start of a
+day — **for each thing I am trying to get done, where is it and what is holding it**. Work is that
+page: one row per goal, read in one line each, opened in place for the rest.
+
+**The layout.** Under the head (the goal count, and the [listener's pill](44-needs-you.md#is-a-chat-listening))
+come **Feature headings** — each goal under the Feature it hangs off (`byFeature`, first-seen order,
+goals under none last under `No feature`; no headings at all where no goal has a parent). A Feature
+folds through `FoldToggle` (subject `work`), and its fold is the same `collapsed` set the tickets tab
+folds Features with — one Feature folded is folded everywhere. Under each heading, **one row per goal
+in flight**:
+
+- **The head line**: the goal's title (the control that opens the full goal page) and its `<Ref>`;
+  then its pickup word (`PICKUP_WORD`, `web/src/view/pickup.ts`), the plan's track and `merged/total`,
+  the agents on it as a lamp and a count, `in Claude` where any of its asks or pull requests is in the
+  listening chat, its spend, and ⚡ — the [priority](05-dispatcher.md#marking-a-goal-a-priority) control, which puts the goal first in
+  the queue. A prioritised row is drawn with a rule down its left.
+- **PRs**: every open pull request of the goal, each in **one** reading (`prReading`): why it is on the
+  operator, in the [Needs you words](44-needs-you.md#pull-requests-waiting-on-you) (`Your call`,
+  `Your review`, `Comments` …, through `prOnYouReasons` and `PR_REASON_LABEL`, so the two pages never
+  disagree); else `CI failing`; else its own first attention reason.
+- **Held**: everything standing between the goal and its next step, from every place that knows one —
+  the asks on the operator, `stack can’t land: <blockedBy>` for a stack its pull requests are in, a
+  blocked part (`part “cutover”: <blockedReason>`), and the queue's own reason for holding the goal's
+  work, **quoted whole** — never reworded, because the queue's sentence is the one the dispatcher
+  wrote and a paraphrase is a second account that can drift. A reading said twice is said once.
+
+**Goals not in flight are folded at the bottom** (`Not in flight — appraising, queued or delivered`,
+`?later=1` when open): a goal with an ask, a pull request or an agent but a pickup status outside the
+set. The rows are ordered by urgency — prioritised first, then a goal with an ask of urgency `now`,
+then any ask, then the rest, each by number — and the **No goal** row last, which collects every open
+pull request with no goal.
+
+**Two in-flight sets, on purpose** (`web/src/view/pickup.ts`). The overview's _Goals in flight_ lists
+`OVERVIEW_IN_FLIGHT` — `active`, `has_pr`, `planning`, `investigation` **and `delivered`**, because a
+delivered goal still has validation and close-out to watch on that card. Work counts
+`WORK_IN_FLIGHT` — the same four **plus `parked` and `escalated`, without `delivered`**: on Work a
+parked or escalated goal is held, not done, and holding is exactly what the row is for, while a
+delivered goal's remaining asks are a later stage and fold away. A goal with a pull request open or an
+agent on it is in flight on Work whatever its status says. Named, so the difference is stated once
+here rather than discovered between two literals. → `test/workPage.test.ts`
+
+**Opening a row in place** (`?row=issue:<n>`, `none` for the No goal row; `work.expand` /
+`work.close`). The open row carries the goal page's essentials, not the goal page:
+
+- **its asks**, each as the shared [ask card](44-needs-you.md#the-ask-card) with `inGoal` (the goal is
+  the row's own heading, so the card leads with the ask), open with their buttons, the Claude button
+  and the sent strip — the same `listenControls.tsx` pieces Needs you draws;
+- **a Parts line** in plan order (`workParts`): ✓ merged or concluded, ⏸ blocked, ▶ being worked, each
+  with its pull request's reading and its Claude control; pull requests no part names follow on a PRs
+  line (`strayPrs`). A blocked part is said here, so Held leaves it out, and the asks are drawn above,
+  so Held leaves them out too;
+- **a Later line**: Validate, Close and Watch, each in the goal tab's own reading, where it has one
+  (`laterStages` drops a stage reading grey, which is a stage with nothing yet);
+- **Instruct** — the goal page's instruction modal — and its cost on the head line.
+
+A goal with no plan and open pull requests draws their cards under the row instead of a Parts line.
+
+**Built once per snapshot.** `goalsOfWork` reads the snapshot through one index (`indexWork`): each
+plan's live parts by goal (`liveParts`), the stack hold by pull request, the queue's holds by goal. A
+row's parts, track and holds come off that index; **the full `buildGoalPage` is built for the open row
+only** — every other row is null there — because building it for every goal on every snapshot was the
+whole cost of the page.
+
+**The rail stays hidden on Work** (`workInFront` in `ConsoleRoot.tsx`), and on the goal, pull-request
+and agent pages it opens: Work is itself a list of what holds every goal, and a second list of holds
+beside it is the same reading twice. → [44](44-needs-you.md#where-it-sits)
+
+Not yet built: the No goal row collects every ticketless pull request, colleagues' included, and is not
+narrowed to the operator's own.
+
 ## The fixture world
 
 The cockpit tests render against one shared fixture world, `buildFixtureState` in
@@ -9021,6 +9118,19 @@ along the workflow, in roughly the order it runs: held at intake (#379), waiting
 flight (#332, #341, #368, #388, #376, #396, #399), delivered (#364, #395, #398), fell short (#382), and
 closed (#352, #357). Scrolling the rail is meant to teach the loop, so a new fixture goes where its
 stage puts it rather than wherever there is room.
+
+**The [Work tab](#the-work-tab) has something on every line it draws.** The goals hang off three
+Features (`FEATURE_OF`: _Checkout and payments_, _Finding a book_, _Running the shop_), so the tab's
+headings and their folds are reachable, and the goals under none are too. **#390 is prioritised**, so a
+⚡ row leads. Its plan runs `client` (merged, #406) → `payment` #413 → `refunds` #414 → `receipts`
+#431 → `cutover`, so its stack is three open rungs over one merged part — the
+[stack block](#a-stack-is-drawn-as-a-path-into-its-base)'s whole shape, numbered `2/6`…`4/6` — and
+`cutover` is `blocked` on the provider's live keys, a Held reading that is a part. **#368 carries a
+second stack**, #435 → #436, with no plan behind it (so its rungs fall back to their positions) and held
+on `#435 not approved`, the rung drawn red. **#332 is `sequenced`** in Up next, held behind #388 in
+the Feature's accepted order, so a queue hold is quoted whole on a row. **The listener is busy on PR
+413** with one queued, so the head's pill, the `in Claude` marks and the Claude buttons all draw; a test
+that needs it off says so.
 
 **One ask per goal, with two deliberate exceptions.** A goal carrying four cards reads as a pile rather
 than a situation, and the thing the fixtures have to show is what _one_ ask looks like and what answering it
@@ -9062,7 +9172,7 @@ readings sit on the same masthead. **Nothing in the fixtures carries a check, a 
 or an arrival unless every part of its plan has merged and an assessor has answered `delivered`** —
 which is #364, #395 and #398, and no other goal. A goal still planning has nothing to write a check
 against, so `validationChecks`, `remoteSheets`, `goalWatchWindows` and `environmentArrivals` name only
-those three; #390's plan is two parts short of finished and it therefore has none of them, however
+those three; #390's plan has parts still open and it therefore has none of them, however
 much a sheet would have filled its Validation pane.
 
 The four showcases are four goals, one per point on that half of the loop. **#333 is at the approval

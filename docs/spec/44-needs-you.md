@@ -42,7 +42,11 @@ first tab until the operator decides otherwise.
 Whether the page is in front — its tab, with no goal or pull request opened over it — is one
 function, `needsYouInFront` (`web/src/view/needsYouPage.ts`), which the shell reads.
 On this tab the shell draws no queue rail — the page _is_ the queue, at full width, and the rail
-beside it would be the same list twice. Everywhere else the rail is where it has always been.
+beside it would be the same list twice. The [Work tab](17-cockpit.md#the-work-tab) hides it too, for
+the same reason — every row there already says what holds its goal — and keeps it hidden on the goal,
+pull-request and agent pages opened from Work (`workInFront`, `ConsoleRoot.tsx`), so opening a row's
+detail does not bring back the list the operator left. Everywhere else the rail is where it has always
+been.
 
 The page is, top to bottom:
 
@@ -155,6 +159,11 @@ and the kind's verb — appear in the card's top-right corner on hover or focus,
 always shown where the device has no hover. The urgency tier, `Blocking`, the holding count and the
 agent's name are not drawn: the dot carries the first and the rest are one press away.
 
+**`inGoal`.** `AskCard` (`web/src/console/askCard.tsx`) is also drawn under a goal's own heading — an
+open row on the [Work tab](17-cockpit.md#the-work-tab). There the goal is already said, so with
+`inGoal` the card drops the goal's title from the headline and its reference: the ask leads. An ask
+about no goal keeps its run's name.
+
 ### Opening an ask in place
 
 A press anywhere on the card opens it where it sits — the Needs you form of [a row opens in place](17-cockpit.md#a-row-opens-in-place) —
@@ -230,6 +239,14 @@ On every ask and every pull request row. What it does depends on the [listener](
 
 An item in `listener.sent` draws a strip under its card — **In your Claude chat**, with when it was
 sent — until it no longer stands (the ask settled, the pull request off the page).
+
+**The listen controls are shared with Work.** `ClaudeButton`, `ListenerStatus` and `SentLine` live in
+`web/src/console/listenControls.tsx`, which is the one module that calls `listenSend`, and the
+[Work tab](17-cockpit.md#the-work-tab) draws the same three: the pill in its head, the button on an open
+row's asks and on its pull requests waiting on the operator, and the sent strip. Whether the chat holds
+an item — `inChat`, working it or handed it — and whether it holds anything of a goal's (`goalInChat`)
+sit beside `sameItem` in `src/listen/sameItem.ts`, so Work's `in Claude` marks and the listener read
+one match.
 
 ## Is a chat listening
 
