@@ -52,6 +52,7 @@ function state(prs: Record<number, Spec>, stacks: number[][] = []): AppState {
         partSlug: null,
         partSeq: null,
       })),
+      base: 'main',
       partTotal: null,
       mergedBelow: [],
     })),

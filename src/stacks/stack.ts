@@ -28,6 +28,8 @@ export interface Stack {
   issueTitle: string | null;
   planId: string | null;
   rungs: StackRung[];
+  /** The branch the stack lands on: the bottom rung's base, or the default branch where it reports none. */
+  base: string;
   /** How many live parts the plan has — the `m` of a rung's `n/m`; null with no single plan. */
   partTotal: number | null;
   /** The merged parts this stack is built on, top first; empty with no single plan. */
@@ -53,7 +55,7 @@ export function buildStacks(openPrs: PullRequest[], plans: Plan[], parts: PlanPa
   for (const bottom of bottoms) {
     for (const path of pathsFrom(bottom, childrenOf)) {
       if (path.length < 2) continue;
-      stacks.push(assemble(path, plans, parts, forks(bottom, childrenOf)));
+      stacks.push(assemble(path, plans, parts, forks(bottom, childrenOf), defaultBranch));
     }
   }
 
@@ -84,7 +86,7 @@ function forks(bottom: PullRequest, childrenOf: (pr: PullRequest) => PullRequest
   return pathsFrom(bottom, childrenOf).filter((p) => p.length >= 2).length > 1;
 }
 
-function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: boolean): Stack {
+function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: boolean, defaultBranch: string): Stack {
   const partByPr = new Map<number, PlanPart>();
   for (const part of parts) if (part.prNumber !== null) partByPr.set(part.prNumber, part);
 
@@ -97,7 +99,7 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
       base: pr.baseBranch ?? '',
       position: i + 1,
       partSlug: part?.slug ?? null,
-      partSeq: part?.seq ?? null,
+      partSeq: part === undefined || part.status === 'retired' ? null : part.seq,
     };
   });
 
@@ -115,6 +117,7 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: 
     issueTitle: plan?.title ?? null,
     planId,
     rungs,
+    base: prs[0]?.baseBranch || defaultBranch,
     partTotal: live === null ? null : live.length,
     mergedBelow: live === null ? [] : mergedBelow(live, bottom),
   };

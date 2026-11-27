@@ -4263,13 +4263,14 @@ together at the place of the first, as one block (`StackBlock`, `.cn-prstack*`).
 **the path the work takes into its base branch**, top to bottom, because that is the order an operator
 asks about it in — _what is waiting, what lands next, where does it end up_:
 
-- **The header** says `Stack · n open · lands on main` — `n` counts the rungs drawn, the base is the
-  bottom rung's base (`main` where it reports none) — and then exactly one of: `Held: <blockedBy>`
+- **The header** says `Stack · n open · lands on main` — `n` counts the stack's open rungs, drawn or
+  not, and the base is `Stack.base`, which the server resolves to the default branch where the bottom
+  rung reports none — and then exactly one of: `Held: <blockedBy>`
   (the server's own sentence, quoted, from `StackLandingView.blockedBy`) or `Ready to land` (`offer`).
 - **The rungs run top first**: the rung furthest from the base at the top, the **next to merge**
   (`position: 1`, accent ring) at the bottom of the open rungs. Each is numbered **as its plan numbers
   it**, `partSeq/partTotal` (`2/6`), so the numbers on the block are the numbers on the goal page;
-  a stack no single plan owns falls back to its position in the stack. `rungLabel` is the one place
+  a stack no single plan owns, and a rung whose part was retired, fall back to its position in the stack. `rungLabel` is the one place
   that choice is made.
 - **The blocking rung is red.** The server names it — `StackLandingView.blockedPr` — so the cockpit
   never parses `#412` back out of the `blockedBy` prose to find which rung to colour.
@@ -9050,7 +9051,7 @@ in flight**:
 `?later=1` when open): a goal with an ask, a pull request or an agent but a pickup status outside the
 set. The rows are ordered by urgency — prioritised first, then a goal with an ask of urgency `now`,
 then any ask, then the rest, each by number — and the **No goal** row last, which collects every open
-pull request with no goal.
+pull request with no goal and every ask raised on none.
 
 **Two in-flight sets, on purpose** (`web/src/view/pickup.ts`). The overview's _Goals in flight_ lists
 `OVERVIEW_IN_FLIGHT` — `active`, `has_pr`, `planning`, `investigation` **and `delivered`**, because a

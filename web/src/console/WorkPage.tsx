@@ -138,7 +138,7 @@ function GoalRow({ work, view, actions }: Props & { work: GoalWork }): JSX.Eleme
   const talk: Talk = (pr, reading) => (
     <PrTalk pr={pr} onYou={reading.tone === 'ask'} open={open} view={view} actions={actions} />
   );
-  const loose = open && planned ? strayPrs(work.parts, work.prs) : work.prs;
+  const loose = !open ? work.prs : planned ? strayPrs(work.parts, work.prs) : [];
   return (
     <div className={`cn-wk-row${priority ? ' cn-wk-priority' : ''}${open ? ' cn-wk-open' : ''}`}>
       <RowHead work={work} open={open} view={view} actions={actions} />

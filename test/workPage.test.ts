@@ -214,3 +214,12 @@ test('in chat: the item the chat is on, or one sent and not yet done; a goal is 
   assert.equal(goalInChat(l, { asks: [{ id: 'esc-1' }], prs: [] }), true);
   assert.equal(goalInChat(l, { asks: [{ id: 'esc-3' }], prs: [{ number: 1 }] }), false);
 });
+
+test('an ask raised on no goal is on the No goal row', () => {
+  const v = view();
+  const loose = v.needsYou.filter((row) => row.goalRef === null);
+  assert.ok(loose.length > 0, 'the fixtures carry an ask on no goal');
+  const none = goalsOfWork(v).find((g) => g.ref === NO_GOAL);
+  assert.ok(none);
+  assert.deepEqual(none.asks.map((a) => a.id).sort(), loose.map((a) => a.id).sort());
+});

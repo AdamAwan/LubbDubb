@@ -393,3 +393,25 @@ test('a hand-made stack has no part numbers and nothing merged below it', () => 
   assert.equal(stack.partTotal, null);
   assert.deepEqual(stack.mergedBelow, []);
 });
+
+test('a rung whose part was retired has no part number, and a stack lands on the default branch when its bottom names none', () => {
+  const [stack] = buildStacks(
+    [
+      pr({ number: 70, branch: 'issue/200/a', baseBranch: undefined }),
+      pr({ number: 71, branch: 'issue/200/b', baseBranch: 'issue/200/a' }),
+    ],
+    [plan({ id: 'p2', originRef: 'issue:200' })],
+    [
+      part({ planId: 'p2', slug: 'a', seq: 1, prNumber: 70 }),
+      part({ planId: 'p2', slug: 'b', seq: 5, prNumber: 71, status: 'retired' }),
+    ],
+    'trunk',
+  );
+  assert.ok(stack);
+  assert.deepEqual(
+    stack.rungs.map((r) => r.partSeq),
+    [1, null],
+  );
+  assert.equal(stack.partTotal, 1);
+  assert.equal(stack.base, 'trunk');
+});

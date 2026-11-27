@@ -37,8 +37,8 @@ function askWords(
 const askCardClass = (expanded: boolean): string => classes('cn-ny-ask cn-plainrefs', expanded && 'cn-ny-ask-open');
 
 /** An opened task's body leads with the task's own title, so a headline that is the ask would say it twice. */
-const bodyLeads = (row: NeedRow, view: CockpitView, about: string | null, body: ReactNode): boolean =>
-  about === null && body !== null && (view.state.humanTasks ?? []).some((t) => t.id === row.id);
+const bodyLeads = (row: NeedRow, view: CockpitView, inGoal: boolean, body: ReactNode): boolean =>
+  inGoal && body !== null && (view.state.humanTasks ?? []).some((t) => t.id === row.id);
 
 // → docs/spec/44-needs-you.md#the-ask-card
 export function AskCard({
@@ -110,7 +110,7 @@ function AskHeadline({
   body: ReactNode;
   inGoal: boolean;
 }): JSX.Element | null {
-  if (bodyLeads(row, view, about, body)) return null;
+  if (bodyLeads(row, view, inGoal, body)) return null;
   const ref = inGoal ? null : askRef(row);
   return (
     <p className="cn-ny-about">

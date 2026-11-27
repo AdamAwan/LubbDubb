@@ -136,11 +136,12 @@ function recoveryBand(view: CockpitView, actions: CockpitActions): JSX.Element |
   ) : null;
 }
 
-/** The focus shape is in front, which draws the creatures on its own card. */
+/** The Work tab is in front: it says what holds every goal, so the rail would say it twice. */
 function workInFront(view: CockpitView): boolean {
   return view.tab === 'inflight';
 }
 
+/** The focus shape is in front, which draws the creatures on its own card. */
 function focusInFront(view: CockpitView): boolean {
   if (view.tab !== 'overview' || view.selectedGoal !== null || view.selectedPr !== null) return false;
   return view.overviewShape === 'focus';

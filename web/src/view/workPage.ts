@@ -68,9 +68,10 @@ interface WorkIndex {
   queueHolds: Map<string, string[]>;
 }
 
-function indexWork(view: CockpitView): WorkIndex {
-  const { state } = view;
-  const planOf = new Map((state.plans ?? []).map((p) => [p.originRef, p.id]));
+/** Each goal's live plan parts in plan order — the first plan on a goal, as the goal page reads it. */
+function partsByGoal(state: CockpitView['state']): (ref: string) => PlanPart[] {
+  const planOf = new Map<string, string>();
+  for (const plan of state.plans ?? []) if (!planOf.has(plan.originRef)) planOf.set(plan.originRef, plan.id);
   const byPlan = new Map<string, PlanPart[]>();
   for (const part of liveParts(state.planParts ?? [])) {
     const list = byPlan.get(part.planId) ?? [];
@@ -78,7 +79,12 @@ function indexWork(view: CockpitView): WorkIndex {
     byPlan.set(part.planId, list);
   }
   for (const list of byPlan.values()) list.sort((a, b) => a.seq - b.seq);
-  const partsOf = (ref: string): PlanPart[] => byPlan.get(planOf.get(ref) ?? '') ?? [];
+  return (ref) => byPlan.get(planOf.get(ref) ?? '') ?? [];
+}
+
+function indexWork(view: CockpitView): WorkIndex {
+  const { state } = view;
+  const partsOf = partsByGoal(state);
 
   const stackHolds = new Map<number, string>();
   for (const stack of state.stacks) {
@@ -122,7 +128,7 @@ export function goalsOfWork(view: CockpitView): GoalWork[] {
     return work;
   };
   for (const issue of state.world.issues) if (WORK_IN_FLIGHT.has(issue.pickup.status)) at(`issue:${issue.number}`);
-  for (const row of view.needsYou) if (row.goalRef !== null) at(row.goalRef).asks.push(row);
+  for (const row of view.needsYou) at(row.goalRef).asks.push(row);
   for (const pr of state.world.pullRequests) at(goalOfPr(state, pr.number)).prs.push(pr);
   for (const agent of view.live) {
     const goal = goalOfOrigin(state, view.taskFor(agent)?.originRef ?? null);

@@ -179,8 +179,8 @@ function StackBlock({
   actions: CockpitActions;
 }): JSX.Element {
   const { stack } = item;
-  const open = item.rungs.length;
-  const base = stack.rungs[0]?.base || 'main';
+  const open = stack.rungs.length;
+  const base = stack.base;
   const landing = view.state.stackLandings.find((l) => l.ref === stack.ref);
   const topFirst = [...item.rungs].reverse();
   return (

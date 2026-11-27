@@ -307,7 +307,10 @@ elsewhere. `test/stacks.test.ts` asserts that structurally — no file under `sr
 which draws it and never re-derives it:
 
 - `StackRung.partSeq` — the rung's part's `seq` in its plan, so a rung is numbered as the plan numbers
-  it (`2/6`); null for a rung no part delivers.
+  it (`2/6`); null for a rung no part delivers, or whose part was retired (a redraw renumbers the live
+  parts and leaves a retired one's old `seq`, which would read `5/4`).
+- `Stack.base` — the branch the stack lands on: the bottom rung's base, or the default branch where it
+  reports none, so the cockpit never guesses `main`.
 - `Stack.partTotal` — how many **live** parts (`liveParts`: every one but `retired`) the plan has, the
   `6` of `2/6`; null where the rungs do not resolve to one plan.
 - `Stack.mergedBelow` — the plan's merged parts this stack is built on, top first, each as `seq`,
