@@ -9026,8 +9026,9 @@ day — **for each thing I am trying to get done, where is it and what is holdin
 page: one row per goal, read in one line each, opened in place for the rest.
 
 **The layout.** Under the head (the goal count, and the [listener's pill](44-needs-you.md#is-a-chat-listening))
-come **Feature headings** — each goal under the Feature it hangs off (`byFeature`, first-seen order,
-goals under none last under `No feature`; no headings at all where no goal has a parent). A Feature
+come **Feature headings** — each goal under the Feature it hangs off (`byFeature`, first-seen order).
+A goal under no Feature is **its own top-level card**, after the Features, with no heading: it is a
+peer of a Feature, not a member of a `No feature` bucket. A Feature
 folds through `FoldToggle` (subject `work`), and its fold is the same `collapsed` set the tickets tab
 folds Features with — one Feature folded is folded everywhere. Under each heading, **one row per goal
 in flight**:
